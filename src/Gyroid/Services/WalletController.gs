@@ -329,6 +329,7 @@ class WalletController : IDisposable {
             let endpoint = settings.Endpoint
             if !await daemon.TryAttachAsync(settings, ct) {
                 PublishNode()
+                ThrowIfCoreExited()
                 return
             }
             if endpoint != settings.Endpoint {
@@ -384,7 +385,14 @@ class WalletController : IDisposable {
             }
         } catch (error Exception) {
             PublishNode()
+            ThrowIfCoreExited()
             throw error
+        }
+    }
+
+    private func ThrowIfCoreExited() {
+        if daemon.NeedsRestart {
+            throw WalletException("Configured core exited before its API became ready")
         }
     }
 

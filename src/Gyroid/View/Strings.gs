@@ -126,6 +126,7 @@ class Strings {
             case "Starting": "启动中"
             case "Core download": "节点程序下载"
             case "Checkpoints": "检查点"
+            case "Connecting": "连接中"
             case "Operation failed": "操作失败"
             case "Refresh failed": "刷新失败"
             case "Copy failed": "复制失败"

@@ -17,13 +17,22 @@ import System.IO
 partial class WalletView {
     private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
 
+    private func Phase() string {
+        let status = wallet.NodeStatus
+        return if status.Phase.Length == 0 && status.Running && status.Peers == 0 {
+            "Connecting"
+        } else {
+            status.Phase
+        }
+    }
+
     private func Preparing() bool -> wallet.NodeStatus.Phase.Length > 0 && wallet.NodeStatus.Phase != "ChainSync"
 
     private func PhaseName() string -> strings.Get(
-        switch wallet.NodeStatus.Phase {
+        switch Phase() {
             case "Core": "Core download"
             case "ChainSync": "Syncing"
-            default: wallet.NodeStatus.Phase
+            default: Phase()
         }
     )
 
@@ -45,7 +54,7 @@ partial class WalletView {
     }
 
     private func SyncIndicator(size float64, fontSize float64) Blob? {
-        if wallet.NodeStatus.Phase.Length == 0 {
+        if Phase().Length == 0 {
             return nil
         }
         let row = Container{
@@ -527,7 +536,7 @@ partial class WalletView {
                 Gap: 8,
                 FlexShrink: 0,
                 Reading("Source", strings.Get(status.Source), ink),
-                if status.Phase.Length > 0 {
+                if Phase().Length > 0 {
                     Reading("State", PhaseText(), lime)
                 } else if status.Running {
                     Reading("State", strings.Get("Running"), lime)
