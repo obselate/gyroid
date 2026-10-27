@@ -344,6 +344,15 @@ class WalletController : IDisposable {
         }
     }
 
+    async func RefreshStatusAsync(ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            await RefreshNodeCoreAsync(ct)
+        } finally {
+            End()
+        }
+    }
+
     private async func RefreshNodeCoreAsync(ct CancellationToken) {
         try {
             using let status = await rpc.JsonAsync("status", ct: ct)

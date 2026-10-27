@@ -35,6 +35,7 @@ partial class WalletView : Cell {
     private var refreshError string = ""
     private var settingsNoticeDismissed bool
     private var refreshTimer WindowTimer?
+    private var statusTimer WindowTimer?
     private var clipboardTimer WindowTimer?
     private var clipboardText string = ""
     private var wallets[]string
@@ -160,6 +161,7 @@ partial class WalletView : Cell {
         tray?.Dispose()
         tray = nil
         refreshTimer?.Dispose()
+        statusTimer?.Dispose()
         decodeTimer?.Dispose()
         decodeTimer = nil
         frameTimer?.Dispose()
@@ -199,7 +201,7 @@ partial class WalletView : Cell {
     private func Fingerprint(snapshot WalletSnapshot) string {
         let node = wallet.NodeStatus
         let text = StringBuilder(
-            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${wallet.LockQueued} ${wallet.NodeProgress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.Peers} ${node.Endpoint} ${node.DataDirectory}"
+            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${wallet.LockQueued} ${wallet.NodeProgress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.SyncProgress} ${node.Phase} ${node.Peers} ${node.Endpoint} ${node.DataDirectory}"
         )
         if let value = snapshot.Balance {
             text.Append(
@@ -230,6 +232,12 @@ partial class WalletView : Cell {
             return
         }
         shownState = state
+        if wallet.NodeStatus.Syncing {
+            statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
+        } else {
+            statusTimer?.Dispose()
+            statusTimer = nil
+        }
         let page = snapshot.Page
         if page != lastPage {
             ClearSecrets()
@@ -396,7 +404,7 @@ partial class WalletView : Cell {
         )
     }
 
-    private async func Refresh() {
+    private async func Refresh(statusOnly bool = false) {
         if refreshing || Working() || wallet.Busy {
             return
         }
@@ -404,7 +412,9 @@ partial class WalletView : Cell {
         var message = ""
         try {
             await Task.Run(
-                () -> if wallet.Snapshot.State == "Unlocked" {
+                () -> if statusOnly {
+                    wallet.RefreshStatusAsync()
+                } else if wallet.Snapshot.State == "Unlocked" {
                     wallet.RefreshAsync()
                 } else {
                     wallet.RefreshNodeAsync()
@@ -893,8 +903,8 @@ partial class WalletView : Cell {
                 SideItem("receive", page == "Receive", blocked, () -> Navigate("Receive")),
                 SideItem("history", page == "Transactions", blocked, () -> Navigate("Transactions")),
                 Container{FlexGrow: 1},
-                if SyncText().Length > 0 {
-                    Container{Padding: Edges{Left: 12}, FlexShrink: 0, Label(SyncText(), 12, orange, "")}
+                if let indicator = SyncIndicator(20, 12) {
+                    Container{Padding: Edges{Left: 10}, FlexShrink: 0, indicator}
                 } else {
                     Container{}
                 },

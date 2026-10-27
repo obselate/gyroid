@@ -17,44 +17,100 @@ import System.IO
 partial class WalletView {
     private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
 
-    private func ProgressText() string -> if wallet.NodeProgress.EndsWith("%", StringComparison.Ordinal) {
-        strings.Get("Downloading") + " " + wallet.NodeProgress
+    private func Preparing() bool -> wallet.NodeStatus.Phase.Length > 0 && wallet.NodeStatus.Phase != "ChainSync"
+
+    private func PhaseName() string -> strings.Get(
+        switch wallet.NodeStatus.Phase {
+            case "Core": "Core download"
+            case "ChainSync": "Syncing"
+            default: wallet.NodeStatus.Phase
+        }
+    )
+
+    private func PhasePercent() int32? {
+        let status = wallet.NodeStatus
+        if status.Phase != "ChainSync" {
+            return status.DownloadPercent
+        }
+        if status.ChainHeight == 0 {
+            return nil
+        }
+        return Math.Min(100, int32(100 * (status.SyncProgress ?? status.Height) / status.ChainHeight))
+    }
+
+    private func PhaseText() string -> if let value = PhasePercent() {
+        PhaseName() + " " + value.ToString() + "%"
     } else {
-        strings.Get(wallet.NodeProgress)
+        PhaseName()
+    }
+
+    private func SyncIndicator(size float64, fontSize float64) Blob? {
+        if wallet.NodeStatus.Phase.Length == 0 {
+            return nil
+        }
+        let row = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 8,
+            FlexShrink: 0,
+            Accessibility: Accessibility{Role: AccessibilityRole.ProgressBar, Name: PhaseText(), Busy: true}
+        }
+        guard let percent = PhasePercent() else {
+            row.Add(Cell.Mount[SpinnerInput, Spinner]("sync", SpinnerInput{Size: size, Color: lime, Label: PhaseName()}))
+            row.Add(Label(PhaseName(), fontSize, body, ""))
+            return row
+        }
+        let stroke = Math.Max(2.0, size / 10)
+        let center = size / 2
+        let radius = center - stroke / 2
+        let circle = PathBuilder(0, 0, size, size)
+            .MoveTo(center, stroke / 2)
+            .ArcTo(radius, radius, 0, false, true, center, size - stroke / 2)
+            .ArcTo(radius, radius, 0, false, true, center, stroke / 2)
+            .Build()
+        row.Add(
+            Container{
+                Width: size,
+                Height: size,
+                FlexShrink: 0,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.Center,
+                Shape{Position: PositionType.Absolute, Width: size, Height: size, Path: circle, BorderWidth: stroke, BorderColor: rule},
+                Shape{
+                    Position: PositionType.Absolute,
+                    Width: size,
+                    Height: size,
+                    Path: circle,
+                    BorderWidth: stroke,
+                    BorderColor: lime,
+                    StrokeEnd: percent / 100.0
+                },
+                MaterialIcons.Create(
+                    switch wallet.NodeStatus.Phase {
+                        case "Checkpoints": "verified"
+                        case "ChainSync": "sync"
+                        default: "download"
+                    },
+                    size / 2,
+                    lime
+                )
+            }
+        )
+        row.Add(Label(PhaseName(), fontSize, body, ""))
+        row.Add(Label((percent.ToString() + "%").PadLeft(4), fontSize, lime, ""))
+        return row
     }
 
     private func NodeProgressCard() Blob {
         let card = Glass()
         card.AlignItems = AlignItems.Center
         card.Padding = 32
-        card.Add(
-            Cell.Mount[SpinnerInput, Spinner]("node-progress", SpinnerInput{Size: 28, StrokeWidth: 3, Color: lime})
-        )
-        card.Add(Label(ProgressText(), 18, ink, ""))
+        card.Add(SyncIndicator(28, 18) ?? Container{})
         return card
     }
 
-    private func SyncText() string {
-        let status = wallet.NodeStatus
-        if !status.Running || !status.Syncing {
-            return ""
-        }
-        let percent = if status.ChainHeight > 0 {
-            Math.Min(100, int32(100 * status.Height / status.ChainHeight))
-        } else {
-            0
-        }
-        return strings.Get("Syncing") + " " + percent.ToString() + "%"
-    }
-
-    private func SyncLabel() Blob? -> if SyncText().Length > 0 {
-        Label(SyncText(), 14, orange, "")
-    } else {
-        nil
-    }
-
     private func WelcomePage() Blob {
-        if wallet.NodeProgress.Length > 0 {
+        if Preparing() {
             return NodeProgressCard()
         }
         let theme = Theme.Read()
@@ -65,7 +121,7 @@ partial class WalletView {
                 strings.Get("new wallet")
             },
             520,
-            SyncLabel()
+            SyncIndicator(20, 14)
         )
         if wallets.Length > 0 {
             let list = Container{
@@ -251,10 +307,10 @@ partial class WalletView {
     }
 
     private func UnlockPage() Blob {
-        if wallet.NodeProgress.Length > 0 {
+        if Preparing() {
             return NodeProgressCard()
         }
-        let panel = PageContent(WalletName(wallet.Settings.ActiveWallet), 520, SyncLabel())
+        let panel = PageContent(WalletName(wallet.Settings.ActiveWallet), 520, SyncIndicator(20, 14))
         panel.Add(
             Field(
                 "Password",
@@ -442,7 +498,6 @@ partial class WalletView {
         let status = wallet.NodeStatus
         let current = wallet.Settings
         let loaded = wallet.Snapshot.State != "Unloaded"
-        let sync = SyncText()
         let left = Container{
             Gap: 16,
             FlexGrow: 1,
@@ -463,10 +518,8 @@ partial class WalletView {
                 Gap: 8,
                 FlexShrink: 0,
                 Reading("Source", strings.Get(status.Source), ink),
-                if wallet.NodeProgress.Length > 0 {
-                    Reading("State", ProgressText(), orange)
-                } else if sync.Length > 0 {
-                    Reading("State", sync, orange)
+                if status.Phase.Length > 0 {
+                    Reading("State", PhaseText(), lime)
                 } else if status.Running {
                     Reading("State", strings.Get("Running"), lime)
                 } else {
