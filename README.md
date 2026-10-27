@@ -17,6 +17,8 @@ dotnet run --project src/Gyroid/Gyroid.gsproj -c Release --no-build
 
 Run `bash scripts/verify.sh` to check the source and build.
 
+Run `bash scripts/verify-testnet.sh <path to Gyroid>` before a release to send funds between two isolated testnet nodes. Mining the funds takes about 17 minutes. Set `GYROID_TESTNET_SNAPSHOT_OUT` to save the funded chain and `GYROID_TESTNET_SNAPSHOT_IN` to reuse it.
+
 ## Links
 
 [License](LICENSE)
