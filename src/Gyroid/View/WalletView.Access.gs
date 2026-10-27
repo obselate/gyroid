@@ -56,7 +56,9 @@ partial class WalletView {
             Accessibility: Accessibility{Role: AccessibilityRole.ProgressBar, Name: PhaseText(), Busy: true}
         }
         guard let percent = PhasePercent() else {
-            row.Add(Cell.Mount[SpinnerInput, Spinner]("sync", SpinnerInput{Size: size, Color: lime, Label: PhaseName()}))
+            row.Add(
+                Cell.Mount[SpinnerInput, Spinner]("sync", SpinnerInput{Size: size, Color: lime, Label: PhaseName()})
+            )
             row.Add(Label(PhaseName(), fontSize, body, ""))
             return row
         }
@@ -75,7 +77,14 @@ partial class WalletView {
                 FlexShrink: 0,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.Center,
-                Shape{Position: PositionType.Absolute, Width: size, Height: size, Path: circle, BorderWidth: stroke, BorderColor: rule},
+                Shape{
+                    Position: PositionType.Absolute,
+                    Width: size,
+                    Height: size,
+                    Path: circle,
+                    BorderWidth: stroke,
+                    BorderColor: rule
+                },
                 Shape{
                     Position: PositionType.Absolute,
                     Width: size,
@@ -91,7 +100,7 @@ partial class WalletView {
                         case "ChainSync": "sync"
                         default: "download"
                     },
-                    size / 2,
+                    size * 0.6,
                     lime
                 )
             }
@@ -121,7 +130,7 @@ partial class WalletView {
                 strings.Get("new wallet")
             },
             520,
-            SyncIndicator(20, 14)
+            SyncIndicator(16, 14)
         )
         if wallets.Length > 0 {
             let list = Container{
@@ -310,7 +319,7 @@ partial class WalletView {
         if Preparing() {
             return NodeProgressCard()
         }
-        let panel = PageContent(WalletName(wallet.Settings.ActiveWallet), 520, SyncIndicator(20, 14))
+        let panel = PageContent(WalletName(wallet.Settings.ActiveWallet), 520, SyncIndicator(16, 14))
         panel.Add(
             Field(
                 "Password",

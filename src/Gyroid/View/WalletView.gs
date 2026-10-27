@@ -232,7 +232,8 @@ partial class WalletView : Cell {
             return
         }
         shownState = state
-        if wallet.NodeStatus.Syncing {
+        let node = wallet.NodeStatus
+        if node.Syncing || node.Running && node.Peers == 0 {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
         } else {
             statusTimer?.Dispose()
@@ -903,7 +904,7 @@ partial class WalletView : Cell {
                 SideItem("receive", page == "Receive", blocked, () -> Navigate("Receive")),
                 SideItem("history", page == "Transactions", blocked, () -> Navigate("Transactions")),
                 Container{FlexGrow: 1},
-                if let indicator = SyncIndicator(20, 12) {
+                if let indicator = SyncIndicator(16, 12) {
                     Container{Padding: Edges{Left: 10}, FlexShrink: 0, indicator}
                 } else {
                     Container{}
