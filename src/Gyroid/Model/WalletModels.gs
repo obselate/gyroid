@@ -39,6 +39,9 @@ class NodeStatus {
     var DataDirectory string = ""
     var Executable string = ""
     var Progress string = ""
+    var Phase string = ""
+    var DownloadPercent int32?
+    var TrustedCheckpoints bool?
 }
 
 class WalletBalance {

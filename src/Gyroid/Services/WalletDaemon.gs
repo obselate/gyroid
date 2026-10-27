@@ -5,9 +5,11 @@ import Microsoft.Win32.SafeHandles
 import System
 import System.Collections.Generic
 import System.Diagnostics
+import System.Globalization
 import System.IO
 import System.IO.Compression
 import System.Net.Http
+import System.Reflection
 import System.Runtime.InteropServices
 import System.Security.Cryptography
 import System.Text
@@ -67,6 +69,9 @@ class WalletDaemon : IDisposable {
     var Progress Action[string]? = nil
     var Source string = "External"
     var Executable string = ""
+    var Phase string = ""
+    var DownloadPercent int32?
+    var TrustedCheckpoints bool?
 
     init() {
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit
@@ -91,7 +96,7 @@ class WalletDaemon : IDisposable {
         try {
             await ConnectCoreAsync(settings, cancellation)
         } finally {
-            Progress?.Invoke("")
+            ReportProgress("", nil)
         }
     }
 
@@ -112,7 +117,13 @@ class WalletDaemon : IDisposable {
         if settings.BinaryPath.Length == 0 || settings.BinaryPath == WalletCore.InstallationPath() && !File.Exists(
             settings.BinaryPath
         ) {
-            settings.BinaryPath = await WalletCore.DownloadAsync(Progress, ct)
+            settings.BinaryPath = await WalletCore.DownloadAsync(
+                value -> {
+                    int32.TryParse(value.TrimEnd('%'), out let percent)
+                    ReportProgress("Core", percent)
+                },
+                ct
+            )
         }
         let program = WalletSettings.ProgramError(settings.BinaryPath)
         if program.Length > 0 {
@@ -143,7 +154,7 @@ class WalletDaemon : IDisposable {
             throw WalletException("Node is restarting. Try again shortly")
         }
         Stop()
-        Progress?.Invoke("Starting")
+        ReportProgress("Starting", nil)
         for attempt in 0 ... 120 {
             ct.ThrowIfCancellationRequested()
             try {
@@ -169,7 +180,9 @@ class WalletDaemon : IDisposable {
             Attach(settings)
             return
         }
-        await SaveCoreSettingsAsync(settings, ct)
+        TrustedCheckpoints = await SaveCheckpointsAsync(settings, ct)
+        await SaveCoreSettingsAsync(settings, !TrustedCheckpoints!!, ct)
+        ReportProgress("Starting", nil)
         let endpoint = Uri(settings.Endpoint)
         let start = ProcessStartInfo{
             FileName: settings.BinaryPath,
@@ -255,6 +268,7 @@ class WalletDaemon : IDisposable {
         }
         WalletCore.VerifyNetwork(pid, settings.Network)
         if !Owned {
+            TrustedCheckpoints = nil
             settings.OwnedProcessId = 0
         } else if settings.OwnedProcessId != pid {
             throw WalletException("API listener is not the app-owned core process")
@@ -372,7 +386,60 @@ class WalletDaemon : IDisposable {
         stream.Flush(true)
     }
 
-    private async func SaveCoreSettingsAsync(settings WalletSettings, ct CancellationToken) {
+    private func ReportProgress(phase string, percent int32?) {
+        Phase = phase
+        DownloadPercent = percent
+        Progress?.Invoke(
+            if percent != nil {
+                phase + " " + percent.ToString() + "%"
+            } else {
+                phase
+            }
+        )
+    }
+
+    private async func SaveCheckpointsAsync(settings WalletSettings, ct CancellationToken) bool {
+        if settings.Network != "mainnet" {
+            return false
+        }
+        ReportProgress("Checkpoints", 0)
+        using let deadline = CancellationTokenSource.CreateLinkedTokenSource(ct)
+        deadline.CancelAfter(TimeSpan.FromSeconds(5))
+        let downloaded = await WalletCheckpoints.FetchAsync(
+            (count, length) -> ReportProgress(
+                "Checkpoints",
+                if length > 0 {
+                    int32(Math.Min(100L, count * 100 / length))
+                } else {
+                    nil
+                }
+            ),
+            ct,
+            deadline.Token
+        )
+        using let resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("Gyroid.Checkpoints.Mainnet") ??
+            throw WalletException("Mainnet checkpoints are missing")
+        let baseline = [int32(resource.Length)]uint8
+        resource.ReadExactly(baseline, 0, baseline.Length)
+        let selected = WalletCheckpoints.Select(baseline, downloaded)
+        let path = Path.Combine(settings.DataDirectory, "checkpoints.dat")
+        let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+        try {
+            using let stream = WalletFiles.CreatePrivate(temporary)
+            await stream.WriteAsync(selected, 0, selected.Length, ct)
+            stream.Flush(true)
+            stream.Dispose()
+            File.Move(temporary, path, true)
+        } finally {
+            if File.Exists(temporary) {
+                File.Delete(temporary)
+            }
+        }
+        ReportProgress("Checkpoints", 100)
+        return true
+    }
+
+    private async func SaveCoreSettingsAsync(settings WalletSettings, fullSync bool, ct CancellationToken) {
         let path = Path.Combine(settings.DataDirectory, "settings.json")
         if path == WalletSettings.ConfigurationPath() {
             throw WalletException("Application and core settings must use different files")
@@ -396,10 +463,12 @@ class WalletDaemon : IDisposable {
                 "default.wallet.dat"
             }
         )
-        if WalletJson.Text(original.RootElement, "wallet_file") == walletFile && WalletJson.Flag(
-            original.RootElement,
-            "full_sync"
+        if WalletJson.Text(original.RootElement, "wallet_file") == walletFile && original.RootElement.TryGetProperty(
+            "full_sync",
+            out let sync
         ) &&
+            (sync.ValueKind == JsonValueKind.True || sync.ValueKind == JsonValueKind.False) &&
+            sync.GetBoolean() == fullSync &&
             (installed || WalletJson.Text(original.RootElement, "listen") == settings.ListenAddress) {
             return
         }
@@ -420,7 +489,7 @@ class WalletDaemon : IDisposable {
                 if !installed {
                     writer.WriteString("listen", settings.ListenAddress)
                 }
-                writer.WriteBoolean("full_sync", true)
+                writer.WriteBoolean("full_sync", fullSync)
                 writer.WriteEndObject()
                 await writer.FlushAsync(ct)
                 writer.Dispose()
@@ -461,6 +530,7 @@ class WalletDaemon : IDisposable {
         lock ownership {
             stopped = process
             process = nil
+            TrustedCheckpoints = nil
         }
         if let owned = stopped {
             try {
@@ -615,6 +685,135 @@ class WalletFiles {
                 }
             }
             return token
+        }
+    }
+}
+
+class WalletCheckpoints {
+    shared {
+        async func FetchAsync(
+            progress Action[int64, int64],
+            cancellation CancellationToken,
+            ct CancellationToken
+        )[]?uint8 {
+            try {
+                using let http = HttpClient(SocketsHttpHandler{AllowAutoRedirect: false, UseProxy: false})
+                using let response = await http.GetAsync(
+                    "https://longhornpool.net/checkpoints.dat",
+                    HttpCompletionOption.ResponseHeadersRead,
+                    ct
+                )
+                if int32(response.StatusCode) != 200 {
+                    return nil
+                }
+                let length = response.Content.Headers.ContentLength ?? 0
+                if length > 1048576 {
+                    return nil
+                }
+                progress.Invoke(0, length)
+                using let input = await response.Content.ReadAsStreamAsync(ct)
+                using let output = MemoryStream()
+                let buffer = [8192]uint8
+                while true {
+                    let count = await input.ReadAsync(buffer, 0, buffer.Length, ct)
+                    if count == 0 {
+                        break
+                    }
+                    if output.Length + count > 1048576 {
+                        return nil
+                    }
+                    output.Write(buffer, 0, count)
+                    progress.Invoke(output.Length, length)
+                }
+                return output.ToArray()
+            } catch (error OperationCanceledException) {
+                cancellation.ThrowIfCancellationRequested()
+                return nil
+            } catch (error HttpRequestException) {
+                return nil
+            } catch (error IOException) {
+                return nil
+            }
+        }
+
+        func Parse(contents[]?uint8) Dictionary[uint64, string] {
+            let entries = Dictionary[uint64, string]()
+            if contents == nil {
+                return entries
+            }
+            let text = Encoding.UTF8.GetString(contents)
+            var offset = 0
+            while offset < text.Length {
+                let end = text.IndexOf('\n', offset)
+                let count = if end < 0 {
+                    text.Length - offset
+                } else {
+                    end - offset
+                }
+                let line = text.Substring(offset, count).Trim()
+                offset = offset + count + 1
+                if line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal) {
+                    continue
+                }
+                let separator = line.IndexOf(':')
+                if separator < 0 || !uint64.TryParse(
+                    line.Substring(0, separator).Trim(),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out let height
+                ) ||
+                    height == 0 {
+                    continue
+                }
+                var hash = line.Substring(separator + 1).Trim()
+                if hash.StartsWith("0x", StringComparison.Ordinal) {
+                    hash = hash.Substring(2)
+                }
+                if hash.Length != 64 {
+                    continue
+                }
+                var valid = true
+                for character in hash {
+                    if !char.IsAsciiHexDigit(character) {
+                        valid = false
+                        break
+                    }
+                }
+                if valid {
+                    entries[height] = hash
+                }
+            }
+            return entries
+        }
+
+        func Agree(first Dictionary[uint64, string], second Dictionary[uint64, string]) bool {
+            for entry in first {
+                if second.TryGetValue(entry.Key, out let hash) && !string.Equals(
+                    entry.Value,
+                    hash,
+                    StringComparison.OrdinalIgnoreCase
+                ) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        func Height(entries Dictionary[uint64, string]) uint64 {
+            var height uint64 = 0
+            for entry in entries {
+                height = Math.Max(height, entry.Key)
+            }
+            return height
+        }
+
+        func Select(baseline[]uint8, downloaded[]?uint8)[]uint8 {
+            let trusted = Parse(baseline)
+            let fetched = Parse(downloaded)
+            if fetched.Count > 0 && Height(fetched) >= Height(trusted) && Agree(trusted, fetched) {
+                return downloaded!!
+            }
+            return baseline
         }
     }
 }

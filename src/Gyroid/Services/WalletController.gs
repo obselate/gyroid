@@ -42,6 +42,13 @@ class WalletController : IDisposable {
         daemon.Progress = value -> {
             nodeProgress = value
             nodeStatus.Progress = value
+            nodeStatus.Phase = if value == "Detecting" {
+                "Detecting"
+            } else {
+                daemon.Phase
+            }
+            nodeStatus.DownloadPercent = daemon.DownloadPercent
+            nodeStatus.TrustedCheckpoints = daemon.TrustedCheckpoints
             Changed?.Invoke()
         }
         if settings.ActiveWallet.Length > 0 {
@@ -355,7 +362,16 @@ class WalletController : IDisposable {
                 Endpoint: settings.Endpoint,
                 DataDirectory: settings.DataDirectory,
                 Executable: daemon.Executable,
-                Progress: nodeProgress
+                Progress: nodeProgress,
+                Phase: if daemon.Phase.Length > 0 {
+                    daemon.Phase
+                } else if WalletJson.Flag(root, "syncing") {
+                    "ChainSync"
+                } else {
+                    ""
+                },
+                DownloadPercent: daemon.DownloadPercent,
+                TrustedCheckpoints: daemon.TrustedCheckpoints
             }
         } catch (error Exception) {
             PublishNode()
@@ -381,7 +397,10 @@ class WalletController : IDisposable {
             } else {
                 settings.BinaryPath
             },
-            Progress: nodeProgress
+            Progress: nodeProgress,
+            Phase: daemon.Phase,
+            DownloadPercent: daemon.DownloadPercent,
+            TrustedCheckpoints: daemon.TrustedCheckpoints
         }
     }
 

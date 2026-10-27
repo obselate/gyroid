@@ -14,6 +14,7 @@
     <Compile Include="**/*.gs" Exclude="bin/**;obj/**" />
     <EmbeddedResource Include="assets/gyroid.png" LogicalName="Gyroid.Icon.png" />
     <EmbeddedResource Include="assets/gyroid-tray.rgba" LogicalName="Gyroid.Tray.rgba" />
+    <EmbeddedResource Include="assets/checkpoints-mainnet.dat" LogicalName="Gyroid.Checkpoints.Mainnet" />
     <EmbeddedResource Include="assets/fonts/JetBrainsMono-Regular.ttf" LogicalName="Gyroid.Font.Regular.ttf" />
     <EmbeddedResource Include="assets/fonts/JetBrainsMono-Bold.ttf" LogicalName="Gyroid.Font.Bold.ttf" />
     <GooShaderEffect Include="assets/background.slang" SourceIndependent="true" />
