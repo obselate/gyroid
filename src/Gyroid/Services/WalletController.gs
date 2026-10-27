@@ -1064,6 +1064,7 @@ class WalletController : IDisposable {
             writer.WriteNumber("timestamp", pending.Timestamp)
             writer.WriteEndObject()
             writer.Flush()
+            writer.Dispose()
             stream.Flush(true)
             stream.Dispose()
             File.Move(temporary, path)
