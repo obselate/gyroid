@@ -180,8 +180,9 @@ class WalletDaemon : IDisposable {
             Attach(settings)
             return
         }
-        TrustedCheckpoints = await SaveCheckpointsAsync(settings, ct)
-        await SaveCoreSettingsAsync(settings, !TrustedCheckpoints!!, ct)
+        let trusted = await SaveCheckpointsAsync(settings, ct)
+        TrustedCheckpoints = trusted
+        await SaveCoreSettingsAsync(settings, !trusted, ct)
         ReportProgress("Starting", nil)
         let endpoint = Uri(settings.Endpoint)
         let start = ProcessStartInfo{
@@ -786,9 +787,9 @@ class WalletCheckpoints {
             return entries
         }
 
-        func Agree(first Dictionary[uint64, string], second Dictionary[uint64, string]) bool {
-            for entry in first {
-                if second.TryGetValue(entry.Key, out let hash) && !string.Equals(
+        func Extends(baseline Dictionary[uint64, string], candidate Dictionary[uint64, string]) bool {
+            for entry in baseline {
+                if !candidate.TryGetValue(entry.Key, out let hash) || !string.Equals(
                     entry.Value,
                     hash,
                     StringComparison.OrdinalIgnoreCase
@@ -810,8 +811,8 @@ class WalletCheckpoints {
         func Select(baseline[]uint8, downloaded[]?uint8)[]uint8 {
             let trusted = Parse(baseline)
             let fetched = Parse(downloaded)
-            if fetched.Count > 0 && Height(fetched) >= Height(trusted) && Agree(trusted, fetched) {
-                return downloaded!!
+            if Height(fetched) >= Height(trusted) && Extends(trusted, fetched) {
+                return downloaded ?? baseline
             }
             return baseline
         }
