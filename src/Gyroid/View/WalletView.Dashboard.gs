@@ -22,6 +22,7 @@ partial class WalletView {
     private var memo string = ""
     private var estimate SendEstimate?
     private var historyTab string = "received"
+    private var confirmPendingSend bool
     private var revealPassword string = ""
     private var historySource WalletSnapshot?
     private var outputs[]WalletOutput
@@ -62,7 +63,13 @@ partial class WalletView {
 
     private func Dashboard() Blob {
         let snapshot = wallet.Snapshot
-        return Container{Gap: 16, FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Balance(snapshot), History(snapshot)}
+        let content = Container{Gap: 16, FlexGrow: 1, FlexBasis: 0, MinHeight: 0}
+        if wallet.Pending != nil || wallet.SendOutcome.Length > 0 {
+            content.Add(PendingSendBanner())
+        }
+        content.Add(Balance(snapshot))
+        content.Add(History(snapshot))
+        return content
     }
 
     private func Stat(label string, value string, color Color) Blob -> Container{
@@ -185,7 +192,93 @@ partial class WalletView {
         }
     }
 
+    private func PendingSendBanner() Blob {
+        let pending = wallet.Pending
+        let content = Glass()
+        content.FlexShrink = 0
+        content.Gap = 10
+        content.Add(Label(strings.Get("Pending send"), 14, orange))
+        let outcome = wallet.SendOutcome
+        let message = if let value = pending {
+            strings.Get(value.State)
+        } else if outcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
+            strings.Get("Submitted") + ": " + outcome.Substring(11)
+        } else {
+            strings.Get("Send failed") + ": " + outcome.Replace("Send failed: ", "")
+        }
+        content.Add(Text{Content: message, FontFamily: font, FontSize: 13, Color: ink, TextWrap: TextWrap.Wrap})
+        content.Add(
+            ActionRow(
+                []Blob{
+                    Button(
+                        if pending?.Retryable == true {
+                            "Resubmit"
+                        } else {
+                            "Dismiss"
+                        },
+                        () -> {
+                            confirmPendingSend = true
+                            Rebuild()
+                        },
+                        Working()
+                    )
+                }
+            )
+        )
+        return content
+    }
+
+    private func ConfirmPendingSend() Blob {
+        let resume = wallet.Pending?.Retryable == true
+        let close Action = () -> {
+            confirmPendingSend = false
+            Rebuild()
+        }
+        return ModalDialog{
+            Open: true,
+            AccessibilityName: strings.Get("Pending send"),
+            Width: Math.Min(width - 48, 600),
+            Content: Text{
+                Content: strings.Get(
+                    if resume {
+                        "Resubmitting an unknown send can pay twice if the node forgot its record"
+                    } else {
+                        "Dismissing does not cancel a payment. Sending again can pay twice"
+                    }
+                ),
+                FontFamily: font,
+                FontSize: 14,
+                Color: orange,
+                TextWrap: TextWrap.Wrap
+            },
+            ConfirmText: strings.Get(
+                if resume {
+                    "Resubmit"
+                } else {
+                    "Dismiss"
+                }
+            ),
+            CancelText: strings.Get("Cancel"),
+            ConfirmDisabled: Working(),
+            OnConfirm: () -> {
+                confirmPendingSend = false
+                if resume {
+                    Run(wallet.ResumeSendAsync(), () -> Refresh())
+                } else {
+                    Run(wallet.DismissSendAsync())
+                }
+            },
+            OnCancel: close,
+            OnClose: close
+        }.Build()
+    }
+
     private func SendPanel() Blob {
+        if wallet.Pending != nil || wallet.SendOutcome.Length > 0 {
+            let card = PageContent(strings.Get("send"), 640)
+            card.Add(PendingSendBanner())
+            return card
+        }
         let blank = address.Trim().Length == 0 || amount.Trim().Length == 0
         let amountIssue = AmountIssue()
         let memoIssue = MemoIssue()

@@ -122,3 +122,13 @@ class SendResult(txId string, fee uint64, change uint64) {
     let Change uint64 = change
     let Status string = "submitted"
 }
+
+class PendingSend {
+    var Key string = ""
+    var Body string = ""
+    var Wallet string = ""
+    var Network string = ""
+    var Timestamp int64
+    var Retryable bool
+    var State string = "Send outcome unknown"
+}

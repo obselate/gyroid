@@ -29,7 +29,6 @@ partial class WalletView : Cell {
     private var lastPage string = ""
     private var operations int32
     private var error string = ""
-    private var outcomeUnknown bool
     private var bannerHeight float64
     private var refreshing bool
     private var refreshError string = ""
@@ -386,12 +385,11 @@ partial class WalletView : Cell {
             () -> {
                 operations--
                 if unknown {
-                    outcomeUnknown = true
                     address = ""
                     amount = ""
                     memo = ""
                     historyTab = "sent"
-                    screen = "Transactions"
+                    screen = "Send"
                     Refresh()
                 } else {
                     error = message
@@ -700,17 +698,6 @@ partial class WalletView : Cell {
 
     private func Problem() Blob? {
         let snapshot = wallet.Snapshot
-        if outcomeUnknown {
-            return Banner{
-                Tone: Tone.Warning,
-                Content: strings.Get("Send result unknown. Check Sent before sending again."),
-                FontFamily: font,
-                OnDismiss: () -> {
-                    outcomeUnknown = false
-                    Rebuild()
-                }
-            }.Build()
-        }
         let message = if error.Length > 0 {
             error
         } else if refreshError.Length > 0 {
@@ -1099,6 +1086,9 @@ partial class WalletView : Cell {
         if WalletAvailable() {
             if let pending = estimate {
                 root.Add(ConfirmSend(pending))
+            }
+            if confirmPendingSend {
+                root.Add(ConfirmPendingSend())
             }
         }
         if applyPending && page == "Settings" {

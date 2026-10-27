@@ -13,6 +13,7 @@ class Cli {
             var limit int32 = 20
             var memo = ""
             var dryRun = false
+            let resume = command == "send" && arguments.Length == 3 && arguments[2] == "--resume"
             if command == "node" {
                 if arguments.Length != 3 ||
                     (arguments[2] != "status" && arguments[2] != "start" && arguments[2] != "stop") {
@@ -32,7 +33,7 @@ class Cli {
                     return Usage(Console.Error)
                 }
             } else if command == "send" {
-                if arguments.Length < 4 {
+                if arguments.Length < 4 && !resume {
                     return Usage(Console.Error)
                 }
                 var hasMemo = false
@@ -70,7 +71,7 @@ class Cli {
                 return 0
             }
             try {
-                if command == "send" {
+                if command == "send" && !resume {
                     WalletController.ValidateSend(arguments[2], arguments[3], memo)
                 }
                 using let wallet = WalletController()
@@ -96,6 +97,12 @@ class Cli {
                         Console.WriteLine("Sync height: " + height.ToString(CultureInfo.InvariantCulture))
                     }
                     Console.WriteLine("Wallet: " + wallet.Snapshot.State)
+                    if let pending = wallet.Pending {
+                        Console.WriteLine("Pending send: " + pending.State)
+                    }
+                    if wallet.SendOutcome.Length > 0 {
+                        Console.WriteLine(wallet.SendOutcome)
+                    }
                 } else if command == "unlock" {
                     let password = ReadPassword()
                     try {
@@ -108,6 +115,32 @@ class Cli {
                     wallet.LockAsync().GetAwaiter().GetResult()
                     Console.WriteLine("Wallet locked")
                 } else if command == "send" {
+                    if resume {
+                        if wallet.Pending == nil {
+                            if wallet.SendOutcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
+                                Console.WriteLine(wallet.SendOutcome)
+                                return 0
+                            }
+                            throw WalletException(
+                                if wallet.SendOutcome.Length > 0 {
+                                    wallet.SendOutcome
+                                } else {
+                                    "No pending send"
+                                }
+                            )
+                        }
+                        RequireTerminal()
+                        Console.Error.WriteLine(
+                            "Resubmitting an unknown send can pay twice if the node forgot its record"
+                        )
+                        Console.Error.Write("Type resubmit to submit the same request: ")
+                        if Console.ReadLine() != "resubmit" {
+                            throw WalletException("Send cancelled")
+                        }
+                        let result = wallet.ResumeSendAsync().GetAwaiter().GetResult()
+                        Console.WriteLine("Submitted: " + result.TxId)
+                        return 0
+                    }
                     wallet.RefreshAsync().GetAwaiter().GetResult()
                     let estimate = wallet.EstimateAsync(arguments[2], arguments[3], memo).GetAwaiter().GetResult()
                     if estimate.Handle.Length > 0 {
@@ -273,6 +306,7 @@ class Cli {
             writer.WriteLine("       gyroid node status | start | stop")
             writer.WriteLine("       gyroid history [--limit N]")
             writer.WriteLine("       gyroid send <address> <amount> [--memo TEXT] [--dry-run]")
+            writer.WriteLine("       gyroid send --resume")
             return 2
         }
     }

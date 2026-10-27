@@ -23,6 +23,9 @@ func SignalWalletDaemon(processId int32, signal int32) int32;
 @DllImport("libc", EntryPoint: "open", SetLastError: true)
 func OpenWalletFile(path string, flags int32) int32;
 
+@DllImport("libc", EntryPoint: "fsync", SetLastError: true)
+func FlushWalletDirectory(fd int32) int32;
+
 @DllImport("libc", EntryPoint: "fstat", SetLastError: true)
 func StatWalletFile(fd int32, buffer IntPtr) int32;
 
@@ -568,6 +571,17 @@ class WalletDaemon : IDisposable {
 
 class WalletFiles {
     shared {
+        func FlushDirectory(path string) {
+            if OperatingSystem.IsWindows() {
+                return
+            }
+            let fd = OpenWalletFile(path, 0)
+            using let handle = SafeFileHandle(IntPtr(fd), true)
+            if fd < 0 || FlushWalletDirectory(fd) != 0 {
+                throw WalletException("Pending send file could not be saved durably")
+            }
+        }
+
         func OpenRead(path string, privateFile bool = false) FileStream {
             var handle SafeFileHandle
             if OperatingSystem.IsWindows() {

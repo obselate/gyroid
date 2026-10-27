@@ -19,6 +19,9 @@ class WalletController : IDisposable {
     var pendingSeed[]?char = nil
     var confirmation SendEstimate? = nil
     var confirmationKey string = ""
+    var pendingSend PendingSend? = nil
+    var sendOutcome string = ""
+    var sendLease FileStream? = nil
     var state string = "Unloaded"
     var page string = "Welcome"
     var connected bool
@@ -32,6 +35,8 @@ class WalletController : IDisposable {
     prop Snapshot WalletSnapshot -> snapshot
     prop NodeStatus NodeStatus -> nodeStatus
     prop Busy bool -> isBusy
+    prop Pending PendingSend? -> pendingSend
+    prop SendOutcome string -> sendOutcome
     prop LockQueued bool -> lockQueued
     prop NodeProgress string -> nodeProgress
     var nodeProgress string = ""
@@ -81,6 +86,8 @@ class WalletController : IDisposable {
             page = "Welcome"
             PublishEmpty()
         }
+        sendLease?.Dispose()
+        sendLease = nil
         isBusy = false
         gate.Release()
         if !disposed {
@@ -151,6 +158,9 @@ class WalletController : IDisposable {
                 }
             }
             connected = true
+            if managed {
+                await RecoverSendCoreAsync(ct)
+            }
             PublishCurrent()
         } catch (error Exception) {
             PublishNode()
@@ -673,6 +683,8 @@ class WalletController : IDisposable {
         }
         managed = false
         state = "Unloaded"
+        pendingSend = nil
+        sendOutcome = ""
     }
 
     async func RevealSeedAsync(password[]char, ct CancellationToken = default(CancellationToken)) {
@@ -744,6 +756,7 @@ class WalletController : IDisposable {
 
     private async func RefreshCoreAsync(ct CancellationToken) {
         RequireUnlocked()
+        await RecoverSendCoreAsync(ct)
         try {
             using let balance = await rpc.JsonAsync("wallet/balance", ct: ct)
             using let address = await rpc.JsonAsync("wallet/address", ct: ct)
@@ -825,6 +838,7 @@ class WalletController : IDisposable {
         let sends = List[WalletSend]()
         var offset int32 = 0
         while true {
+            await Task.Delay(2000, ct)
             using let response = await rpc.JsonAsync(
                 "wallet/sends?limit=500&offset=" + offset.ToString() + "&order=desc",
                 ct: ct
@@ -877,6 +891,7 @@ class WalletController : IDisposable {
         await BeginAsync(ct)
         try {
             RequireUnlocked()
+            RequireNoPendingSend()
             InvalidateConfirmation()
             let request = ValidateSend(
                 address,
@@ -895,6 +910,7 @@ class WalletController : IDisposable {
                 handle = resolved.Handle
                 recipient = ValidateAddress(resolved.Address)
             }
+            await Task.Delay(2000, ct)
             using let result = await rpc.JsonAsync(
                 "wallet/send",
                 writer -> WriteSend(writer, recipient, request.Amount, request.Memo, true),
@@ -940,6 +956,7 @@ class WalletController : IDisposable {
         await BeginAsync(ct)
         try {
             RequireUnlocked()
+            RequireNoPendingSend()
             if !Object.ReferenceEquals(estimate, confirmation) {
                 throw WalletException("Estimate is no longer valid. Request a new estimate")
             }
@@ -954,23 +971,243 @@ class WalletController : IDisposable {
             if WalletJson.Flag(walletAddress.RootElement, "view_only") {
                 throw WalletException("View-only wallets cannot send")
             }
-            using let result = await rpc.JsonAsync(
+            using let body = MemoryStream()
+            using let writer = Utf8JsonWriter(body)
+            WriteSend(writer, estimate.Address, estimate.Amount, estimate.Memo, false)
+            writer.Flush()
+            let pending = PendingSend{
+                Key: key,
+                Body: Encoding.UTF8.GetString(body.GetBuffer(), 0, int32(body.Length)),
+                Wallet: settings.ActiveWallet,
+                Network: settings.Network,
+                Timestamp: DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            }
+            SavePendingSend(pending)
+            pendingSend = pending
+            return await SubmitPendingCoreAsync(pending, ct)
+        } finally {
+            End()
+        }
+    }
+
+    private func PendingSendPath() string -> Path.Combine(
+        settings.DataDirectory,
+        "gyroid-pending-send." + settings.ActiveWallet + ".json"
+    )
+
+    private func AcquireSendLease() {
+        if sendLease != nil {
+            return
+        }
+        let options = FileStreamOptions{
+            Mode: FileMode.OpenOrCreate,
+            Access: FileAccess.ReadWrite,
+            Share: FileShare.None
+        }
+        if !OperatingSystem.IsWindows() {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite
+        }
+        try {
+            sendLease = FileStream(PendingSendPath() + ".lock", options)
+        } catch (error IOException) {
+            throw WalletException("Another Gyroid process is handling this wallet's sends")
+        }
+    }
+
+    private func LoadPendingSend() {
+        let previous = pendingSend
+        pendingSend = nil
+        if settings.ActiveWallet.Length == 0 || !File.Exists(PendingSendPath()) {
+            return
+        }
+        using let json = JsonDocument.Parse(WalletFiles.ReadText(PendingSendPath(), 16384, true))
+        let root = json.RootElement
+        let pending = PendingSend{
+            Key: WalletJson.Text(root, "idempotency_key"),
+            Body: WalletJson.Text(root, "body"),
+            Wallet: WalletJson.Text(root, "wallet"),
+            Network: WalletJson.Text(root, "network"),
+            Timestamp: WalletJson.Signed(root, "timestamp")
+        }
+        if pending.Wallet != settings.ActiveWallet ||
+            pending.Network != settings.Network ||
+            pending
+            .Key
+            .Length == 0 ||
+            pending
+            .Body
+            .Length == 0 ||
+            pending.Timestamp <= 0 {
+            throw WalletException("Pending send file is invalid")
+        }
+        using let body = JsonDocument.Parse(pending.Body)
+        if let prior = previous {
+            if prior.Key == pending.Key && prior.Body == pending.Body {
+                pending.State = prior.State
+                pending.Retryable = prior.Retryable
+            }
+        }
+        pendingSend = pending
+    }
+
+    private func SavePendingSend(pending PendingSend) {
+        let path = PendingSendPath()
+        let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+        try {
+            using let stream = WalletFiles.CreatePrivate(temporary)
+            using let writer = Utf8JsonWriter(stream)
+            writer.WriteStartObject()
+            writer.WriteString("idempotency_key", pending.Key)
+            writer.WriteString("body", pending.Body)
+            writer.WriteString("wallet", pending.Wallet)
+            writer.WriteString("network", pending.Network)
+            writer.WriteNumber("timestamp", pending.Timestamp)
+            writer.WriteEndObject()
+            writer.Flush()
+            stream.Flush(true)
+            stream.Dispose()
+            File.Move(temporary, path)
+            WalletFiles.FlushDirectory(settings.DataDirectory)
+        } finally {
+            File.Delete(temporary)
+        }
+    }
+
+    private func ClearPendingSend() {
+        File.Delete(PendingSendPath())
+        WalletFiles.FlushDirectory(settings.DataDirectory)
+        pendingSend = nil
+    }
+
+    private func RequireNoPendingSend() {
+        AcquireSendLease()
+        LoadPendingSend()
+        if pendingSend != nil {
+            throw WalletException("Resolve the pending send before starting another")
+        }
+    }
+
+    private async func RecoverSendCoreAsync(ct CancellationToken) {
+        AcquireSendLease()
+        LoadPendingSend()
+        guard let pending = pendingSend else {
+            return
+        }
+        try {
+            await Task.Delay(2000, ct)
+            using let response = await rpc.JsonAsync(
+                "wallet/send/status?idempotency_key=" + Uri.EscapeDataString(pending.Key),
+                ct: ct
+            )
+            let root = response.RootElement
+            let status = WalletJson.Text(root, "state")
+            if state == "Unlocked" {
+                let sends = await ReadSendsAsync(ct)
+                snapshot.Sends = sends
+            }
+            if status == "not_found" && state == "Unlocked" {
+                using let body = JsonDocument.Parse(pending.Body)
+                let recipients = body.RootElement.GetProperty("recipients")
+                let recipient = recipients[0]
+                for send in snapshot.Sends {
+                    if send.Timestamp < pending.Timestamp || send.Recipients.Length != 1 {
+                        continue
+                    }
+                    let recorded = send.Recipients[0]
+                    if recorded.Address == WalletJson.Text(recipient, "address") &&
+                        recorded.Amount == WalletJson.Number(recipient, "amount") && recorded.Memo == WalletJson.Text(
+                        recipient,
+                        "memo_text"
+                    ) {
+                        sendOutcome = "Submitted: " + send.TxId
+                        ClearPendingSend()
+                        return
+                    }
+                }
+            }
+            if status == "completed" && root.TryGetProperty("result", out let result) {
+                let txid = WalletJson.Text(result, "txid")
+                if txid.Length > 0 && !WalletJson.Flag(result, "dry_run") {
+                    sendOutcome = "Submitted: " + txid
+                    ClearPendingSend()
+                }
+            } else if status == "failed" {
+                sendOutcome = "Send failed: " + WalletJson.Text(root, "error")
+                ClearPendingSend()
+            } else if status == "not_found" && state == "Unlocked" {
+                pending.State = "No send record. Outcome unknown"
+                pending.Retryable = true
+            }
+        } catch (error WalletException) {
+            pending.Retryable = false
+        }
+    }
+
+    private async func SubmitPendingCoreAsync(pending PendingSend, ct CancellationToken) SendResult {
+        await Task.Delay(2000, ct)
+        try {
+            using let response = await rpc.JsonAsync(
                 "wallet/send",
-                writer -> WriteSend(writer, estimate.Address, estimate.Amount, estimate.Memo, false),
+                writer -> writer.WriteRawValue(pending.Body, true),
                 ct,
-                key,
+                pending.Key,
                 true
             )
-            try {
-                let root = result.RootElement
-                let txId = WalletJson.Text(root, "txid")
-                if txId.Length == 0 || WalletJson.Flag(root, "dry_run") {
-                    throw WalletException("Invalid send response")
-                }
-                return SendResult(txId, WalletJson.Number(root, "fee"), WalletJson.Number(root, "change"))
-            } catch (error Exception) {
-                throw WalletException("Send outcome is unknown. Refresh outgoing sends before any new attempt", 0, true)
+            let root = response.RootElement
+            let txid = WalletJson.Text(root, "txid")
+            if txid.Length == 0 || WalletJson.Flag(root, "dry_run") {
+                throw WalletException("Invalid send response", 0, true)
             }
+            let result = SendResult(txid, WalletJson.Number(root, "fee"), WalletJson.Number(root, "change"))
+            sendOutcome = "Submitted: " + txid
+            ClearPendingSend()
+            return result
+        } catch (error WalletException) {
+            await RecoverSendCoreAsync(CancellationToken.None)
+            if pendingSend == nil && sendOutcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
+                return SendResult(sendOutcome.Substring(11), 0, 0)
+            }
+            if pendingSend == nil {
+                throw WalletException(sendOutcome)
+            }
+            throw WalletException("Send outcome unknown. Resolve the pending send before starting another", 0, true)
+        }
+    }
+
+    async func ResumeSendAsync(ct CancellationToken = default(CancellationToken)) SendResult {
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            await RecoverSendCoreAsync(ct)
+            guard let pending = pendingSend else {
+                if sendOutcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
+                    return SendResult(sendOutcome.Substring(11), 0, 0)
+                }
+                throw WalletException(
+                    if sendOutcome.Length > 0 {
+                        sendOutcome
+                    } else {
+                        "No pending send"
+                    }
+                )
+            }
+            if !pending.Retryable {
+                throw WalletException("Send outcome unknown. Resubmission is not available")
+            }
+            pending.Retryable = false
+            return await SubmitPendingCoreAsync(pending, ct)
+        } finally {
+            End()
+        }
+    }
+
+    async func DismissSendAsync(ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            AcquireSendLease()
+            ClearPendingSend()
+            sendOutcome = ""
         } finally {
             End()
         }
