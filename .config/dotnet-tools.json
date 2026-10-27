@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "gsharp.gsfmt": {
+      "version": "0.5.212",
+      "commands": ["gsfmt"]
+    }
+  }
+}

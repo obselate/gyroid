@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Goo": {
+        "type": "Direct",
+        "requested": "[0.22.0, 0.22.0]",
+        "resolved": "0.22.0",
+        "contentHash": "DI/+TbaBNCMZ7Od5J9U27doDs5vHfJIYqaAqMpHkmtlkua+ZOGW2O4vs4suX7QEataNJ+bK6tr48zRCaJ6TJtA==",
+        "dependencies": {
+          "Hexa.NET.SDL3": "1.2.17",
+          "Tmds.DBus.Protocol": "0.95.1",
+          "Unicode.Bidi": "0.3.18"
+        }
+      },
+      "Goo.Widgets": {
+        "type": "Direct",
+        "requested": "[0.16.1, 0.16.1]",
+        "resolved": "0.16.1",
+        "contentHash": "DCY0pB3bS0QPfr9ET/igT0hYVu6sQloZNmZlCKtCFe3e79+ZA3v1DtAgBQLLDD8VeqWd2JFqMIetRzCnxTeorg==",
+        "dependencies": {
+          "Goo": "0.20.0"
+        }
+      },
+      "Microsoft.DotNet.ILCompiler": {
+        "type": "Direct",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "AawF393Q+VkdrnrnI1gu612zh5iqpa1AGSvnKCQ3IkMgSKJXIQbO1sXYRgEzOU4f0cPZ6MaCCF29xZSGWlmbuQ=="
+      },
+      "Microsoft.NET.ILLink.Tasks": {
+        "type": "Direct",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "xi+BDjFpW+Sb+MHFHaH6Y/gV9I8BluFwRXc1QyCdoZbIK26eNiBeFuMTe/FMwc33G1wdHCyDg7CVTmb8OdQrMQ=="
+      },
+      "Net.Codecrete.QrCodeGenerator": {
+        "type": "Direct",
+        "requested": "[3.1.0, 3.1.0]",
+        "resolved": "3.1.0",
+        "contentHash": "2b9mz9C5vNdpwFT1o4j/1DijuNAzP0wHZo3EqJe7zIQDO3/e38NNJuQ3+kJ22oJakJtieRI0wYCwbBVUbesVTg=="
+      },
+      "NSec.Cryptography": {
+        "type": "Direct",
+        "requested": "[26.4.0, 26.4.0]",
+        "resolved": "26.4.0",
+        "contentHash": "0vsCtY5f+YgQROiWNqzgWp+l2pddfk9FkWoGV/bEo0MuEYPKlJWuoA8aOfO6qp3f+EnObKE3zSJhn1PspJeJVg==",
+        "dependencies": {
+          "libsodium": "[1.0.22, 1.0.23)"
+        }
+      },
+      "Hexa.NET.SDL3": {
+        "type": "Transitive",
+        "resolved": "1.2.17",
+        "contentHash": "575Jg8/VU/D2JumvDmC7xiRDGMO1VPiw75+c4qNebQrAsRnA+XzhgcuoC91ozYaKZT1sqkb+ChySGGV3E/wonw==",
+        "dependencies": {
+          "HexaGen.Runtime": "1.1.24"
+        }
+      },
+      "HexaGen.Runtime": {
+        "type": "Transitive",
+        "resolved": "1.1.24",
+        "contentHash": "1P5IA09EL514OeKGyJ3mSI5F9MGAId27CoSR0SzVz3Jj6m/7tn/GdONoWEUYacRSc41y+CbR6tVGcZNAldsehA=="
+      },
+      "libsodium": {
+        "type": "Transitive",
+        "resolved": "1.0.22",
+        "contentHash": "KPD9SloJFclrsjnhABu7dzWrcyYkwPbvx5l1gRSPAX/0n+OBtSiVCKtGFv4n+ecWUHU0tCG9LSSwoZZx673zBQ=="
+      },
+      "Tmds.DBus.Protocol": {
+        "type": "Transitive",
+        "resolved": "0.95.1",
+        "contentHash": "IbGhqZAqqgB/DkT70+lAk4MNv95tZtsTMFQ+S3uGy0aTfOkGVeFjeNJsX8dBI/3+CPnO5XW6lRQKGeFEgHElKw=="
+      },
+      "Unicode.Bidi": {
+        "type": "Transitive",
+        "resolved": "0.3.18",
+        "contentHash": "HjVMQk+TfHDhRdavpgYS8ulyENYPSRTaViEttoPsHPUHXHk32eEAcv3YSPhTAjxd6h+6CCA+oBJWagDvOfSEZw=="
+      }
+    },
+    "net10.0/linux-x64": {
+      "Goo": {
+        "type": "Direct",
+        "requested": "[0.22.0, 0.22.0]",
+        "resolved": "0.22.0",
+        "contentHash": "DI/+TbaBNCMZ7Od5J9U27doDs5vHfJIYqaAqMpHkmtlkua+ZOGW2O4vs4suX7QEataNJ+bK6tr48zRCaJ6TJtA==",
+        "dependencies": {
+          "Hexa.NET.SDL3": "1.2.17",
+          "Tmds.DBus.Protocol": "0.95.1",
+          "Unicode.Bidi": "0.3.18"
+        }
+      },
+      "Microsoft.DotNet.ILCompiler": {
+        "type": "Direct",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "AawF393Q+VkdrnrnI1gu612zh5iqpa1AGSvnKCQ3IkMgSKJXIQbO1sXYRgEzOU4f0cPZ6MaCCF29xZSGWlmbuQ==",
+        "dependencies": {
+          "runtime.linux-x64.Microsoft.DotNet.ILCompiler": "10.0.12"
+        }
+      },
+      "Hexa.NET.SDL3": {
+        "type": "Transitive",
+        "resolved": "1.2.17",
+        "contentHash": "575Jg8/VU/D2JumvDmC7xiRDGMO1VPiw75+c4qNebQrAsRnA+XzhgcuoC91ozYaKZT1sqkb+ChySGGV3E/wonw==",
+        "dependencies": {
+          "HexaGen.Runtime": "1.1.24"
+        }
+      },
+      "libsodium": {
+        "type": "Transitive",
+        "resolved": "1.0.22",
+        "contentHash": "KPD9SloJFclrsjnhABu7dzWrcyYkwPbvx5l1gRSPAX/0n+OBtSiVCKtGFv4n+ecWUHU0tCG9LSSwoZZx673zBQ=="
+      },
+      "runtime.linux-x64.Microsoft.DotNet.ILCompiler": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "wAa+LAE6+Bkd+pEJvGdnQU8PZQRzvhurpQ4hzsOTpRuedIq1kunJcz86xBCBlzsc+QlVdCKVUPzEfB3uYVB7Gw=="
+      }
+    }
+  }
+}

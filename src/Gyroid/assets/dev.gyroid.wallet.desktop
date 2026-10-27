@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Gyroid
+Icon=dev.gyroid.wallet
+Exec=gyroid
+TryExec=gyroid
+Terminal=false
+StartupWMClass=dev.gyroid.wallet
+Categories=Finance;
