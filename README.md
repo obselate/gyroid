@@ -4,7 +4,7 @@ A Blocknet (BNT) wallet with a graphical interface and command-line tools. Suppo
 
 ## Install
 
-Install the .NET SDK version in `global.json` and the Linux NativeAOT build prerequisites.
+Install the .NET SDK version in `global.json`, [Slang 2026.16](https://github.com/shader-slang/slang/releases/tag/v2026.16) (`slangc` on `PATH` or `SLANG_SDK` set) and the Linux NativeAOT build prerequisites.
 
 ## Build and run
 
