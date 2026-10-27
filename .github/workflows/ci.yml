@@ -30,4 +30,18 @@ jobs:
           mkdir "$RUNNER_TEMP/slang"
           tar -xzf "$RUNNER_TEMP/slang.tar.gz" -C "$RUNNER_TEMP/slang"
           echo "SLANG_SDK=$RUNNER_TEMP/slang" >> "$GITHUB_ENV"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        id: spirv-val
+        with:
+          path: ${{ runner.temp }}/vulkan-sdk
+          key: spirv-val-linux-x64-1.4.357.0-9a49b0883b9b635689a85b5647dbfcb223268151
+      - name: Install spirv-val
+        if: steps.spirv-val.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/vulkan-sdk.tar.xz" https://sdk.lunarg.com/sdk/download/1.4.357.0/linux/vulkan_sdk.tar.xz
+          echo "0f09bf6a0625e346bf004be70b92907e934a4c76606b323441b2baf3a5a0e66d  $RUNNER_TEMP/vulkan-sdk.tar.xz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/vulkan-sdk/bin"
+          tar -xJf "$RUNNER_TEMP/vulkan-sdk.tar.xz" -C "$RUNNER_TEMP/vulkan-sdk/bin" --strip-components=3 1.4.357.0/x86_64/bin/spirv-val
+          rm "$RUNNER_TEMP/vulkan-sdk.tar.xz"
+      - run: echo "VULKAN_SDK=$RUNNER_TEMP/vulkan-sdk" >> "$GITHUB_ENV"
       - run: bash scripts/verify.sh
