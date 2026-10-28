@@ -347,12 +347,7 @@ partial class WalletView : Cell {
         if !decoding.ContainsKey(channel) {
             return 1
         }
-        let duration = switch channel {
-            case "sync": 400.0
-            case "seed": 720.0
-            default: 900.0
-        }
-        return Stopwatch.GetElapsedTime(decoding[channel]).TotalMilliseconds / duration
+        return Stopwatch.GetElapsedTime(decoding[channel]).TotalMilliseconds / 250
     }
 
     private func Frame(content string, t float64, seed int32, digits Random, size float64, color Color) Text {
