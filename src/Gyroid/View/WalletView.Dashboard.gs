@@ -1134,7 +1134,7 @@ partial class WalletView {
                 proofKey = task.Result
                 proofAddress = send.Recipients.Length > 0 ? send.Recipients[0].Address: ""
                 proofAmount = send.Recipients.Length > 0 ? Money(send.Recipients[0].Amount): ""
-                verdict = nil
+                ResetVerdict()
             }
         )
     }

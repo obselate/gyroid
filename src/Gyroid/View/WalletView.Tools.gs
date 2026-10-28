@@ -23,6 +23,7 @@ partial class WalletView {
     private var proofAddress string = ""
     private var proofAmount string = ""
     private var verdict bool?
+    private var verdictRun int32
     private var rescan Task?
     private var contacts SortedDictionary[string, string] = SortedDictionary[string, string](StringComparer.Ordinal)
     private var contactName string = ""
@@ -46,7 +47,12 @@ partial class WalletView {
         proofKey = ""
         proofAddress = ""
         proofAmount = ""
+        ResetVerdict()
+    }
+
+    private func ResetVerdict() {
         verdict = nil
+        verdictRun += 1
     }
 
     private func Tabs(key string, label string, items[]NavigationItem, selected string, chosen Action[string]) Blob ->
@@ -88,7 +94,7 @@ partial class WalletView {
                 tab,
                 id -> {
                     toolsTab = id
-                    verdict = nil
+                    ResetVerdict()
                     Rebuild()
                 }
             )
@@ -143,7 +149,7 @@ partial class WalletView {
         value,
         text -> {
             changed(text)
-            verdict = nil
+            ResetVerdict()
             Rebuild()
         },
         submit
@@ -166,6 +172,8 @@ partial class WalletView {
         if Working() {
             return
         }
+        ResetVerdict()
+        let run = verdictRun
         let task = if tab == "proof" {
             wallet.VerifyProofAsync(proofTx, proofKey, proofAddress, proofAmount)
         } else {
@@ -174,7 +182,9 @@ partial class WalletView {
         Run(
             task,
             () -> {
-                verdict = task.Result
+                if run == verdictRun {
+                    verdict = task.Result
+                }
             }
         )
     }
