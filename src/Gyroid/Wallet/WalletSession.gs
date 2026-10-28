@@ -23,6 +23,7 @@ class WalletSession : IDisposable {
     let Keys WalletKeys
     let Proofs MessageProofs
     let Mining MiningService
+    let Checks PrivacyChecks
     let gate SemaphoreSlim = SemaphoreSlim(1, 1)
     let autoLockChanged SemaphoreSlim = SemaphoreSlim(0, 1)
     var snapshot WalletSnapshot = WalletSnapshot()
@@ -57,6 +58,7 @@ class WalletSession : IDisposable {
         Keys = WalletKeys(this)
         Proofs = MessageProofs(this)
         Mining = MiningService(this)
+        Checks = PrivacyChecks(this)
         Node.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         Node.Changed = () -> Changed?.Invoke()
         if settings.ActiveWallet.Length > 0 {
@@ -909,7 +911,9 @@ class WalletSession : IDisposable {
                 Balance: NodeJson.OptionalNumber(root, "total") + change,
                 Spendable: NodeJson.OptionalNumber(root, "spendable"),
                 Pending: NodeJson.OptionalNumber(root, "pending") + change,
-                Unconfirmed: change
+                Unconfirmed: change,
+                Outputs: NodeJson.OptionalNumber(root, "outputs_total") ?? uint64(0),
+                MemoErrors: NodeJson.OptionalNumber(root, "memo_decrypt_failures") ?? uint64(0)
             }
             let outputs = await History.ReloadAsync(sends, ct)
             snapshot = WalletSnapshot{

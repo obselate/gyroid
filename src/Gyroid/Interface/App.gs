@@ -35,14 +35,11 @@ partial class App : Cell {
     private let receiveRequest ReceiveRequest = ReceiveRequest()
 
     private let miningHistory MiningHistory = MiningHistory()
+    private let toolsState ToolsState = ToolsState()
 
-    private var proofTx string = ""
+    private let togglePrivacy Action
 
-    private var proofKey string = ""
-
-    private var proofAddress string = ""
-
-    private var proofAmount string = ""
+    private let openNodeSettings Action
 
     private let wallet WalletSession
 
@@ -117,6 +114,11 @@ partial class App : Cell {
             (task, done, secret, extra) -> Run(task, done, secret, extra)
         )
         navigate = target -> Navigate(target)
+        togglePrivacy = () -> TogglePrivacy()
+        openNodeSettings = () -> {
+            settingsSection = "node"
+            Navigate("Settings")
+        }
         showUpgrade = () -> {
             upgradeShown = true
             Rebuild()
@@ -226,7 +228,7 @@ partial class App : Cell {
         )
         if let value = snapshot.Balance {
             text.Append(
-                " ${value.Scanning} ${value.ScanHeight} ${value.ChainHeight} ${value.Balance} ${value.Spendable} ${value.Pending}"
+                " ${value.Scanning} ${value.ScanHeight} ${value.ChainHeight} ${value.Balance} ${value.Spendable} ${value.Pending} ${value.Outputs} ${value.MemoErrors}"
             )
         }
         for output in snapshot.History {
@@ -254,6 +256,7 @@ partial class App : Cell {
         }
         if snapshot.State != "Unlocked" {
             ClearSeed()
+            toolsState.Report = nil
         }
         shownState = state
         let node = wallet.Node.Status
@@ -267,7 +270,6 @@ partial class App : Cell {
         if page != lastPage {
             ResumePlayback()
             ClearSecrets()
-            ClearTools()
             if lastPage == "Seed" {
                 ClearSeed()
             }
@@ -647,8 +649,27 @@ partial class App : Cell {
                     OnDone: finishSeed
                 }
             )
-        } else if page == "Tools" {
-            ToolsPage()
+        } else if page == "Tools" || page == "Privacy" {
+            Cell.Mount[ToolsInput, ToolsPage](
+                "tools",
+                ToolsInput{
+                    Session: wallet,
+                    Ui: ui,
+                    State: toolsState,
+                    Snapshot: snapshot,
+                    Node: wallet.Node.Status,
+                    Section: page,
+                    AutoLock: wallet.Settings.AutoLockMinutes,
+                    Privacy: ui.Privacy,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    Width: width,
+                    Height: height,
+                    OnNavigate: navigate,
+                    OnPrivacy: togglePrivacy,
+                    OnNodeSettings: openNodeSettings
+                }
+            )
         } else if page == "Contacts" {
             Cell.Mount[ContactsInput, ContactsPage](
                 "contacts",
@@ -717,7 +738,8 @@ partial class App : Cell {
             case "Seed": 760.0
             case "Receive": 640.0
             case "Send": 640.0
-            case "Tools": 640.0
+            case "Tools": span
+            case "Privacy": span
             case "Contacts": 640.0
             default: 560.0
         }

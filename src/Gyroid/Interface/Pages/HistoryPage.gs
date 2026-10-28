@@ -71,6 +71,7 @@ class HistoryPage : Cell[HistoryInput] {
     private var proofRecipient int32
     private var exporting bool
     private var format string = "csv"
+    private var observed string = ""
     private var memos bool = true
     private var plotWidth float64
     private var low uint64
@@ -206,6 +207,39 @@ class HistoryPage : Cell[HistoryInput] {
         rows.BorderWidth = Edges{Top: 1}
         rows.BorderColor = ui.Rule
         panel.Add(rows)
+        let lensRow = Array.FindIndex(shown, (row HistoryRow) -> row.Kind == "out" && row.TxId == observed)
+        if lensRow >= 0 {
+            let row = shown[lensRow]
+            let portal = Portal()
+            portal.Add(
+                Cell.Mount[ObserverLensInput, ObserverLens](
+                    "lens",
+                    ObserverLensInput{
+                        Session: input.Session,
+                        Ui: ui,
+                        Send: input.Snapshot.Sends.First((send WalletSend) -> send.TxId == observed),
+                        Recipient: ui.Short(row.Recipient),
+                        Privacy: input.Privacy,
+                        Language: input.Language,
+                        Width: input.Width,
+                        OnProve: () -> {
+                            observed = ""
+                            tab = "proof"
+                            revision++
+                            if proofFor != row.TxId {
+                                Prove(row)
+                            }
+                            Rebuild()
+                        },
+                        OnClose: () -> {
+                            observed = ""
+                            Rebuild()
+                        }
+                    }
+                )
+            )
+            panel.Add(portal)
+        }
         return panel
     }
 
@@ -822,7 +856,15 @@ class HistoryPage : Cell[HistoryInput] {
                         Rebuild()
                     }
                 ),
-                Container{FlexGrow: 1}
+                Container{FlexGrow: 1},
+                IconButton{
+                    Icon: MaterialIcons.Create("visibility", 16, ui.Body),
+                    AccessibilityName: ui.Strings.Get("observer view"),
+                    OnClick: () -> {
+                        observed = row.TxId
+                        Rebuild()
+                    }
+                }.Build()
             }
             if tab == "proof" {
                 tabs.Add(

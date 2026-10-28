@@ -23,14 +23,7 @@ import System.Text
 import System.Threading.Tasks
 
 partial class App {
-    private func RailItem(
-        label string,
-        icon string,
-        selected bool,
-        disabled bool,
-        action Action,
-        checked AccessibilityChecked = AccessibilityChecked.Unspecified
-    ) Blob {
+    private func RailItem(label string, icon string, selected bool, disabled bool, action Action) Blob {
         let color = if disabled {
             ui.Dim
         } else if selected {
@@ -59,8 +52,7 @@ partial class App {
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get(label),
-                Selected: selected,
-                Checked: checked
+                Selected: selected
             },
             OnClick: action,
             MaterialIcons.Create(icon, 20, color),
@@ -101,14 +93,9 @@ partial class App {
                 } else {
                     "visibility"
                 },
-                false,
-                false,
-                () -> TogglePrivacy(),
-                if ui.Privacy {
-                    AccessibilityChecked.True
-                } else {
-                    AccessibilityChecked.False
-                }
+                page == "Privacy",
+                blocked,
+                () -> Navigate("Privacy")
             )
         )
         rail.Add(RailItem("settings", "settings", page == "Settings", blocked, () -> Navigate("Settings")))

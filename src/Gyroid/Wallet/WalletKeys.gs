@@ -33,6 +33,20 @@ class WalletKeys {
         }
     }
 
+    async func PhraseAsync(password[]char, ct CancellationToken = default(CancellationToken))[]char {
+        await session.BeginAsync(ct)
+        try {
+            session.RequireUnlocked()
+            if session.Snapshot.ViewOnly {
+                throw WalletException("View-only wallets do not have a spend recovery phrase")
+            }
+            return await session.Node.Api.SeedAsync(password, ct)
+        } finally {
+            Array.Clear(password)
+            session.End()
+        }
+    }
+
     func TakePendingSeed()[]?char {
         let seed = pendingSeed
         pendingSeed = nil
