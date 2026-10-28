@@ -21,6 +21,8 @@ class WalletSnapshot {
     var Address string = ""
     var Balance WalletBalance? = nil
     var History[]WalletOutput = []WalletOutput{}
+    var HistoryTotal uint64
+    var HistoryMore bool
     var Sends[]WalletSend = []WalletSend{}
 }
 
@@ -42,6 +44,10 @@ class NodeStatus {
     var Phase string = ""
     var DownloadPercent int32?
     var TrustedCheckpoints bool?
+    var UpgradeDate string = ""
+    var UpgradeDeadline string = ""
+    var UpgradeNotice string = ""
+    var UpgradeBlocksLeft uint64
 }
 
 class WalletBalance {
@@ -88,6 +94,13 @@ class WalletSend {
     var Amount uint64
     var Fee uint64
     var Recipients[]WalletRecipient = []WalletRecipient{}
+}
+
+class TransactionDetails {
+    var Height uint64
+    var Confirmations uint64
+    var InMempool bool
+    var Timestamp int64? = nil
 }
 
 class SendEstimate(

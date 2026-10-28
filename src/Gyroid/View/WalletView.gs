@@ -81,6 +81,7 @@ partial class WalletView : Cell {
         strings = Strings(wallet.Settings.Language)
         receivedRow = (output WalletOutput) -> ReceivedRow(output)
         sentRow = (send WalletSend) -> SentRow(send)
+        historyHandle.MetricsChanged += MoreHistory
         background = ShaderEffect(ShaderEffectProgram(Resource("Gyroid.Background.goo-effect")))
         appIcon = ImageSource.Decode(Resource("Gyroid.Icon.png"))
         privacy = wallet.Settings.Privacy
@@ -200,7 +201,7 @@ partial class WalletView : Cell {
     private func Fingerprint(snapshot WalletSnapshot) string {
         let node = wallet.NodeStatus
         let text = StringBuilder(
-            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${wallet.LockQueued} ${wallet.NodeProgress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.SyncProgress} ${node.Phase} ${node.Peers} ${node.Endpoint} ${node.DataDirectory}"
+            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${snapshot.HistoryTotal} ${wallet.Pending?.Retryable} ${wallet.Pending?.State} ${wallet.LockQueued} ${wallet.NodeProgress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.SyncProgress} ${node.Phase} ${node.Peers} ${node.Endpoint} ${node.DataDirectory}"
         )
         if let value = snapshot.Balance {
             text.Append(
@@ -339,6 +340,9 @@ partial class WalletView : Cell {
         phrase = ""
         revealPassword = ""
         estimate = nil
+        shownOutput = nil
+        shownSend = nil
+        upgradeShown = false
     }
 
     private func LoadWallets() {
@@ -1089,6 +1093,12 @@ partial class WalletView : Cell {
             }
             if confirmPendingSend {
                 root.Add(ConfirmPendingSend())
+            }
+            if shownOutput != nil || shownSend != nil {
+                root.Add(TransactionDialog())
+            }
+            if upgradeShown {
+                root.Add(UpgradeDialog())
             }
         }
         if applyPending && page == "Settings" {

@@ -164,7 +164,11 @@ class Cli {
                     }
                 } else {
                     wallet.RefreshAsync().GetAwaiter().GetResult()
-                    let snapshot = wallet.Snapshot
+                    var snapshot = wallet.Snapshot
+                    while command == "history" && snapshot.HistoryMore && snapshot.History.Length < limit {
+                        wallet.LoadHistoryAsync().GetAwaiter().GetResult()
+                        snapshot = wallet.Snapshot
+                    }
                     if command == "address" {
                         Console.WriteLine(snapshot.Address)
                     } else if command == "balance" {

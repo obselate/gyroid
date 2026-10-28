@@ -4,6 +4,7 @@ import Gyroid.Model
 import System
 import System.Collections.Generic
 import System.IO
+import System.Linq
 import System.Text
 import System.Text.Json
 import System.Threading
@@ -22,6 +23,8 @@ class WalletController : IDisposable {
     var pendingSend PendingSend? = nil
     var sendOutcome string = ""
     var sendLease FileStream? = nil
+    var historyOffset int32
+    var historyTotal uint64
     var state string = "Unloaded"
     var page string = "Welcome"
     var connected bool
@@ -477,7 +480,7 @@ class WalletController : IDisposable {
         try {
             using let status = await rpc.JsonAsync("status", ct: ct)
             let root = status.RootElement
-            nodeStatus = NodeStatus{
+            let current = NodeStatus{
                 Source: daemon.Source,
                 Owned: daemon.Owned,
                 Running: true,
@@ -502,6 +505,17 @@ class WalletController : IDisposable {
                 DownloadPercent: daemon.DownloadPercent,
                 TrustedCheckpoints: daemon.TrustedCheckpoints
             }
+            if root.TryGetProperty("network_upgrade", out let upgrade) && upgrade.ValueKind == JsonValueKind.Object {
+                current.UpgradeDate = WalletJson.Text(upgrade, "date")
+                current.UpgradeDeadline = WalletJson.Text(upgrade, "migration_deadline")
+                current.UpgradeNotice = WalletJson.Text(upgrade, "notice")
+                current.UpgradeBlocksLeft = if current.Height < 103680 {
+                    103680 - current.Height
+                } else {
+                    0
+                }
+            }
+            nodeStatus = current
         } catch (error Exception) {
             PublishNode()
             ThrowIfCoreExited()
@@ -871,7 +885,6 @@ class WalletController : IDisposable {
         try {
             using let balance = await rpc.JsonAsync("wallet/balance", ct: ct)
             using let address = await rpc.JsonAsync("wallet/address", ct: ct)
-            using let history = await rpc.JsonAsync("wallet/history", ct: ct)
             let sends = await ReadSendsAsync(ct)
             let root = balance.RootElement
             let amounts = WalletBalance{
@@ -891,21 +904,11 @@ class WalletController : IDisposable {
                 amounts.PendingUnconfirmedEta = eta.GetInt64()
             }
             let outputs = List[WalletOutput]()
-            for row in history.RootElement.GetProperty("outputs").EnumerateArray() {
-                let hex = WalletJson.Text(row, "memo_hex")
-                outputs.Add(
-                    WalletOutput{
-                        TxId: WalletJson.Text(row, "txid"),
-                        OutputIndex: int32(WalletJson.Number(row, "output_index")),
-                        Amount: WalletJson.Number(row, "amount"),
-                        BlockHeight: WalletJson.Number(row, "block_height"),
-                        IsCoinbase: WalletJson.Flag(row, "is_coinbase"),
-                        Spent: WalletJson.Flag(row, "spent"),
-                        SpentHeight: WalletJson.OptionalNumber(row, "spent_height"),
-                        MemoHex: hex,
-                        Memo: WalletJson.Memo(hex)
-                    }
-                )
+            let wanted = Math.Max(historyPage, historyOffset)
+            historyOffset = 0
+            var more = true
+            while more && historyOffset < wanted {
+                more = await ReadHistoryAsync(outputs, Math.Min(500, wanted - historyOffset), ct)
             }
             snapshot = WalletSnapshot{
                 Page: page,
@@ -916,6 +919,8 @@ class WalletController : IDisposable {
                 ViewOnly: WalletJson.Flag(address.RootElement, "view_only"),
                 Balance: amounts,
                 History: outputs.ToArray(),
+                HistoryTotal: historyTotal,
+                HistoryMore: uint64(historyOffset) < historyTotal,
                 Sends: sends
             }
         } catch (error WalletException) {
@@ -942,6 +947,74 @@ class WalletController : IDisposable {
                 throw error
             }
             throw WalletException("Daemon returned invalid wallet data")
+        }
+    }
+
+    private async func ReadHistoryAsync(outputs List[WalletOutput], limit int32, ct CancellationToken) bool {
+        using let response = await rpc.JsonAsync(
+            "wallet/history/page?limit=" + limit.ToString() + "&offset=" + historyOffset.ToString() + "&order=desc",
+            ct: ct
+        )
+        let root = response.RootElement
+        let rows = root.GetProperty("outputs")
+        let keys = HashSet[string](
+            outputs.Select((output WalletOutput) -> output.TxId + ":" + output.OutputIndex.ToString())
+        )
+        for row in rows.EnumerateArray() {
+            let hex = WalletJson.Text(row, "memo_hex")
+            let output = WalletOutput{
+                TxId: WalletJson.Text(row, "txid"),
+                OutputIndex: int32(WalletJson.Number(row, "output_index")),
+                Amount: WalletJson.Number(row, "amount"),
+                BlockHeight: WalletJson.Number(row, "block_height"),
+                IsCoinbase: WalletJson.Flag(row, "is_coinbase"),
+                Spent: WalletJson.Flag(row, "spent"),
+                SpentHeight: WalletJson.OptionalNumber(row, "spent_height"),
+                MemoHex: hex,
+                Memo: WalletJson.Memo(hex)
+            }
+            if keys.Add(output.TxId + ":" + output.OutputIndex.ToString()) {
+                outputs.Add(output)
+            }
+        }
+        historyOffset += rows.GetArrayLength()
+        historyTotal = WalletJson.Number(root, "total")
+        return rows.GetArrayLength() > 0 && uint64(historyOffset) < historyTotal
+    }
+
+    async func LoadHistoryAsync(ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            if uint64(historyOffset) < historyTotal {
+                let outputs = List[WalletOutput](snapshot.History)
+                await ReadHistoryAsync(outputs, historyPage, ct)
+                snapshot.History = outputs.ToArray()
+                PublishCurrent()
+            }
+        } finally {
+            End()
+        }
+    }
+
+    async func TransactionAsync(txid string, ct CancellationToken = default(CancellationToken)) TransactionDetails {
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            using let response = await rpc.JsonAsync("tx/" + Uri.EscapeDataString(txid), ct: ct)
+            let root = response.RootElement
+            let details = TransactionDetails{
+                Height: WalletJson.OptionalNumber(root, "block_height") ?? uint64(0),
+                Confirmations: WalletJson.Number(root, "confirmations"),
+                InMempool: WalletJson.Flag(root, "in_mempool")
+            }
+            if details.Height > 0 {
+                using let block = await rpc.JsonAsync("block/" + details.Height.ToString(), ct: ct)
+                details.Timestamp = WalletJson.Signed(block.RootElement, "timestamp")
+            }
+            return details
+        } finally {
+            End()
         }
     }
 
@@ -1377,6 +1450,8 @@ class WalletController : IDisposable {
     }
 
     private func PublishEmpty() {
+        historyOffset = 0
+        historyTotal = 0
         snapshot = WalletSnapshot{Page: page, State: state, Connected: connected, OwnedDaemon: daemon.Owned}
     }
 
@@ -1390,6 +1465,8 @@ class WalletController : IDisposable {
             ViewOnly: snapshot.ViewOnly,
             Balance: snapshot.Balance,
             History: snapshot.History,
+            HistoryTotal: historyTotal,
+            HistoryMore: uint64(historyOffset) < historyTotal,
             Sends: snapshot.Sends
         }
     }
@@ -1427,6 +1504,7 @@ class WalletController : IDisposable {
     shared {
         let MemoLimit int32 = 124
         private let memoEncoding UTF8Encoding = UTF8Encoding(false, true)
+        private let historyPage int32 = 50
 
         func ValidateAddress(address string) string {
             let recipient = address.Trim()

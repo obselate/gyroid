@@ -15,6 +15,7 @@ import System.Collections.Generic
 import System.Globalization
 import System.Linq
 import System.Text
+import System.Threading.Tasks
 
 partial class WalletView {
     private var address string = ""
@@ -31,6 +32,13 @@ partial class WalletView {
     private var qrPath VectorPath = VectorPath.Empty
     private let receivedRow Func[WalletOutput, Blob]
     private let sentRow Func[WalletSend, Blob]
+    private let historyHandle ElementHandle = ElementHandle()
+    private var loadingHistory bool
+    private var shownOutput WalletOutput?
+    private var shownSend WalletSend?
+    private var shownTransaction TransactionDetails?
+    private var transactionFailed bool
+    private var upgradeShown bool
 
     private func Money(value uint64) string -> WalletAmount.Format(value)
 
@@ -68,6 +76,9 @@ partial class WalletView {
             content.Add(PendingSendBanner())
         }
         content.Add(Balance(snapshot))
+        if wallet.NodeStatus.UpgradeDate.Length > 0 {
+            content.Add(Upgrade(wallet.NodeStatus))
+        }
         content.Add(History(snapshot))
         return content
     }
@@ -583,7 +594,7 @@ partial class WalletView {
     private func History(snapshot WalletSnapshot) Blob {
         if !Object.ReferenceEquals(historySource, snapshot) {
             historySource = snapshot
-            outputs = snapshot.History.OrderByDescending((output WalletOutput) -> output.BlockHeight).ToArray()
+            outputs = snapshot.History
             sends = snapshot.Sends.OrderByDescending((send WalletSend) -> send.Timestamp).ToArray()
         }
         let list = if historyTab == "sent" {
@@ -603,6 +614,9 @@ partial class WalletView {
                 receivedRow,
                 false
             )
+        }
+        if historyTab == "received" {
+            list.Handle = historyHandle
         }
         list.FlexGrow = 1
         list.FlexBasis = 0
@@ -634,7 +648,7 @@ partial class WalletView {
                                 Items: []NavigationItem{
                                     NavigationItem{
                                         Id: "received",
-                                        Label: strings.Get("received") + " " + outputs.Length.ToString()
+                                        Label: strings.Get("received") + " " + snapshot.HistoryTotal.ToString()
                                     },
                                     NavigationItem{
                                         Id: "sent",
@@ -665,10 +679,12 @@ partial class WalletView {
         return panel
     }
 
-    private func ReceivedRow(output WalletOutput) Blob -> Container{
+    private func ReceivedRow(output WalletOutput) Blob -> Goo
+        .Button{
         Height: 44,
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Center,
+        JustifyContent: JustifyContent.FlexStart,
         Gap: 16,
         Padding: Edges{Left: 13, Right: 16},
         BorderWidth: Edges{Left: 3, Bottom: 1},
@@ -678,6 +694,14 @@ partial class WalletView {
         } else {
             mint
         },
+        BackgroundColor: Color.Transparent,
+        Hover: Style{BackgroundColor: rule},
+        Focus: Theme.Read().FocusStyle,
+        Accessibility: Accessibility{
+            Role: AccessibilityRole.Button,
+            Name: strings.Get("received") + " " + Amount(output.Amount) + " " + Count(output.BlockHeight)
+        },
+        OnClick: () -> ShowTransaction(output, nil),
         Container{
             Width: 200,
             FlexShrink: 0,
@@ -688,7 +712,8 @@ partial class WalletView {
                     body
                 } else {
                     mint
-                }
+                },
+                ""
             )
         },
         Grow(
@@ -707,17 +732,24 @@ partial class WalletView {
         Label(Count(output.BlockHeight), 12, body)
     }
 
+    private func ChainState(state string, confirmations uint64) string -> if state == "confirmed" {
+        strings.Get("Confirmed") + " " + Count(confirmations)
+    } else if state == "mempool" {
+        strings.Get("Mempool")
+    } else if state == "not_found" {
+        strings.Get("Not found")
+    } else {
+        state
+    }
+
+    private func Time(seconds int64) string -> DateTimeOffset
+        .FromUnixTimeSeconds(seconds)
+        .ToLocalTime()
+        .ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
+
     private func SentRow(send WalletSend) Blob {
         let confirmed = send.Status == "confirmed"
-        let status = if confirmed {
-            strings.Get("Confirmed") + " " + Count(send.Confirmations)
-        } else if send.Status == "mempool" {
-            strings.Get("Mempool")
-        } else if send.Status == "not_found" {
-            strings.Get("Not found")
-        } else {
-            send.Status
-        }
+        let status = ChainState(send.Status, send.Confirmations)
         let notes = Container{
             Gap: 4,
             Label(
@@ -736,24 +768,30 @@ partial class WalletView {
         if memos.Length > 0 {
             notes.Add(Label(Hidden(memos), 12, ink))
         }
-        let time = DateTimeOffset
-            .FromUnixTimeSeconds(send.Timestamp)
-            .ToLocalTime()
-            .ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
-        return Container{
+        return Goo
+            .Button{
             Height: 56,
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.FlexStart,
             Gap: 16,
             Padding: Edges{Left: 13, Right: 16},
             BorderWidth: Edges{Left: 3, Bottom: 1},
             BorderColor: rule,
             BorderStartColor: pink,
+            BackgroundColor: Color.Transparent,
+            Hover: Style{BackgroundColor: rule},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Button,
+                Name: strings.Get("sent") + " " + Amount(send.Amount) + " " + status
+            },
+            OnClick: () -> ShowTransaction(nil, send),
             Container{
                 Width: 200,
                 FlexShrink: 0,
                 Gap: 4,
-                Label("-" + Amount(send.Amount), 14, pink),
+                Label("-" + Amount(send.Amount), 14, pink, ""),
                 Figure("Fee", Amount(send.Fee), body, 12)
             },
             Grow(notes),
@@ -770,8 +808,269 @@ partial class WalletView {
                         orange
                     }
                 ),
-                Label(time, 12, body)
+                Label(Time(send.Timestamp), 12, body)
             }
         }
+    }
+
+    private func Upgrade(node NodeStatus) Blob {
+        let strip = Glass()
+        strip.FlexShrink = 0
+        strip.FlexDirection = FlexDirection.Row
+        strip.AlignItems = AlignItems.Center
+        strip.Gap = 24
+        strip.Padding = Edges{Top: 6, Left: 20, Right: 8, Bottom: 6}
+        strip.BorderWidth = Edges{Left: 3, Top: 1, Right: 1, Bottom: 1}
+        strip.BorderStartColor = orange
+        strip.Add(Figure("Network upgrade", node.UpgradeDate, ink))
+        strip.Add(Grow(Figure("Blocks left", Count(node.UpgradeBlocksLeft), orange)))
+        strip.Add(
+            IconButton{
+                Icon: MaterialIcons.Create("info", 16, body),
+                AccessibilityName: strings.Get("Network upgrade"),
+                OnClick: () -> {
+                    upgradeShown = true
+                    Rebuild()
+                }
+            }.Build()
+        )
+        return strip
+    }
+
+    private func UpgradeDialog() Blob {
+        let node = wallet.NodeStatus
+        let close Action = () -> {
+            upgradeShown = false
+            Rebuild()
+        }
+        return Cell.Mount[ModalDialog, ModalDialogHost](
+            "upgrade",
+            ModalDialog{
+                Open: true,
+                AccessibilityName: strings.Get("Network upgrade"),
+                Width: Math.Min(width - 48, 600),
+                Header: Label(strings.Get("Network upgrade"), 18, ink, ""),
+                Content: Container{
+                    Gap: 14,
+                    Figure("Date", node.UpgradeDate, ink),
+                    Figure("Blocks left", Count(node.UpgradeBlocksLeft), orange),
+                    Figure("Migration deadline", node.UpgradeDeadline, ink),
+                    Text{
+                        Content: node.UpgradeNotice,
+                        FontFamily: font,
+                        FontSize: 13,
+                        Color: body,
+                        TextWrap: TextWrap.Wrap
+                    }
+                },
+                Footer: ActionRow([]Blob{Button("Close", close)}),
+                OnCancel: close,
+                OnClose: close
+            }
+        )
+    }
+
+    private func MoreHistory(metrics ElementMetrics) {
+        let remaining = metrics.ScrollRange.Y - metrics.ScrollOffset.Y
+        let more = wallet.Snapshot.HistoryMore
+        if loadingHistory || !more || remaining > 440 || historyTab != "received" || !metrics.IsMounted {
+            return
+        }
+        LoadHistory()
+    }
+
+    private async func LoadHistory() {
+        loadingHistory = true
+        var message = ""
+        try {
+            await Task.Run(() -> wallet.LoadHistoryAsync())
+        } catch (failure WalletException) {
+            message = failure.Message
+        } catch (failure Exception) {
+            message = "Refresh failed"
+        }
+        window?.TryPost(
+            () -> {
+                loadingHistory = false
+                if message.Length > 0 {
+                    refreshError = message
+                    Rebuild()
+                }
+                Sync()
+            }
+        )
+    }
+
+    private async func ShowTransaction(output WalletOutput?, send WalletSend?) {
+        shownOutput = output
+        shownSend = send
+        shownTransaction = nil
+        transactionFailed = false
+        Rebuild()
+        let txid = output?.TxId ?? send?.TxId ?? ""
+        var details TransactionDetails? = nil
+        try {
+            details = await Task.Run(() -> wallet.TransactionAsync(txid))
+        } catch (failure Exception) {
+            details = nil
+        }
+        window?.TryPost(
+            () -> {
+                if (shownOutput?.TxId ?? shownSend?.TxId) == txid {
+                    shownTransaction = details
+                    transactionFailed = details == nil
+                    Rebuild()
+                }
+            }
+        )
+    }
+
+    private func TransactionDialog() Blob {
+        let close Action = () -> {
+            shownOutput = nil
+            shownSend = nil
+            Rebuild()
+        }
+        let chain = shownTransaction
+        let waiting = chain == nil && !transactionFailed
+        let output = shownOutput
+        let send = shownSend
+        let txid = output?.TxId ?? send?.TxId ?? ""
+        let state = if let value = chain {
+            if value.InMempool {
+                "mempool"
+            } else {
+                "confirmed"
+            }
+        } else {
+            send?.Status ?? ""
+        }
+        let height = chain?.Height ?? output?.BlockHeight ?? uint64(0)
+        let time = if let value = send {
+            value.Timestamp
+        } else {
+            chain?.Timestamp
+        }
+        let content = Container{
+            Gap: 14,
+            MinHeight: 0,
+            FlexShrink: 1,
+            OverflowY: Overflow.Scroll,
+            ScrollbarY: Theme.Read().Scrollbar
+        }
+        if let value = output {
+            content.Add(Figure("Amount", "+" + Amount(value.Amount) + " BNT", mint, 18))
+        }
+        if let value = send {
+            content.Add(Figure("Amount", "-" + Amount(value.Amount) + " BNT", pink, 18))
+            content.Add(Figure("Fee", Amount(value.Fee) + " BNT", ink))
+        }
+        if state.Length > 0 {
+            content.Add(
+                Figure(
+                    "Status",
+                    ChainState(state, chain?.Confirmations ?? send?.Confirmations ?? uint64(0)),
+                    if state == "confirmed" {
+                        lime
+                    } else {
+                        orange
+                    }
+                )
+            )
+        } else if waiting {
+            content.Add(Figure("Status", "…", body))
+        }
+        if height > 0 {
+            content.Add(Figure("Height", Count(height), ink))
+        } else if waiting {
+            content.Add(Figure("Height", "…", body))
+        }
+        if let seconds = time {
+            content.Add(Figure("Time", Time(seconds), ink))
+        } else if waiting {
+            content.Add(Figure("Time", "…", body))
+        }
+        if let value = output {
+            if value.Memo.Length > 0 {
+                content.Add(Figure("Memo", Hidden(value.Memo), ink))
+            }
+        }
+        let copied = clipboardText == txid
+        content.Add(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.FlexStart,
+                Gap: 8,
+                Grow(
+                    Container{
+                        Gap: 6,
+                        Label(strings.Get("Transaction"), 12, body),
+                        Text{
+                            Content: Hidden(Grouped(txid)),
+                            FontFamily: font,
+                            FontSize: 13,
+                            Color: ink,
+                            TextWrap: TextWrap.Wrap
+                        }
+                    }
+                ),
+                IconButton{
+                    Icon: MaterialIcons.Create(
+                        if copied {
+                            "check"
+                        } else {
+                            "content_copy"
+                        },
+                        16,
+                        if copied {
+                            lime
+                        } else {
+                            body
+                        }
+                    ),
+                    AccessibilityName: strings.Get("Copy transaction ID"),
+                    OnClick: () -> {
+                        Copy(txid, 120000)
+                        Rebuild()
+                    }
+                }.Build()
+            }
+        )
+        for recipient in send?.Recipients ?? Array.Empty[WalletRecipient]() {
+            let entry = Container{
+                Gap: 6,
+                Label(strings.Get("Recipient"), 12, body),
+                Text{
+                    Content: Hidden(Grouped(recipient.Address)),
+                    FontFamily: font,
+                    FontSize: 13,
+                    Color: ink,
+                    TextWrap: TextWrap.Wrap
+                },
+                Figure("Amount", Amount(recipient.Amount) + " BNT", ink)
+            }
+            if recipient.Memo.Length > 0 {
+                entry.Add(Figure("Memo", Hidden(recipient.Memo), ink))
+            }
+            content.Add(Accent(pink, entry))
+        }
+        let title = if send != nil {
+            "sent"
+        } else {
+            "received"
+        }
+        return Cell.Mount[ModalDialog, ModalDialogHost](
+            "transaction",
+            ModalDialog{
+                Open: true,
+                AccessibilityName: strings.Get(title),
+                Width: Math.Min(width - 48, 600),
+                Header: Label(strings.Get(title), 18, ink, ""),
+                Content: content,
+                Footer: ActionRow([]Blob{Button("Close", close)}),
+                OnCancel: close,
+                OnClose: close
+            }
+        )
     }
 }
