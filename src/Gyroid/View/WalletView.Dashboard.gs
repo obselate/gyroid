@@ -123,19 +123,17 @@ partial class WalletView {
                 ink
             }
         }
-        let room = width - 248 - 40 - 280 - 49
-        let size = Math.Max(24, Math.Min(height * 0.07, room / (0.6 * (total.Length + 4))))
-        let unit = if balance?.Balance != nil {
-            " BNT"
-        } else {
-            ""
+        let room = width - 680
+        let size = Math.Max(24, Math.Min(height * 0.07, room / (0.62 * total.Length)))
+        let figure = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Baseline,
+            Gap: 10,
+            MinWidth: 0,
+            Label(total, size, totalColor, "balance")
         }
-        let figure = Label(total + unit, size, totalColor, "balance")
-        if unit.Length > 0 {
-            figure.StyleRanges = (figure.StyleRanges ?? Array.Empty[TextStyleRange]()).Append(
-                TextStyleRange(TextRange(total.Length, unit.Length), Style{FontSize: 18, Color: body})
-            )
-                .ToArray()
+        if balance?.Balance != nil {
+            figure.Add(Container{FlexShrink: 0, Label("BNT", 18, body, "")})
         }
         let hero = Glass()
         hero.FlexShrink = 0
@@ -245,43 +243,47 @@ partial class WalletView {
             confirmPendingSend = false
             Rebuild()
         }
-        return ModalDialog{
-            Open: true,
-            AccessibilityName: strings.Get("Pending send"),
-            Width: Math.Min(width - 48, 600),
-            Content: Text{
-                Content: strings.Get(
+        return Cell.Mount[ModalDialog, ModalDialogHost](
+            "pending-send",
+            ModalDialog{
+                Open: true,
+                Preset: ModalDialogPreset.Confirm,
+                AccessibilityName: strings.Get("Pending send"),
+                Width: Math.Min(width - 48, 600),
+                Content: Text{
+                    Content: strings.Get(
+                        if resume {
+                            "Resubmitting an unknown send can pay twice if the node forgot its record"
+                        } else {
+                            "Dismissing does not cancel a payment. Sending again can pay twice"
+                        }
+                    ),
+                    FontFamily: font,
+                    FontSize: 14,
+                    Color: orange,
+                    TextWrap: TextWrap.Wrap
+                },
+                ConfirmText: strings.Get(
                     if resume {
-                        "Resubmitting an unknown send can pay twice if the node forgot its record"
+                        "Resubmit"
                     } else {
-                        "Dismissing does not cancel a payment. Sending again can pay twice"
+                        "Dismiss"
                     }
                 ),
-                FontFamily: font,
-                FontSize: 14,
-                Color: orange,
-                TextWrap: TextWrap.Wrap
-            },
-            ConfirmText: strings.Get(
-                if resume {
-                    "Resubmit"
-                } else {
-                    "Dismiss"
-                }
-            ),
-            CancelText: strings.Get("Cancel"),
-            ConfirmDisabled: Working(),
-            OnConfirm: () -> {
-                confirmPendingSend = false
-                if resume {
-                    Run(wallet.ResumeSendAsync(), () -> Refresh())
-                } else {
-                    Run(wallet.DismissSendAsync())
-                }
-            },
-            OnCancel: close,
-            OnClose: close
-        }.Build()
+                CancelText: strings.Get("Cancel"),
+                ConfirmDisabled: Working(),
+                OnConfirm: () -> {
+                    confirmPendingSend = false
+                    if resume {
+                        Run(wallet.ResumeSendAsync(), () -> Refresh())
+                    } else {
+                        Run(wallet.DismissSendAsync())
+                    }
+                },
+                OnCancel: close,
+                OnClose: close
+            }
+        )
     }
 
     private func SendPanel() Blob {
@@ -436,18 +438,22 @@ partial class WalletView {
         if pending.Memo.Length > 0 {
             content.Add(Figure("Memo", pending.Memo, ink))
         }
-        return ModalDialog{
-            Open: true,
-            AccessibilityName: strings.Get("Confirm send"),
-            Width: Math.Min(width - 48, 600),
-            Content: content,
-            ConfirmText: strings.Get("Send"),
-            CancelText: strings.Get("Cancel"),
-            ConfirmDisabled: Working(),
-            OnConfirm: () -> Submit(),
-            OnCancel: close,
-            OnClose: close
-        }.Build()
+        return Cell.Mount[ModalDialog, ModalDialogHost](
+            "confirm-send",
+            ModalDialog{
+                Open: true,
+                Preset: ModalDialogPreset.Confirm,
+                AccessibilityName: strings.Get("Confirm send"),
+                Width: Math.Min(width - 48, 600),
+                Content: content,
+                ConfirmText: strings.Get("Send"),
+                CancelText: strings.Get("Cancel"),
+                ConfirmDisabled: Working(),
+                OnConfirm: () -> Submit(),
+                OnCancel: close,
+                OnClose: close
+            }
+        )
     }
 
     private func RevealSeed() {

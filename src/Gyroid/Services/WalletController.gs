@@ -505,7 +505,9 @@ class WalletController : IDisposable {
                 DownloadPercent: daemon.DownloadPercent,
                 TrustedCheckpoints: daemon.TrustedCheckpoints
             }
-            if root.TryGetProperty("network_upgrade", out let upgrade) && upgrade.ValueKind == JsonValueKind.Object {
+            if settings.Network == "mainnet" && root.TryGetProperty("network_upgrade", out let upgrade) &&
+                upgrade.ValueKind == JsonValueKind
+                .Object {
                 current.UpgradeDate = WalletJson.Text(upgrade, "date")
                 current.UpgradeDeadline = WalletJson.Text(upgrade, "migration_deadline")
                 current.UpgradeNotice = WalletJson.Text(upgrade, "notice")
