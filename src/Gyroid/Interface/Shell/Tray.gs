@@ -1,13 +1,34 @@
-package Gyroid.View
+package Gyroid.Interface
 
 import Goo
+import Goo.Widgets
+import Goo.Widgets.Actions
+import Goo.Widgets.Feedback
+import Goo.Widgets.Icons
+import Goo.Widgets.Inputs
+import Goo.Widgets.Layout
+import Goo.Widgets.Navigation
+import Gyroid.History
+import Gyroid.Node
 import Gyroid.Platform
+import Gyroid.Settings
+import Gyroid.Wallet
 import System
+import System.Collections.Generic
+import System.Diagnostics
+import System.IO
+import System.Linq
+import System.Numerics
+import System.Text
+import System.Threading.Tasks
 
 partial class WalletView {
     private var tray TrayIcon?
+
     private var trayLockable bool
+
     private var hidden bool
+
     private var quitting bool
 
     func Start() {
@@ -110,4 +131,6 @@ partial class WalletView {
         quitting = true
         window?.RequestClose()
     }
+
+    private let appIcon ImageSource
 }

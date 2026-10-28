@@ -3,9 +3,9 @@ package Gyroid
 import Goo
 import Goo.Widgets.Layout
 import Gyroid.Cli
+import Gyroid.Interface
 import Gyroid.Node
 import Gyroid.Platform
-import Gyroid.View
 import Gyroid.Wallet
 import System
 import System.Globalization

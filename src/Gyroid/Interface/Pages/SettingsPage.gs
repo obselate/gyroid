@@ -1,423 +1,39 @@
-package Gyroid.View
+package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Actions
+import Goo.Widgets.Data
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
+import Gyroid.Contacts
+import Gyroid.History
 import Gyroid.Node
+import Gyroid.Platform
+import Gyroid.Send
 import Gyroid.Settings
 import Gyroid.Wallet
+import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic
+import System.Diagnostics
+import System.Globalization
 import System.IO
 import System.Linq
+import System.Numerics
+import System.Text
+import System.Threading.Tasks
 
 partial class WalletView {
-    private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-
-    private func Phase() string {
-        let status = wallet.Node.Status
-        return if status.Phase.Length == 0 && status.Running && status.Peers == 0 {
-            "Connecting"
-        } else {
-            status.Phase
-        }
-    }
-
-    private func Preparing() bool -> wallet.Node.Status.Phase.Length > 0 && wallet.Node.Status.Phase != "ChainSync"
-
-    private func PhaseName() string -> strings.Get(
-        switch Phase() {
-            case "Core": "Core download"
-            case "ChainSync": "Syncing"
-            default: Phase()
-        }
-    )
-
-    private func PhasePercent() int32? {
-        let status = wallet.Node.Status
-        if status.Phase != "ChainSync" {
-            return status.DownloadPercent
-        }
-        if status.ChainHeight == 0 {
-            return nil
-        }
-        return Math.Min(100, int32(100 * (status.SyncProgress ?? status.Height) / status.ChainHeight))
-    }
-
-    private func PhaseText() string -> if let value = PhasePercent() {
-        PhaseName() + " " + value.ToString() + "%"
-    } else {
-        PhaseName()
-    }
-
-    private func SyncIndicator(size float64, fontSize float64) Blob? {
-        if Phase().Length == 0 {
-            return nil
-        }
-        let row = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 8,
-            FlexShrink: 0,
-            Accessibility: Accessibility{Role: AccessibilityRole.ProgressBar, Name: PhaseText(), Busy: true}
-        }
-        guard let percent = PhasePercent() else {
-            row.Add(
-                Cell.Mount[SpinnerInput, Spinner](
-                    if PlaybackActive() {
-                        "sync"
-                    } else {
-                        "sync-idle"
-                    },
-                    SpinnerInput{Size: size, Color: lime, Label: PhaseName()}
-                )
-            )
-            row.Add(Label(PhaseName(), fontSize, body, ""))
-            return row
-        }
-        let stroke = Math.Max(2.0, size / 10)
-        let center = size / 2
-        let radius = center - stroke / 2
-        let circle = PathBuilder(0, 0, size, size)
-            .MoveTo(center, stroke / 2)
-            .ArcTo(radius, radius, 0, false, true, center, size - stroke / 2)
-            .ArcTo(radius, radius, 0, false, true, center, stroke / 2)
-            .Build()
-        row.Add(
-            Container{
-                Width: size,
-                Height: size,
-                FlexShrink: 0,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
-                Shape{
-                    Position: PositionType.Absolute,
-                    Width: size,
-                    Height: size,
-                    Path: circle,
-                    BorderWidth: stroke,
-                    BorderColor: rule
-                },
-                Shape{
-                    Position: PositionType.Absolute,
-                    Width: size,
-                    Height: size,
-                    Path: circle,
-                    BorderWidth: stroke,
-                    BorderColor: lime,
-                    StrokeEnd: percent / 100.0
-                },
-                MaterialIcons.Create(
-                    switch wallet.Node.Status.Phase {
-                        case "Checkpoints": "verified"
-                        case "ChainSync": "sync"
-                        default: "download"
-                    },
-                    size * 0.6,
-                    lime
-                )
-            }
-        )
-        row.Add(Label(PhaseName(), fontSize, body, ""))
-        row.Add(Label((percent.ToString() + "%").PadLeft(4), fontSize, lime, ""))
-        return row
-    }
-
-    private func NodeProgressCard() Blob {
-        let card = Glass()
-        card.AlignItems = AlignItems.Center
-        card.Padding = 32
-        card.Add(SyncIndicator(28, 18) ?? Container{})
-        return card
-    }
-
-    private func WelcomePage() Blob {
-        if Preparing() {
-            return NodeProgressCard()
-        }
-        let theme = Theme.Read()
-        let panel = PageContent(
-            if wallets.Length > 0 {
-                strings.Get("wallets")
-            } else {
-                strings.Get("new wallet")
-            },
-            520,
-            SyncIndicator(16, 14)
-        )
-        if wallets.Length > 0 {
-            let list = Container{
-                Gap: 6,
-                MinHeight: 0,
-                FlexShrink: 1,
-                OverflowY: Overflow.Scroll,
-                ScrollbarY: theme.Scrollbar
-            }
-            for filename in wallets {
-                let label = WalletName(filename)
-                list.Add(
-                    Goo
-                        .Button{
-                        Key: filename,
-                        Height: 44,
-                        FlexShrink: 0,
-                        Padding: Edges{Left: 14, Right: 14},
-                        BorderWidth: Edges{Left: 3, Top: 1, Right: 1, Bottom: 1},
-                        BorderRadius: 4,
-                        BorderColor: rule,
-                        BorderStartColor: lime,
-                        BackgroundColor: surface,
-                        FlexDirection: FlexDirection.Row,
-                        AlignItems: AlignItems.Center,
-                        JustifyContent: JustifyContent.FlexStart,
-                        Disabled: Working(),
-                        Hover: Style{BackgroundColor: rule, BorderColor: edge, BorderStartColor: limeHover},
-                        Focus: theme.FocusStyle,
-                        Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label},
-                        OnClick: () -> Run(wallet.Library.ChooseWalletAsync(filename)),
-                        Label(label, 14, ink)
-                    }
-                )
-            }
-            panel.Add(list)
-        }
-        panel.Add(
-            ActionRow(
-                []Blob{
-                    SettingsButton(),
-                    Container{FlexGrow: 1},
-                    Button("Create", () -> Open("Create"), Working(), wallets.Length == 0),
-                    Button("Import phrase", () -> Open("Phrase"), Working()),
-                    Button("Import file", () -> ImportFile(), Working()),
-                    Button("View-only", () -> Open("ViewOnly"), Working())
-                }
-            )
-        )
-        return panel
-    }
-
-    private func Open(target string) {
-        ClearSecrets()
-        error = ""
-        name = ""
-        screen = target
-        if target == "Contacts" {
-            LoadContacts()
-        }
-        Decode("page")
-        Rebuild()
-    }
-
-    private func Back() {
-        ClearSecrets()
-        error = ""
-        name = ""
-        draft = nil
-        screen = ""
-        Decode("page")
-        Rebuild()
-    }
-
-    private func ImportFile() {
-        ChooseFile(FileDialogKind.OpenFile, "Import wallet", Home(), path -> Run(wallet.Library.ImportFileAsync(path)))
-    }
-
-    private func CreatePage(kind string) Blob {
-        let panel = PageContent(
-            strings.Get(
-                switch kind {
-                    case "Phrase": "import phrase"
-                    case "ViewOnly": "import view-only"
-                    default: "create wallet"
-                }
-            )
-        )
-        let submit Action = () -> CreateWallet(kind)
-        panel.Add(
-            Field(
-                "Name",
-                name,
-                value -> {
-                    name = value
-                    Rebuild()
-                },
-                submit
-            )
-        )
-        if kind == "Phrase" {
-            panel.Add(
-                Field(
-                    "Recovery phrase",
-                    phrase,
-                    value -> {
-                        phrase = value
-                        Rebuild()
-                    },
-                    submit,
-                    true
-                )
-            )
-        }
-        if kind == "ViewOnly" {
-            panel.Add(
-                Field(
-                    "Spend public key",
-                    spendKey,
-                    value -> {
-                        spendKey = value.Trim()
-                        Rebuild()
-                    },
-                    submit
-                )
-            )
-            panel.Add(
-                Field(
-                    "View private key",
-                    viewKey,
-                    value -> {
-                        viewKey = value.Trim()
-                        Rebuild()
-                    },
-                    submit,
-                    true
-                )
-            )
-        }
-        panel.Add(
-            Field(
-                "Password",
-                password,
-                value -> {
-                    password = value
-                    passwordIssue = ""
-                    Rebuild()
-                },
-                submit,
-                true
-            )
-        )
-        panel.Add(
-            Field(
-                "Confirm",
-                confirmation,
-                value -> {
-                    confirmation = value
-                    passwordIssue = ""
-                    Rebuild()
-                },
-                submit,
-                true,
-                passwordIssue
-            )
-        )
-        panel.Add(
-            ActionRow(
-                []Blob{
-                    Button("Back", () -> Back(), Working()),
-                    Button(kind == "Create" ? "Create": "Import", submit, Working() || Incomplete(kind), true)
-                }
-            )
-        )
-        return panel
-    }
-
-    private func Incomplete(kind string) bool -> name.Trim()
-        .Length == 0 ||
-        password.Length == 0 ||
-        kind == "Phrase" &&
-        phrase
-        .Trim().Length == 0 || kind == "ViewOnly" && (spendKey.Length == 0 || viewKey.Length == 0)
-
-    private func WalletFile(label string) string {
-        let trimmed = label.Trim()
-        return if trimmed.EndsWith(".wallet.dat", StringComparison.Ordinal) {
-            trimmed
-        } else {
-            trimmed + ".wallet.dat"
-        }
-    }
-
-    private func CreateWallet(kind string) {
-        if Working() || Incomplete(kind) {
-            return
-        }
-        let secret = password.ToCharArray()
-        let again = confirmation.ToCharArray()
-        let issue = WalletValidation.PasswordError(secret, again)
-        Array.Clear(again)
-        if issue.Length > 0 {
-            Array.Clear(secret)
-            passwordIssue = issue
-            Rebuild()
-            return
-        }
-        let filename = WalletFile(name)
-        if kind == "Phrase" {
-            let words = phrase.ToCharArray()
-            phrase = ""
-            Run(wallet.ImportPhraseAsync(filename, words, secret), nil, secret, words)
-        } else if kind == "ViewOnly" {
-            let key = viewKey.ToCharArray()
-            Run(wallet.ImportViewOnlyAsync(filename, spendKey.ToCharArray(), key, secret), nil, secret, key)
-        } else {
-            Run(wallet.CreateAsync(filename, secret), nil, secret)
-        }
-    }
-
-    private func UnlockPage() Blob {
-        if Preparing() {
-            return NodeProgressCard()
-        }
-        let panel = PageContent(WalletName(wallet.Settings.ActiveWallet), 520, SyncIndicator(16, 14))
-        panel.Add(
-            Field(
-                "Password",
-                password,
-                value -> {
-                    password = value
-                    Rebuild()
-                },
-                () -> Unlock(),
-                true
-            )
-        )
-        panel.Add(
-            ActionRow(
-                []Blob{
-                    SettingsButton(),
-                    Container{FlexGrow: 1},
-                    Button("Switch wallet", () -> Run(wallet.UnloadAsync()), Working()),
-                    Button("Unlock", () -> Unlock(), Working() || password.Length == 0, true)
-                }
-            )
-        )
-        return panel
-    }
-
-    private func Unlock() {
-        if Working() || password.Length == 0 {
-            return
-        }
-        let buffer = password.ToCharArray()
-        password = ""
-        Run(wallet.UnlockAsync(buffer), nil, buffer)
-    }
-
-    private func SettingsButton() Blob -> IconButton{
-        Icon: MaterialIcons.Create("settings", 16, body),
-        Disabled: Working(),
-        AccessibilityName: strings.Get("Settings"),
-        OnClick: () -> Navigate("Settings")
-    }.Build()
-
     private var settingsTab string = "general"
+
     private var applyPending bool
+
     private var listenIssue string = ""
+
     private var programIssue string = ""
 
     private func Pinned(variable string) bool -> Environment.GetEnvironmentVariable("GYROID_" + variable) != nil
@@ -951,4 +567,221 @@ partial class WalletView {
         )
         return Setting(label, row)
     }
+
+    private var revealPassword string = ""
+
+    private func RevealSeed() {
+        if Working() || revealPassword.Length == 0 {
+            return
+        }
+        let buffer = revealPassword.ToCharArray()
+        revealPassword = ""
+        seedFromWallet = true
+        Run(wallet.Keys.RevealSeedAsync(buffer), nil, buffer)
+    }
+
+    private var rescan Task?
+
+    private var filePassword string = ""
+
+    private var viewKeys WalletViewKeys?
+
+    private var viewKeysVisible bool
+
+    private var viewOnlyOpen bool
+
+    private var viewOnlyCreated string = ""
+
+    private func Rescan() {
+        let task = wallet.SyncAsync()
+        rescan = task
+        Run(task)
+    }
+
+    private func ExportViewKeys() {
+        if Working() || revealPassword.Length == 0 {
+            return
+        }
+        let buffer = revealPassword.ToCharArray()
+        revealPassword = ""
+        let task = wallet.Keys.ExportViewKeysAsync(buffer)
+        Run(
+            task,
+            () -> {
+                viewKeys = task.Result
+            },
+            buffer
+        )
+    }
+
+    private func ViewKeysDialog(keys WalletViewKeys) Blob {
+        let close Action = () -> {
+            ClearSecrets()
+            Rebuild()
+        }
+        return Cell.Mount[ModalDialog, ModalDialogHost](
+            "view-keys",
+            ModalDialog{
+                Open: true,
+                CreateRoot: DialogRoot,
+                AccessibilityName: strings.Get("View keys"),
+                Width: Math.Min(width - 48, 600),
+                Header: Label(strings.Get("View keys"), 18, ink, ""),
+                Content: Container{
+                    Gap: 14,
+                    ViewKey("Spend public key", keys.SpendPublic),
+                    ViewKey("View private key", keys.ViewPrivate)
+                },
+                Footer: ActionRow(
+                    []Blob{
+                        Button(
+                            viewKeysVisible ? "Hide": "Reveal",
+                            () -> {
+                                viewKeysVisible = !viewKeysVisible
+                                Rebuild()
+                            }
+                        ),
+                        Button("Close", close)
+                    }
+                ),
+                OnCancel: close,
+                OnClose: close
+            }
+        )
+    }
+
+    private func ViewKey(label string, key[]char) Blob -> Accent(
+        viewKeysVisible ? lime: edge,
+        Copyable(label, String(key), Grouped(viewKeysVisible ? String(key): String('•', key.Length)), 30000)
+    )
+
+    private func ViewOnlyDialog() Blob {
+        let close Action = () -> {
+            ClearSecrets()
+            name = ""
+            Rebuild()
+        }
+        let content = Container{Gap: 14}
+        let actions = List[Blob]{Button(viewOnlyCreated.Length > 0 ? "Close": "Cancel", close)}
+        if viewOnlyCreated.Length > 0 {
+            content.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 8,
+                    MaterialIcons.Create("check_circle", 18, lime),
+                    Label(WalletName(viewOnlyCreated), 16, lime, "")
+                }
+            )
+        } else {
+            if error.Length > 0 {
+                content.Add(Label(Explain(error), 13, pink, ""))
+            }
+            let submit Action = () -> CreateViewOnly()
+            content.Add(
+                Field(
+                    "Name",
+                    name,
+                    value -> {
+                        name = value
+                        Rebuild()
+                    },
+                    submit
+                )
+            )
+            content.Add(
+                Field(
+                    "Password",
+                    password,
+                    value -> {
+                        password = value
+                        passwordIssue = ""
+                        Rebuild()
+                    },
+                    submit,
+                    true
+                )
+            )
+            content.Add(
+                Field(
+                    "File password",
+                    filePassword,
+                    value -> {
+                        filePassword = value
+                        passwordIssue = ""
+                        Rebuild()
+                    },
+                    submit,
+                    true
+                )
+            )
+            content.Add(
+                Field(
+                    "Confirm",
+                    confirmation,
+                    value -> {
+                        confirmation = value
+                        passwordIssue = ""
+                        Rebuild()
+                    },
+                    submit,
+                    true,
+                    passwordIssue
+                )
+            )
+            actions.Add(
+                Button(
+                    "Create",
+                    submit,
+                    Working() || name.Trim().Length == 0 || password.Length == 0 || filePassword.Length == 0,
+                    true
+                )
+            )
+        }
+        return Cell.Mount[ModalDialog, ModalDialogHost](
+            "view-only",
+            ModalDialog{
+                Open: true,
+                CreateRoot: DialogRoot,
+                AccessibilityName: strings.Get("Create view-only"),
+                Width: Math.Min(width - 48, 520),
+                Header: Label(strings.Get("Create view-only"), 18, ink, ""),
+                Content: content,
+                Footer: ActionRow(actions.ToArray()),
+                OnCancel: close,
+                OnClose: close
+            }
+        )
+    }
+
+    private func CreateViewOnly() {
+        if Working() || name.Trim().Length == 0 || password.Length == 0 || filePassword.Length == 0 {
+            return
+        }
+        passwordIssue = if password == filePassword {
+            "View-only file password must differ from the wallet password"
+        } else {
+            WalletValidation.PasswordError(filePassword.ToCharArray(), confirmation.ToCharArray())
+        }
+        if passwordIssue.Length > 0 {
+            Rebuild()
+            return
+        }
+        let filename = WalletFile(name)
+        let current = password.ToCharArray()
+        let secret = filePassword.ToCharArray()
+        Run(
+            wallet.Keys.CreateViewOnlyAsync(filename, current, secret),
+            () -> {
+                ClearSecrets()
+                name = ""
+                viewOnlyOpen = true
+                viewOnlyCreated = filename
+            },
+            current,
+            secret
+        )
+    }
+
+    private var draft WalletSettings?
 }

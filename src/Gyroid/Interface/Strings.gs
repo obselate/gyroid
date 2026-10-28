@@ -1,4 +1,4 @@
-package Gyroid.View
+package Gyroid.Interface
 
 import Gyroid.Node
 import System

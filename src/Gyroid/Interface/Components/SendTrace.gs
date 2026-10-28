@@ -1,4 +1,4 @@
-package Gyroid.View
+package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
@@ -22,11 +22,13 @@ class SendCue(Delay float64, From float64, Target float64, Wobble float64) : Sim
 
 partial class WalletView {
     private let traceFades[]Anim[float64] = [6]Anim[float64]
+
     private let traceShifts[]Anim[Point] = [6]Anim[Point]
+
     private var traceSeal Anim[float64]?
-    private var traceEstimate SendEstimate?
-    private var traceResult SendResult?
+
     private var traceCompact bool
+
     private var traceTimer WindowTimer?
 
     private func TraceSend(estimate SendEstimate, result SendResult) {
