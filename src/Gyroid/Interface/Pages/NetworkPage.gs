@@ -100,6 +100,7 @@ class NetworkPage : Cell[NetworkInput] {
         figures.Add(Figure(input, "Emitted", report.Emitted.ToString("0.0", CultureInfo.InvariantCulture), "%"))
         let times = Card(ui)
         times.FlexGrow = 1
+        times.FlexBasis = 0
         times.Add(
             Header(
                 input,
@@ -128,6 +129,7 @@ class NetworkPage : Cell[NetworkInput] {
         }
         let last = Card(ui)
         last.FlexGrow = 1.15
+        last.FlexBasis = 0
         last.Add(Header(input, "Last block", "last", tip.Timestamp > 0 ? ui.Clock(tip.Timestamp): "-", Container{}))
         last.Add(Ribbon(input, tip))
         last.Add(Details(input, shown, tip))
@@ -157,13 +159,14 @@ class NetworkPage : Cell[NetworkInput] {
         var result NetworkReport? = nil
         try {
             result = await Task.Run(() -> input.Session.Node.ReadNetworkAsync(previous, CancellationToken.None))
-        } catch (failure Exception) {
-            result = nil
-        }
+        } catch (failure Exception) { }
         input.Window?.TryPost(
             () -> {
                 loading = false
-                report = result ?? report
+                guard let value = result else {
+                    return
+                }
+                report = value
                 Rebuild()
             }
         )
@@ -174,7 +177,6 @@ class NetworkPage : Cell[NetworkInput] {
         card.BorderRadius = 14
         card.Padding = Edges{Left: 18, Right: 18, Top: 14, Bottom: 12}
         card.Gap = 8
-        card.FlexBasis = 0
         return card
     }
 
