@@ -27,7 +27,7 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var settingsTab string = "general"
 
     private var applyPending bool
@@ -41,21 +41,21 @@ partial class WalletView {
     private func SettingsPage() Blob {
         if seedFromWallet {
             if let words = seed {
-                let phrase = PageContent(strings.Get("recovery phrase"), 860)
+                let phrase = ui.PageContent(ui.Strings.Get("recovery phrase"), 860)
                 phrase.Add(Phrase(words, Math.Min(width - 256, 860) - 42))
                 return phrase
             }
         }
-        let panel = PageContent(
-            strings.Get("settings"),
+        let panel = ui.PageContent(
+            ui.Strings.Get("settings"),
             860,
-            Tabs(
+            ui.Tabs(
                 "settings-tabs",
                 "Settings",
                 []NavigationItem{
-                    NavigationItem{Id: "general", Label: strings.Get("General")},
-                    NavigationItem{Id: "node", Label: strings.Get("Node")},
-                    NavigationItem{Id: "wallet", Label: strings.Get("Wallet")}
+                    NavigationItem{Id: "general", Label: ui.Strings.Get("General")},
+                    NavigationItem{Id: "node", Label: ui.Strings.Get("Node")},
+                    NavigationItem{Id: "wallet", Label: ui.Strings.Get("Wallet")}
                 },
                 settingsTab,
                 id -> {
@@ -76,21 +76,21 @@ partial class WalletView {
         )
         let actions = List[Blob]()
         if !WalletAvailable() {
-            actions.Add(Button("Back", () -> Back(), Working()))
+            actions.Add(ui.Button("Back", () -> Back(), ui.Working()))
         }
         if settingsTab != "general" {
             actions.Add(Container{FlexGrow: 1})
             actions.Add(
-                Button(
+                ui.Button(
                     "Save",
                     () -> SaveSettings(value),
-                    Working() || !value.StartupDiffers(wallet.Settings) && value.LoadError.Length == 0,
+                    ui.Working() || !value.StartupDiffers(wallet.Settings) && value.LoadError.Length == 0,
                     true
                 )
             )
         }
         if actions.Count > 0 {
-            panel.Add(ActionRow(actions.ToArray()))
+            panel.Add(ui.ActionRow(actions.ToArray()))
         }
         return panel
     }
@@ -99,7 +99,7 @@ partial class WalletView {
         Gap: Theme.Read().ControlGap,
         FlexShrink: 0,
         AlignItems: AlignItems.FlexStart,
-        Label(strings.Get(label), Theme.Read().LabelFontSize, body),
+        ui.Label(ui.Strings.Get(label), Theme.Read().LabelFontSize, ui.Body),
         control
     }
 
@@ -117,8 +117,8 @@ partial class WalletView {
             ToggleGroupInput{
                 Items: options,
                 SelectedIds: []string{selected},
-                AccessibilityName: strings.Get(label),
-                Disabled: disabled || Working(),
+                AccessibilityName: ui.Strings.Get(label),
+                Disabled: disabled || ui.Working(),
                 OnChange: ids -> {
                     if ids.Length > 0 {
                         chosen(ids[0])
@@ -133,9 +133,9 @@ partial class WalletView {
         AlignItems: AlignItems.Baseline,
         Gap: 12,
         FlexShrink: 0,
-        Accessibility: Accessibility{Name: strings.Get(label) + " " + value},
-        Container{Width: 88, FlexShrink: 0, Label(strings.Get(label), 12, body, "")},
-        Grow(Label(value, 13, color, ""))
+        Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
+        Container{Width: 88, FlexShrink: 0, ui.Label(ui.Strings.Get(label), 12, ui.Body, "")},
+        ui.Grow(ui.Label(value, 13, color, ""))
     }
 
     private func GeneralSettings() Blob -> Container{
@@ -145,10 +145,10 @@ partial class WalletView {
             "language",
             "Language",
             []ToggleOption{
-                ToggleOption{Id: "en", Label: strings.Get("English")},
-                ToggleOption{Id: "zh-Hans", Label: strings.Get("中文")}
+                ToggleOption{Id: "en", Label: ui.Strings.Get("English")},
+                ToggleOption{Id: "zh-Hans", Label: ui.Strings.Get("中文")}
             },
-            strings.Language,
+            ui.Strings.Language,
             false,
             id -> SetLanguage(id)
         ),
@@ -159,9 +159,9 @@ partial class WalletView {
                 (minutes string) -> ToggleOption{
                     Id: minutes,
                     Label: if minutes == "0" {
-                        strings.Get("Off")
+                        ui.Strings.Get("Off")
                     } else {
-                        minutes + " " + strings.Get("min")
+                        minutes + " " + ui.Strings.Get("min")
                     }
                 }
             )
@@ -176,11 +176,11 @@ partial class WalletView {
             Gap: 12,
             FlexShrink: 0,
             ToggleSwitch{
-                Checked: privacy,
-                AccessibilityName: strings.Get("Privacy"),
+                Checked: ui.Privacy,
+                AccessibilityName: ui.Strings.Get("Privacy"),
                 OnClick: () -> TogglePrivacy()
             }.Build(),
-            Label(strings.Get("Privacy"), 14, ink)
+            ui.Label(ui.Strings.Get("Privacy"), 14, ui.Ink)
         }
     }
 
@@ -197,8 +197,8 @@ partial class WalletView {
                 "node-mode",
                 "Node mode",
                 []ToggleOption{
-                    ToggleOption{Id: "automatic", Label: strings.Get("Automatic")},
-                    ToggleOption{Id: "manual", Label: strings.Get("Manual")}
+                    ToggleOption{Id: "automatic", Label: ui.Strings.Get("Automatic")},
+                    ToggleOption{Id: "manual", Label: ui.Strings.Get("Manual")}
                 },
                 current.NodeMode,
                 Pinned("NODE_MODE"),
@@ -207,13 +207,13 @@ partial class WalletView {
             Container{
                 Gap: 8,
                 FlexShrink: 0,
-                Reading("Source", strings.Get(status.Source), ink),
+                Reading("Source", ui.Strings.Get(status.Source), ui.Ink),
                 if Phase().Length > 0 {
-                    Reading("State", PhaseText(), lime)
+                    Reading("State", PhaseText(), ui.Lime)
                 } else if status.Running {
-                    Reading("State", strings.Get("Running"), lime)
+                    Reading("State", ui.Strings.Get("Running"), ui.Lime)
                 } else {
-                    Reading("State", strings.Get("Stopped"), body)
+                    Reading("State", ui.Strings.Get("Stopped"), ui.Body)
                 },
                 Reading(
                     "Version",
@@ -222,51 +222,51 @@ partial class WalletView {
                     } else {
                         "-"
                     },
-                    ink
+                    ui.Ink
                 ),
                 Reading(
                     "Network",
-                    strings.Get(
+                    ui.Strings.Get(
                         if status.Network == "testnet" {
                             "Testnet"
                         } else {
                             "Mainnet"
                         }
                     ),
-                    ink
+                    ui.Ink
                 ),
                 Reading(
                     "Height",
                     if !status.Running {
                         "-"
                     } else if status.Syncing {
-                        Count(status.Height) + " / " + Count(status.ChainHeight)
+                        ui.Count(status.Height) + " / " + ui.Count(status.ChainHeight)
                     } else {
-                        Count(status.Height)
+                        ui.Count(status.Height)
                     },
-                    ink
+                    ui.Ink
                 ),
                 Reading(
                     "Peers",
                     if status.Running {
-                        Count(status.Peers)
+                        ui.Count(status.Peers)
                     } else {
                         "-"
                     },
-                    ink
+                    ui.Ink
                 ),
-                Reading("Node URL", status.Endpoint, ink),
-                Reading("Data", status.DataDirectory, ink)
+                Reading("Node URL", status.Endpoint, ui.Ink),
+                Reading("Data", status.DataDirectory, ui.Ink)
             }
         }
         let actions = Container{FlexDirection: FlexDirection.Row, Gap: 8, FlexShrink: 0}
         if !status.Running && current.NodeMode == "automatic" && wallet.Node.Status.Progress.Length == 0 {
-            actions.Add(Button("Start", () -> Run(wallet.StartNodeAsync()), Working()))
+            actions.Add(ui.Button("Start", () -> Run(wallet.StartNodeAsync()), ui.Working()))
         }
         if status.Owned {
-            actions.Add(Button("Stop", () -> Run(wallet.StopNodeAsync()), Working() || loaded))
+            actions.Add(ui.Button("Stop", () -> Run(wallet.StopNodeAsync()), ui.Working() || loaded))
             if current.NodeMode == "automatic" {
-                actions.Add(Button("Restart", () -> Run(wallet.RestartNodeAsync()), Working() || loaded))
+                actions.Add(ui.Button("Restart", () -> Run(wallet.RestartNodeAsync()), ui.Working() || loaded))
             }
         }
         left.Add(actions)
@@ -279,8 +279,8 @@ partial class WalletView {
                 "network",
                 "Network",
                 []ToggleOption{
-                    ToggleOption{Id: "mainnet", Label: strings.Get("Mainnet")},
-                    ToggleOption{Id: "testnet", Label: strings.Get("Testnet")}
+                    ToggleOption{Id: "mainnet", Label: ui.Strings.Get("Mainnet")},
+                    ToggleOption{Id: "testnet", Label: ui.Strings.Get("Testnet")}
                 },
                 value.Network,
                 Pinned("NETWORK"),
@@ -289,7 +289,7 @@ partial class WalletView {
                     Rebuild()
                 }
             ),
-            Field(
+            ui.Field(
                 "Node URL",
                 value.Endpoint,
                 text -> {
@@ -321,7 +321,7 @@ partial class WalletView {
         }
         if status.Source != "External" && current.DataDirectory != current.DiscoveredDataDirectory {
             fields.Add(
-                Field(
+                ui.Field(
                     "P2P address",
                     value.ListenAddress,
                     text -> {
@@ -358,10 +358,10 @@ partial class WalletView {
                     AlignItems: AlignItems.FlexEnd,
                     Gap: 8,
                     FlexShrink: 0,
-                    Grow(
+                    ui.Grow(
                         Container{
                             MinWidth: 0,
-                            Field(
+                            ui.Field(
                                 "Password",
                                 revealPassword,
                                 text -> {
@@ -373,8 +373,8 @@ partial class WalletView {
                             )
                         }
                     ),
-                    Button("Show phrase", () -> RevealSeed(), Working() || revealPassword.Length == 0, true),
-                    Button("View keys", () -> ExportViewKeys(), Working() || revealPassword.Length == 0)
+                    ui.Button("Show phrase", () -> RevealSeed(), ui.Working() || revealPassword.Length == 0, true),
+                    ui.Button("View keys", () -> ExportViewKeys(), ui.Working() || revealPassword.Length == 0)
                 }
             )
         }
@@ -404,7 +404,7 @@ partial class WalletView {
                     }
                 )
             )
-            actions.Add(Button("Sync", () -> Rescan(), Working()))
+            actions.Add(ui.Button("Sync", () -> Rescan(), ui.Working()))
             if rescan?.IsCompleted == false {
                 actions.Add(
                     Cell.Mount[SpinnerInput, Spinner](
@@ -413,16 +413,16 @@ partial class WalletView {
                         } else {
                             "rescan-idle"
                         },
-                        SpinnerInput{Size: 16, Color: lime, Label: strings.Get("Scanning")}
+                        SpinnerInput{Size: 16, Color: ui.Lime, Label: ui.Strings.Get("Scanning")}
                     )
                 )
-                actions.Add(Label(strings.Get("Scanning"), 13, body, ""))
+                actions.Add(ui.Label(ui.Strings.Get("Scanning"), 13, ui.Body, ""))
             }
         }
         actions.Add(Container{FlexGrow: 1})
         if wallet.Snapshot.State == "Unlocked" && !wallet.Snapshot.ViewOnly {
             actions.Add(
-                Button(
+                ui.Button(
                     "Create view-only",
                     () -> {
                         ClearSecrets()
@@ -431,12 +431,12 @@ partial class WalletView {
                         viewOnlyOpen = true
                         Rebuild()
                     },
-                    Working()
+                    ui.Working()
                 )
             )
         }
         if wallet.Snapshot.Page != "Welcome" {
-            actions.Add(Button("Switch wallet", () -> Run(wallet.UnloadAsync()), Working()))
+            actions.Add(ui.Button("Switch wallet", () -> Run(wallet.UnloadAsync()), ui.Working()))
         }
         tab.Add(actions)
         return tab
@@ -477,19 +477,19 @@ partial class WalletView {
         }
         return ModalDialog{
             Open: true,
-            CreateRoot: DialogRoot,
-            AccessibilityName: strings.Get("Apply settings"),
+            CreateRoot: ui.DialogRoot,
+            AccessibilityName: ui.Strings.Get("Apply settings"),
             Width: Math.Min(width - 48, 420),
-            Content: Label(strings.Get("Apply settings"), 18, ink, ""),
-            ConfirmText: strings.Get(
+            Content: ui.Label(ui.Strings.Get("Apply settings"), 18, ui.Ink, ""),
+            ConfirmText: ui.Strings.Get(
                 if wallet.Snapshot.State == "Unlocked" {
                     "Lock and apply"
                 } else {
                     "Apply"
                 }
             ),
-            CancelText: strings.Get("Cancel"),
-            ConfirmDisabled: Working(),
+            CancelText: ui.Strings.Get("Cancel"),
+            ConfirmDisabled: ui.Working(),
             OnConfirm: () -> SaveSettings(value),
             OnCancel: close,
             OnClose: close
@@ -497,11 +497,11 @@ partial class WalletView {
     }
 
     private async func SetLanguage(language string) {
-        strings.Language = language
+        ui.Strings.Language = language
         if let value = draft {
             value.Language = language
         }
-        decoding.Clear()
+        ui.Decoding.Clear()
         tray?.Update(TraySettings())
         Rebuild()
         try {
@@ -526,7 +526,7 @@ partial class WalletView {
     ) Blob {
         let input = Container{}
         input.Add(
-            Field(
+            ui.Field(
                 label,
                 current,
                 text -> {
@@ -545,9 +545,9 @@ partial class WalletView {
             Gap: 8,
             FlexShrink: 0
         }
-        row.Add(Grow(input))
+        row.Add(ui.Grow(input))
         row.Add(
-            Button(
+            ui.Button(
                 "Browse",
                 () -> ChooseFile(
                     kind,
@@ -562,7 +562,7 @@ partial class WalletView {
                         Rebuild()
                     }
                 ),
-                disabled || Working()
+                disabled || ui.Working()
             )
         )
         return Setting(label, row)
@@ -571,7 +571,7 @@ partial class WalletView {
     private var revealPassword string = ""
 
     private func RevealSeed() {
-        if Working() || revealPassword.Length == 0 {
+        if ui.Working() || revealPassword.Length == 0 {
             return
         }
         let buffer = revealPassword.ToCharArray()
@@ -599,7 +599,7 @@ partial class WalletView {
     }
 
     private func ExportViewKeys() {
-        if Working() || revealPassword.Length == 0 {
+        if ui.Working() || revealPassword.Length == 0 {
             return
         }
         let buffer = revealPassword.ToCharArray()
@@ -623,25 +623,25 @@ partial class WalletView {
             "view-keys",
             ModalDialog{
                 Open: true,
-                CreateRoot: DialogRoot,
-                AccessibilityName: strings.Get("View keys"),
+                CreateRoot: ui.DialogRoot,
+                AccessibilityName: ui.Strings.Get("View keys"),
                 Width: Math.Min(width - 48, 600),
-                Header: Label(strings.Get("View keys"), 18, ink, ""),
+                Header: ui.Label(ui.Strings.Get("View keys"), 18, ui.Ink, ""),
                 Content: Container{
                     Gap: 14,
                     ViewKey("Spend public key", keys.SpendPublic),
                     ViewKey("View private key", keys.ViewPrivate)
                 },
-                Footer: ActionRow(
+                Footer: ui.ActionRow(
                     []Blob{
-                        Button(
+                        ui.Button(
                             viewKeysVisible ? "Hide": "Reveal",
                             () -> {
                                 viewKeysVisible = !viewKeysVisible
                                 Rebuild()
                             }
                         ),
-                        Button("Close", close)
+                        ui.Button("Close", close)
                     }
                 ),
                 OnCancel: close,
@@ -650,9 +650,9 @@ partial class WalletView {
         )
     }
 
-    private func ViewKey(label string, key[]char) Blob -> Accent(
-        viewKeysVisible ? lime: edge,
-        Copyable(label, String(key), Grouped(viewKeysVisible ? String(key): String('•', key.Length)), 30000)
+    private func ViewKey(label string, key[]char) Blob -> ui.Accent(
+        viewKeysVisible ? ui.Lime: ui.Edge,
+        ui.Copyable(label, String(key), ui.Grouped(viewKeysVisible ? String(key): String('•', key.Length)), 30000)
     )
 
     private func ViewOnlyDialog() Blob {
@@ -662,24 +662,24 @@ partial class WalletView {
             Rebuild()
         }
         let content = Container{Gap: 14}
-        let actions = List[Blob]{Button(viewOnlyCreated.Length > 0 ? "Close": "Cancel", close)}
+        let actions = List[Blob]{ui.Button(viewOnlyCreated.Length > 0 ? "Close": "Cancel", close)}
         if viewOnlyCreated.Length > 0 {
             content.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 8,
-                    MaterialIcons.Create("check_circle", 18, lime),
-                    Label(WalletName(viewOnlyCreated), 16, lime, "")
+                    MaterialIcons.Create("check_circle", 18, ui.Lime),
+                    ui.Label(WalletName(viewOnlyCreated), 16, ui.Lime, "")
                 }
             )
         } else {
             if error.Length > 0 {
-                content.Add(Label(Explain(error), 13, pink, ""))
+                content.Add(ui.Label(ui.Strings.Explain(error), 13, ui.Pink, ""))
             }
             let submit Action = () -> CreateViewOnly()
             content.Add(
-                Field(
+                ui.Field(
                     "Name",
                     name,
                     value -> {
@@ -690,7 +690,7 @@ partial class WalletView {
                 )
             )
             content.Add(
-                Field(
+                ui.Field(
                     "Password",
                     password,
                     value -> {
@@ -703,7 +703,7 @@ partial class WalletView {
                 )
             )
             content.Add(
-                Field(
+                ui.Field(
                     "File password",
                     filePassword,
                     value -> {
@@ -716,7 +716,7 @@ partial class WalletView {
                 )
             )
             content.Add(
-                Field(
+                ui.Field(
                     "Confirm",
                     confirmation,
                     value -> {
@@ -730,10 +730,10 @@ partial class WalletView {
                 )
             )
             actions.Add(
-                Button(
+                ui.Button(
                     "Create",
                     submit,
-                    Working() || name.Trim().Length == 0 || password.Length == 0 || filePassword.Length == 0,
+                    ui.Working() || name.Trim().Length == 0 || password.Length == 0 || filePassword.Length == 0,
                     true
                 )
             )
@@ -742,12 +742,12 @@ partial class WalletView {
             "view-only",
             ModalDialog{
                 Open: true,
-                CreateRoot: DialogRoot,
-                AccessibilityName: strings.Get("Create view-only"),
+                CreateRoot: ui.DialogRoot,
+                AccessibilityName: ui.Strings.Get("Create view-only"),
                 Width: Math.Min(width - 48, 520),
-                Header: Label(strings.Get("Create view-only"), 18, ink, ""),
+                Header: ui.Label(ui.Strings.Get("Create view-only"), 18, ui.Ink, ""),
                 Content: content,
-                Footer: ActionRow(actions.ToArray()),
+                Footer: ui.ActionRow(actions.ToArray()),
                 OnCancel: close,
                 OnClose: close
             }
@@ -755,7 +755,7 @@ partial class WalletView {
     }
 
     private func CreateViewOnly() {
-        if Working() || name.Trim().Length == 0 || password.Length == 0 || filePassword.Length == 0 {
+        if ui.Working() || name.Trim().Length == 0 || password.Length == 0 || filePassword.Length == 0 {
             return
         }
         passwordIssue = if password == filePassword {

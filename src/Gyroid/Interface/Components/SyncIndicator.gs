@@ -16,7 +16,7 @@ import System.Collections.Generic
 import System.IO
 import System.Linq
 
-partial class WalletView {
+partial class App {
     private func Phase() string {
         let status = wallet.Node.Status
         return if status.Phase.Length == 0 && status.Running && status.Peers == 0 {
@@ -28,7 +28,7 @@ partial class WalletView {
 
     private func Preparing() bool -> wallet.Node.Status.Phase.Length > 0 && wallet.Node.Status.Phase != "ChainSync"
 
-    private func PhaseName() string -> strings.Get(
+    private func PhaseName() string -> ui.Strings.Get(
         switch Phase() {
             case "Core": "Core download"
             case "ChainSync": "Syncing"
@@ -72,10 +72,10 @@ partial class WalletView {
                     } else {
                         "sync-idle"
                     },
-                    SpinnerInput{Size: size, Color: lime, Label: PhaseName()}
+                    SpinnerInput{Size: size, Color: ui.Lime, Label: PhaseName()}
                 )
             )
-            row.Add(Label(PhaseName(), fontSize, body, ""))
+            row.Add(ui.Label(PhaseName(), fontSize, ui.Body, ""))
             return row
         }
         let stroke = Math.Max(2.0, size / 10)
@@ -99,7 +99,7 @@ partial class WalletView {
                     Height: size,
                     Path: circle,
                     BorderWidth: stroke,
-                    BorderColor: rule
+                    BorderColor: ui.Rule
                 },
                 Shape{
                     Position: PositionType.Absolute,
@@ -107,7 +107,7 @@ partial class WalletView {
                     Height: size,
                     Path: circle,
                     BorderWidth: stroke,
-                    BorderColor: lime,
+                    BorderColor: ui.Lime,
                     StrokeEnd: percent / 100.0
                 },
                 MaterialIcons.Create(
@@ -117,12 +117,12 @@ partial class WalletView {
                         default: "download"
                     },
                     size * 0.6,
-                    lime
+                    ui.Lime
                 )
             }
         )
-        row.Add(Label(PhaseName(), fontSize, body, ""))
-        row.Add(Label((percent.ToString() + "%").PadLeft(4), fontSize, lime, ""))
+        row.Add(ui.Label(PhaseName(), fontSize, ui.Body, ""))
+        row.Add(ui.Label((percent.ToString() + "%").PadLeft(4), fontSize, ui.Lime, ""))
         return row
     }
 }

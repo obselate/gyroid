@@ -21,7 +21,7 @@ import System.Linq
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var shownOutput WalletOutput?
 
     private var shownSend WalletSend?
@@ -88,63 +88,63 @@ partial class WalletView {
             ScrollbarY: Theme.Read().Scrollbar
         }
         if let value = output {
-            content.Add(Figure("Amount", "+" + Amount(value.Amount) + " BNT", mint, 18))
+            content.Add(ui.Figure("Amount", "+" + ui.Amount(value.Amount) + " BNT", ui.Mint, 18))
         }
         if let value = send {
-            content.Add(Figure("Amount", "-" + Amount(value.Amount) + " BNT", pink, 18))
-            content.Add(Figure("Fee", Amount(value.Fee) + " BNT", ink))
+            content.Add(ui.Figure("Amount", "-" + ui.Amount(value.Amount) + " BNT", ui.Pink, 18))
+            content.Add(ui.Figure("Fee", ui.Amount(value.Fee) + " BNT", ui.Ink))
         }
         if state.Length > 0 {
             content.Add(
-                Figure(
+                ui.Figure(
                     "Status",
-                    ChainState(state, chain?.Confirmations ?? send?.Confirmations ?? uint64(0)),
+                    ui.ChainState(state, chain?.Confirmations ?? send?.Confirmations ?? uint64(0)),
                     if state == "confirmed" {
-                        lime
+                        ui.Lime
                     } else {
-                        orange
+                        ui.Orange
                     }
                 )
             )
         } else if waiting {
-            content.Add(Figure("Status", "…", body))
+            content.Add(ui.Figure("Status", "…", ui.Body))
         }
         if height > 0 {
-            content.Add(Figure("Height", Count(height), ink))
+            content.Add(ui.Figure("Height", ui.Count(height), ui.Ink))
         } else if waiting {
-            content.Add(Figure("Height", "…", body))
+            content.Add(ui.Figure("Height", "…", ui.Body))
         }
         if let seconds = time {
-            content.Add(Figure("Time", Time(seconds), ink))
+            content.Add(ui.Figure("Time", ui.Time(seconds), ui.Ink))
         } else if waiting {
-            content.Add(Figure("Time", "…", body))
+            content.Add(ui.Figure("Time", "…", ui.Body))
         }
         if let value = output {
             if value.Memo.Length > 0 {
-                content.Add(Figure("Memo", Hidden(value.Memo), ink))
+                content.Add(ui.Figure("Memo", ui.Hidden(value.Memo), ui.Ink))
             }
         }
-        content.Add(Copyable("Transaction", txid, Hidden(Grouped(txid))))
+        content.Add(ui.Copyable("Transaction", txid, ui.Hidden(ui.Grouped(txid))))
         if proofTx == txid && proofKey.Length > 0 {
-            content.Add(Copyable("Proof key", proofKey, Hidden(Grouped(proofKey))))
+            content.Add(ui.Copyable("Proof key", proofKey, ui.Hidden(ui.Grouped(proofKey))))
         }
         for recipient in send?.Recipients ?? Array.Empty[WalletRecipient]() {
             let entry = Container{
                 Gap: 6,
-                Label(strings.Get("Recipient"), 12, body),
+                ui.Label(ui.Strings.Get("Recipient"), 12, ui.Body),
                 Text{
-                    Content: Hidden(Grouped(recipient.Address)),
-                    FontFamily: font,
+                    Content: ui.Hidden(ui.Grouped(recipient.Address)),
+                    FontFamily: ui.Font,
                     FontSize: 13,
-                    Color: ink,
+                    Color: ui.Ink,
                     TextWrap: TextWrap.Wrap
                 },
-                Figure("Amount", Amount(recipient.Amount) + " BNT", ink)
+                ui.Figure("Amount", ui.Amount(recipient.Amount) + " BNT", ui.Ink)
             }
             if recipient.Memo.Length > 0 {
-                entry.Add(Figure("Memo", Hidden(recipient.Memo), ink))
+                entry.Add(ui.Figure("Memo", ui.Hidden(recipient.Memo), ui.Ink))
             }
-            content.Add(Accent(pink, entry))
+            content.Add(ui.Accent(ui.Pink, entry))
         }
         let title = if send != nil {
             "sent"
@@ -154,20 +154,20 @@ partial class WalletView {
         let actions = List[Blob]()
         if let value = send {
             if state == "confirmed" && proofTx != txid {
-                actions.Add(Button("Prove", () -> Prove(value), Working()))
+                actions.Add(ui.Button("Prove", () -> Prove(value), ui.Working()))
             }
         }
-        actions.Add(Button("Close", close))
+        actions.Add(ui.Button("Close", close))
         return Cell.Mount[ModalDialog, ModalDialogHost](
             "transaction",
             ModalDialog{
                 Open: true,
-                CreateRoot: DialogRoot,
-                AccessibilityName: strings.Get(title),
+                CreateRoot: ui.DialogRoot,
+                AccessibilityName: ui.Strings.Get(title),
                 Width: Math.Min(width - 48, 600),
-                Header: Label(strings.Get(title), 18, ink, ""),
+                Header: ui.Label(ui.Strings.Get(title), 18, ui.Ink, ""),
                 Content: content,
-                Footer: ActionRow(actions.ToArray()),
+                Footer: ui.ActionRow(actions.ToArray()),
                 OnCancel: close,
                 OnClose: close
             }

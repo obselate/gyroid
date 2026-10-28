@@ -14,7 +14,7 @@ import System
 import System.Collections.Generic
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var toolsTab string = "sign"
 
     private var message string = ""
@@ -52,14 +52,14 @@ partial class WalletView {
         }
         let items = List[NavigationItem]()
         if !viewOnly {
-            items.Add(NavigationItem{Id: "sign", Label: strings.Get("Sign")})
+            items.Add(NavigationItem{Id: "sign", Label: ui.Strings.Get("Sign")})
         }
-        items.Add(NavigationItem{Id: "verify", Label: strings.Get("Verify")})
-        items.Add(NavigationItem{Id: "proof", Label: strings.Get("Proof")})
-        let panel = PageContent(
-            strings.Get("tools"),
+        items.Add(NavigationItem{Id: "verify", Label: ui.Strings.Get("Verify")})
+        items.Add(NavigationItem{Id: "proof", Label: ui.Strings.Get("Proof")})
+        let panel = ui.PageContent(
+            ui.Strings.Get("tools"),
             640,
-            Tabs(
+            ui.Tabs(
                 "tools-tabs",
                 "tools",
                 items.ToArray(),
@@ -107,7 +107,7 @@ partial class WalletView {
         )
         if tab == "sign" {
             panel.Add(
-                Field(
+                ui.Field(
                     "Message",
                     message,
                     value -> {
@@ -119,9 +119,9 @@ partial class WalletView {
                 )
             )
             if signature.Length > 0 {
-                panel.Add(Copyable("Signature", signature, Grouped(signature)))
+                panel.Add(ui.Copyable("Signature", signature, ui.Grouped(signature)))
             }
-            panel.Add(ActionRow([]Blob{Button("Sign", () -> Sign(), Working() || message.Length == 0, true)}))
+            panel.Add(ui.ActionRow([]Blob{ui.Button("Sign", () -> Sign(), ui.Working() || message.Length == 0, true)}))
             return panel
         }
         if tab == "proof" {
@@ -141,16 +141,16 @@ partial class WalletView {
         }
         let result = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexGrow: 1}
         if let valid = verdict {
-            let color = valid ? lime: pink
+            let color = valid ? ui.Lime: ui.Pink
             result.Add(MaterialIcons.Create(valid ? "check_circle": "cancel", 18, color))
-            result.Add(Label(strings.Get(valid ? "Valid": "Invalid"), 14, color, ""))
+            result.Add(ui.Label(ui.Strings.Get(valid ? "Valid": "Invalid"), 14, color, ""))
         }
-        panel.Add(ActionRow([]Blob{result, Button("Verify", verify, Working() || blank, true)}))
+        panel.Add(ui.ActionRow([]Blob{result, ui.Button("Verify", verify, ui.Working() || blank, true)}))
         return panel
     }
 
     private func Sign() {
-        if Working() || message.Length == 0 {
+        if ui.Working() || message.Length == 0 {
             return
         }
         let task = wallet.Proofs.SignAsync(message)
@@ -163,7 +163,7 @@ partial class WalletView {
     }
 
     private func Verify(tab string) {
-        if Working() {
+        if ui.Working() {
             return
         }
         ResetVerdict()
@@ -182,4 +182,15 @@ partial class WalletView {
             }
         )
     }
+
+    private func ToolField(label string, value string, changed Action[string], submit Action) Blob -> ui.Field(
+        label,
+        value,
+        text -> {
+            changed(text)
+            ResetVerdict()
+            Rebuild()
+        },
+        submit
+    )
 }

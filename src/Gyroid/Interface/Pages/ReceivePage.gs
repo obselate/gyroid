@@ -21,7 +21,7 @@ import System.Linq
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var requestAmount string = ""
 
     private var requestMemo string = ""
@@ -31,12 +31,12 @@ partial class WalletView {
     private var qrPath VectorPath = VectorPath.Empty
 
     private func ReceivePanel(receiving string) Blob {
-        let panel = PageContent(strings.Get("receive"), 640)
+        let panel = ui.PageContent(ui.Strings.Get("receive"), 640)
         if receiving.Length == 0 {
             return panel
         }
-        let amountIssue = AmountIssue(requestAmount)
-        let memoIssue = MemoIssue(requestMemo)
+        let amountIssue = ui.AmountIssue(requestAmount)
+        let memoIssue = ui.MemoIssue(requestMemo)
         let query = List[string]()
         if requestAmount.Length > 0 && amountIssue.Length == 0 {
             query.Add("amount=" + requestAmount)
@@ -54,70 +54,70 @@ partial class WalletView {
             qrPath = QrPath(request)
         }
         let size = Math.Clamp(height - 230 - bannerHeight, 160.0, 300.0)
-        let copied = ReadOnlySpan[char](clipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(receiving))
+        let copied = ReadOnlySpan[char](ui.ClipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(receiving))
         panel.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
                 Gap: 24,
                 FlexShrink: 0,
-                if privacy {
+                if ui.Privacy {
                     Container{
                         Width: size,
                         Height: size,
                         FlexShrink: 0,
-                        BackgroundColor: surface,
+                        BackgroundColor: ui.Surface,
                         BorderWidth: 1,
-                        BorderColor: edge,
+                        BorderColor: ui.Edge,
                         BorderRadius: 4,
                         AlignItems: AlignItems.Center,
                         JustifyContent: JustifyContent.Center,
                         Accessibility: Accessibility{
                             Role: AccessibilityRole.Image,
-                            Name: strings.Get("Address QR code hidden")
+                            Name: ui.Strings.Get("Address QR code hidden")
                         },
-                        MaterialIcons.Create("visibility_off", 32, dim)
+                        MaterialIcons.Create("visibility_off", 32, ui.Dim)
                     }
                 } else {
                     Container{
                         Width: size,
                         Height: size,
                         FlexShrink: 0,
-                        BackgroundColor: ink,
+                        BackgroundColor: ui.Ink,
                         BorderRadius: 4,
                         Accessibility: Accessibility{
                             Role: AccessibilityRole.Image,
-                            Name: strings.Get("Address QR code")
+                            Name: ui.Strings.Get("Address QR code")
                         },
-                        Shape{Width: size, Height: size, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: black}
+                        Shape{Width: size, Height: size, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: ui.Black}
                     }
                 },
-                Grow(
+                ui.Grow(
                     Container{
                         Gap: 16,
                         JustifyContent: JustifyContent.Center,
                         Container{
                             Gap: 6,
-                            Label(strings.Get("Address"), 12, body),
+                            ui.Label(ui.Strings.Get("Address"), 12, ui.Body),
                             Container{
                                 FlexDirection: FlexDirection.Row,
                                 AlignItems: AlignItems.FlexStart,
                                 Gap: 8,
-                                Grow(
+                                ui.Grow(
                                     Text{
-                                        Content: if privacy {
+                                        Content: if ui.Privacy {
                                             "•••••••• •••••••• •••••••• ••••••••"
                                         } else {
-                                            Grouped(receiving)
+                                            ui.Grouped(receiving)
                                         },
-                                        FontFamily: font,
+                                        FontFamily: ui.Font,
                                         FontSize: 14,
-                                        Color: ink,
+                                        Color: ui.Ink,
                                         TextWrap: TextWrap.Wrap,
                                         Accessibility: Accessibility{
-                                            Name: if privacy {
-                                                strings.Get("Address hidden")
+                                            Name: if ui.Privacy {
+                                                ui.Strings.Get("Address hidden")
                                             } else {
-                                                strings.Get("Address") + " " + receiving
+                                                ui.Strings.Get("Address") + " " + receiving
                                             }
                                         }
                                     }
@@ -131,20 +131,20 @@ partial class WalletView {
                                         },
                                         16,
                                         if copied {
-                                            lime
+                                            ui.Lime
                                         } else {
-                                            body
+                                            ui.Body
                                         }
                                     ),
-                                    AccessibilityName: strings.Get("Copy address"),
+                                    AccessibilityName: ui.Strings.Get("Copy address"),
                                     OnClick: () -> {
-                                        Copy(receiving, 120000)
+                                        ui.Copy(receiving, 120000)
                                         Rebuild()
                                     }
                                 }.Build()
                             }
                         },
-                        Field(
+                        ui.Field(
                             "Amount",
                             requestAmount,
                             value -> {
@@ -153,7 +153,7 @@ partial class WalletView {
                             },
                             issue: amountIssue
                         ),
-                        Field(
+                        ui.Field(
                             "Memo",
                             requestMemo,
                             value -> {
@@ -163,7 +163,7 @@ partial class WalletView {
                             issue: memoIssue
                         ),
                         if request != receiving {
-                            Copyable("Request", request, Hidden("blocknet://…?" + String.Join("&", query)))
+                            ui.Copyable("Request", request, ui.Hidden("blocknet://…?" + String.Join("&", query)))
                         } else {
                             Container{}
                         }

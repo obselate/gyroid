@@ -14,7 +14,7 @@ import System
 import System.Collections.Generic
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var help string = ""
 
     private let helpAnchors Dictionary[string, ElementHandle] = Dictionary[string, ElementHandle]()
@@ -26,7 +26,13 @@ partial class WalletView {
         let lines = Container{Gap: 8}
         for line in details {
             lines.Add(
-                Text{Content: strings.Get(line), FontFamily: font, FontSize: 13, Color: ink, TextWrap: TextWrap.Wrap}
+                Text{
+                    Content: ui.Strings.Get(line),
+                    FontFamily: ui.Font,
+                    FontSize: 13,
+                    Color: ui.Ink,
+                    TextWrap: TextWrap.Wrap
+                }
             )
         }
         return Container{
@@ -34,12 +40,12 @@ partial class WalletView {
             AlignItems: AlignItems.Center,
             Gap: 4,
             FlexShrink: 0,
-            Grow(Label(strings.Get(summary), 13, body, "")),
+            ui.Grow(ui.Label(ui.Strings.Get(summary), 13, ui.Body, "")),
             Container{
                 Handle: helpAnchors[topic],
                 IconButton{
-                    Icon: MaterialIcons.Create("info", 16, body),
-                    AccessibilityName: strings.Get(topic),
+                    Icon: MaterialIcons.Create("info", 16, ui.Body),
+                    AccessibilityName: ui.Strings.Get(topic),
                     OnClick: () -> {
                         help = topic
                         Rebuild()
@@ -55,7 +61,7 @@ partial class WalletView {
                     Width: 400,
                     Padding: 16,
                     Content: lines,
-                    AccessibilityName: strings.Get(topic),
+                    AccessibilityName: ui.Strings.Get(topic),
                     OnDismiss: reason -> {
                         help = ""
                         Rebuild()

@@ -27,7 +27,7 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView : Cell {
+partial class App : Cell {
     private var traceEstimate SendEstimate?
 
     private var traceResult SendResult?
@@ -40,7 +40,7 @@ partial class WalletView : Cell {
                 proofTx = send.TxId
                 proofKey = task.Result
                 proofAddress = send.Recipients.Length > 0 ? send.Recipients[0].Address: ""
-                proofAmount = send.Recipients.Length > 0 ? Money(send.Recipients[0].Amount): ""
+                proofAmount = send.Recipients.Length > 0 ? ui.Money(send.Recipients[0].Amount): ""
                 ResetVerdict()
             }
         )
@@ -55,6 +55,8 @@ partial class WalletView : Cell {
     private var proofAmount string = ""
 
     private let wallet WalletSession
+
+    private let ui Presentation
 
     private var window Window?
 
@@ -90,71 +92,28 @@ partial class WalletView : Cell {
 
     init(wallet WalletSession) {
         this.wallet = wallet
-        strings = Strings(wallet.Settings.Language)
+        ui = Presentation(
+            wallet.Settings.Language,
+            wallet.Settings.Privacy,
+            () -> Rebuild(),
+            PlaybackActive,
+            Touch,
+            message -> {
+                error = message
+            }
+        )
         receivedRow = (output WalletOutput) -> ReceivedRow(output)
         sentRow = (send WalletSend) -> SentRow(send)
         historyHandle.MetricsChanged += MoreHistory
         background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
         appIcon = ImageSource.Decode(Resources.Resource("Gyroid.Icon.png"))
-        privacy = wallet.Settings.Privacy
         LoadWallets()
         LoadContacts()
     }
 
     func Attach(owner Window) {
         window = owner
-        FontSource("JetBrains Mono", 400, false, Resources.Resource("Gyroid.Font.Regular.ttf")).Register()
-        FontSource("JetBrains Mono", 700, false, Resources.Resource("Gyroid.Font.Bold.ttf")).Register()
-        let palette = (
-            Theme.Ink with{
-                Translate = key -> strings.Get(key),
-                FontFamily = font,
-                HeadingFontFamily = font,
-                MonoFontFamily = font,
-                FontSize = 14,
-                PanelRadius = 6,
-                ControlRadius = 4,
-                CanvasColor = black,
-                PanelColor = surface,
-                RaisedColor = raised,
-                OverlayColor = raised,
-                FieldColor = surface,
-                SunkenColor = black,
-                HoverColor = rule,
-                PressedColor = edge,
-                ActiveColor = edge,
-                BorderColor = edge,
-                InputBorderColor = edge,
-                StrongBorderColor = dim,
-                TextColor = ink,
-                MutedTextColor = body,
-                SubtleTextColor = body,
-                PlaceholderColor = dim,
-                FaintTextColor = body,
-                DisabledTextColor = dim,
-                AccentColor = lime,
-                OnAccentColor = black,
-                AccentHoverColor = limeHover,
-                AccentPressedColor = lime,
-                FocusColor = lime,
-                LinkColor = blue,
-                InfoColor = blue,
-                SuccessColor = lime,
-                WarningColor = orange,
-                DangerColor = pink,
-                DangerFillColor = pink,
-                DangerHoverColor = pink,
-                InfoFillColor = Color.Parse("#00111a"),
-                SuccessFillColor = Color.Parse("#111a00"),
-                WarningFillColor = Color.Parse("#1a1100"),
-                DangerQuietColor = Color.Parse("#1a0011")
-            }
-        ).WithGlass() with{
-            GlassColor = black.WithAlpha(pane),
-            HairlineColor = edge,
-            HighlightColor = surface.WithAlpha(0)
-        }
-        Theme.Attach(owner, palette)
+        ui.Attach(owner)
         Resize(owner)
         owner.MetricsChanged += metrics -> {
             pixelScale = metrics.DisplayScaleX * metrics.UiScale
@@ -190,13 +149,13 @@ partial class WalletView : Cell {
         tray = nil
         refreshTimer?.Dispose()
         statusTimer?.Dispose()
-        decodeTimer?.Dispose()
-        decodeTimer = nil
+        ui.DecodeTimer?.Dispose()
+        ui.DecodeTimer = nil
         frameTimer?.Dispose()
         frameTimer = nil
         traceTimer?.Dispose()
         traceTimer = nil
-        ReleaseClipboard()
+        ui.ReleaseClipboard()
         ClearSecrets()
         ClearSeed()
         wallet.Changed = nil
@@ -270,7 +229,7 @@ partial class WalletView : Cell {
             }
             if !seedFromWallet || page != "Seed" && page != "Wallet" {
                 screen = ""
-                Decode("page")
+                ui.Decode("page")
             }
             lastPage = page
             seedFromWallet = seedFromWallet && page == "Seed"
@@ -278,7 +237,7 @@ partial class WalletView : Cell {
         let balance = snapshot.Balance
         if balance?.Balance != shownBalance {
             shownBalance = balance?.Balance
-            Decode("balance")
+            ui.Decode("balance")
         }
         let heights = if let value = balance {
             value.ScanHeight.ToString() + " " + value.ChainHeight.ToString()
@@ -287,7 +246,7 @@ partial class WalletView : Cell {
         }
         if heights != shownHeight {
             shownHeight = heights
-            Decode("sync")
+            ui.Decode("sync")
         }
         UpdateTray()
         Rebuild()
@@ -315,7 +274,7 @@ partial class WalletView : Cell {
     }
 
     private func Run(task Task, done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
-        operations++
+        ui.Operations++
         error = ""
         Rebuild()
         Complete(task, done, secret, extra)
@@ -345,7 +304,7 @@ partial class WalletView : Cell {
         }
         window?.TryPost(
             () -> {
-                operations--
+                ui.Operations--
                 if unknown {
                     address = ""
                     amount = ""
@@ -366,7 +325,7 @@ partial class WalletView : Cell {
     }
 
     private async func Refresh(statusOnly bool = false) {
-        if refreshing || Working() || wallet.Busy {
+        if refreshing || ui.Working() || wallet.Busy {
             return
         }
         refreshing = true
@@ -407,7 +366,7 @@ partial class WalletView : Cell {
         try {
             let result = await host.ShowFileDialogAsync(
                 kind,
-                FileDialogOptions{Title: strings.Get(title), InitialPath: initialPath}
+                FileDialogOptions{Title: ui.Strings.Get(title), InitialPath: initialPath}
             )
             if result.Status == FileDialogStatus.Success && result.Paths.Count > 0 {
                 path = result.Paths[0]
@@ -433,7 +392,7 @@ partial class WalletView : Cell {
     wallet.Snapshot.State == "Unlocked" && (wallet.Snapshot.Page == "Wallet" || seedFromWallet)
 
     private func Navigate(target string) {
-        if Working() {
+        if ui.Working() {
             return
         }
         if target == "Settings" {
@@ -451,11 +410,11 @@ partial class WalletView : Cell {
     }
 
     private async func TogglePrivacy() {
-        privacy = !privacy
-        Decode("balance")
+        ui.Privacy = !ui.Privacy
+        ui.Decode("balance")
         Rebuild()
         try {
-            await wallet.SavePrivacyAsync(privacy)
+            await wallet.SavePrivacyAsync(ui.Privacy)
         } catch (failure Exception) {
             window?.TryPost(
                 () -> {
@@ -479,8 +438,8 @@ partial class WalletView : Cell {
                 theme.PanelRadius
             },
             Overflow: Overflow.Hidden,
-            FontFamily: font,
-            Color: ink,
+            FontFamily: ui.Font,
+            Color: ui.Ink,
             KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
             OnPointerDown: (event PointerEvent) -> Touch(),
             OnWheel: (event WheelEvent) -> Touch(),
@@ -638,9 +597,9 @@ partial class WalletView : Cell {
                     BorderWidth: 1,
                     BorderRadius: theme.PanelRadius,
                     BorderColor: if window?.IsFocused == true {
-                        edge
+                        ui.Edge
                     } else {
-                        rule
+                        ui.Rule
                     },
                     HitTestSelf: false,
                     ZIndex: 30

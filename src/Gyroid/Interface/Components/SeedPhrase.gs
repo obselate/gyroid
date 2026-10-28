@@ -6,7 +6,7 @@ import System
 import System.Collections.Generic
 import System.IO
 
-partial class WalletView {
+partial class App {
     private func Phrase(words[]char, inner float64) Blob {
         let columns = if inner < 560 {
             3
@@ -33,32 +33,39 @@ partial class WalletView {
                             Padding: Edges{Left: 10, Right: 10},
                             BorderWidth: Edges{Left: 3, Top: 1, Right: 1, Bottom: 1},
                             BorderRadius: 4,
-                            BorderColor: rule,
+                            BorderColor: ui.Rule,
                             BorderStartColor: if seedVisible {
-                                lime
+                                ui.Lime
                             } else {
-                                edge
+                                ui.Edge
                             },
-                            BackgroundColor: surface,
+                            BackgroundColor: ui.Surface,
                             Accessibility: Accessibility{
                                 Name: if seedVisible {
                                     number + " " + String(words, start, length)
                                 } else {
-                                    number + " " + strings.Get("hidden")
+                                    number + " " + ui.Strings.Get("hidden")
                                 }
                             },
-                            Label(number, 12, body),
+                            ui.Label(number, 12, ui.Body),
                             if seedVisible {
-                                Frame(
+                                ui.Frame(
                                     String(words, start, length),
-                                    Progress("seed"),
+                                    ui.Progress("seed"),
                                     holdSeed ^ index,
                                     Random.Shared,
                                     14,
-                                    lime
+                                    ui.Lime
                                 )
                             } else {
-                                Frame(String('x', length), 0, holdSeed ^ index, Random(holdSeed ^ index), 14, body)
+                                ui.Frame(
+                                    String('x', length),
+                                    0,
+                                    holdSeed ^ index,
+                                    Random(holdSeed ^ index),
+                                    14,
+                                    ui.Body
+                                )
                             }
                         }
                     )
@@ -69,7 +76,7 @@ partial class WalletView {
             position++
         }
         let actions = List[Blob]{
-            Button(
+            ui.Button(
                 if seedVisible {
                     "Hide"
                 } else {
@@ -78,20 +85,20 @@ partial class WalletView {
                 () -> {
                     seedVisible = !seedVisible
                     if seedVisible {
-                        Decode("seed")
+                        ui.Decode("seed")
                     } else {
                         holdSeed = Random.Shared.Next()
                     }
                     Rebuild()
                 }
             ),
-            Button("Copy", () -> Copy(String(words), 30000)),
-            Button("Export", () -> ExportSeed(), Working())
+            ui.Button("Copy", () -> ui.Copy(String(words), 30000)),
+            ui.Button("Export", () -> ExportSeed(), ui.Working())
         }
         if seedFromWallet {
-            actions.Add(Button("Done", () -> FinishSeed(), Working(), true))
+            actions.Add(ui.Button("Done", () -> FinishSeed(), ui.Working(), true))
         }
-        return Container{Gap: 16, FlexShrink: 0, grid, ActionRow(actions.ToArray())}
+        return Container{Gap: 16, FlexShrink: 0, grid, ui.ActionRow(actions.ToArray())}
     }
 
     private func ExportSeed() {

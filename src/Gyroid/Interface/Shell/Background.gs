@@ -22,7 +22,7 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var frameTimer WindowTimer?
 
     private var lastActivity int64 = Stopwatch.GetTimestamp()
@@ -34,8 +34,6 @@ partial class WalletView {
     private var sceneShift float64
 
     private var sceneCenter float32 = 0.62F
-
-    private let pane float64 = 0.8
 
     private func PlaybackActive() bool ->
     !hidden && window?.IsFocused == true && window?.IsVisible == true && window?.State != WindowState.Minimized
@@ -52,9 +50,9 @@ partial class WalletView {
             clock.Stop()
             frameTimer?.Dispose()
             frameTimer = nil
-            decodeTimer?.Dispose()
-            decodeTimer = nil
-            decoding.Clear()
+            ui.DecodeTimer?.Dispose()
+            ui.DecodeTimer = nil
+            ui.Decoding.Clear()
         } else {
             clock.Start()
             frameTimer ??= window?.SetInterval(() -> Tick(), 50)
@@ -82,7 +80,10 @@ partial class WalletView {
         } else {
             Math.Max(0, sceneShift - step)
         }
-        background.SetParameter(3, Vector4(float32(sceneShift), float32(3 * (window?.UiScale ?? 1)), float32(pane), 0F))
+        background.SetParameter(
+            3,
+            Vector4(float32(sceneShift), float32(3 * (window?.UiScale ?? 1)), float32(ui.Pane), 0F)
+        )
         background.ElapsedSeconds = now
     }
 }

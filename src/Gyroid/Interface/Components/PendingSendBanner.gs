@@ -21,28 +21,28 @@ import System.Linq
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var confirmPendingSend bool
 
     private func PendingSendBanner() Blob {
         let pending = wallet.Send.Pending
-        let content = Glass()
+        let content = ui.Glass()
         content.FlexShrink = 0
         content.Gap = 10
-        content.Add(Label(strings.Get("Pending send"), 14, orange))
+        content.Add(ui.Label(ui.Strings.Get("Pending send"), 14, ui.Orange))
         let outcome = wallet.Send.Outcome
         let message = if let value = pending {
-            strings.Get(value.State)
+            ui.Strings.Get(value.State)
         } else if outcome.TxId.Length > 0 {
-            strings.Get("Submitted") + ": " + outcome.TxId
+            ui.Strings.Get("Submitted") + ": " + outcome.TxId
         } else {
-            strings.Get("Send failed") + ": " + (outcome.Error ?? "")
+            ui.Strings.Get("Send failed") + ": " + (outcome.Error ?? "")
         }
-        content.Add(Text{Content: message, FontFamily: font, FontSize: 13, Color: ink, TextWrap: TextWrap.Wrap})
+        content.Add(Text{Content: message, FontFamily: ui.Font, FontSize: 13, Color: ui.Ink, TextWrap: TextWrap.Wrap})
         content.Add(
-            ActionRow(
+            ui.ActionRow(
                 []Blob{
-                    Button(
+                    ui.Button(
                         if pending?.Retryable == true {
                             "Resubmit"
                         } else {
@@ -52,7 +52,7 @@ partial class WalletView {
                             confirmPendingSend = true
                             Rebuild()
                         },
-                        Working()
+                        ui.Working()
                     )
                 }
             )
@@ -70,32 +70,32 @@ partial class WalletView {
             "pending-send",
             ModalDialog{
                 Open: true,
-                CreateRoot: DialogRoot,
+                CreateRoot: ui.DialogRoot,
                 Preset: ModalDialogPreset.Confirm,
-                AccessibilityName: strings.Get("Pending send"),
+                AccessibilityName: ui.Strings.Get("Pending send"),
                 Width: Math.Min(width - 48, 600),
                 Content: Text{
-                    Content: strings.Get(
+                    Content: ui.Strings.Get(
                         if resume {
                             "Resubmitting an unknown send can pay twice if the node forgot its record"
                         } else {
                             "Dismissing does not cancel a payment. Sending again can pay twice"
                         }
                     ),
-                    FontFamily: font,
+                    FontFamily: ui.Font,
                     FontSize: 14,
-                    Color: orange,
+                    Color: ui.Orange,
                     TextWrap: TextWrap.Wrap
                 },
-                ConfirmText: strings.Get(
+                ConfirmText: ui.Strings.Get(
                     if resume {
                         "Resubmit"
                     } else {
                         "Dismiss"
                     }
                 ),
-                CancelText: strings.Get("Cancel"),
-                ConfirmDisabled: Working(),
+                CancelText: ui.Strings.Get("Cancel"),
+                ConfirmDisabled: ui.Working(),
                 OnConfirm: () -> {
                     confirmPendingSend = false
                     if resume {

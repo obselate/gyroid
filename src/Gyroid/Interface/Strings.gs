@@ -11,6 +11,63 @@ class Strings {
         Language = Resolve(language)
     }
 
+    func Explain(message string) string -> Get(
+        switch message {
+            case "Recovery phrase must contain English BIP39 words": "Recovery phrase must use English words"
+            case "Recovery phrase contains a word outside the English BIP39 wordlist": "Recovery phrase has an unknown word"
+            case "Node is not running. Manual mode never starts or downloads a core": "No node in manual mode"
+            case "Cannot reach the configured daemon": "Node not reachable. Check Node URL in Settings"
+            case "Owned daemon is running but its API is not ready": "Node is starting. Try again shortly"
+            case "Configured core exited before its API became ready": "Node did not start"
+            case "Could not start the configured core executable": "Node program could not start"
+            case "Daemon binary must be an absolute path": "Node program must be a full path"
+            case "Choose a new app-owned data directory. Existing unmanaged core data will not be modified": "Choose an empty Data folder. Existing node data is not changed"
+            case "Core wallet_file must be an absolute path. Configure the external daemon explicitly": "Node settings need a full wallet file path"
+            case "Core wallet_file must have a parent directory": "Node settings need a full wallet file path"
+            case "Core settings must be a JSON object": "Node settings file could not be read"
+            case "Core settings could not be parsed": "Node settings file could not be read"
+            case "Application and core settings must use different files": "Node settings must be a separate file"
+            case "API endpoint must be a loopback HTTP origin": "Node URL must be a local http address"
+            case "Access to the configured API cookie was denied": "Node access file cannot be read"
+            case CoreRelease.MismatchMessage: "Node program is not the verified " + CoreRelease.Version + " release"
+            case "No pinned core is available for this platform": "No verified node release for this platform"
+            case "API listener identity could not be verified": "Local node process could not be verified"
+            case "API listener is not the app-owned core process": "Local node is not the process started by this app"
+            case "API listener identity changed during connection": "Local node changed during connection"
+            case "File must be a regular no-follow file": "Access file must be a regular file, not a link"
+            case "File ownership or permissions are not private": "Access file must belong to you with private permissions"
+            case "File exceeds the supported size": "Access file exceeds the size limit"
+            case "API cookie must contain exactly 64 hexadecimal characters": "Node access file must contain a 64-character hex token"
+            case "Daemon rejected the request. Check the wallet inputs, funds and memo limits": "Node rejected the request. Check amount, funds and memo"
+            case "Node access denied. Check the cookie configuration": "Node access denied. Check the Data folder"
+            case "Wrong wallet password": "Wrong password"
+            case "No wallet is loaded or the daemon is not ready": "Node not ready or no wallet loaded"
+            case "Daemon returned no recovery phrase": "Node returned no recovery phrase"
+            case "Daemon did not return a dry-run estimate": "Node returned no fee estimate"
+            case "Daemon returned an invalid response": "Node sent an invalid response"
+            case "Daemon returned invalid wallet data": "Node sent an invalid response"
+            case "Daemon returned an invalid recovery phrase response": "Node sent an invalid response"
+            case "Daemon returned an incomplete outgoing history page": "Node sent an invalid response"
+            case "Daemon response omitted a required timestamp": "Node sent an invalid response"
+            case "Daemon response omitted a required numeric field": "Node sent an invalid response"
+            case "Daemon response exceeds the supported size": "Node sent an invalid response"
+            case "Daemon owner is closed": "App is closing"
+            case "Wallet controller is closed": "App is closing"
+            case "This application has not loaded a wallet. An external wallet will not be changed": "Wallet was loaded outside this app and is left unchanged"
+            case "Data and wallet directories must be valid absolute paths": "Data and Wallets must be full folder paths"
+            case "Data and wallet directories must be absolute paths": "Data and Wallets must be full folder paths"
+            case "Invalid Blocknet ID. Use $$ followed by 1 to 64 letters, digits, dots, underscores or hyphens": "Invalid Blocknet ID. Use $$ and up to 64 letters, digits, . _ or -"
+            case "Blocknet ID was not found": "Blocknet ID not found"
+            case "Blocknet ID resolver is unavailable": "Blocknet ID lookup unavailable"
+            case "Blocknet ID response exceeds the supported size": "Blocknet ID lookup failed"
+            case "Blocknet ID request was cancelled or timed out": "Blocknet ID lookup timed out"
+            case "Cannot reach the Blocknet ID resolver": "Blocknet ID lookup unreachable. Check your connection"
+            case "Cannot read the Blocknet ID response": "Blocknet ID lookup failed"
+            case "Could not verify the Blocknet ID destination": "Blocknet ID address could not be verified"
+            default: message.Replace("Daemon request failed with HTTP", Get("Node request failed with code"))
+        }
+    )
+
     func Get(key string) string {
         if Language != "zh-Hans" {
             return key

@@ -22,13 +22,13 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private func Chrome() Blob -> WindowChrome{
         Host: window,
         Height: 44,
         ControlWidth: 46,
-        ControlColor: body,
-        HoverBackgroundColor: rule,
+        ControlColor: ui.Body,
+        HoverBackgroundColor: ui.Rule,
         EnableDoubleClick: true,
         EnableContextMenu: true,
         CreateControlContent: (chrome, command) -> ControlGlyph(chrome, command),
@@ -38,8 +38,8 @@ partial class WalletView {
             Gap: 10,
             Padding: Edges{Left: 14},
             Image{Width: 18, Height: 18, Source: appIcon},
-            Label("gyroid", 14, ink, ""),
-            Label(wallet.Snapshot.ViewOnly ? strings.Get("view only"): "", 12, orange, "")
+            ui.Label("gyroid", 14, ui.Ink, ""),
+            ui.Label(wallet.Snapshot.ViewOnly ? ui.Strings.Get("view only"): "", 12, ui.Orange, "")
         }
     }.Build()
 

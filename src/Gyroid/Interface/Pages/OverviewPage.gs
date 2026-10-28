@@ -21,7 +21,7 @@ import System.Linq
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var upgradeShown bool
 
     private func Dashboard() Blob {
@@ -43,39 +43,39 @@ partial class WalletView {
         AlignItems: AlignItems.Baseline,
         JustifyContent: JustifyContent.SpaceBetween,
         Gap: 16,
-        Accessibility: Accessibility{Name: strings.Get(label) + " " + value},
-        Label(strings.Get(label), 12, body),
-        Label(value, 16, color, "balance")
+        Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
+        ui.Label(ui.Strings.Get(label), 12, ui.Body),
+        ui.Label(value, 16, color, "balance")
     }
 
     private func Balance(snapshot WalletSnapshot) Blob {
         let balance = snapshot.Balance
         var total = if balance?.Scanning == true {
-            strings.Get("Scanning")
+            ui.Strings.Get("Scanning")
         } else {
-            strings.Get("Unavailable")
+            ui.Strings.Get("Unavailable")
         }
         var totalColor = if balance?.Scanning == true {
-            orange
+            ui.Orange
         } else {
-            body
+            ui.Body
         }
-        var spendable = strings.Get("Unavailable")
-        var pending = strings.Get("Unavailable")
-        var pendingColor = body
+        var spendable = ui.Strings.Get("Unavailable")
+        var pending = ui.Strings.Get("Unavailable")
+        var pendingColor = ui.Body
         if let units = balance?.Balance {
-            total = Amount(units)
-            totalColor = lime
+            total = ui.Amount(units)
+            totalColor = ui.Lime
         }
         if let units = balance?.Spendable {
-            spendable = Amount(units)
+            spendable = ui.Amount(units)
         }
         if let units = balance?.Pending {
-            pending = Amount(units)
+            pending = ui.Amount(units)
             pendingColor = if units > 0 {
-                orange
+                ui.Orange
             } else {
-                ink
+                ui.Ink
             }
         }
         let room = width - 680
@@ -85,35 +85,35 @@ partial class WalletView {
             AlignItems: AlignItems.Baseline,
             Gap: 10,
             MinWidth: 0,
-            Label(total, size, totalColor, "balance")
+            ui.Label(total, size, totalColor, "balance")
         }
         if balance?.Balance != nil {
-            figure.Add(Container{FlexShrink: 0, Label("BNT", 18, body, "")})
+            figure.Add(Container{FlexShrink: 0, ui.Label("BNT", 18, ui.Body, "")})
         }
-        let hero = Glass()
+        let hero = ui.Glass()
         hero.FlexShrink = 0
         hero.FlexDirection = FlexDirection.Row
         hero.AlignItems = AlignItems.Center
         hero.Gap = 24
         hero.BorderWidth = Edges{Left: 3, Top: 1, Right: 1, Bottom: 1}
-        hero.BorderStartColor = lime
+        hero.BorderStartColor = ui.Lime
         hero.Add(
-            Grow(
+            ui.Grow(
                 Container{
                     Gap: 4,
-                    Accessibility: Accessibility{Name: strings.Get("Balance") + " " + total},
-                    Label(strings.Get("Balance"), 12, body),
+                    Accessibility: Accessibility{Name: ui.Strings.Get("Balance") + " " + total},
+                    ui.Label(ui.Strings.Get("Balance"), 12, ui.Body),
                     figure
                 }
             )
         )
-        hero.Add(Container{Width: 1, AlignSelf: AlignSelf.Stretch, BackgroundColor: rule})
+        hero.Add(Container{Width: 1, AlignSelf: AlignSelf.Stretch, BackgroundColor: ui.Rule})
         hero.Add(
             Container{
                 Width: 280,
                 FlexShrink: 0,
                 Gap: 12,
-                Stat("Available", spendable, ink),
+                Stat("Available", spendable, ui.Ink),
                 Stat("Pending", pending, pendingColor)
             }
         )
@@ -122,29 +122,35 @@ partial class WalletView {
 
     private func Chain(snapshot WalletSnapshot) Blob {
         guard let value = snapshot.Balance else {
-            return Figure("Height", strings.Get("Unavailable"), body)
+            return ui.Figure("Height", ui.Strings.Get("Unavailable"), ui.Body)
         }
         if value.Scanning {
-            return Figure("Height", Count(value.ScanHeight) + " / " + Count(value.ChainHeight), orange, 14, "sync")
+            return ui.Figure(
+                "Height",
+                ui.Count(value.ScanHeight) + " / " + ui.Count(value.ChainHeight),
+                ui.Orange,
+                14,
+                "sync"
+            )
         }
-        return Figure("Height", Count(value.ChainHeight), ink, 14, "sync")
+        return ui.Figure("Height", ui.Count(value.ChainHeight), ui.Ink, 14, "sync")
     }
 
     private func Upgrade(node NodeStatus) Blob {
-        let strip = Glass()
+        let strip = ui.Glass()
         strip.FlexShrink = 0
         strip.FlexDirection = FlexDirection.Row
         strip.AlignItems = AlignItems.Center
         strip.Gap = 24
         strip.Padding = Edges{Top: 6, Left: 20, Right: 8, Bottom: 6}
         strip.BorderWidth = Edges{Left: 3, Top: 1, Right: 1, Bottom: 1}
-        strip.BorderStartColor = orange
-        strip.Add(Figure("Network upgrade", node.UpgradeDate, ink))
-        strip.Add(Grow(Figure("Blocks left", Count(node.UpgradeBlocksLeft), orange)))
+        strip.BorderStartColor = ui.Orange
+        strip.Add(ui.Figure("Network upgrade", node.UpgradeDate, ui.Ink))
+        strip.Add(ui.Grow(ui.Figure("Blocks left", ui.Count(node.UpgradeBlocksLeft), ui.Orange)))
         strip.Add(
             IconButton{
-                Icon: MaterialIcons.Create("info", 16, body),
-                AccessibilityName: strings.Get("Network upgrade"),
+                Icon: MaterialIcons.Create("info", 16, ui.Body),
+                AccessibilityName: ui.Strings.Get("Network upgrade"),
                 OnClick: () -> {
                     upgradeShown = true
                     Rebuild()
@@ -164,24 +170,24 @@ partial class WalletView {
             "upgrade",
             ModalDialog{
                 Open: true,
-                CreateRoot: DialogRoot,
-                AccessibilityName: strings.Get("Network upgrade"),
+                CreateRoot: ui.DialogRoot,
+                AccessibilityName: ui.Strings.Get("Network upgrade"),
                 Width: Math.Min(width - 48, 600),
-                Header: Label(strings.Get("Network upgrade"), 18, ink, ""),
+                Header: ui.Label(ui.Strings.Get("Network upgrade"), 18, ui.Ink, ""),
                 Content: Container{
                     Gap: 14,
-                    Figure("Date", node.UpgradeDate, ink),
-                    Figure("Blocks left", Count(node.UpgradeBlocksLeft), orange),
-                    Figure("Migration deadline", node.UpgradeDeadline, ink),
+                    ui.Figure("Date", node.UpgradeDate, ui.Ink),
+                    ui.Figure("Blocks left", ui.Count(node.UpgradeBlocksLeft), ui.Orange),
+                    ui.Figure("Migration deadline", node.UpgradeDeadline, ui.Ink),
                     Text{
                         Content: node.UpgradeNotice,
-                        FontFamily: font,
+                        FontFamily: ui.Font,
                         FontSize: 13,
-                        Color: body,
+                        Color: ui.Body,
                         TextWrap: TextWrap.Wrap
                     }
                 },
-                Footer: ActionRow([]Blob{Button("Close", close)}),
+                Footer: ui.ActionRow([]Blob{ui.Button("Close", close)}),
                 OnCancel: close,
                 OnClose: close
             }

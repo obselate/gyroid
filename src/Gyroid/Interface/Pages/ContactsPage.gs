@@ -14,7 +14,7 @@ import System
 import System.Collections.Generic
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var contacts SortedDictionary[string, string] = SortedDictionary[string, string](StringComparer.Ordinal)
 
     private var contactName string = ""
@@ -36,7 +36,7 @@ partial class WalletView {
     }
 
     private func ContactsPage() Blob {
-        let panel = PageContent(strings.Get("contacts"), 640)
+        let panel = ui.PageContent(ui.Strings.Get("contacts"), 640)
         if contacts.Count > 0 {
             let list = Container{
                 Gap: 6,
@@ -57,19 +57,19 @@ partial class WalletView {
                         Padding: Edges{Left: 14, Right: 4},
                         BorderWidth: Edges{Left: 3, Top: 1, Right: 1, Bottom: 1},
                         BorderRadius: 4,
-                        BorderColor: rule,
+                        BorderColor: ui.Rule,
                         BorderStartColor: if label == editingContact {
-                            lime
+                            ui.Lime
                         } else {
-                            blue
+                            ui.Blue
                         },
-                        BackgroundColor: surface,
-                        Container{Width: 160, FlexShrink: 0, Label(label, 14, ink)},
-                        Grow(Label(Hidden(destination), 12, body)),
+                        BackgroundColor: ui.Surface,
+                        Container{Width: 160, FlexShrink: 0, ui.Label(label, 14, ui.Ink)},
+                        ui.Grow(ui.Label(ui.Hidden(destination), 12, ui.Body)),
                         IconButton{
-                            Icon: MaterialIcons.Create("edit", 16, body),
-                            Disabled: Working(),
-                            AccessibilityName: strings.Get("Edit") + " " + label,
+                            Icon: MaterialIcons.Create("edit", 16, ui.Body),
+                            Disabled: ui.Working(),
+                            AccessibilityName: ui.Strings.Get("Edit") + " " + label,
                             OnClick: () -> {
                                 editingContact = label
                                 contactName = label
@@ -79,9 +79,9 @@ partial class WalletView {
                             }
                         }.Build(),
                         IconButton{
-                            Icon: MaterialIcons.Create("delete", 16, body),
-                            Disabled: Working(),
-                            AccessibilityName: strings.Get("Delete") + " " + label,
+                            Icon: MaterialIcons.Create("delete", 16, ui.Body),
+                            Disabled: ui.Working(),
+                            AccessibilityName: ui.Strings.Get("Delete") + " " + label,
                             OnClick: () -> {
                                 deletingContact = label
                                 Rebuild()
@@ -102,7 +102,7 @@ partial class WalletView {
                 Container{
                     Width: 200,
                     FlexShrink: 0,
-                    Field(
+                    ui.Field(
                         "Name",
                         contactName,
                         value -> {
@@ -113,10 +113,10 @@ partial class WalletView {
                         issue: taken ? "Name already exists": ""
                     )
                 },
-                Grow(
+                ui.Grow(
                     Container{
                         MinWidth: 0,
-                        Field(
+                        ui.Field(
                             "Address",
                             contactAddress,
                             value -> {
@@ -133,17 +133,17 @@ partial class WalletView {
         )
         let actions = List[Blob]()
         if editingContact.Length > 0 {
-            actions.Add(Button("Cancel", () -> ResetContact(), Working()))
+            actions.Add(ui.Button("Cancel", () -> ResetContact(), ui.Working()))
         }
         actions.Add(
-            Button(
+            ui.Button(
                 "Save",
                 () -> SaveContact(),
-                Working() || label.Length == 0 || contactAddress.Length == 0 || taken,
+                ui.Working() || label.Length == 0 || contactAddress.Length == 0 || taken,
                 true
             )
         )
-        panel.Add(ActionRow(actions.ToArray()))
+        panel.Add(ui.ActionRow(actions.ToArray()))
         return panel
     }
 
@@ -157,7 +157,7 @@ partial class WalletView {
 
     private func SaveContact() {
         let label = contactName.Trim()
-        if Working() || label.Length == 0 || label != editingContact && contacts.ContainsKey(label) {
+        if ui.Working() || label.Length == 0 || label != editingContact && contacts.ContainsKey(label) {
             return
         }
         try {
@@ -190,14 +190,14 @@ partial class WalletView {
             "delete-contact",
             ModalDialog{
                 Open: true,
-                CreateRoot: DialogRoot,
+                CreateRoot: ui.DialogRoot,
                 Preset: ModalDialogPreset.Confirm,
-                AccessibilityName: strings.Get("Delete"),
+                AccessibilityName: ui.Strings.Get("Delete"),
                 Width: Math.Min(width - 48, 420),
-                Content: Label(deletingContact, 16, ink, ""),
-                ConfirmText: strings.Get("Delete"),
-                CancelText: strings.Get("Cancel"),
-                ConfirmDisabled: Working(),
+                Content: ui.Label(deletingContact, 16, ui.Ink, ""),
+                ConfirmText: ui.Strings.Get("Delete"),
+                CancelText: ui.Strings.Get("Cancel"),
+                ConfirmDisabled: ui.Working(),
                 OnConfirm: () -> {
                     let removed = deletingContact
                     let next = SortedDictionary[string, string](contacts, StringComparer.Ordinal)

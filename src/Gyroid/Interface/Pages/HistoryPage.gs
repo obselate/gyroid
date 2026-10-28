@@ -21,7 +21,7 @@ import System.Linq
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var historyTab string = "received"
 
     private var historySource WalletSnapshot?
@@ -48,7 +48,7 @@ partial class WalletView {
             VirtualRows(
                 sends,
                 56,
-                (send WalletSend) -> send.TxId + privacy.ToString() + strings.Language,
+                (send WalletSend) -> send.TxId + ui.Privacy.ToString() + ui.Strings.Language,
                 sentRow,
                 false
             )
@@ -56,8 +56,10 @@ partial class WalletView {
             VirtualRows(
                 outputs,
                 44,
-                (output WalletOutput) -> output.TxId + ":" + output.OutputIndex.ToString() + privacy.ToString() +
-                    strings.Language,
+                (output WalletOutput) -> output.TxId + ":" + output.OutputIndex.ToString() + ui.Privacy.ToString() +
+                    ui
+                    .Strings
+                    .Language,
                 receivedRow,
                 false
             )
@@ -74,7 +76,7 @@ partial class WalletView {
         } else {
             outputs.Length
         }
-        let panel = Glass()
+        let panel = ui.Glass()
         panel.FlexGrow = 1
         panel.AlignSelf = AlignSelf.Stretch
         panel.Padding = Edges{Top: 12, Left: 20, Right: 20, Bottom: 8}
@@ -86,18 +88,21 @@ partial class WalletView {
                 JustifyContent: JustifyContent.SpaceBetween,
                 Gap: 16,
                 FlexShrink: 0,
-                Grow(
+                ui.Grow(
                     Container{
                         MinWidth: 0,
-                        Tabs(
+                        ui.Tabs(
                             "history-tabs",
                             "Transactions",
                             []NavigationItem{
                                 NavigationItem{
                                     Id: "received",
-                                    Label: strings.Get("received") + " " + snapshot.HistoryTotal.ToString()
+                                    Label: ui.Strings.Get("received") + " " + snapshot.HistoryTotal.ToString()
                                 },
-                                NavigationItem{Id: "sent", Label: strings.Get("sent") + " " + sends.Length.ToString()}
+                                NavigationItem{
+                                    Id: "sent",
+                                    Label: ui.Strings.Get("sent") + " " + sends.Length.ToString()
+                                }
                             },
                             historyTab,
                             id -> {
@@ -128,37 +133,37 @@ partial class WalletView {
         Gap: 16,
         Padding: Edges{Left: 13, Right: 16},
         BorderWidth: Edges{Left: 3, Bottom: 1},
-        BorderColor: rule,
+        BorderColor: ui.Rule,
         BorderStartColor: if output.Spent {
-            edge
+            ui.Edge
         } else {
-            mint
+            ui.Mint
         },
         BackgroundColor: Color.Transparent,
-        Hover: Style{BackgroundColor: rule},
+        Hover: Style{BackgroundColor: ui.Rule},
         Focus: Theme.Read().FocusStyle,
         Accessibility: Accessibility{
             Role: AccessibilityRole.Button,
-            Name: strings.Get("received") + " " + Amount(output.Amount) + " " + Count(output.BlockHeight)
+            Name: ui.Strings.Get("received") + " " + ui.Amount(output.Amount) + " " + ui.Count(output.BlockHeight)
         },
         OnClick: () -> ShowTransaction(output, nil),
         Container{
             Width: 200,
             FlexShrink: 0,
-            Label(
-                "+" + Amount(output.Amount),
+            ui.Label(
+                "+" + ui.Amount(output.Amount),
                 14,
                 if output.Spent {
-                    body
+                    ui.Body
                 } else {
-                    mint
+                    ui.Mint
                 },
                 ""
             )
         },
-        Grow(
-            Label(
-                Hidden(
+        ui.Grow(
+            ui.Label(
+                ui.Hidden(
                     if output.Memo.Length > 0 {
                         output.Memo
                     } else {
@@ -166,21 +171,21 @@ partial class WalletView {
                     }
                 ),
                 12,
-                body
+                ui.Body
             )
         ),
-        Label(Count(output.BlockHeight), 12, body)
+        ui.Label(ui.Count(output.BlockHeight), 12, ui.Body)
     }
 
     private func SentRow(send WalletSend) Blob {
         let confirmed = send.Status == "confirmed"
-        let status = ChainState(send.Status, send.Confirmations)
+        let status = ui.ChainState(send.Status, send.Confirmations)
         let notes = Container{
             Gap: 4,
-            Label(
-                Hidden(String.Join(" ", send.Recipients.Select((recipient WalletRecipient) -> recipient.Address))),
+            ui.Label(
+                ui.Hidden(String.Join(" ", send.Recipients.Select((recipient WalletRecipient) -> recipient.Address))),
                 12,
-                body
+                ui.Body
             )
         }
         let memos = String.Join(
@@ -191,7 +196,7 @@ partial class WalletView {
                 .Where((memo string) -> memo.Length > 0)
         )
         if memos.Length > 0 {
-            notes.Add(Label(Hidden(memos), 12, ink))
+            notes.Add(ui.Label(ui.Hidden(memos), 12, ui.Ink))
         }
         return Goo
             .Button{
@@ -202,38 +207,38 @@ partial class WalletView {
             Gap: 16,
             Padding: Edges{Left: 13, Right: 16},
             BorderWidth: Edges{Left: 3, Bottom: 1},
-            BorderColor: rule,
-            BorderStartColor: pink,
+            BorderColor: ui.Rule,
+            BorderStartColor: ui.Pink,
             BackgroundColor: Color.Transparent,
-            Hover: Style{BackgroundColor: rule},
+            Hover: Style{BackgroundColor: ui.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
-                Name: strings.Get("sent") + " " + Amount(send.Amount) + " " + status
+                Name: ui.Strings.Get("sent") + " " + ui.Amount(send.Amount) + " " + status
             },
             OnClick: () -> ShowTransaction(nil, send),
             Container{
                 Width: 200,
                 FlexShrink: 0,
                 Gap: 4,
-                Label("-" + Amount(send.Amount), 14, pink, ""),
-                Figure("Fee", Amount(send.Fee), body, 12)
+                ui.Label("-" + ui.Amount(send.Amount), 14, ui.Pink, ""),
+                ui.Figure("Fee", ui.Amount(send.Fee), ui.Body, 12)
             },
-            Grow(notes),
+            ui.Grow(notes),
             Container{
                 AlignItems: AlignItems.FlexEnd,
                 FlexShrink: 0,
                 Gap: 4,
-                Label(
+                ui.Label(
                     status,
                     12,
                     if confirmed {
-                        lime
+                        ui.Lime
                     } else {
-                        orange
+                        ui.Orange
                     }
                 ),
-                Label(Time(send.Timestamp), 12, body)
+                ui.Label(ui.Time(send.Timestamp), 12, ui.Body)
             }
         }
     }

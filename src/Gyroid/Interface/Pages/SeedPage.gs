@@ -6,7 +6,7 @@ import System
 import System.Collections.Generic
 import System.IO
 
-partial class WalletView {
+partial class App {
     private var seed[]?char
 
     private var seedVisible bool
@@ -25,7 +25,7 @@ partial class WalletView {
     }
 
     private func ClearSeed() {
-        ReleaseClipboard()
+        ui.ReleaseClipboard()
         if let words = seed {
             Array.Clear(words)
         }
@@ -42,9 +42,9 @@ partial class WalletView {
 
     private func SeedPage() Blob {
         guard let words = seed else {
-            let prompt = PageContent(strings.Get("recovery phrase"))
+            let prompt = ui.PageContent(ui.Strings.Get("recovery phrase"))
             prompt.Add(
-                Field(
+                ui.Field(
                     "Password",
                     revealPassword,
                     value -> {
@@ -56,11 +56,13 @@ partial class WalletView {
                 )
             )
             prompt.Add(
-                ActionRow([]Blob{Button("Show", () -> RevealSeed(), Working() || revealPassword.Length == 0, true)})
+                ui.ActionRow(
+                    []Blob{ui.Button("Show", () -> RevealSeed(), ui.Working() || revealPassword.Length == 0, true)}
+                )
             )
             return prompt
         }
-        let panel = PageContent(strings.Get("recovery phrase"), 760)
+        let panel = ui.PageContent(ui.Strings.Get("recovery phrase"), 760)
         panel.Add(Phrase(words, Math.Min(width - 56, 760) - 42))
         panel.Add(
             Container{
@@ -68,9 +70,9 @@ partial class WalletView {
                 AlignItems: AlignItems.Center,
                 Gap: 16,
                 FlexShrink: 0,
-                Grow(
+                ui.Grow(
                     Checkbox{
-                        Label: strings.Get("I saved these words"),
+                        Label: ui.Strings.Get("I saved these words"),
                         State: if seedSaved {
                             AccessibilityChecked.True
                         } else {
@@ -82,7 +84,7 @@ partial class WalletView {
                         }
                     }.Build()
                 ),
-                Button("Continue", () -> FinishSeed(), !seedSaved || Working(), true)
+                ui.Button("Continue", () -> FinishSeed(), !seedSaved || ui.Working(), true)
             }
         )
         return panel

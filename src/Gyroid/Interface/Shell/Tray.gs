@@ -22,7 +22,7 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var tray TrayIcon?
 
     private var trayLockable bool
@@ -71,7 +71,7 @@ partial class WalletView {
         }
         ClearSecrets()
         ClearSeed()
-        ReleaseClipboard()
+        ui.ReleaseClipboard()
         if tray?.Status == TrayStatus.Registered {
             hidden = true
             host.Hide()
@@ -88,12 +88,12 @@ partial class WalletView {
         Width: 64,
         Height: 64,
         Rgba: Resources.Resource("Gyroid.Tray.rgba"),
-        Tooltip: strings.Get("Gyroid"),
+        Tooltip: ui.Strings.Get("Gyroid"),
         Menu: []NativeMenuItem{
-            NativeMenuItem{Id: "show", Text: strings.Get("Show")},
-            NativeMenuItem{Id: "lock", Text: strings.Get("Lock"), Enabled: trayLockable},
+            NativeMenuItem{Id: "show", Text: ui.Strings.Get("Show")},
+            NativeMenuItem{Id: "lock", Text: ui.Strings.Get("Lock"), Enabled: trayLockable},
             NativeMenuItem{Separator: true},
-            NativeMenuItem{Id: "quit", Text: strings.Get("Quit")}
+            NativeMenuItem{Id: "quit", Text: ui.Strings.Get("Quit")}
         }
     }
 
@@ -123,7 +123,7 @@ partial class WalletView {
         }
         ClearSecrets()
         ClearSeed()
-        ReleaseClipboard()
+        ui.ReleaseClipboard()
         Run(wallet.LockAsync())
     }
 

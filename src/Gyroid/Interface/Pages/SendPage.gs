@@ -21,7 +21,7 @@ import System.Linq
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private var address string = ""
 
     private var amount string = ""
@@ -32,32 +32,32 @@ partial class WalletView {
 
     private func SendPanel() Blob {
         if wallet.Send.Error.Length > 0 {
-            let card = PageContent(strings.Get("send"), 640)
+            let card = ui.PageContent(ui.Strings.Get("send"), 640)
             card.Add(
                 Text{
-                    Content: Explain(wallet.Send.Error),
-                    FontFamily: font,
+                    Content: ui.Strings.Explain(wallet.Send.Error),
+                    FontFamily: ui.Font,
                     FontSize: 13,
-                    Color: orange,
+                    Color: ui.Orange,
                     TextWrap: TextWrap.Wrap
                 }
             )
             return card
         }
         if wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0 {
-            let card = PageContent(strings.Get("send"), 640)
+            let card = ui.PageContent(ui.Strings.Get("send"), 640)
             card.Add(PendingSendBanner())
             return card
         }
         let blank = address.Trim().Length == 0 || amount.Trim().Length == 0
-        let amountIssue = AmountIssue(amount, wallet.Snapshot.Balance?.Spendable)
-        let memoIssue = MemoIssue(memo)
+        let amountIssue = ui.AmountIssue(amount, wallet.Snapshot.Balance?.Spendable)
+        let memoIssue = ui.MemoIssue(memo)
         let remaining = WalletValidation.MemoLimit - Encoding.UTF8.GetByteCount(memo)
-        let card = PageContent(
-            strings.Get("send"),
+        let card = ui.PageContent(
+            ui.Strings.Get("send"),
             640,
             if let units = wallet.Snapshot.Balance?.Spendable {
-                Figure("Available", Amount(units) + " BNT", lime, 14)
+                ui.Figure("Available", ui.Amount(units) + " BNT", ui.Lime, 14)
             } else {
                 nil
             }
@@ -67,10 +67,10 @@ partial class WalletView {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: 8,
-            Grow(
+            ui.Grow(
                 Container{
                     MinWidth: 0,
-                    Field(
+                    ui.Field(
                         "Memo",
                         memo,
                         value -> {
@@ -84,7 +84,7 @@ partial class WalletView {
             )
         }
         if remaining >= 0 && remaining < 25 {
-            memoField.Add(Label(remaining.ToString(CultureInfo.InvariantCulture), 12, body))
+            memoField.Add(ui.Label(remaining.ToString(CultureInfo.InvariantCulture), 12, ui.Body))
         }
         var chosen string? = nil
         for (label, destination) in contacts {
@@ -98,10 +98,10 @@ partial class WalletView {
                 AlignItems: AlignItems.FlexEnd,
                 Gap: 8,
                 FlexShrink: 0,
-                Grow(
+                ui.Grow(
                     Container{
                         MinWidth: 0,
-                        Field(
+                        ui.Field(
                             "Address",
                             address,
                             value -> {
@@ -121,8 +121,8 @@ partial class WalletView {
                                 .Select((label string) -> ComboBoxOption{Id: label, Label: label})
                                 .ToArray(),
                             SelectedId: chosen,
-                            Placeholder: strings.Get("contacts"),
-                            AccessibilityName: strings.Get("contacts"),
+                            Placeholder: ui.Strings.Get("contacts"),
+                            AccessibilityName: ui.Strings.Get("contacts"),
                             Searchable: contacts.Count > 8,
                             Width: 180,
                             CreateRow: (input ComboBoxInput, option ComboBoxOption, row Container) -> {
@@ -130,7 +130,7 @@ partial class WalletView {
                                 row.BorderRadius = 0
                                 return row
                             },
-                            Disabled: Working(),
+                            Disabled: ui.Working(),
                             OnSelect: id -> {
                                 address = contacts[id]
                                 Rebuild()
@@ -147,10 +147,10 @@ partial class WalletView {
                 FlexDirection: FlexDirection.Row,
                 Gap: 16,
                 FlexShrink: 0,
-                Grow(
+                ui.Grow(
                     Container{
                         MinWidth: 0,
-                        Field(
+                        ui.Field(
                             "Amount",
                             amount,
                             value -> {
@@ -162,16 +162,16 @@ partial class WalletView {
                         )
                     }
                 ),
-                Grow(memoField)
+                ui.Grow(memoField)
             }
         )
         card.Add(
-            ActionRow(
+            ui.ActionRow(
                 []Blob{
-                    Button(
+                    ui.Button(
                         "Review",
                         () -> Review(),
-                        Working() || blank || amountIssue.Length > 0 || memoIssue.Length > 0,
+                        ui.Working() || blank || amountIssue.Length > 0 || memoIssue.Length > 0,
                         true
                     )
                 }
@@ -184,7 +184,7 @@ partial class WalletView {
     }
 
     private func Review() {
-        if Working() || address.Trim().Length == 0 || amount.Trim().Length == 0 {
+        if ui.Working() || address.Trim().Length == 0 || amount.Trim().Length == 0 {
             return
         }
         let task = Task.Run(() -> wallet.Send.EstimateAsync(address, amount, memo))
@@ -200,7 +200,7 @@ partial class WalletView {
         guard let pending = estimate else {
             return
         }
-        if Working() {
+        if ui.Working() {
             return
         }
         estimate = nil
@@ -230,37 +230,45 @@ partial class WalletView {
         }
         let recipient = Container{
             Gap: 6,
-            Accessibility: Accessibility{Name: strings.Get("Recipient") + " " + pending.Handle + " " + pending.Address},
-            Label(strings.Get("Recipient"), 12, body)
+            Accessibility: Accessibility{
+                Name: ui.Strings.Get("Recipient") + " " + pending.Handle + " " + pending.Address
+            },
+            ui.Label(ui.Strings.Get("Recipient"), 12, ui.Body)
         }
         if pending.Handle.Length > 0 {
-            recipient.Add(Label(pending.Handle, 16, lime, ""))
+            recipient.Add(ui.Label(pending.Handle, 16, ui.Lime, ""))
         }
         recipient.Add(
-            Text{Content: Grouped(pending.Address), FontFamily: font, FontSize: 14, Color: ink, TextWrap: TextWrap.Wrap}
+            Text{
+                Content: ui.Grouped(pending.Address),
+                FontFamily: ui.Font,
+                FontSize: 14,
+                Color: ui.Ink,
+                TextWrap: TextWrap.Wrap
+            }
         )
         let content = Container{
             Gap: 14,
-            Accent(pink, recipient),
-            Figure("Amount", Money(pending.Amount) + " BNT", ink),
-            Figure("Fee", Money(pending.Fee) + " BNT", ink),
-            Figure("Total", Money(pending.Total) + " BNT", lime, 18)
+            ui.Accent(ui.Pink, recipient),
+            ui.Figure("Amount", ui.Money(pending.Amount) + " BNT", ui.Ink),
+            ui.Figure("Fee", ui.Money(pending.Fee) + " BNT", ui.Ink),
+            ui.Figure("Total", ui.Money(pending.Total) + " BNT", ui.Lime, 18)
         }
         if pending.Memo.Length > 0 {
-            content.Add(Figure("Memo", pending.Memo, ink))
+            content.Add(ui.Figure("Memo", pending.Memo, ui.Ink))
         }
         return Cell.Mount[ModalDialog, ModalDialogHost](
             "confirm-send",
             ModalDialog{
                 Open: true,
-                CreateRoot: DialogRoot,
+                CreateRoot: ui.DialogRoot,
                 Preset: ModalDialogPreset.Confirm,
-                AccessibilityName: strings.Get("Confirm send"),
+                AccessibilityName: ui.Strings.Get("Confirm send"),
                 Width: Math.Min(width - 48, 600),
                 Content: content,
-                ConfirmText: strings.Get("Send"),
-                CancelText: strings.Get("Cancel"),
-                ConfirmDisabled: Working(),
+                ConfirmText: ui.Strings.Get("Send"),
+                CancelText: ui.Strings.Get("Cancel"),
+                ConfirmDisabled: ui.Working(),
                 OnConfirm: () -> Submit(),
                 OnCancel: close,
                 OnClose: close

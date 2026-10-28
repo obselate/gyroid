@@ -23,11 +23,11 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
 
     private func NodeProgressCard() Blob {
-        let card = Glass()
+        let card = ui.Glass()
         card.AlignItems = AlignItems.Center
         card.Padding = 32
         card.Add(SyncIndicator(28, 18) ?? Container{})
@@ -39,11 +39,11 @@ partial class WalletView {
             return NodeProgressCard()
         }
         let theme = Theme.Read()
-        let panel = PageContent(
+        let panel = ui.PageContent(
             if wallets.Length > 0 {
-                strings.Get("wallets")
+                ui.Strings.Get("wallets")
             } else {
-                strings.Get("new wallet")
+                ui.Strings.Get("new wallet")
             },
             520,
             SyncIndicator(16, 14)
@@ -67,32 +67,32 @@ partial class WalletView {
                         Padding: Edges{Left: 14, Right: 14},
                         BorderWidth: Edges{Left: 3, Top: 1, Right: 1, Bottom: 1},
                         BorderRadius: 4,
-                        BorderColor: rule,
-                        BorderStartColor: lime,
-                        BackgroundColor: surface,
+                        BorderColor: ui.Rule,
+                        BorderStartColor: ui.Lime,
+                        BackgroundColor: ui.Surface,
                         FlexDirection: FlexDirection.Row,
                         AlignItems: AlignItems.Center,
                         JustifyContent: JustifyContent.FlexStart,
-                        Disabled: Working(),
-                        Hover: Style{BackgroundColor: rule, BorderColor: edge, BorderStartColor: limeHover},
+                        Disabled: ui.Working(),
+                        Hover: Style{BackgroundColor: ui.Rule, BorderColor: ui.Edge, BorderStartColor: ui.LimeHover},
                         Focus: theme.FocusStyle,
                         Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label},
                         OnClick: () -> Run(wallet.Library.ChooseWalletAsync(filename)),
-                        Label(label, 14, ink)
+                        ui.Label(label, 14, ui.Ink)
                     }
                 )
             }
             panel.Add(list)
         }
         panel.Add(
-            ActionRow(
+            ui.ActionRow(
                 []Blob{
                     SettingsButton(),
                     Container{FlexGrow: 1},
-                    Button("Create", () -> Open("Create"), Working(), wallets.Length == 0),
-                    Button("Import phrase", () -> Open("Phrase"), Working()),
-                    Button("Import file", () -> ImportFile(), Working()),
-                    Button("View-only", () -> Open("ViewOnly"), Working())
+                    ui.Button("Create", () -> Open("Create"), ui.Working(), wallets.Length == 0),
+                    ui.Button("Import phrase", () -> Open("Phrase"), ui.Working()),
+                    ui.Button("Import file", () -> ImportFile(), ui.Working()),
+                    ui.Button("View-only", () -> Open("ViewOnly"), ui.Working())
                 }
             )
         )
@@ -107,7 +107,7 @@ partial class WalletView {
         if target == "Contacts" {
             LoadContacts()
         }
-        Decode("page")
+        ui.Decode("page")
         Rebuild()
     }
 
@@ -117,7 +117,7 @@ partial class WalletView {
         name = ""
         draft = nil
         screen = ""
-        Decode("page")
+        ui.Decode("page")
         Rebuild()
     }
 
@@ -126,8 +126,8 @@ partial class WalletView {
     }
 
     private func CreatePage(kind string) Blob {
-        let panel = PageContent(
-            strings.Get(
+        let panel = ui.PageContent(
+            ui.Strings.Get(
                 switch kind {
                     case "Phrase": "import phrase"
                     case "ViewOnly": "import view-only"
@@ -137,7 +137,7 @@ partial class WalletView {
         )
         let submit Action = () -> CreateWallet(kind)
         panel.Add(
-            Field(
+            ui.Field(
                 "Name",
                 name,
                 value -> {
@@ -149,7 +149,7 @@ partial class WalletView {
         )
         if kind == "Phrase" {
             panel.Add(
-                Field(
+                ui.Field(
                     "Recovery phrase",
                     phrase,
                     value -> {
@@ -163,7 +163,7 @@ partial class WalletView {
         }
         if kind == "ViewOnly" {
             panel.Add(
-                Field(
+                ui.Field(
                     "Spend public key",
                     spendKey,
                     value -> {
@@ -174,7 +174,7 @@ partial class WalletView {
                 )
             )
             panel.Add(
-                Field(
+                ui.Field(
                     "View private key",
                     viewKey,
                     value -> {
@@ -187,7 +187,7 @@ partial class WalletView {
             )
         }
         panel.Add(
-            Field(
+            ui.Field(
                 "Password",
                 password,
                 value -> {
@@ -200,7 +200,7 @@ partial class WalletView {
             )
         )
         panel.Add(
-            Field(
+            ui.Field(
                 "Confirm",
                 confirmation,
                 value -> {
@@ -214,10 +214,10 @@ partial class WalletView {
             )
         )
         panel.Add(
-            ActionRow(
+            ui.ActionRow(
                 []Blob{
-                    Button("Back", () -> Back(), Working()),
-                    Button(kind == "Create" ? "Create": "Import", submit, Working() || Incomplete(kind), true)
+                    ui.Button("Back", () -> Back(), ui.Working()),
+                    ui.Button(kind == "Create" ? "Create": "Import", submit, ui.Working() || Incomplete(kind), true)
                 }
             )
         )
@@ -241,7 +241,7 @@ partial class WalletView {
     }
 
     private func CreateWallet(kind string) {
-        if Working() || Incomplete(kind) {
+        if ui.Working() || Incomplete(kind) {
             return
         }
         let secret = password.ToCharArray()
@@ -271,9 +271,9 @@ partial class WalletView {
         if Preparing() {
             return NodeProgressCard()
         }
-        let panel = PageContent(WalletName(wallet.Settings.ActiveWallet), 520, SyncIndicator(16, 14))
+        let panel = ui.PageContent(WalletName(wallet.Settings.ActiveWallet), 520, SyncIndicator(16, 14))
         panel.Add(
-            Field(
+            ui.Field(
                 "Password",
                 password,
                 value -> {
@@ -285,12 +285,12 @@ partial class WalletView {
             )
         )
         panel.Add(
-            ActionRow(
+            ui.ActionRow(
                 []Blob{
                     SettingsButton(),
                     Container{FlexGrow: 1},
-                    Button("Switch wallet", () -> Run(wallet.UnloadAsync()), Working()),
-                    Button("Unlock", () -> Unlock(), Working() || password.Length == 0, true)
+                    ui.Button("Switch wallet", () -> Run(wallet.UnloadAsync()), ui.Working()),
+                    ui.Button("Unlock", () -> Unlock(), ui.Working() || password.Length == 0, true)
                 }
             )
         )
@@ -298,7 +298,7 @@ partial class WalletView {
     }
 
     private func Unlock() {
-        if Working() || password.Length == 0 {
+        if ui.Working() || password.Length == 0 {
             return
         }
         let buffer = password.ToCharArray()
@@ -307,9 +307,9 @@ partial class WalletView {
     }
 
     private func SettingsButton() Blob -> IconButton{
-        Icon: MaterialIcons.Create("settings", 16, body),
-        Disabled: Working(),
-        AccessibilityName: strings.Get("Settings"),
+        Icon: MaterialIcons.Create("settings", 16, ui.Body),
+        Disabled: ui.Working(),
+        AccessibilityName: ui.Strings.Get("Settings"),
         OnClick: () -> Navigate("Settings")
     }.Build()
 

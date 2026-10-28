@@ -27,20 +27,99 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
-    private func Money(value uint64) string -> WalletAmount.Format(value)
+class Presentation {
+    private var window Window?
+    let Pane float64 = 0.8
+    private let rebuild Action
+    private let playbackActive Func[bool]
+    private let touch Action
+    private let report Action[string]
 
-    private func Hidden(value string) string -> if privacy {
+    init(
+        language string,
+        privacy bool,
+        rebuild Action,
+        playbackActive Func[bool],
+        touch Action,
+        report Action[string]
+    ) {
+        Strings = Gyroid.Interface.Strings(language)
+        Privacy = privacy
+        this.rebuild = rebuild
+        this.playbackActive = playbackActive
+        this.touch = touch
+        this.report = report
+    }
+
+    func Attach(owner Window) {
+        window = owner
+        FontSource("JetBrains Mono", 400, false, Resources.Resource("Gyroid.Font.Regular.ttf")).Register()
+        FontSource("JetBrains Mono", 700, false, Resources.Resource("Gyroid.Font.Bold.ttf")).Register()
+        let palette = (
+            Theme.Ink with{
+                Translate = key -> Strings.Get(key),
+                FontFamily = Font,
+                HeadingFontFamily = Font,
+                MonoFontFamily = Font,
+                FontSize = 14,
+                PanelRadius = 6,
+                ControlRadius = 4,
+                CanvasColor = Black,
+                PanelColor = Surface,
+                RaisedColor = Raised,
+                OverlayColor = Raised,
+                FieldColor = Surface,
+                SunkenColor = Black,
+                HoverColor = Rule,
+                PressedColor = Edge,
+                ActiveColor = Edge,
+                BorderColor = Edge,
+                InputBorderColor = Edge,
+                StrongBorderColor = Dim,
+                TextColor = Ink,
+                MutedTextColor = Body,
+                SubtleTextColor = Body,
+                PlaceholderColor = Dim,
+                FaintTextColor = Body,
+                DisabledTextColor = Dim,
+                AccentColor = Lime,
+                OnAccentColor = Black,
+                AccentHoverColor = LimeHover,
+                AccentPressedColor = Lime,
+                FocusColor = Lime,
+                LinkColor = Blue,
+                InfoColor = Blue,
+                SuccessColor = Lime,
+                WarningColor = Orange,
+                DangerColor = Pink,
+                DangerFillColor = Pink,
+                DangerHoverColor = Pink,
+                InfoFillColor = Color.Parse("#00111a"),
+                SuccessFillColor = Color.Parse("#111a00"),
+                WarningFillColor = Color.Parse("#1a1100"),
+                DangerQuietColor = Color.Parse("#1a0011")
+            }
+        ).WithGlass() with{
+            GlassColor = Black.WithAlpha(Pane),
+            HairlineColor = Edge,
+            HighlightColor = Surface.WithAlpha(0)
+        }
+        Theme.Attach(owner, palette)
+    }
+
+    func Money(value uint64) string -> WalletAmount.Format(value)
+
+    func Hidden(value string) string -> if Privacy {
         "••••••••"
     } else {
         value
     }
 
-    private func Amount(value uint64) string -> Hidden(Money(value))
+    func Amount(value uint64) string -> Hidden(Money(value))
 
-    private func Count(value uint64) string -> value.ToString("N0", CultureInfo.InvariantCulture)
+    func Count(value uint64) string -> value.ToString("N0", CultureInfo.InvariantCulture)
 
-    private func Grouped(value string) string {
+    func Grouped(value string) string {
         let groups = List[string]()
         var start = 0
         while start < value.Length {
@@ -50,14 +129,14 @@ partial class WalletView {
         return String.Join(" ", groups)
     }
 
-    private func Grow(blob Blob) Blob {
+    func Grow(blob Blob) Blob {
         blob.FlexGrow = 1
         blob.FlexBasis = 0
         blob.MinWidth = 0
         return blob
     }
 
-    private func AmountIssue(value string, available uint64? = nil) string {
+    func AmountIssue(value string, available uint64? = nil) string {
         if value.Length == 0 {
             return ""
         }
@@ -72,7 +151,7 @@ partial class WalletView {
         }
     }
 
-    private func MemoIssue(value string) string {
+    func MemoIssue(value string) string {
         try {
             WalletValidation.MemoBytes(value)
             return ""
@@ -81,28 +160,28 @@ partial class WalletView {
         }
     }
 
-    private func ChainState(state string, confirmations uint64) string -> if state == "confirmed" {
-        strings.Get("Confirmed") + " " + Count(confirmations)
+    func ChainState(state string, confirmations uint64) string -> if state == "confirmed" {
+        Strings.Get("Confirmed") + " " + Count(confirmations)
     } else if state == "mempool" {
-        strings.Get("Pending")
+        Strings.Get("Pending")
     } else if state == "not_found" {
-        strings.Get("Not found")
+        Strings.Get("Not found")
     } else {
         state
     }
 
-    private func Time(seconds int64) string -> DateTimeOffset
+    func Time(seconds int64) string -> DateTimeOffset
         .FromUnixTimeSeconds(seconds)
         .ToLocalTime()
         .ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
 
-    private func Tabs(key string, label string, items[]NavigationItem, selected string, chosen Action[string]) Blob ->
+    func Tabs(key string, label string, items[]NavigationItem, selected string, chosen Action[string]) Blob ->
     Cell.Mount[TabBarInput, TabBar](
         key,
         TabBarInput{
             Items: items,
             SelectedId: selected,
-            AccessibilityName: strings.Get(label),
+            AccessibilityName: Strings.Get(label),
             CreateItem: (bar TabBarInput, item NavigationItem, button Button) -> {
                 button.BorderRadius = 4
                 button.Overflow = Overflow.Hidden
@@ -112,99 +191,88 @@ partial class WalletView {
         }
     )
 
-    private func ToolField(label string, value string, changed Action[string], submit Action) Blob -> Field(
-        label,
-        value,
-        text -> {
-            changed(text)
-            ResetVerdict()
-            Rebuild()
-        },
-        submit
-    )
+    let Strings Strings
 
-    private let strings Strings
+    var Operations int32
 
-    private var operations int32
+    private var ClipboardTimer WindowTimer?
 
-    private var clipboardTimer WindowTimer?
+    var ClipboardText[]char = []char{}
 
-    private var clipboardText[]char = []char{}
+    let Decoding Dictionary[string, int64] = Dictionary[string, int64]()
 
-    private let decoding Dictionary[string, int64] = Dictionary[string, int64]()
+    private var DecodeSeed int32
 
-    private var decodeSeed int32
+    var DecodeTimer WindowTimer?
 
-    private var decodeTimer WindowTimer?
+    var Privacy bool
 
-    private var privacy bool
+    let Font string = "JetBrains Mono, Noto Sans CJK, msyh, PingFang"
 
-    private let font string = "JetBrains Mono, Noto Sans CJK, msyh, PingFang"
+    let Black Color = Color.Parse("#000000")
 
-    private let black Color = Color.Parse("#000000")
+    let Surface Color = Color.Parse("#050505")
 
-    private let surface Color = Color.Parse("#050505")
+    let Raised Color = Color.Parse("#0a0a0a")
 
-    private let raised Color = Color.Parse("#0a0a0a")
+    let Rule Color = Color.Parse("#1d1d1d")
 
-    private let rule Color = Color.Parse("#1d1d1d")
+    let Edge Color = Color.Parse("#2e2e2e")
 
-    private let edge Color = Color.Parse("#2e2e2e")
+    let Ink Color = Color.Parse("#f2f2f2")
 
-    private let ink Color = Color.Parse("#f2f2f2")
+    let Body Color = Color.Parse("#c8c8c8")
 
-    private let body Color = Color.Parse("#c8c8c8")
+    let Dim Color = Color.Parse("#7a7a7a")
 
-    private let dim Color = Color.Parse("#7a7a7a")
+    let Lime Color = Color.Parse("#aaff00")
 
-    private let lime Color = Color.Parse("#aaff00")
+    let LimeHover Color = Color.Parse("#ccff33")
 
-    private let limeHover Color = Color.Parse("#ccff33")
+    let Orange Color = Color.Parse("#ffaa00")
 
-    private let orange Color = Color.Parse("#ffaa00")
+    let Pink Color = Color.Parse("#ff00aa")
 
-    private let pink Color = Color.Parse("#ff00aa")
+    let Blue Color = Color.Parse("#00aaff")
 
-    private let blue Color = Color.Parse("#00aaff")
+    let Mint Color = Color.Parse("#00ffaa")
 
-    private let mint Color = Color.Parse("#00ffaa")
+    let Violet Color = Color.Parse("#aa00ff")
 
-    private let violet Color = Color.Parse("#aa00ff")
-
-    private func Decode(channel string) {
-        if !PlaybackActive() {
+    func Decode(channel string) {
+        if !playbackActive() {
             return
         }
-        decoding[channel] = Stopwatch.GetTimestamp()
-        decodeSeed = Random.Shared.Next()
-        decodeTimer ??= window?.SetInterval(
+        Decoding[channel] = Stopwatch.GetTimestamp()
+        DecodeSeed = Random.Shared.Next()
+        DecodeTimer ??= window?.SetInterval(
             () -> {
-                for channel in decoding.Keys.ToArray() {
+                for channel in Decoding.Keys.ToArray() {
                     if Progress(channel) >= 1 {
-                        decoding.Remove(channel)
+                        Decoding.Remove(channel)
                     }
                 }
-                if decoding.Count == 0 {
-                    decodeTimer?.Dispose()
-                    decodeTimer = nil
+                if Decoding.Count == 0 {
+                    DecodeTimer?.Dispose()
+                    DecodeTimer = nil
                 }
-                Rebuild()
+                rebuild()
             },
             30
         )
     }
 
-    private func Progress(channel string) float64 {
-        if !decoding.ContainsKey(channel) {
+    func Progress(channel string) float64 {
+        if !Decoding.ContainsKey(channel) {
             return 1
         }
-        return Stopwatch.GetElapsedTime(decoding[channel]).TotalMilliseconds / 250
+        return Stopwatch.GetElapsedTime(Decoding[channel]).TotalMilliseconds / 250
     }
 
-    private func Frame(content string, t float64, seed int32, digits Random, size float64, color Color) Text {
+    func Frame(content string, t float64, seed int32, digits Random, size float64, color Color) Text {
         let thresholds = Random(seed)
         let reveal = (t - 0.45) / 0.55
-        let neon = []Color{lime, orange, pink, blue, mint, violet}
+        let neon = []Color{Lime, Orange, Pink, Blue, Mint, Violet}
         let chars = content.ToCharArray()
         let tints = List[TextStyleRange]()
         var index = 0
@@ -221,7 +289,7 @@ partial class WalletView {
         return Text{
             Content: String(chars),
             StyleRanges: tints.ToArray(),
-            FontFamily: font,
+            FontFamily: Font,
             FontSize: size,
             Color: color,
             TextWrap: TextWrap.NoWrap,
@@ -229,9 +297,9 @@ partial class WalletView {
         }
     }
 
-    private func Working() bool -> operations > 0
+    func Working() bool -> Operations > 0
 
-    private func Copy(content string, clearAfterMs float64) {
+    func Copy(content string, clearAfterMs float64) {
         guard let host = window else {
             return
         }
@@ -239,29 +307,29 @@ partial class WalletView {
         try {
             host.SetClipboardText(content)
         } catch (failure Exception) {
-            error = "Copy failed"
-            Rebuild()
+            report("Copy failed")
+            rebuild()
             return
         }
-        clipboardText = content.ToCharArray()
-        clipboardTimer = host.SetTimeout(
+        ClipboardText = content.ToCharArray()
+        ClipboardTimer = host.SetTimeout(
             () -> {
                 ReleaseClipboard()
-                Rebuild()
+                rebuild()
             },
             clearAfterMs
         )
     }
 
-    private func ReleaseClipboard() {
+    func ReleaseClipboard() {
         guard let host = window else {
             return
         }
-        guard let timer = clipboardTimer else {
+        guard let timer = ClipboardTimer else {
             return
         }
         timer.Dispose()
-        clipboardTimer = nil
+        ClipboardTimer = nil
         try {
             let current = host.GetClipboardText()
             if System
@@ -270,56 +338,50 @@ partial class WalletView {
                 .CryptographicOperations
                 .FixedTimeEquals(
                 System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](System.MemoryExtensions.AsSpan(current)),
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](ReadOnlySpan[char](clipboardText))
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](ReadOnlySpan[char](ClipboardText))
             ) {
                 host.SetClipboardText("")
             }
         } catch (failure Exception) {
-            error = "Clipboard could not be cleared"
-            Rebuild()
+            report("Clipboard could not be cleared")
+            rebuild()
         } finally {
-            Array.Clear(clipboardText)
-            clipboardText = []char{}
+            Array.Clear(ClipboardText)
+            ClipboardText = []char{}
         }
     }
 
-    private func Label(content string, size float64 = 14, color Color? = nil, channel string = "page") Text {
+    func Label(content string, size float64 = 14, color Color? = nil, channel string = "page") Text {
         let t = if channel.Length == 0 {
             1.0
         } else {
             Math.Min(Progress("page"), Progress(channel))
         }
         if size >= 13 && t < 1 {
-            return Frame(content, t, decodeSeed ^ content.GetHashCode(), Random.Shared, size, color ?? ink)
+            return Frame(content, t, DecodeSeed ^ content.GetHashCode(), Random.Shared, size, color ?? Ink)
         }
         return Text{
             Content: content,
-            FontFamily: font,
+            FontFamily: Font,
             FontSize: size,
-            Color: color ?? ink,
+            Color: color ?? Ink,
             TextWrap: TextWrap.NoWrap,
             TextTrimming: TextTrimming.Ellipsis,
             MinWidth: 0
         }
     }
 
-    private func Figure(
-        label string,
-        value string,
-        color Color,
-        size float64 = 14,
-        channel string = "page"
-    ) Blob -> Container{
+    func Figure(label string, value string, color Color, size float64 = 14, channel string = "page") Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Baseline,
         Gap: 10,
         MinWidth: 0,
-        Accessibility: Accessibility{Name: strings.Get(label) + " " + value},
-        Label(strings.Get(label), 12, body),
+        Accessibility: Accessibility{Name: Strings.Get(label) + " " + value},
+        Label(Strings.Get(label), 12, Body),
         Label(value, size, color, channel)
     }
 
-    private func DialogRoot(dialog ModalDialog, backdrop Goo.Button, panel Container) Container -> Container{
+    func DialogRoot(dialog ModalDialog, backdrop Goo.Button, panel Container) Container -> Container{
         Position: PositionType.Absolute,
         Left: 0,
         Right: 0,
@@ -327,12 +389,12 @@ partial class WalletView {
         Bottom: 0,
         AlignItems: AlignItems.Center,
         JustifyContent: JustifyContent.Center,
-        OnPointerDown: (event PointerEvent) -> Touch(),
-        OnWheel: (event WheelEvent) -> Touch()
+        OnPointerDown: (event PointerEvent) -> touch(),
+        OnWheel: (event WheelEvent) -> touch()
     }
 
-    private func Copyable(label string, value string, shown string, clearAfterMs float64 = 120000) Blob {
-        let copied = ReadOnlySpan[char](clipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(value))
+    func Copyable(label string, value string, shown string, clearAfterMs float64 = 120000) Blob {
+        let copied = ReadOnlySpan[char](ClipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(value))
         return Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.FlexStart,
@@ -341,23 +403,23 @@ partial class WalletView {
             Grow(
                 Container{
                     Gap: 6,
-                    Label(strings.Get(label), 12, body),
-                    Text{Content: shown, FontFamily: font, FontSize: 13, Color: ink, TextWrap: TextWrap.Wrap}
+                    Label(Strings.Get(label), 12, Body),
+                    Text{Content: shown, FontFamily: Font, FontSize: 13, Color: Ink, TextWrap: TextWrap.Wrap}
                 }
             ),
             IconButton{
-                Icon: MaterialIcons.Create(copied ? "check": "content_copy", 16, copied ? lime: body),
-                AccessibilityName: strings.Get("Copy") + " " + strings.Get(label),
+                Icon: MaterialIcons.Create(copied ? "check": "content_copy", 16, copied ? Lime: Body),
+                AccessibilityName: Strings.Get("Copy") + " " + Strings.Get(label),
                 OnClick: () -> {
                     Copy(value, clearAfterMs)
-                    Rebuild()
+                    rebuild()
                 }
             }.Build()
         }
     }
 
-    private func Glass() Container -> Container{
-        BackgroundColor: surface.WithAlpha(pane),
+    func Glass() Container -> Container{
+        BackgroundColor: Surface.WithAlpha(Pane),
         BackdropBlur: 16,
         BorderWidth: 1,
         BorderColor: Theme.Read().HairlineColor,
@@ -368,7 +430,7 @@ partial class WalletView {
         MinHeight: 0
     }
 
-    private func Accent(color Color, content Blob) Blob -> Container{
+    func Accent(color Color, content Blob) Blob -> Container{
         BorderWidth: Edges{Left: 3},
         BorderColor: color,
         Padding: Edges{Left: 12},
@@ -376,7 +438,7 @@ partial class WalletView {
         content
     }
 
-    private func Button(content string, action Action, disabled bool = false, primary bool = false) Blob {
+    func Button(content string, action Action, disabled bool = false, primary bool = false) Blob {
         let theme = Theme.Read()
         let style = if primary {
             theme.PrimaryButton
@@ -388,15 +450,15 @@ partial class WalletView {
             Position: PositionType.Relative,
             (
                 style with{
-                    Content = strings.Get(content),
+                    Content = Strings.Get(content),
                     OnClick = action,
                     Disabled = disabled || busy,
                     DisabledBackgroundColor = busy ? style.BackgroundColor: style.DisabledBackgroundColor,
-                    DisabledTextColor = busy ? Color.Transparent: dim,
-                    FontFamily = font
+                    DisabledTextColor = busy ? Color.Transparent: Dim,
+                    FontFamily = Font
                 }
             ).Build(),
-            if busy && PlaybackActive() {
+            if busy && playbackActive() {
                 Container{
                     Position: PositionType.Absolute,
                     Left: 0,
@@ -416,7 +478,7 @@ partial class WalletView {
         }
     }
 
-    private func Field(
+    func Field(
         label string,
         value string,
         changed Action[string],
@@ -427,24 +489,24 @@ partial class WalletView {
         labelled bool = true
     ) Blob -> TextField{
         Label: if labelled {
-            strings.Get(label)
+            Strings.Get(label)
         } else {
             nil
         },
-        AccessibilityName: strings.Get(label),
+        AccessibilityName: Strings.Get(label),
         Value: value,
         Controlled: true,
         Password: secret,
         RevealButton: secret,
         IssueText: if issue.Length > 0 {
-            Explain(issue)
+            Strings.Explain(issue)
         } else {
             nil
         },
         Invalid: issue.Length > 0,
         Disabled: disabled || Working(),
         Width: Percent(100),
-        FontFamily: font,
+        FontFamily: Font,
         ContentDirection: Direction.LeftToRight,
         OnChange: changed,
         OnSubmit: _ -> {
@@ -454,7 +516,7 @@ partial class WalletView {
         }
     }.Build()
 
-    private func PageContent(title string, maxWidth float64 = 520, trailing Blob? = nil) Container {
+    func PageContent(title string, maxWidth float64 = 520, trailing Blob? = nil) Container {
         let card = Glass()
         card.Width = Percent(100)
         card.MaxWidth = maxWidth
@@ -465,7 +527,7 @@ partial class WalletView {
             JustifyContent: JustifyContent.SpaceBetween,
             Gap: 16,
             FlexShrink: 0,
-            Label(title, 18, ink)
+            Label(title, 18, Ink)
         }
         if let value = trailing {
             header.Add(value)
@@ -474,7 +536,7 @@ partial class WalletView {
         return card
     }
 
-    private func ActionRow(children[]Blob) Blob {
+    func ActionRow(children[]Blob) Blob {
         let row = Container{
             FlexDirection: FlexDirection.Row,
             JustifyContent: JustifyContent.FlexEnd,
@@ -486,61 +548,4 @@ partial class WalletView {
         }
         return row
     }
-
-    private func Explain(message string) string -> strings.Get(
-        switch message {
-            case "Recovery phrase must contain English BIP39 words": "Recovery phrase must use English words"
-            case "Recovery phrase contains a word outside the English BIP39 wordlist": "Recovery phrase has an unknown word"
-            case "Node is not running. Manual mode never starts or downloads a core": "No node in manual mode"
-            case "Cannot reach the configured daemon": "Node not reachable. Check Node URL in Settings"
-            case "Owned daemon is running but its API is not ready": "Node is starting. Try again shortly"
-            case "Configured core exited before its API became ready": "Node did not start"
-            case "Could not start the configured core executable": "Node program could not start"
-            case "Daemon binary must be an absolute path": "Node program must be a full path"
-            case "Choose a new app-owned data directory. Existing unmanaged core data will not be modified": "Choose an empty Data folder. Existing node data is not changed"
-            case "Core wallet_file must be an absolute path. Configure the external daemon explicitly": "Node settings need a full wallet file path"
-            case "Core wallet_file must have a parent directory": "Node settings need a full wallet file path"
-            case "Core settings must be a JSON object": "Node settings file could not be read"
-            case "Core settings could not be parsed": "Node settings file could not be read"
-            case "Application and core settings must use different files": "Node settings must be a separate file"
-            case "API endpoint must be a loopback HTTP origin": "Node URL must be a local http address"
-            case "Access to the configured API cookie was denied": "Node access file cannot be read"
-            case CoreRelease.MismatchMessage: "Node program is not the verified " + CoreRelease.Version + " release"
-            case "No pinned core is available for this platform": "No verified node release for this platform"
-            case "API listener identity could not be verified": "Local node process could not be verified"
-            case "API listener is not the app-owned core process": "Local node is not the process started by this app"
-            case "API listener identity changed during connection": "Local node changed during connection"
-            case "File must be a regular no-follow file": "Access file must be a regular file, not a link"
-            case "File ownership or permissions are not private": "Access file must belong to you with private permissions"
-            case "File exceeds the supported size": "Access file exceeds the size limit"
-            case "API cookie must contain exactly 64 hexadecimal characters": "Node access file must contain a 64-character hex token"
-            case "Daemon rejected the request. Check the wallet inputs, funds and memo limits": "Node rejected the request. Check amount, funds and memo"
-            case "Node access denied. Check the cookie configuration": "Node access denied. Check the Data folder"
-            case "Wrong wallet password": "Wrong password"
-            case "No wallet is loaded or the daemon is not ready": "Node not ready or no wallet loaded"
-            case "Daemon returned no recovery phrase": "Node returned no recovery phrase"
-            case "Daemon did not return a dry-run estimate": "Node returned no fee estimate"
-            case "Daemon returned an invalid response": "Node sent an invalid response"
-            case "Daemon returned invalid wallet data": "Node sent an invalid response"
-            case "Daemon returned an invalid recovery phrase response": "Node sent an invalid response"
-            case "Daemon returned an incomplete outgoing history page": "Node sent an invalid response"
-            case "Daemon response omitted a required timestamp": "Node sent an invalid response"
-            case "Daemon response omitted a required numeric field": "Node sent an invalid response"
-            case "Daemon response exceeds the supported size": "Node sent an invalid response"
-            case "Daemon owner is closed": "App is closing"
-            case "Wallet controller is closed": "App is closing"
-            case "This application has not loaded a wallet. An external wallet will not be changed": "Wallet was loaded outside this app and is left unchanged"
-            case "Data and wallet directories must be valid absolute paths": "Data and Wallets must be full folder paths"
-            case "Data and wallet directories must be absolute paths": "Data and Wallets must be full folder paths"
-            case "Invalid Blocknet ID. Use $$ followed by 1 to 64 letters, digits, dots, underscores or hyphens": "Invalid Blocknet ID. Use $$ and up to 64 letters, digits, . _ or -"
-            case "Blocknet ID was not found": "Blocknet ID not found"
-            case "Blocknet ID resolver is unavailable": "Blocknet ID lookup unavailable"
-            case "Blocknet ID response exceeds the supported size": "Blocknet ID lookup failed"
-            case "Blocknet ID request was cancelled or timed out": "Blocknet ID lookup timed out"
-            case "Cannot reach the Blocknet ID resolver": "Blocknet ID lookup unreachable. Check your connection"
-            case "Cannot read the Blocknet ID response": "Blocknet ID lookup failed"
-            case "Could not verify the Blocknet ID destination": "Blocknet ID address could not be verified"
-            default: message.Replace("Daemon request failed with HTTP", strings.Get("Node request failed with code"))
-        }
-    )
 }

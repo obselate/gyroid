@@ -22,7 +22,7 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private func SideItem(
         label string,
         selected bool,
@@ -38,12 +38,12 @@ partial class WalletView {
         BorderWidth: Edges{Left: 3, Top: 1, Right: 1, Bottom: 1},
         BorderRadius: 4,
         BorderColor: if selected {
-            rule
+            ui.Rule
         } else {
             Color.Transparent
         },
         BorderStartColor: if selected {
-            lime
+            ui.Lime
         } else {
             Color.Transparent
         },
@@ -61,34 +61,34 @@ partial class WalletView {
             0.0
         },
         Disabled: disabled,
-        Hover: Style{BackgroundColor: rule},
+        Hover: Style{BackgroundColor: ui.Rule},
         Focus: Theme.Read().FocusStyle,
-        Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: strings.Get(label), Checked: checked},
+        Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label), Checked: checked},
         OnClick: action,
         if icon.Length > 0 {
-            Container{FlexShrink: 0, MaterialIcons.Create(icon, 16, dim)}
+            Container{FlexShrink: 0, MaterialIcons.Create(icon, 16, ui.Dim)}
         } else {
             Container{}
         },
-        Label(
-            strings.Get(label),
+        ui.Label(
+            ui.Strings.Get(label),
             14,
             if disabled {
-                dim
+                ui.Dim
             } else if selected {
-                lime
+                ui.Lime
             } else if icon.Length > 0 {
-                body
+                ui.Body
             } else {
-                ink
+                ui.Ink
             },
             ""
         )
     }
 
     private func Sidebar(page string) Blob {
-        let blocked = Working()
-        let island = Glass()
+        let blocked = ui.Working()
+        let island = ui.Glass()
         island.Width = 176
         island.FlexShrink = 0
         island.Margin = Edges{Top: 24, Left: 24, Bottom: 24}
@@ -113,18 +113,18 @@ partial class WalletView {
                 } else {
                     Container{}
                 },
-                Container{Height: 1, FlexShrink: 0, Margin: Edges{Top: 8, Bottom: 8}, BackgroundColor: rule},
+                Container{Height: 1, FlexShrink: 0, Margin: Edges{Top: 8, Bottom: 8}, BackgroundColor: ui.Rule},
                 SideItem(
                     "privacy",
-                    privacy,
+                    ui.Privacy,
                     false,
                     () -> TogglePrivacy(),
-                    if privacy {
+                    if ui.Privacy {
                         "visibility_off"
                     } else {
                         "visibility"
                     },
-                    if privacy {
+                    if ui.Privacy {
                         AccessibilityChecked.True
                     } else {
                         AccessibilityChecked.False

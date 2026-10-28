@@ -87,7 +87,7 @@ func Main() {
         (version?.InformationalVersion ?? "unknown").Split('+')[0],
         "dev.gyroid.wallet"
     )
-    var activationTarget WalletView? = nil
+    var activationTarget App? = nil
     Window.ApplicationActivated += request -> {
         if !request.IsInitial {
             activationTarget?.Restore()
@@ -105,7 +105,7 @@ func Main() {
         throw InvalidOperationException("Application instance unavailable")
     }
     using let wallet = WalletSession()
-    let view = WalletView(wallet)
+    let view = App(wallet)
     activationTarget = view
     let window = Window{
         Title: "Gyroid",

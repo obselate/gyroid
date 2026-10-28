@@ -22,7 +22,7 @@ import System.Numerics
 import System.Text
 import System.Threading.Tasks
 
-partial class WalletView {
+partial class App {
     private func Problem() Blob? {
         let snapshot = wallet.Snapshot
         let message = if error.Length > 0 {
@@ -41,14 +41,14 @@ partial class WalletView {
             }
             return Banner{
                 Tone: Tone.Warning,
-                Content: strings.Get("Settings file not loaded") + ": " + Explain(problem),
-                FontFamily: font,
+                Content: ui.Strings.Get("Settings file not loaded") + ": " + ui.Strings.Explain(problem),
+                FontFamily: ui.Font,
             }.Build()
         }
         return Banner{
             Tone: Tone.Danger,
-            Content: Explain(message),
-            FontFamily: font,
+            Content: ui.Strings.Explain(message),
+            FontFamily: ui.Font,
             OnDismiss: () -> {
                 error = ""
                 refreshError = ""

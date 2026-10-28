@@ -20,7 +20,7 @@ class SendCue(Delay float64, From float64, Target float64, Wobble float64) : Sim
     override func Done(elapsed float64) bool -> elapsed >= Delay + 0.25
 }
 
-partial class WalletView {
+partial class App {
     private let traceFades[]Anim[float64] = [6]Anim[float64]
 
     private let traceShifts[]Anim[Point] = [6]Anim[Point]
@@ -109,30 +109,30 @@ partial class WalletView {
         if confirmations >= 10 {
             return nil
         }
-        let status = ChainState(state, confirmations)
+        let status = ui.ChainState(state, confirmations)
         let filled = int32(confirmations)
         let ticks = Text{
             Content: String('●', filled) + String('○', 10 - filled),
-            StyleRanges: []TextStyleRange{TextStyleRange(TextRange(0, filled), Style{Color: lime})},
-            FontFamily: font,
+            StyleRanges: []TextStyleRange{TextStyleRange(TextRange(0, filled), Style{Color: ui.Lime})},
+            FontFamily: ui.Font,
             FontSize: 13,
-            Color: dim,
+            Color: ui.Dim,
             TextWrap: TextWrap.NoWrap
         }
-        let chain = Label(
+        let chain = ui.Label(
             status,
             12,
             if state == "confirmed" {
-                lime
+                ui.Lime
             } else {
-                orange
+                ui.Orange
             },
             ""
         )
-        let txid = Label(Hidden(result.TxId.Substring(0, 8)), 12, ink, "")
+        let txid = ui.Label(ui.Hidden(result.TxId.Substring(0, 8)), 12, ui.Ink, "")
         let close = IconButton{
-            Icon: MaterialIcons.Create("close", 16, body),
-            AccessibilityName: strings.Get("Close"),
+            Icon: MaterialIcons.Create("close", 16, ui.Body),
+            AccessibilityName: ui.Strings.Get("Close"),
             OnClick: () -> CloseTrace()
         }.Build()
         let strip = Container{
@@ -147,35 +147,35 @@ partial class WalletView {
             MinWidth: 0,
             Padding: Edges{Top: 8, Bottom: 8},
             BorderWidth: Edges{Top: 1, Bottom: 1},
-            BorderColor: rule,
+            BorderColor: ui.Rule,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Status,
-                Name: strings.Get("sent") + " " + Amount(estimate.Amount) + " BNT " + status
+                Name: ui.Strings.Get("sent") + " " + ui.Amount(estimate.Amount) + " BNT " + status
             }
         }
         if traceCompact {
-            strip.Add(Label("◆", 14, lime, ""))
+            strip.Add(ui.Label("◆", 14, ui.Lime, ""))
             strip.Add(txid)
-            strip.Add(Label("-" + Amount(estimate.Amount), 12, pink, ""))
+            strip.Add(ui.Label("-" + ui.Amount(estimate.Amount), 12, ui.Pink, ""))
             strip.Add(chain)
-            strip.Add(Grow(ticks))
+            strip.Add(ui.Grow(ticks))
             strip.Add(close)
             return strip
         }
         let inputCount = result.InputCount
         let inputs = Math.Min(inputCount, 6)
-        let coins = Label(
+        let coins = ui.Label(
             String('◉', inputs) + if inputCount > inputs {
                 " +" + (inputCount - inputs).ToString()
             } else {
                 ""
             },
             16,
-            lime,
+            ui.Lime,
             ""
         )
         let ring = Container{Gap: 2, MinWidth: 0, Overflow: Overflow.Hidden}
-        let neon = []Color{lime, orange, pink, blue, mint, violet}
+        let neon = []Color{ui.Lime, ui.Orange, ui.Pink, ui.Blue, ui.Mint, ui.Violet}
         for row in 0 ... Math.Min(inputCount, 3) {
             let digits = Random(result.TxId.GetHashCode() + row)
             let glyphs = StringBuilder()
@@ -190,24 +190,24 @@ partial class WalletView {
                 Text{
                     Content: glyphs.ToString(),
                     StyleRanges: tints.ToArray(),
-                    FontFamily: font,
+                    FontFamily: ui.Font,
                     FontSize: 12,
-                    Color: dim,
+                    Color: ui.Dim,
                     TextWrap: TextWrap.NoWrap
                 }
             )
         }
         if inputCount > 3 {
-            ring.Add(Label("+" + (inputCount - 3).ToString(), 11, dim, ""))
+            ring.Add(ui.Label("+" + (inputCount - 3).ToString(), 11, ui.Dim, ""))
         }
-        let outputs = Container{Gap: 2, Label("▶ " + Amount(estimate.Amount), 12, pink, "")}
+        let outputs = Container{Gap: 2, ui.Label("▶ " + ui.Amount(estimate.Amount), 12, ui.Pink, "")}
         if result.Change > 0 {
             outputs.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     Gap: 6,
-                    Label("▶ " + Amount(result.Change), 12, mint, ""),
-                    Label(strings.Get("change"), 11, dim, "")
+                    ui.Label("▶ " + ui.Amount(result.Change), 12, ui.Mint, ""),
+                    ui.Label(ui.Strings.Get("change"), 11, ui.Dim, "")
                 }
             )
         }
@@ -217,8 +217,8 @@ partial class WalletView {
                 Gap: 6,
                 OpacityAnim: traceFades[3],
                 TranslateAnim: traceShifts[3],
-                Label("↘ " + Amount(result.Fee), 12, orange, ""),
-                Label(strings.Get("Fee"), 11, dim, "")
+                ui.Label("↘ " + ui.Amount(result.Fee), 12, ui.Orange, ""),
+                ui.Label(ui.Strings.Get("Fee"), 11, ui.Dim, "")
             }
         )
         let ringStage = TraceStage("ring ×16", 1, ring)
@@ -230,7 +230,11 @@ partial class WalletView {
             TraceStage(
                 "inputs",
                 0,
-                Container{Gap: 2, coins, Label(Amount(estimate.Amount + result.Fee + result.Change), 12, body, "")}
+                Container{
+                    Gap: 2,
+                    coins,
+                    ui.Label(ui.Amount(estimate.Amount + result.Fee + result.Change), 12, ui.Body, "")
+                }
             ),
             ringStage,
             TraceStage("outputs", 2, outputs),
@@ -241,13 +245,13 @@ partial class WalletView {
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 6,
-                    Container{ScaleAnim: traceSeal, Label("◆", 16, lime, "")},
+                    Container{ScaleAnim: traceSeal, ui.Label("◆", 16, ui.Lime, "")},
                     txid
                 }
             ),
             TraceStage("broadcast", 5, Container{Gap: 2, chain, ticks})
         }
-        strip.Add(Grow(stages))
+        strip.Add(ui.Grow(stages))
         strip.Add(close)
         return strip
     }
@@ -257,14 +261,14 @@ partial class WalletView {
         FlexShrink: 0,
         OpacityAnim: traceFades[stage],
         TranslateAnim: traceShifts[stage],
-        Label(
+        ui.Label(
             if stage > 0 {
-                "→ " + strings.Get(label)
+                "→ " + ui.Strings.Get(label)
             } else {
-                strings.Get(label)
+                ui.Strings.Get(label)
             },
             11,
-            dim,
+            ui.Dim,
             ""
         ),
         content
