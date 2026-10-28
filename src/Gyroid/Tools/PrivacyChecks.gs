@@ -2,6 +2,7 @@ package Gyroid.Tools
 
 import Gyroid.Node
 import Gyroid.Platform
+import Gyroid.Settings
 import Gyroid.Wallet
 import System
 import System.Collections.Generic
@@ -44,19 +45,52 @@ class PrivacyChecks {
         this.session = session
     }
 
-    private func PhraseMarker() string -> Path.Combine(
-        session.settings.DataDirectory,
-        "gyroid-phrase-checked." + session.settings.ActiveWallet
-    )
+    private func PhraseStatePath() string -> AppSettings.ConfigurationPath() + ".phrase-checks.json"
 
-    func PhraseChecked() DateTime? -> if File.Exists(PhraseMarker()) {
-        File.GetLastWriteTime(PhraseMarker())
-    } else {
-        nil
+    private func WalletKey() string -> session.Library.WalletPath(session.settings.ActiveWallet)
+
+    func PhraseChecked() DateTime? {
+        if !File.Exists(PhraseStatePath()) {
+            return nil
+        }
+        using let state = JsonDocument.Parse(PrivateFiles.ReadText(PhraseStatePath(), 65536, true))
+        return if state.RootElement.TryGetProperty(WalletKey(), out let date) {
+            date.GetDateTime().ToLocalTime()
+        } else {
+            nil
+        }
     }
 
     async func MarkPhraseCheckedAsync() {
-        await PrivateFiles.WriteAtomic(PhraseMarker(), stream -> Task.CompletedTask, true, false)
+        let path = PhraseStatePath()
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(path) ?? throw WalletException("Settings file must have a parent directory")
+        )
+        using let state = JsonDocument.Parse(
+            if File.Exists(path) {
+                PrivateFiles.ReadText(path, 65536, true)
+            } else {
+                "{}"
+            }
+        )
+        let wallet = WalletKey()
+        await PrivateFiles.WriteAtomic(
+            path,
+            async (stream) -> {
+                using let writer = Utf8JsonWriter(stream)
+                writer.WriteStartObject()
+                for entry in state.RootElement.EnumerateObject() {
+                    if entry.Name != wallet {
+                        entry.WriteTo(writer)
+                    }
+                }
+                writer.WriteString(wallet, DateTime.UtcNow)
+                writer.WriteEndObject()
+                await writer.FlushAsync()
+            },
+            true,
+            false
+        )
     }
 
     func WalletFileMode() UnixFileMode? {
