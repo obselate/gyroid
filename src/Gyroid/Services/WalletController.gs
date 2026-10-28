@@ -1154,21 +1154,18 @@ class WalletController : IDisposable {
             using let address = await rpc.JsonAsync("wallet/address", ct: ct)
             let sends = await ReadSendsAsync(ct)
             let root = balance.RootElement
+            let change = WalletJson.OptionalNumber(root, "pending_unconfirmed") ?? 0
             let amounts = WalletBalance{
                 Scanning: WalletJson.Flag(root, "scanning"),
                 ScanHeight: WalletJson.Number(root, "synced_height"),
                 ChainHeight: WalletJson.Number(root, "chain_height"),
-                Balance: WalletJson.OptionalNumber(root, "total"),
+                Balance: WalletJson.OptionalNumber(root, "total") + change,
                 Spendable: WalletJson.OptionalNumber(root, "spendable"),
-                Pending: WalletJson.OptionalNumber(root, "pending"),
-                PendingUnconfirmed: WalletJson.OptionalNumber(root, "pending_unconfirmed"),
+                Pending: WalletJson.OptionalNumber(root, "pending") + change,
                 OutputsTotal: WalletJson.OptionalNumber(root, "outputs_total"),
                 OutputsUnspent: WalletJson.OptionalNumber(root, "outputs_unspent"),
                 MemoDecryptFailures: WalletJson.OptionalNumber(root, "memo_decrypt_failures"),
                 MemoDecryptLastHeight: WalletJson.OptionalNumber(root, "memo_decrypt_last_height")
-            }
-            if root.TryGetProperty("pending_unconfirmed_eta", out let eta) {
-                amounts.PendingUnconfirmedEta = eta.GetInt64()
             }
             let outputs = List[WalletOutput]()
             let wanted = Math.Max(historyPage, historyOffset)
@@ -1434,7 +1431,6 @@ class WalletController : IDisposable {
                 Timestamp: DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             }
             SavePendingSend(pending)
-            pendingSend = pending
             return await SubmitPendingCoreAsync(pending, ct)
         } finally {
             End()
@@ -1623,18 +1619,19 @@ class WalletController : IDisposable {
                 throw WalletException("Invalid send response", 0, true)
             }
             let result = SendResult(txid, WalletJson.Number(root, "fee"), WalletJson.Number(root, "change"))
-            sendOutcome = "Submitted: " + txid
             ClearPendingSend()
             return result
         } catch (error WalletException) {
             await RecoverSendCoreAsync(CancellationToken.None)
-            if pendingSend == nil && sendOutcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
-                return SendResult(sendOutcome.Substring(11), 0, 0)
+            let outcome = sendOutcome
+            sendOutcome = ""
+            if pendingSend != nil {
+                throw WalletException("Send outcome unknown. Resolve the pending send before starting another", 0, true)
             }
-            if pendingSend == nil {
-                throw WalletException(sendOutcome)
+            if outcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
+                return SendResult(outcome.Substring(11), 0, 0)
             }
-            throw WalletException("Send outcome unknown. Resolve the pending send before starting another", 0, true)
+            throw WalletException(outcome)
         }
     }
 

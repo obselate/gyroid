@@ -161,7 +161,7 @@ partial class WalletView {
                 Width: 280,
                 FlexShrink: 0,
                 Gap: 12,
-                Stat("Spendable", spendable, ink),
+                Stat("Available", spendable, ink),
                 Stat("Pending", pending, pendingColor)
             }
         )
@@ -302,7 +302,7 @@ partial class WalletView {
             strings.Get("send"),
             640,
             if let units = wallet.Snapshot.Balance?.Spendable {
-                Figure("Spendable", Amount(units) + " BNT", lime, 14)
+                Figure("Available", Amount(units) + " BNT", lime, 14)
             } else {
                 nil
             }
@@ -814,7 +814,7 @@ partial class WalletView {
     private func ChainState(state string, confirmations uint64) string -> if state == "confirmed" {
         strings.Get("Confirmed") + " " + Count(confirmations)
     } else if state == "mempool" {
-        strings.Get("Mempool")
+        strings.Get("Pending")
     } else if state == "not_found" {
         strings.Get("Not found")
     } else {
