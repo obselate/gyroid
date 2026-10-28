@@ -47,7 +47,7 @@ class ContactsPage : Cell[ContactsInput] {
                 Gap: 8,
                 FlexShrink: 0,
                 ui.Grow(ui.Label(ui.Strings.Get("contacts"), 17, ui.Ink, "")),
-                Square(input, "person_add", "Add contact", editing == "", () -> Edit("", ""))
+                Square(input, "person_add", ui.Strings.Get("Add contact"), editing == "", () -> Edit("", ""))
             }
         )
         let list = Container{
