@@ -127,10 +127,11 @@ class SendEstimate(
     }
 }
 
-class SendResult(txId string, fee uint64, change uint64) {
+class SendResult(txId string, fee uint64, change uint64, inputCount int32) {
     let TxId string = txId
     let Fee uint64 = fee
     let Change uint64 = change
+    let InputCount int32 = inputCount
     let Status string = "submitted"
 }
 

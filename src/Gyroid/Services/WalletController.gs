@@ -1631,7 +1631,12 @@ class WalletController : IDisposable {
             if txid.Length == 0 || WalletJson.Flag(root, "dry_run") {
                 throw WalletException("Invalid send response", 0, true)
             }
-            let result = SendResult(txid, WalletJson.Number(root, "fee"), WalletJson.Number(root, "change"))
+            let result = SendResult(
+                txid,
+                WalletJson.Number(root, "fee"),
+                WalletJson.Number(root, "change"),
+                int32(WalletJson.Number(root, "input_count"))
+            )
             ClearPendingSend()
             return result
         } catch (error WalletException) {
@@ -1642,7 +1647,7 @@ class WalletController : IDisposable {
                 throw WalletException("Send outcome unknown. Resolve the pending send before starting another", 0, true)
             }
             if outcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
-                return SendResult(outcome.Substring(11), 0, 0)
+                return SendResult(outcome.Substring(11), 0, 0, 0)
             }
             throw WalletException(outcome)
         }
@@ -1655,7 +1660,7 @@ class WalletController : IDisposable {
             await RecoverSendCoreAsync(ct)
             guard let pending = pendingSend else {
                 if sendOutcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
-                    return SendResult(sendOutcome.Substring(11), 0, 0)
+                    return SendResult(sendOutcome.Substring(11), 0, 0, 0)
                 }
                 throw WalletException(
                     if sendOutcome.Length > 0 {
