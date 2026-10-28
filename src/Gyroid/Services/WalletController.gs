@@ -1211,6 +1211,7 @@ class WalletController : IDisposable {
         guard let pending = pendingSend else {
             return
         }
+        pending.CanRetry = false
         try {
             using let response = await rpc.JsonAsync(
                 "wallet/send/status?idempotency_key=" + Uri.EscapeDataString(pending.Key),
