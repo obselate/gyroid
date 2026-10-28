@@ -29,6 +29,7 @@ class NodeSupervisor : IDisposable {
     var Executable string = ""
     var Phase string = ""
     var DownloadPercent int32?
+    var CheckpointHeight uint64
 
     prop NeedsRestart bool -> process != nil && !Owned
 
@@ -388,6 +389,7 @@ class NodeSupervisor : IDisposable {
             let existing = Checkpoints.Parse(System.Text.Encoding.UTF8.GetBytes(PrivateFiles.ReadText(path, 1048576)))
             let trusted = Checkpoints.Parse(baseline)
             if Checkpoints.Height(existing) >= Checkpoints.Height(trusted) && Checkpoints.Extends(trusted, existing) {
+                CheckpointHeight = Checkpoints.Height(existing)
                 return true
             }
         }
@@ -408,6 +410,7 @@ class NodeSupervisor : IDisposable {
         )
         let selected = Checkpoints.Select(baseline, downloaded)
         await PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(selected, 0, selected.Length, ct), true, false)
+        CheckpointHeight = Checkpoints.Height(Checkpoints.Parse(selected))
         ReportProgress("Checkpoints", 100)
         return true
     }

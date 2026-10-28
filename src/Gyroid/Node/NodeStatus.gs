@@ -14,6 +14,13 @@ class NodeStatus {
     var SyncProgress uint64?
     var Peers uint64
     var Mempool uint64
+    var MempoolBytes uint64
+    var PeerId string = ""
+    var IdentityAge string = ""
+    var BestHash string = ""
+    var Listen string = ""
+    var MaxOutbound uint64
+    var CheckpointHeight uint64
     var LastBlockTime int64
     var SyncRate float64
     var Endpoint string = ""

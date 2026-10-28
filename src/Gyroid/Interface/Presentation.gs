@@ -205,6 +205,11 @@ class Presentation {
         .ToLocalTime()
         .ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
 
+    func Clock(seconds int64) string -> DateTimeOffset
+        .FromUnixTimeSeconds(seconds)
+        .ToLocalTime()
+        .ToString("HH:mm", CultureInfo.InvariantCulture)
+
     func Tabs(key string, label string, items[]NavigationItem, selected string, chosen Action[string]) Blob ->
     Cell.Mount[TabBarInput, TabBar](
         key,

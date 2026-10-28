@@ -559,6 +559,8 @@ partial class App : Cell {
             screen
         } else if snapshot.Page == "Wallet" {
             "Overview"
+        } else if Preparing() {
+            "Sync"
         } else if snapshot.Page == "Welcome" || snapshot.Page == "Unlock" {
             "Library"
         } else {
@@ -639,6 +641,26 @@ partial class App : Cell {
             )
         } else if page == "Transactions" {
             HistoryView(snapshot)
+        } else if page == "Network" {
+            Cell.Mount[NetworkInput, NetworkPage](
+                "network",
+                NetworkInput{
+                    Ui: ui,
+                    Session: wallet,
+                    Window: window,
+                    Node: wallet.Node.Status,
+                    History: snapshot.History,
+                    Sends: snapshot.Sends,
+                    Language: ui.Strings.Language,
+                    Width: width,
+                    Height: height
+                }
+            )
+        } else if page == "Sync" {
+            Cell.Mount[SyncInput, SyncPage](
+                "sync",
+                SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
+            )
         } else if page == "Seed" || seedFromWallet && seed != nil {
             Cell.Mount[SeedPageInput, SeedPage](
                 "seed",
@@ -738,6 +760,8 @@ partial class App : Cell {
         let cardWidth = switch page {
             case "Overview": span
             case "Transactions": span
+            case "Network": span
+            case "Sync": 760.0
             case "Settings": 1004.0
             case "Seed": 760.0
             case "Receive": 640.0
@@ -787,7 +811,7 @@ partial class App : Cell {
         if page == "Overview" && (wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0) {
             main.Add(PendingSendBanner())
         }
-        if page == "Overview" || page == "Transactions" || page == "Mining" {
+        if page == "Overview" || page == "Transactions" || page == "Mining" || page == "Network" {
             main.Add(content)
         } else {
             let stage = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, FlexDirection: FlexDirection.Row}
