@@ -45,8 +45,7 @@ data struct HistoryRow {
     var Need uint64
     var Time int64
     var State string
-    var Recipient string
-    var Paid uint64
+    var Recipients[]WalletRecipient
     var Open bool
     var Revision int32
     var Privacy bool
@@ -69,6 +68,7 @@ class HistoryPage : Cell[HistoryInput] {
     private var proofFor string = ""
     private var proofKey string = ""
     private var proofValid bool
+    private var proofRecipient int32
     private var exporting bool
     private var format string = "csv"
     private var memos bool = true
@@ -239,7 +239,6 @@ class HistoryPage : Cell[HistoryInput] {
             if confirmed && height < lowest {
                 continue
             }
-            let recipient = send.Recipients.FirstOrDefault()
             rows.Add(
                 Item(input, "s:" + send.TxId) with{
                     Kind = confirmed ? "out": "pending",
@@ -258,8 +257,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Need = 10,
                     Time = send.Timestamp,
                     State = send.Status,
-                    Recipient = recipient?.Address ?? "",
-                    Paid = recipient?.Amount ?? 0UL
+                    Recipients = send.Recipients
                 }
             )
         }
@@ -281,7 +279,7 @@ class HistoryPage : Cell[HistoryInput] {
         TxId: "",
         Memo: "",
         State: "",
-        Recipient: "",
+        Recipients: Array.Empty[WalletRecipient](),
         Open: key == expanded,
         Revision: key == expanded ? revision: 0,
         Privacy: input.Privacy,
@@ -687,8 +685,22 @@ class HistoryPage : Cell[HistoryInput] {
         } else {
             row.Depth.ToString() + "/" + row.Need.ToString()
         }
-        let note = row.Memo.Length > 0 ? row.Memo: Short(row.TxId)
+        let recipient = row.Recipients.FirstOrDefault()
+        let note = row
+            .Recipients
+            .Length > 1 ? Short(recipient?.Address ?? ""): row
+            .Memo
+            .Length > 0 ? row.Memo: Short(row.TxId)
         let sign = row.Kind == "in" || row.Kind == "mined" ? "+": "−"
+        let notes = Container{
+            Padding: Edges{Left: 6},
+            FlexDirection: FlexDirection.Row,
+            Gap: 6,
+            ui.Label(ui.Hidden(note), 12, row.Memo.Length > 0 ? ui.Ink: ui.Dim, "")
+        }
+        if row.Recipients.Length > 1 {
+            notes.Add(ui.Label("+" + (row.Recipients.Length - 1).ToString(), 12, ui.Dim, ""))
+        }
         let line = Goo
             .Button{
             Height: row.Width >= 1700 ? 42.0: 38.0,
@@ -712,6 +724,8 @@ class HistoryPage : Cell[HistoryInput] {
             OnClick: () -> {
                 expanded = row.Open ? "": row.Key
                 tab = "details"
+                proofRecipient = 0
+                proofFor = ""
                 revision++
                 Rebuild()
             },
@@ -741,12 +755,7 @@ class HistoryPage : Cell[HistoryInput] {
                 AlignItems: AlignItems.FlexEnd,
                 ui.Label(sign + ui.Amount(row.Amount), 14, row.Kind == "pending" ? ui.Pink: Tint(row.Kind), "")
             },
-            ui.Grow(
-                Container{
-                    Padding: Edges{Left: 6},
-                    ui.Label(ui.Hidden(note), 12, row.Memo.Length > 0 ? ui.Ink: ui.Dim, "")
-                }
-            ),
+            ui.Grow(notes),
             Container{
                 Width: compact ? 170.0: 212.0,
                 FlexShrink: 0,
@@ -786,6 +795,7 @@ class HistoryPage : Cell[HistoryInput] {
 
     private func Details(row HistoryRow) Blob {
         let ui = current.Ui
+        let recipient = row.Recipients.ElementAtOrDefault(proofRecipient)
         let panel = Container{
             Gap: 12,
             Padding: Edges{Top: 4, Bottom: 14, Left: row.Width < 1000 ? 16.0: 38.0, Right: 16},
@@ -825,6 +835,34 @@ class HistoryPage : Cell[HistoryInput] {
             }
             panel.Add(tabs)
             if tab == "proof" {
+                if row.Recipients.Length > 1 {
+                    panel.Add(
+                        Cell.Mount[ToggleGroupInput, ToggleGroup](
+                            "proof-recipient",
+                            ToggleGroupInput{
+                                Items: row
+                                    .Recipients
+                                    .Select(
+                                    (entry WalletRecipient, index int32) -> ToggleOption{
+                                        Id: index.ToString(),
+                                        Label: ui.Strings.Get("Recipient") + " " + (index + 1).ToString()
+                                    }
+                                )
+                                    .ToArray(),
+                                SelectedIds: []string{proofRecipient.ToString()},
+                                AccessibilityName: ui.Strings.Get("recipient"),
+                                OnChange: ids -> {
+                                    if ids.Length > 0 {
+                                        proofRecipient = Int32.Parse(ids[0], CultureInfo.InvariantCulture)
+                                        Prove(row)
+                                        revision++
+                                        Rebuild()
+                                    }
+                                }
+                            }
+                        )
+                    )
+                }
                 panel.Add(
                     Block(
                         "proof key",
@@ -834,7 +872,7 @@ class HistoryPage : Cell[HistoryInput] {
                     )
                 )
                 panel.Add(Block("transaction", row.TxId, ui.Grouped(row.TxId), ui.Body))
-                panel.Add(Block("recipient", row.Recipient, Spaced(row.Recipient, 10), ui.Body))
+                panel.Add(Block("recipient", recipient?.Address ?? "", Spaced(recipient?.Address ?? "", 10), ui.Body))
                 let ready = proofFor == row.TxId && proofKey.Length > 0
                 let actions = Container{
                     FlexDirection: FlexDirection.Row,
@@ -849,7 +887,7 @@ class HistoryPage : Cell[HistoryInput] {
                     } else {
                         Container{}
                     },
-                    Figure("amount", ui.Amount(row.Paid) + " BNT", ui.Ink, 14),
+                    Figure("amount", ui.Amount(recipient?.Amount ?? 0UL) + " BNT", ui.Ink, 14),
                     Container{FlexGrow: 1},
                     ui.Button("save", () -> SaveProof(row), !ready),
                     ui.Button("copy proof", () -> ui.Copy(ProofText(row), 120000), !ready, true)
@@ -872,18 +910,21 @@ class HistoryPage : Cell[HistoryInput] {
         }
         if row.Kind == "out" || row.Kind == "pending" {
             values.Add(Figure("fee", ui.Amount(row.Fee), ui.Ink, 13))
-            values.Add(
-                Figure(
-                    "recipient",
-                    ui.Hidden(
-                        row.Recipient.Length > 14 ? row.Recipient.Substring(0, 8) + "…" + row.Recipient.Substring(
-                            row.Recipient.Length - 6
-                        ): row.Recipient
-                    ),
-                    ui.Ink,
-                    13
+            if row.Recipients.Length == 1 {
+                let address = row.Recipients[0].Address
+                values.Add(
+                    Figure(
+                        "recipient",
+                        ui.Hidden(
+                            address.Length > 14 ? address.Substring(0, 8) + "…" + address.Substring(
+                                address.Length - 6
+                            ): address
+                        ),
+                        ui.Ink,
+                        13
+                    )
                 )
-            )
+            }
         }
         if row.Kind == "mined" && row.Depth < 60 {
             values.Add(Figure("spendable at", ui.Count(row.Height + 60), ui.Orange, 13))
@@ -891,10 +932,23 @@ class HistoryPage : Cell[HistoryInput] {
         if row.Kind == "in" {
             values.Add(Figure("output", "#" + row.Index.ToString(), ui.Ink, 13))
         }
-        if row.Memo.Length > 0 {
+        if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
             values.Add(Figure("memo", ui.Hidden(row.Memo), ui.Ink, 13))
         }
         panel.Add(values)
+        if row.Recipients.Length > 1 {
+            for entry in row.Recipients {
+                let details = Container{
+                    Gap: 4,
+                    Block("recipient", entry.Address, Spaced(entry.Address, 10), ui.Body),
+                    Figure("amount", ui.Amount(entry.Amount) + " BNT", ui.Ink, 13)
+                }
+                if entry.Memo.Length > 0 {
+                    details.Add(Figure("memo", ui.Hidden(entry.Memo), ui.Ink, 13))
+                }
+                panel.Add(details)
+            }
+        }
         panel.Add(Block("transaction", row.TxId, ui.Grouped(row.TxId), ui.Body))
         return panel
     }
@@ -1153,18 +1207,30 @@ class HistoryPage : Cell[HistoryInput] {
 
     private func Prove(row HistoryRow) {
         let proofs = current.Session.Proofs
-        let amount = WalletAmount.Format(row.Paid)
+        let selected = proofRecipient
+        if selected >= row.Recipients.Length {
+            return
+        }
+        let recipient = row.Recipients[selected]
+        let amount = WalletAmount.Format(recipient.Amount)
         let prove = Task.Run(() -> proofs.ProveAsync(row.TxId))
         proofFor = row.TxId
         proofKey = ""
+        proofValid = false
         current.Ui.Run(
             prove,
             () -> {
-                proofKey = prove.Result
-                let verify = Task.Run(() -> proofs.VerifyProofAsync(row.TxId, prove.Result, row.Recipient, amount))
+                if proofFor != row.TxId || proofRecipient != selected {
+                    return
+                }
+                let verify = Task.Run(() -> proofs.VerifyProofAsync(row.TxId, prove.Result, recipient.Address, amount))
                 current.Ui.Run(
                     verify,
                     () -> {
+                        if proofFor != row.TxId || proofRecipient != selected {
+                            return
+                        }
+                        proofKey = prove.Result
                         proofValid = verify.Result
                         revision++
                         Rebuild()
@@ -1178,14 +1244,14 @@ class HistoryPage : Cell[HistoryInput] {
 
     private func ProofText(row HistoryRow) string {
         let strings = current.Ui.Strings
+        let recipient = row.Recipients.ElementAtOrDefault(proofRecipient)
         return strings.Get("transaction") + " " + row.TxId + "\n" + strings.Get("proof key") +
             " " +
             proofKey +
             "\n" +
-            strings.Get("recipient") + " " + row.Recipient + "\n" + strings.Get("amount") + " " + WalletAmount.Format(
-            row.Paid
-        ) +
-            "\n"
+            strings.Get("recipient") + " " + (recipient?.Address ?? "") + "\n" + strings.Get("amount") +
+            " " +
+            WalletAmount.Format(recipient?.Amount ?? 0UL) + "\n"
     }
 
     private func SaveProof(row HistoryRow) {
