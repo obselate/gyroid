@@ -752,6 +752,30 @@ partial class WalletView {
         }
         let actions = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexShrink: 0}
         if wallet.Snapshot.State == "Unlocked" {
+            tab.Add(
+                Explainer(
+                    "About view-only wallets",
+                    "A view-only wallet sees incoming payments but cannot send",
+                    []string{
+                        "View keys show incoming payments only",
+                        "A view-only wallet cannot send or sign",
+                        "It cannot see spends, so balance may be high",
+                        "Share view keys only with people you trust"
+                    }
+                )
+            )
+            tab.Add(
+                Explainer(
+                    "About rescan",
+                    "Scan blocks the wallet has not checked yet",
+                    []string{
+                        "Finds new payments and spends",
+                        "Then updates the balance",
+                        "If the wallet is up to date, nothing changes",
+                        "Nothing is sent and no coins move"
+                    }
+                )
+            )
             actions.Add(Button("Rescan", () -> Rescan(), Working()))
             if rescan?.IsCompleted == false {
                 actions.Add(

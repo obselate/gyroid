@@ -15,6 +15,8 @@ import System.Threading.Tasks
 
 partial class WalletView {
     private var toolsTab string = "sign"
+    private var help string = ""
+    private let helpAnchors Dictionary[string, ElementHandle] = Dictionary[string, ElementHandle]()
     private var message string = ""
     private var signature string = ""
     private var signer string = ""
@@ -53,6 +55,52 @@ partial class WalletView {
     private func ResetVerdict() {
         verdict = nil
         verdictRun += 1
+    }
+
+    private func Explainer(topic string, summary string, details[]string) Blob {
+        if !helpAnchors.ContainsKey(topic) {
+            helpAnchors[topic] = ElementHandle()
+        }
+        let lines = Container{Gap: 8}
+        for line in details {
+            lines.Add(
+                Text{Content: strings.Get(line), FontFamily: font, FontSize: 13, Color: ink, TextWrap: TextWrap.Wrap}
+            )
+        }
+        return Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 4,
+            FlexShrink: 0,
+            Grow(Label(strings.Get(summary), 13, body, "")),
+            Container{
+                Handle: helpAnchors[topic],
+                IconButton{
+                    Icon: MaterialIcons.Create("info", 16, body),
+                    AccessibilityName: strings.Get(topic),
+                    OnClick: () -> {
+                        help = topic
+                        Rebuild()
+                    }
+                }.Build()
+            },
+            Cell.Mount[PopoverInput, Popover](
+                topic,
+                PopoverInput{
+                    Open: help == topic,
+                    Anchor: helpAnchors[topic],
+                    Placement: PopoverPlacement.BottomEnd,
+                    Width: 400,
+                    Padding: 16,
+                    Content: lines,
+                    AccessibilityName: strings.Get(topic),
+                    OnDismiss: reason -> {
+                        help = ""
+                        Rebuild()
+                    }
+                }
+            )
+        }
     }
 
     private func Tabs(key string, label string, items[]NavigationItem, selected string, chosen Action[string]) Blob ->
@@ -100,6 +148,39 @@ partial class WalletView {
             )
         )
         let verify Action = () -> Verify(tab)
+        panel.Add(
+            switch tab {
+                case "sign": Explainer(
+                    "About signing",
+                    "Prove you own this wallet's address",
+                    []string{
+                        "Signs your message with this wallet's key",
+                        "Share the message, signature and address",
+                        "Nothing is sent and no coins move",
+                        "Anyone can check it in Verify"
+                    }
+                )
+                case "verify": Explainer(
+                    "About verifying",
+                    "Check that an address owner signed a message",
+                    []string{
+                        "Paste the address, message and signature",
+                        "Valid means the address owner signed it",
+                        "Any change to the message makes it invalid"
+                    }
+                )
+                default: Explainer(
+                    "About payment proofs",
+                    "Prove you paid someone, or check a proof",
+                    []string{
+                        "Open a confirmed send in History, then Prove",
+                        "Share the four fields below with them",
+                        "Valid means that address got that amount",
+                        "Anyone can check it. Your keys stay private"
+                    }
+                )
+            }
+        )
         if tab == "sign" {
             panel.Add(
                 Field(
