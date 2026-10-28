@@ -69,19 +69,21 @@ class CoreProcess {
             }
         }
 
+        func IsTestnet(arguments[]string) bool {
+            for argument in arguments {
+                if argument == "--testnet" ||
+                    argument == "-testnet" ||
+                    argument == "--testnet=true" ||
+                    argument == "-testnet=true" {
+                    return true
+                }
+            }
+            return false
+        }
+
         func VerifyNetwork(pid int32, network string) {
             if OperatingSystem.IsLinux() || OperatingSystem.IsWindows() {
-                let arguments = Arguments(pid)
-                var testnet = false
-                for argument in arguments {
-                    if argument == "--testnet" ||
-                        argument == "-testnet" ||
-                        argument == "--testnet=true" ||
-                        argument == "-testnet=true" {
-                        testnet = true
-                    }
-                }
-                if testnet != (network == "testnet") {
+                if IsTestnet(Arguments(pid)) != (network == "testnet") {
                     throw WalletException("Running core network does not match the configured network")
                 }
             }

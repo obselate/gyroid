@@ -289,14 +289,7 @@ class NodeSupervisor : IDisposable {
                     let arguments = CoreProcess.Arguments(current.Id)
                     var endpoint = ""
                     var data = ""
-                    var testnet = false
                     for index in 0 ... arguments.Length {
-                        if arguments[index] == "--testnet" ||
-                            arguments[index] == "-testnet" ||
-                            arguments[index] == "--testnet=true" ||
-                            arguments[index] == "-testnet=true" {
-                            testnet = true
-                        }
                         if index + 1 < arguments.Length {
                             if arguments[index] == "--api" || arguments[index] == "-api" {
                                 endpoint = arguments[index + 1]
@@ -310,9 +303,9 @@ class NodeSupervisor : IDisposable {
                             data = arguments[index].Substring(7)
                         }
                     }
-                    if testnet != (settings.Network == "testnet") || endpoint.Length == 0 || !Path.IsPathFullyQualified(
-                        data
-                    ) {
+                    if CoreProcess.IsTestnet(arguments) != (settings.Network == "testnet") ||
+                        endpoint.Length == 0 ||
+                        !Path.IsPathFullyQualified(data) {
                         continue
                     }
                     if Path.GetFullPath(data) != Path.GetFullPath(settings.DataDirectory) &&

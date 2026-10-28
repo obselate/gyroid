@@ -861,7 +861,7 @@ partial class WalletView : Cell {
             case "Application and core settings must use different files": "Node settings must be a separate file"
             case "API endpoint must be a loopback HTTP origin": "Node URL must be a local http address"
             case "Access to the configured API cookie was denied": "Node access file cannot be read"
-            case "Core executable does not match the pinned Blocknet 0.22.0 release": "Node program is not the verified 0.22.0 release"
+            case CoreRelease.MismatchMessage: "Node program is not the verified " + CoreRelease.Version + " release"
             case "No pinned core is available for this platform": "No verified node release for this platform"
             case "API listener identity could not be verified": "Local node process could not be verified"
             case "API listener is not the app-owned core process": "Local node is not the process started by this app"

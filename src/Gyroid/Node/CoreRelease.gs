@@ -12,6 +12,10 @@ import System.Threading.Tasks
 
 class CoreRelease {
     shared {
+        let Version string = "0.22.0"
+        let UpgradeHeight uint64 = 103680
+        let MismatchMessage string = "Core executable does not match the pinned Blocknet " + Version + " release"
+
         func ExecutableName() string -> "blocknet-core-" + Platform() + if OperatingSystem.IsWindows() {
             ".exe"
         } else {
@@ -25,7 +29,7 @@ class CoreRelease {
             ),
             "Gyroid",
             "core",
-            "v0.22.0",
+            "v" + Version,
             ExecutableName()
         )
 
@@ -48,9 +52,13 @@ class CoreRelease {
             let ct = deadline.Token
             using let http = HttpClient(SocketsHttpHandler{AllowAutoRedirect: false, UseProxy: false})
             var address = Uri(
-                "https://github.com/blocknetprivacy/core/releases/download/v0.22.0/blocknet-core-" +
+                "https://github.com/blocknetprivacy/core/releases/download/v" +
+                    Version +
+                    "/blocknet-core-" +
                     Platform() +
-                    "-0.22.0.zip"
+                    "-" +
+                    Version +
+                    ".zip"
             )
             progress?.Invoke("0%")
             try {
@@ -195,7 +203,7 @@ class CoreRelease {
                 default: throw WalletException("No pinned core is available for this platform")
             }
             if digest != expected {
-                throw WalletException("Core executable does not match the pinned Blocknet 0.22.0 release")
+                throw WalletException(MismatchMessage)
             }
         }
     }

@@ -548,7 +548,7 @@ class WalletController : IDisposable {
                 Source: daemon.Source,
                 Owned: daemon.Owned,
                 Running: true,
-                Version: "0.22.0",
+                Version: CoreRelease.Version,
                 Network: settings.Network,
                 Height: NodeJson.Number(root, "chain_height"),
                 ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),
@@ -574,8 +574,8 @@ class WalletController : IDisposable {
                 current.UpgradeDate = NodeJson.Text(upgrade, "date")
                 current.UpgradeDeadline = NodeJson.Text(upgrade, "migration_deadline")
                 current.UpgradeNotice = NodeJson.Text(upgrade, "notice")
-                current.UpgradeBlocksLeft = if current.Height < 103680 {
-                    103680 - current.Height
+                current.UpgradeBlocksLeft = if current.Height < CoreRelease.UpgradeHeight {
+                    CoreRelease.UpgradeHeight - current.Height
                 } else {
                     0
                 }

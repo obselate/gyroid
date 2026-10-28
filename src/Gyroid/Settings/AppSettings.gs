@@ -186,12 +186,8 @@ class WalletSettings {
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "bnt")
             }
             let platform = CoreRelease.Platform()
-            let executable = "blocknet-core-" + platform + if OperatingSystem.IsWindows() {
-                ".exe"
-            } else {
-                ""
-            }
-            let wrapper = Path.Combine(cfg, "cores", "v0.22.0", executable)
+            let executable = CoreRelease.ExecutableName()
+            let wrapper = Path.Combine(cfg, "cores", "v" + CoreRelease.Version, executable)
             var wrapped = false
             var data = DefaultData(network)
             var wallets = Path.Combine(data, "wallets")
