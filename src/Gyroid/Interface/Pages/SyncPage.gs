@@ -269,7 +269,7 @@ class SyncPage : Cell[SyncInput] {
         case "Checkpoints": 1
         case "Starting": 2
         case "Detecting": 2
-        default: node.Peers == 0 ? 3: 4
+        default: node.Syncing && node.ChainHeight > node.Height + 2 ? 4: node.Peers == 0 ? 3: 4
     }
 
     private func StepName(step int32) string -> switch step {

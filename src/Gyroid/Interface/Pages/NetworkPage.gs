@@ -474,7 +474,9 @@ class NetworkPage : Cell[NetworkInput] {
                         BackgroundColor: Color.Parse("#b37700")
                     }
                 )
-                plot.Add(Place(right + 5, 10, ui.Label(ui.Strings.Get("10 conf"), 11, ui.Orange, "")))
+                plot.Add(
+                    Place(Math.Min(right + 5, width - 58), 10, ui.Label(ui.Strings.Get("10 conf"), 11, ui.Orange, ""))
+                )
             }
         }
         return plot

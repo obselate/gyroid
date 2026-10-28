@@ -260,7 +260,7 @@ partial class App : Cell {
         }
         shownState = state
         let node = wallet.Node.Status
-        if node.Syncing || node.Running && node.Peers == 0 {
+        if node.Syncing || node.Running && (node.Peers == 0 || node.Height == 0) {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
         } else {
             statusTimer?.Dispose()
