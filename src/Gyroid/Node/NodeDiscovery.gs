@@ -4,6 +4,7 @@ import Gyroid.Platform
 import Gyroid.Settings
 import System
 import System.IO
+import System.Linq
 import System.Runtime.InteropServices
 import System.Text.Json
 
@@ -191,8 +192,11 @@ class NodeDiscovery {
                 )
             }
             if settings.WalletDirectory.Length == 0 {
+                let legacy = Path.Combine(settings.DataDirectory, "wallets")
                 settings.WalletDirectory = if installed && settings.DataDirectory == data {
                     wallets
+                } else if Directory.Exists(legacy) && Directory.EnumerateFiles(legacy, "*.dat").Any() {
+                    legacy
                 } else {
                     AppSettings.DefaultWallets(network)
                 }
