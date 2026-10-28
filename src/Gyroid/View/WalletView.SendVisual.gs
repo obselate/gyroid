@@ -166,7 +166,7 @@ partial class WalletView {
             } else {
                 ""
             },
-            14,
+            16,
             lime,
             ""
         )
@@ -187,7 +187,7 @@ partial class WalletView {
                     Content: glyphs.ToString(),
                     StyleRanges: tints.ToArray(),
                     FontFamily: font,
-                    FontSize: 11,
+                    FontSize: 12,
                     Color: dim,
                     TextWrap: TextWrap.NoWrap
                 }
@@ -217,16 +217,18 @@ partial class WalletView {
                 Label(strings.Get("Fee"), 11, dim, "")
             }
         )
-        strip.Add(
+        let stages = Container{
+            FlexDirection: FlexDirection.Row,
+            FlexWrap: FlexWrap.Wrap,
+            ColumnGap: 16,
+            RowGap: 8,
             TraceStage(
                 "inputs",
                 0,
                 Container{Gap: 2, coins, Label(Amount(estimate.Amount + result.Fee + result.Change), 12, body, "")}
-            )
-        )
-        strip.Add(TraceStage("ring ×16", 1, ring))
-        strip.Add(TraceStage("outputs", 2, outputs))
-        strip.Add(
+            ),
+            TraceStage("ring ×16", 1, ring),
+            TraceStage("outputs", 2, outputs),
             TraceStage(
                 "sealed",
                 4,
@@ -237,19 +239,28 @@ partial class WalletView {
                     Container{ScaleAnim: traceSeal, Label("◆", 16, lime, "")},
                     txid
                 }
-            )
-        )
-        strip.Add(Grow(TraceStage("broadcast", 5, Container{Gap: 2, chain, ticks})))
+            ),
+            TraceStage("broadcast", 5, Container{Gap: 2, chain, ticks})
+        }
+        strip.Add(Grow(stages))
         strip.Add(close)
         return strip
     }
 
     private func TraceStage(label string, stage int32, content Blob) Blob -> Container{
         Gap: 4,
-        MinWidth: 0,
         OpacityAnim: traceFades[stage],
         TranslateAnim: traceShifts[stage],
-        Label(strings.Get(label), 11, dim, ""),
+        Label(
+            if stage > 0 {
+                "→ " + strings.Get(label)
+            } else {
+                strings.Get(label)
+            },
+            11,
+            dim,
+            ""
+        ),
         content
     }
 }
