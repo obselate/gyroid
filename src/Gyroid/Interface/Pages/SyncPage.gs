@@ -250,7 +250,7 @@ class SyncPage : Cell[SyncInput] {
         } else if connectingSince == 0 {
             connectingSince = Stopwatch.GetTimestamp()
         }
-        if node.Height != lastHeight || heightSince == 0 {
+        if node.Height != lastHeight || heightSince == 0 || step == 4 && stallTimer == nil {
             lastHeight = node.Height
             heightSince = now
             stallTimer?.Dispose()
