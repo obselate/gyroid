@@ -18,6 +18,7 @@ class ReceiveRequest {
     var Amount string = ""
     var Memo string = ""
     var Reference string = ""
+    var Since uint64
     var Format string = "link"
 }
 
@@ -50,6 +51,7 @@ class ReceivePage : Cell[ReceivePageInput] {
             request.Reference = ""
         } else if request.Reference.Length == 0 {
             request.Reference = "#" + Random.Shared.Next(0x1000000).ToString("x6")
+            request.Since = input.ChainHeight
         }
         let full = if request.Memo.Length > 0 {
             request.Memo + " " + request.Reference
@@ -455,6 +457,9 @@ class ReceivePage : Cell[ReceivePageInput] {
             return nil
         }
         for output in input.History {
+            if output.Coinbase || output.BlockHeight != 0 && output.BlockHeight < request.Since {
+                continue
+            }
             if (atoms == 0 || output.Amount == atoms) && if reference {
                 output.Memo.Contains(request.Reference, StringComparison.Ordinal)
             } else {
