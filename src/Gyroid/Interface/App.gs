@@ -583,7 +583,7 @@ partial class App : Cell {
                     Session: wallet,
                     Window: window,
                     History: miningHistory,
-                    Wallet: WalletName(wallet.Settings.ActiveWallet),
+                    Wallet: ui.WalletName(wallet.Settings.ActiveWallet),
                     Language: ui.Strings.Language,
                     Busy: ui.Working(),
                     Height: height
