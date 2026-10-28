@@ -82,7 +82,6 @@ class HistoryService {
                 OutputIndex: int32(NodeJson.Number(row, "output_index")),
                 Amount: NodeJson.Number(row, "amount"),
                 BlockHeight: NodeJson.Number(row, "block_height"),
-                Coinbase: NodeJson.Flag(row, "is_coinbase"),
                 Spent: NodeJson.Flag(row, "spent"),
                 Coinbase: NodeJson.Flag(row, "is_coinbase"),
                 Memo: NodeJson.Memo(hex)

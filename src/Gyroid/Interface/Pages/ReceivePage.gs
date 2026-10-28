@@ -19,6 +19,7 @@ class ReceiveRequest {
     var Memo string = ""
     var Reference string = ""
     var Since uint64
+    let ExistingOutputs HashSet[string] = HashSet[string](StringComparer.Ordinal)
     var Format string = "link"
 }
 
@@ -52,6 +53,10 @@ class ReceivePage : Cell[ReceivePageInput] {
         } else if request.Reference.Length == 0 {
             request.Reference = "#" + Random.Shared.Next(0x1000000).ToString("x6")
             request.Since = input.ChainHeight
+            request.ExistingOutputs.Clear()
+            for output in input.History {
+                request.ExistingOutputs.Add(output.TxId + ":" + output.OutputIndex.ToString())
+            }
         }
         let full = if request.Memo.Length > 0 {
             request.Memo + " " + request.Reference
@@ -457,7 +462,12 @@ class ReceivePage : Cell[ReceivePageInput] {
             return nil
         }
         for output in input.History {
-            if output.Coinbase || output.BlockHeight != 0 && output.BlockHeight < request.Since {
+            if output.Coinbase ||
+                output.BlockHeight != 0 &&
+                output.BlockHeight < request.Since ||
+                request
+                .ExistingOutputs
+                .Contains(output.TxId + ":" + output.OutputIndex.ToString()) {
                 continue
             }
             if (atoms == 0 || output.Amount == atoms) && if reference {
