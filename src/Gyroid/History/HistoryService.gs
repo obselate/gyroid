@@ -37,10 +37,10 @@ class HistoryService {
 
     async func ReloadAsync(sends[]WalletSend, ct CancellationToken)[]WalletOutput {
         let outputs = List[WalletOutput]()
-        let sentTransactions = HashSet[string](StringComparer.Ordinal)
+        let sentTransactions = Dictionary[string, int32](StringComparer.Ordinal)
         let keys = Dictionary[string, int32](StringComparer.Ordinal)
         for send in sends {
-            sentTransactions.Add(send.TxId)
+            sentTransactions[send.TxId] = send.Recipients.Length
         }
         historyOffset = 0
         var more = await ReadHistoryAsync(outputs, keys, sentTransactions, ct)
@@ -66,7 +66,7 @@ class HistoryService {
     private async func ReadHistoryAsync(
         outputs List[WalletOutput],
         keys Dictionary[string, int32],
-        sentTransactions HashSet[string],
+        sentTransactions Dictionary[string, int32],
         ct CancellationToken
     ) bool {
         using let response = await session
@@ -86,10 +86,11 @@ class HistoryService {
                 Coinbase: NodeJson.Flag(row, "is_coinbase"),
                 Memo: NodeJson.Memo(hex)
             }
-            if !sentTransactions.Contains(output.TxId) && keys.TryAdd(
-                output.TxId + ":" + output.OutputIndex.ToString(),
-                outputs.Count
-            ) {
+            if (
+                !sentTransactions.TryGetValue(output.TxId, out let recipientCount) ||
+                    output.OutputIndex < recipientCount
+            ) &&
+                keys.TryAdd(output.TxId + ":" + output.OutputIndex.ToString(), outputs.Count) {
                 outputs.Add(output)
             }
         }

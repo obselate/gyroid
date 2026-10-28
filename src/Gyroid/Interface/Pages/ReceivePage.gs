@@ -18,7 +18,6 @@ class ReceiveRequest {
     var Amount string = ""
     var Memo string = ""
     var Reference string = ""
-    var Since uint64
     var Format string = "link"
 }
 
@@ -51,7 +50,6 @@ class ReceivePage : Cell[ReceivePageInput] {
             request.Reference = ""
         } else if request.Reference.Length == 0 {
             request.Reference = "#" + Random.Shared.Next(0x1000000).ToString("x6")
-            request.Since = input.ChainHeight
         }
         let full = if request.Memo.Length > 0 {
             request.Memo + " " + request.Reference
@@ -94,9 +92,9 @@ class ReceivePage : Cell[ReceivePageInput] {
             qrCode = encoded
             qrPath = QrPath(encoded)
         }
-        let paid = Payment(input, full)
+        let paid = Payment(input, true)
         let possible = if paid == nil && request.Amount.Length > 0 {
-            Payment(input, request.Memo)
+            Payment(input, false)
         } else {
             nil
         }
@@ -446,7 +444,7 @@ class ReceivePage : Cell[ReceivePageInput] {
         return button
     }
 
-    private func Payment(input ReceivePageInput, expected string) WalletOutput? {
+    private func Payment(input ReceivePageInput, reference bool) WalletOutput? {
         let request = input.Request
         let atoms = if request.Amount.Length > 0 && input.Ui.AmountIssue(request.Amount).Length == 0 {
             WalletAmount.Parse(request.Amount)
@@ -457,9 +455,11 @@ class ReceivePage : Cell[ReceivePageInput] {
             return nil
         }
         for output in input.History {
-            if (output.BlockHeight == 0 || output.BlockHeight >= request.Since) &&
-                output.Memo == expected &&
-                (atoms == 0 || output.Amount == atoms) {
+            if (atoms == 0 || output.Amount == atoms) && if reference {
+                output.Memo.Contains(request.Reference, StringComparison.Ordinal)
+            } else {
+                output.Memo == request.Memo
+            } {
                 return output
             }
         }
