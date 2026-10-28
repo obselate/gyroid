@@ -279,6 +279,24 @@ try:
                        GYROID_DATA_DIR=str(root / "node0"), GYROID_WALLET_DIR=str(root / "node0"),
                        GYROID_BINARY=core)
     api(0, "wallet/lock", {})
+    cli("settings", "auto-lock", "1")
+    cli("unlock", reply=password, prompt=b"Password:")
+    report(step, since)
+    step = "CliAutoLock"
+    since = time.monotonic()
+    api(0, "wallet/balance")
+    def locked():
+        try:
+            api(0, "wallet/balance")
+            return False
+        except urllib.error.HTTPError as error:
+            if error.code != 403:
+                raise
+            return True
+    wait_for(locked, seconds=70)
+    if time.monotonic() - since < 59:
+        raise RuntimeError()
+    cli("settings", "auto-lock", "0")
     cli("unlock", reply=password, prompt=b"Password:")
     report(step, since)
     step = "Maturity"

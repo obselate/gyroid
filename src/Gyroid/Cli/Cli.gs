@@ -12,7 +12,7 @@ import System.Threading
 
 class Cli {
     shared {
-        func Run(input[]string) int32 {
+        func Run(input[]string, stopped ManualResetEventSlim, started Action[WalletSession]) int32 {
             var arguments = input
             let command = arguments[1]
             if arguments.Length > 2 && arguments[2] == "--help" {
@@ -124,16 +124,17 @@ class Cli {
                     WalletValidation.ValidateSend(arguments[2], arguments[3], memo)
                 }
                 using let wallet = WalletSession()
+                started(wallet)
                 let problem = wallet.Settings.LoadError
                 if problem.Length > 0 {
                     Console.Error.WriteLine("Settings file not loaded: " + problem)
                     return 1
                 }
                 if command == "settings" {
-                    return RunSettings(wallet.Settings, arguments)
+                    return RunSettings(wallet, arguments)
                 }
                 if command == "node" {
-                    return RunNode(wallet, arguments[2])
+                    return RunNode(wallet, arguments[2], stopped)
                 }
                 wallet.StartNodeAsync().GetAwaiter().GetResult()
                 if command == "status" {
@@ -157,7 +158,7 @@ class Cli {
                     }
                     let password = ReadPassword()
                     try {
-                        wallet.UnlockAsync(password).GetAwaiter().GetResult()
+                        wallet.UnlockAsync(password, scheduleLock: true).GetAwaiter().GetResult()
                     } finally {
                         Array.Clear(password)
                     }
@@ -372,7 +373,7 @@ class Cli {
             return 0
         }
 
-        private func RunSettings(settings WalletSettings, arguments[]string) int32 {
+        private func RunSettings(wallet WalletSession, arguments[]string) int32 {
             if arguments.Length == 4 {
                 if arguments[2] != "auto-lock" {
                     return Usage(Console.Error)
@@ -380,14 +381,15 @@ class Cli {
                 if !Int32.TryParse(arguments[3], NumberStyles.None, CultureInfo.InvariantCulture, out let minutes) {
                     throw WalletException("Auto-lock minutes must be zero or greater")
                 }
-                settings.AutoLockMinutes = minutes
-                WalletSettings.SaveAsync(settings, default(CancellationToken)).GetAwaiter().GetResult()
+                wallet.SaveAutoLockAsync(minutes).GetAwaiter().GetResult()
             }
-            Console.WriteLine("Auto-lock minutes: " + settings.AutoLockMinutes.ToString(CultureInfo.InvariantCulture))
+            Console.WriteLine(
+                "Auto-lock minutes: " + wallet.Settings.AutoLockMinutes.ToString(CultureInfo.InvariantCulture)
+            )
             return 0
         }
 
-        private func RunNode(wallet WalletSession, action string) int32 {
+        private func RunNode(wallet WalletSession, action string, stopped ManualResetEventSlim) int32 {
             if action == "start" {
                 wallet.StartNodeAsync().GetAwaiter().GetResult()
             } else {
@@ -414,18 +416,8 @@ class Cli {
             Console.WriteLine("Executable: " + status.Executable)
             Console.WriteLine("Progress: " + status.Progress)
             if action == "start" && status.Owned {
-                using let stopped = ManualResetEventSlim(false)
-                let cancel ConsoleCancelEventHandler = (sender, event) -> {
-                    event.Cancel = true
-                    stopped.Set()
-                }
-                Console.CancelKeyPress += cancel
-                try {
-                    Console.Error.WriteLine("Node runs until this command exits. Press Ctrl+C to stop")
-                    stopped.Wait()
-                } finally {
-                    Console.CancelKeyPress -= cancel
-                }
+                Console.Error.WriteLine("Node runs until this command exits. Press Ctrl+C to stop")
+                stopped.Wait()
             }
             return 0
         }

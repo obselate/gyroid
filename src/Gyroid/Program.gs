@@ -11,6 +11,7 @@ import System
 import System.Globalization
 import System.Reflection
 import System.Runtime.InteropServices
+import System.Threading
 
 @DllImport("kernel32.dll")
 func GetConsoleProcessList(processes[]uint32, count uint32) uint32;
@@ -24,8 +25,44 @@ func Main() {
         Environment.ExitCode = OwnedCoreWrapper.RunWindows(arguments)
         return
     }
+    if arguments.Length == 2 && arguments[1] == "--lock-wallet" {
+        Environment.ExitCode = WalletLockScheduler.Run()
+        return
+    }
     if arguments.Length > 1 && arguments[1] != "--width" && arguments[1] != "--height" && arguments[1] != "--scale" {
-        Environment.ExitCode = Cli.Run(arguments)
+        using let stopped = ManualResetEventSlim(false)
+        var wallet WalletSession? = nil
+        let nodeStart = arguments.Length == 3 && arguments[1] == "node" && arguments[2] == "start"
+        let exit EventHandler = (sender, event) -> wallet?.Dispose()
+        let cancel ConsoleCancelEventHandler = (sender, event) -> {
+            if nodeStart {
+                event.Cancel = true
+                stopped.Set()
+            }
+        }
+        AppDomain.CurrentDomain.ProcessExit += exit
+        Console.CancelKeyPress += cancel
+        using let termination PosixSignalRegistration? = if OperatingSystem.IsWindows() {
+            nil
+        } else {
+            PosixSignalRegistration.Create(
+                PosixSignal.SIGTERM,
+                signal -> {
+                    if nodeStart {
+                        signal.Cancel = true
+                        stopped.Set()
+                    } else {
+                        wallet?.Dispose()
+                    }
+                }
+            )
+        }
+        try {
+            Environment.ExitCode = Cli.Run(arguments, stopped, value -> wallet = value)
+        } finally {
+            Console.CancelKeyPress -= cancel
+            AppDomain.CurrentDomain.ProcessExit -= exit
+        }
         return
     }
     var index = 1
@@ -89,6 +126,17 @@ func Main() {
     WindowChrome.ReplaceTitlebar(window)
     view.Attach(window)
     window.OnClosing = () -> view.Closing()
+    using let termination PosixSignalRegistration? = if OperatingSystem.IsWindows() {
+        nil
+    } else {
+        PosixSignalRegistration.Create(
+            PosixSignal.SIGTERM,
+            signal -> {
+                signal.Cancel = true
+                window.Post(() -> view.Quit())
+            }
+        )
+    }
     window.Open()
     view.Start()
     window.Run()

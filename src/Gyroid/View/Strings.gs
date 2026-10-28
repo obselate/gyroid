@@ -353,6 +353,7 @@ class Strings {
             case "Core process arguments could not be verified": "无法验证节点进程参数"
             case "Could not allocate the owned core console": "无法为节点进程分配控制台"
             case "Could not register the owned core console handler": "无法注册节点控制台处理程序"
+            case "Could not schedule wallet auto-lock": "无法安排钱包自动锁定"
             default: key
         }
     }

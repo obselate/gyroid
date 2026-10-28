@@ -179,8 +179,6 @@ partial class WalletView : Cell {
     }
 
     private func Close() {
-        termination?.Dispose()
-        termination = nil
         tray?.Dispose()
         tray = nil
         refreshTimer?.Dispose()

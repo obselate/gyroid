@@ -380,6 +380,9 @@ class WalletSession : IDisposable {
             next.Validate()
             await WalletSettings.SaveAsync(next, ct)
             settings.AutoLockMinutes = minutes
+            if minutes == 0 {
+                WalletLockScheduler.Cancel(settings)
+            }
             Touch()
             if autoLockChanged.CurrentCount == 0 {
                 autoLockChanged.Release()
@@ -560,7 +563,11 @@ class WalletSession : IDisposable {
         }
     }
 
-    async func UnlockAsync(password[]char, ct CancellationToken = default(CancellationToken)) {
+    async func UnlockAsync(
+        password[]char,
+        ct CancellationToken = default(CancellationToken),
+        scheduleLock bool = false
+    ) {
         await BeginAsync(ct)
         try {
             if Encoding.UTF8.GetByteCount(password) < 3 {
@@ -589,6 +596,15 @@ class WalletSession : IDisposable {
             state = "Unlocked"
             Touch()
             page = "Wallet"
+            try {
+                WalletLockScheduler.Cancel(settings)
+                if scheduleLock && settings.AutoLockMinutes > 0 {
+                    await WalletLockScheduler.ScheduleAsync(Node, settings.AutoLockMinutes)
+                }
+            } catch (error Exception) {
+                await LockCoreAsync(default(CancellationToken))
+                throw WalletException("Could not schedule wallet auto-lock")
+            }
             PublishEmpty()
             await RefreshCoreAsync(ct)
         } finally {
@@ -632,6 +648,7 @@ class WalletSession : IDisposable {
         try {
             using let result = await Node.Api.JsonAsync("wallet/lock", WriteEmpty, ct)
             state = "Locked"
+            WalletLockScheduler.Cancel(settings)
             PublishEmpty()
         } catch (error WalletException) {
             if error.StatusCode == 503 {
@@ -672,6 +689,7 @@ class WalletSession : IDisposable {
                     throw error
                 }
             }
+            WalletLockScheduler.Cancel(settings)
         }
         managed = false
         state = "Unloaded"

@@ -23,22 +23,12 @@ class NodeSupervisor : IDisposable {
     var disposed bool
     var lease FileStream? = nil
     var nextStart DateTimeOffset
-    var termination PosixSignalRegistration? = nil
     var Progress Action[string]? = nil
     var Exited Action? = nil
     var Source string = "External"
     var Executable string = ""
     var Phase string = ""
     var DownloadPercent int32?
-
-    init() {
-        AppDomain.CurrentDomain.ProcessExit += OnProcessExit
-        if !OperatingSystem.IsWindows() {
-            termination = PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ -> Dispose())
-        }
-    }
-
-    private func OnProcessExit(sender Object?, args EventArgs) -> Dispose()
 
     prop NeedsRestart bool -> process != nil && !Owned
 
@@ -514,9 +504,6 @@ class NodeSupervisor : IDisposable {
             disposed = true
         }
         shutdown.Cancel()
-        termination?.Dispose()
-        termination = nil
-        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit
         Stop()
     }
 }
