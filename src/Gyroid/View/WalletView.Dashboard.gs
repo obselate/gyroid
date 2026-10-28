@@ -460,6 +460,8 @@ partial class WalletView {
                 screen = "Transactions"
                 if task.Result.Fee > 0 {
                     TraceSend(pending, task.Result)
+                } else {
+                    CloseTrace()
                 }
                 Refresh()
             }
