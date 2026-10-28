@@ -293,7 +293,7 @@ partial class WalletView : Cell {
         if page != lastPage {
             ClearSecrets()
             ClearTools()
-            traceResult = nil
+            CloseTrace()
             if lastPage == "Seed" {
                 ClearSeed()
             }

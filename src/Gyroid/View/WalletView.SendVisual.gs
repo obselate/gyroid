@@ -85,6 +85,7 @@ partial class WalletView {
     }
 
     private func CloseTrace() {
+        traceEstimate = nil
         traceResult = nil
         traceTimer?.Dispose()
         traceTimer = nil
