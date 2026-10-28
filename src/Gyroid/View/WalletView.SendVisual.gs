@@ -160,10 +160,15 @@ partial class WalletView {
             strip.Add(close)
             return strip
         }
-        let inputs = Math.Min(result.InputCount, 6)
+        let inputCount = if result.InputCount > 0 {
+            result.InputCount
+        } else {
+            estimate.InputCount
+        }
+        let inputs = Math.Min(inputCount, 6)
         let coins = Label(
-            String('◉', inputs) + if result.InputCount > inputs {
-                " +" + (result.InputCount - inputs).ToString()
+            String('◉', inputs) + if inputCount > inputs {
+                " +" + (inputCount - inputs).ToString()
             } else {
                 ""
             },
@@ -173,7 +178,7 @@ partial class WalletView {
         )
         let ring = Container{Gap: 2, MinWidth: 0, Overflow: Overflow.Hidden}
         let neon = []Color{lime, orange, pink, blue, mint, violet}
-        for row in 0 ... Math.Min(result.InputCount, 3) {
+        for row in 0 ... Math.Min(inputCount, 3) {
             let digits = Random(result.TxId.GetHashCode() + row)
             let glyphs = StringBuilder()
             let tints = List[TextStyleRange]()
@@ -194,8 +199,8 @@ partial class WalletView {
                 }
             )
         }
-        if result.InputCount > 3 {
-            ring.Add(Label("+" + (result.InputCount - 3).ToString(), 11, dim, ""))
+        if inputCount > 3 {
+            ring.Add(Label("+" + (inputCount - 3).ToString(), 11, dim, ""))
         }
         let outputs = Container{Gap: 2, Label("▶ " + Amount(estimate.Amount), 12, pink, "")}
         if result.Change > 0 {

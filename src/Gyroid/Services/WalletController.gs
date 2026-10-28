@@ -1635,7 +1635,7 @@ class WalletController : IDisposable {
                 txid,
                 WalletJson.Number(root, "fee"),
                 WalletJson.Number(root, "change"),
-                int32(WalletJson.Number(root, "input_count"))
+                int32(WalletJson.OptionalNumber(root, "input_count") ?? 0)
             )
             ClearPendingSend()
             return result
