@@ -33,3 +33,15 @@ class PendingSend {
         .ToUnixTimeSeconds() - Timestamp < 2592000
     var State string = "Send outcome unknown"
 }
+
+class SendOutcome(txId string = "", error string? = nil) {
+    let TxId string = txId
+    let Error string? = error
+    let Text string = if txId.Length > 0 {
+        "Submitted: " + txId
+    } else if let message = error {
+        "Send failed: " + message
+    } else {
+        ""
+    }
+}

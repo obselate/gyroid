@@ -128,11 +128,11 @@ class Cli {
                         Console.WriteLine("Sync height: " + height.ToString(CultureInfo.InvariantCulture))
                     }
                     Console.WriteLine("Wallet: " + wallet.Snapshot.State)
-                    if let pending = wallet.Pending {
+                    if let pending = wallet.Send.Pending {
                         Console.WriteLine("Pending send: " + pending.State)
                     }
-                    if wallet.SendOutcome.Length > 0 {
-                        Console.WriteLine(wallet.SendOutcome)
+                    if wallet.Send.Outcome.Text.Length > 0 {
+                        Console.WriteLine(wallet.Send.Outcome.Text)
                     }
                 } else if command == "unlock" || command == "load" {
                     if command == "load" {
@@ -193,20 +193,20 @@ class Cli {
                     return RunViewOnly(wallet, arguments)
                 } else if command == "send" {
                     if resume {
-                        if wallet.Pending == nil {
-                            if wallet.SendOutcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
-                                Console.WriteLine(wallet.SendOutcome)
+                        if wallet.Send.Pending == nil {
+                            if wallet.Send.Outcome.TxId.Length > 0 {
+                                Console.WriteLine(wallet.Send.Outcome.Text)
                                 return 0
                             }
                             throw WalletException(
-                                if wallet.SendOutcome.Length > 0 {
-                                    wallet.SendOutcome
+                                if wallet.Send.Outcome.Text.Length > 0 {
+                                    wallet.Send.Outcome.Text
                                 } else {
                                     "No pending send"
                                 }
                             )
                         }
-                        if wallet.Pending?.Retryable != true {
+                        if wallet.Send.Pending?.Retryable != true {
                             throw WalletException("Send outcome unknown. Resubmission is not available")
                         }
                         RequireTerminal()
@@ -217,12 +217,12 @@ class Cli {
                         if Console.ReadLine() != "resubmit" {
                             throw WalletException("Send cancelled")
                         }
-                        let result = wallet.ResumeSendAsync().GetAwaiter().GetResult()
+                        let result = wallet.Send.ResumeAsync().GetAwaiter().GetResult()
                         Console.WriteLine("Submitted: " + result.TxId)
                         return 0
                     }
                     wallet.RefreshAsync().GetAwaiter().GetResult()
-                    let estimate = wallet.EstimateAsync(arguments[2], arguments[3], memo).GetAwaiter().GetResult()
+                    let estimate = wallet.Send.EstimateAsync(arguments[2], arguments[3], memo).GetAwaiter().GetResult()
                     if estimate.Handle.Length > 0 {
                         Console.WriteLine("Blocknet ID: " + estimate.Handle)
                     }
@@ -236,7 +236,7 @@ class Cli {
                         if Console.ReadLine() != "send" {
                             throw WalletException("Send cancelled")
                         }
-                        let result = wallet.SubmitAsync(estimate).GetAwaiter().GetResult()
+                        let result = wallet.Send.SubmitAsync(estimate).GetAwaiter().GetResult()
                         Console.WriteLine("Submitted: " + result.TxId)
                     }
                 } else {
@@ -281,8 +281,8 @@ class Cli {
                         }
                     }
                 }
-                if (command == "status" || command == "balance") && wallet.PendingSendError.Length > 0 {
-                    Console.WriteLine(wallet.PendingSendError)
+                if (command == "status" || command == "balance") && wallet.Send.Error.Length > 0 {
+                    Console.WriteLine(wallet.Send.Error)
                 }
                 return 0
             } catch (error Exception) {

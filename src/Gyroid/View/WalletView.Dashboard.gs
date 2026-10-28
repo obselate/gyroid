@@ -78,7 +78,7 @@ partial class WalletView {
     private func Dashboard() Blob {
         let snapshot = wallet.Snapshot
         let content = Container{Gap: 16, FlexGrow: 1, FlexBasis: 0, MinHeight: 0}
-        if wallet.Pending != nil || wallet.SendOutcome.Length > 0 {
+        if wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0 {
             content.Add(PendingSendBanner())
         }
         content.Add(Balance(snapshot))
@@ -206,18 +206,18 @@ partial class WalletView {
     }
 
     private func PendingSendBanner() Blob {
-        let pending = wallet.Pending
+        let pending = wallet.Send.Pending
         let content = Glass()
         content.FlexShrink = 0
         content.Gap = 10
         content.Add(Label(strings.Get("Pending send"), 14, orange))
-        let outcome = wallet.SendOutcome
+        let outcome = wallet.Send.Outcome
         let message = if let value = pending {
             strings.Get(value.State)
-        } else if outcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
-            strings.Get("Submitted") + ": " + outcome.Substring(11)
+        } else if outcome.TxId.Length > 0 {
+            strings.Get("Submitted") + ": " + outcome.TxId
         } else {
-            strings.Get("Send failed") + ": " + outcome.Replace("Send failed: ", "")
+            strings.Get("Send failed") + ": " + (outcome.Error ?? "")
         }
         content.Add(Text{Content: message, FontFamily: font, FontSize: 13, Color: ink, TextWrap: TextWrap.Wrap})
         content.Add(
@@ -242,7 +242,7 @@ partial class WalletView {
     }
 
     private func ConfirmPendingSend() Blob {
-        let resume = wallet.Pending?.Retryable == true
+        let resume = wallet.Send.Pending?.Retryable == true
         let close Action = () -> {
             confirmPendingSend = false
             Rebuild()
@@ -280,9 +280,9 @@ partial class WalletView {
                 OnConfirm: () -> {
                     confirmPendingSend = false
                     if resume {
-                        Run(wallet.ResumeSendAsync(), () -> Refresh())
+                        Run(wallet.Send.ResumeAsync(), () -> Refresh())
                     } else {
-                        Run(wallet.DismissSendAsync())
+                        Run(wallet.Send.DismissAsync())
                     }
                 },
                 OnCancel: close,
@@ -292,11 +292,11 @@ partial class WalletView {
     }
 
     private func SendPanel() Blob {
-        if wallet.PendingSendError.Length > 0 {
+        if wallet.Send.Error.Length > 0 {
             let card = PageContent(strings.Get("send"), 640)
             card.Add(
                 Text{
-                    Content: Explain(wallet.PendingSendError),
+                    Content: Explain(wallet.Send.Error),
                     FontFamily: font,
                     FontSize: 13,
                     Color: orange,
@@ -305,7 +305,7 @@ partial class WalletView {
             )
             return card
         }
-        if wallet.Pending != nil || wallet.SendOutcome.Length > 0 {
+        if wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0 {
             let card = PageContent(strings.Get("send"), 640)
             card.Add(PendingSendBanner())
             return card
@@ -448,7 +448,7 @@ partial class WalletView {
         if Working() || address.Trim().Length == 0 || amount.Trim().Length == 0 {
             return
         }
-        let task = Task.Run(() -> wallet.EstimateAsync(address, amount, memo))
+        let task = Task.Run(() -> wallet.Send.EstimateAsync(address, amount, memo))
         Run(
             task,
             () -> {
@@ -465,7 +465,7 @@ partial class WalletView {
             return
         }
         estimate = nil
-        let task = Task.Run(() -> wallet.SubmitAsync(pending))
+        let task = Task.Run(() -> wallet.Send.SubmitAsync(pending))
         Run(
             task,
             () -> {
