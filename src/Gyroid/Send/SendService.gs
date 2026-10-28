@@ -57,18 +57,7 @@ class SendService {
             if NodeJson.Flag(walletAddress.RootElement, "view_only") {
                 throw WalletException("View-only wallets cannot send")
             }
-            let handles = [recipients.Length]string
-            for index in 0 ... recipients.Length {
-                handles[index] = ""
-                if recipients[index].Address.StartsWith("$", StringComparison.Ordinal) {
-                    let resolved = await BlocknetId.ResolveAsync(recipients[index].Address, ct)
-                    handles[index] = resolved.Handle
-                    recipients[index] = WalletRecipient{
-                        ... recipients[index],
-                        Address: WalletValidation.ValidateAddress(resolved.Address)
-                    }
-                }
-            }
+            let handles = await ResolveRecipientsAsync(recipients, ct)
             await Task.Delay(2000, ct)
             using let result = await session
                 .Node
@@ -94,6 +83,22 @@ class SendService {
         } finally {
             session.End()
         }
+    }
+
+    private async func ResolveRecipientsAsync(recipients[]WalletRecipient, ct CancellationToken)[]string {
+        let handles = [recipients.Length]string
+        for index in 0 ... recipients.Length {
+            handles[index] = ""
+            if recipients[index].Address.StartsWith("$", StringComparison.Ordinal) {
+                let resolved = await BlocknetId.ResolveAsync(recipients[index].Address, ct)
+                handles[index] = resolved.Handle
+                recipients[index] = WalletRecipient{
+                    ... recipients[index],
+                    Address: WalletValidation.ValidateAddress(resolved.Address)
+                }
+            }
+        }
+        return handles
     }
 
     private func Validate(requests[]WalletRecipient, spendable uint64)[]WalletRecipient {
@@ -140,6 +145,7 @@ class SendService {
                 reserved += other.Amount
             }
             let probe = others.Append(WalletRecipient{Address: address, Amount: 1, Memo: memo}).ToArray()
+            await ResolveRecipientsAsync(probe, ct)
             using let estimate = await session
                 .Node
                 .Api
@@ -166,7 +172,7 @@ class SendService {
                 throw WalletException("Amount and fee exceed spendable balance")
             }
             let maximum = available - reserved - fee
-            probe[probe.Length - 1] = WalletRecipient{Address: address, Amount: maximum, Memo: memo}
+            probe[probe.Length - 1] = WalletRecipient{... probe[probe.Length - 1], Amount: maximum}
             using let check = await session
                 .Node
                 .Api
