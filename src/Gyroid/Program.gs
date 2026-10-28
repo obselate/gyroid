@@ -109,6 +109,7 @@ func Main() {
     activationTarget = view
     let window = Window{
         Title: "Gyroid",
+        AccessibilityAdapter: NativeAccessibilityAdapter(),
         Width: int32(Option(arguments, "--width", 1280)),
         Height: int32(Option(arguments, "--height", 800)),
         MinWidth: 960,

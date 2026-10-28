@@ -13,6 +13,12 @@
           "Unicode.Bidi": "0.3.18"
         }
       },
+      "Goo.Accessibility": {
+        "type": "Direct",
+        "requested": "[0.22.3, 0.22.3]",
+        "resolved": "0.22.3",
+        "contentHash": "hnVU5DWSq64Uez/rb+T/z827r+1KXqPE9yY92jXocnJBTBjANlvbqvUWILQrv1DHUr/VcqUXMguy9ZbPm/D58w=="
+      },
       "Goo.Widgets": {
         "type": "Direct",
         "requested": "[0.16.1, 0.16.1]",
@@ -89,6 +95,12 @@
           "Tmds.DBus.Protocol": "0.95.1",
           "Unicode.Bidi": "0.3.18"
         }
+      },
+      "Goo.Accessibility": {
+        "type": "Direct",
+        "requested": "[0.22.3, 0.22.3]",
+        "resolved": "0.22.3",
+        "contentHash": "hnVU5DWSq64Uez/rb+T/z827r+1KXqPE9yY92jXocnJBTBjANlvbqvUWILQrv1DHUr/VcqUXMguy9ZbPm/D58w=="
       },
       "Microsoft.DotNet.ILCompiler": {
         "type": "Direct",
