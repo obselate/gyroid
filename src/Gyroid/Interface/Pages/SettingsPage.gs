@@ -178,12 +178,16 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             header.Add(ui.Badge(ui.Strings.Get("view-only"), ui.Blue, "key"))
         }
         let pane = Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MaxWidth: 820, MinHeight: 0, Gap: 12, header}
-        switch section {
-            case "security": pane.Add(Security(input, settings))
-            case "node": pane.Add(NodeSection(input, settings))
-            case "wallet": WalletSection(input, settings, pane)
-            case "advanced": Advanced(input, pane)
-            default: pane.Add(General(input, settings))
+        if section == "security" {
+            pane.Add(Security(input, settings))
+        } else if section == "node" {
+            pane.Add(NodeSection(input, settings))
+        } else if section == "wallet" {
+            WalletSection(input, settings, pane)
+        } else if section == "advanced" {
+            Advanced(input, pane)
+        } else {
+            pane.Add(General(input, settings))
         }
         let root = Container{
             FlexDirection: FlexDirection.Row,
@@ -763,8 +767,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             FlexShrink: 0
         }
         let wide = Math.Clamp(input.Height * 0.05, 22.0, 48.0)
+        var note = ""
         if let result = certificate {
             let clean = result.Violations.Length == 0
+            note = Violations(ui, result.Violations.Length)
             verdict.Add(
                 ui.Label(
                     clean ? ui.Strings.Get("clean"): Violations(ui, result.Violations.Length),
@@ -814,16 +820,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 AlignItems: AlignItems.Center,
                 Gap: 8,
                 FlexShrink: 0,
-                ui.Label(
-                    if let result = certificate {
-                        Violations(ui, result.Violations.Length)
-                    } else {
-                        ""
-                    },
-                    12.5,
-                    ui.Dim,
-                    ""
-                ),
+                ui.Label(note, 12.5, ui.Dim, ""),
                 Container{FlexGrow: 1},
                 ui.Button(
                     "Certify",
