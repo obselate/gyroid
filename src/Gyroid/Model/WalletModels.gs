@@ -150,3 +150,15 @@ class PendingSend {
         .ToUnixTimeSeconds() - Timestamp < 2592000
     var State string = "Send outcome unknown"
 }
+
+class WalletViewKeys : IDisposable {
+    var SpendPublic[]char = []char{}
+    var ViewPrivate[]char = []char{}
+    var ViewPublic[]char = []char{}
+
+    func Dispose() {
+        Array.Clear(SpendPublic)
+        Array.Clear(ViewPrivate)
+        Array.Clear(ViewPublic)
+    }
+}

@@ -37,6 +37,7 @@ class WalletController : IDisposable {
     var events CancellationTokenSource? = nil
     var eventsEnabled bool
     var nextRestart DateTimeOffset
+    var lastActivity int64 = Environment.TickCount64
 
     prop Settings WalletSettings -> settings.Copy()
     prop Snapshot WalletSnapshot -> snapshot
@@ -69,6 +70,7 @@ class WalletController : IDisposable {
         }
         PublishEmpty()
         PublishNode()
+        Task.Run(() -> AutoLockAsync())
     }
 
     private async func BeginAsync(ct CancellationToken) {
@@ -102,6 +104,36 @@ class WalletController : IDisposable {
         if !disposed {
             Changed?.Invoke()
         }
+    }
+
+    func Touch() {
+        Interlocked.Exchange(ref lastActivity, Environment.TickCount64)
+    }
+
+    private func IdleExpired() bool -> settings.AutoLockMinutes > 0 && Environment.TickCount64 - Interlocked.Read(
+        ref lastActivity
+    ) >= int64(settings.AutoLockMinutes) * 60000
+
+    private async func AutoLockAsync() {
+        let ct = shutdown.Token
+        using let timer = PeriodicTimer(TimeSpan.FromSeconds(1))
+        try {
+            while await timer.WaitForNextTickAsync(ct) {
+                if !managed || state != "Unlocked" || !IdleExpired() {
+                    continue
+                }
+                await BeginAsync(ct)
+                try {
+                    if managed && state == "Unlocked" && IdleExpired() {
+                        await LockCoreAsync(ct)
+                    }
+                } catch (error WalletException) {
+                    PublishEmpty()
+                } finally {
+                    End()
+                }
+            }
+        } catch (error OperationCanceledException) { }
     }
 
     func EnableEvents() {
@@ -236,6 +268,9 @@ class WalletController : IDisposable {
             await RefreshNodeCoreAsync(ct)
             try {
                 using let address = await rpc.JsonAsync("wallet/address", ct: ct)
+                if state != "Unlocked" {
+                    Touch()
+                }
                 state = "Unlocked"
             } catch (error WalletException) {
                 if error.StatusCode == 403 {
@@ -357,6 +392,20 @@ class WalletController : IDisposable {
             PublishEmpty()
             PublishNode()
             await ConnectCoreAsync(ct)
+        } finally {
+            End()
+        }
+    }
+
+    async func SaveAutoLockAsync(minutes int32, ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            let next = settings.Copy()
+            next.AutoLockMinutes = minutes
+            next.Validate()
+            await WalletSettings.SaveAsync(next, ct)
+            settings.AutoLockMinutes = minutes
+            Touch()
         } finally {
             End()
         }
@@ -647,6 +696,7 @@ class WalletController : IDisposable {
             )
             managed = true
             state = "Unlocked"
+            Touch()
             page = "Wallet"
             settings.ActiveWallet = filename
             PublishEmpty()
@@ -687,6 +737,7 @@ class WalletController : IDisposable {
             )
             managed = true
             state = "Unlocked"
+            Touch()
             page = "Wallet"
             settings.ActiveWallet = filename
             PublishEmpty()
@@ -727,6 +778,7 @@ class WalletController : IDisposable {
                 )
             }
             state = "Unlocked"
+            Touch()
             page = "Wallet"
             PublishEmpty()
             await RefreshCoreAsync(ct)
@@ -751,33 +803,37 @@ class WalletController : IDisposable {
             throw error
         }
         try {
-            StopEvents()
-            lockQueued = false
-            RequireManaged()
-            ClearSeed()
-            InvalidateConfirmation()
-            state = "Unknown"
-            page = "Unlock"
-            PublishEmpty()
-            Changed?.Invoke()
-            try {
-                using let result = await rpc.JsonAsync("wallet/lock", WriteEmpty, ct)
-                state = "Locked"
-                PublishEmpty()
-            } catch (error WalletException) {
-                if error.StatusCode == 503 {
-                    state = "Unloaded"
-                    managed = false
-                    page = "Welcome"
-                } else if error.StatusCode == 403 {
-                    state = "Locked"
-                }
-                PublishEmpty()
-                throw error
-            }
+            await LockCoreAsync(ct)
         } finally {
             lockQueued = false
             End()
+        }
+    }
+
+    private async func LockCoreAsync(ct CancellationToken) {
+        StopEvents()
+        lockQueued = false
+        RequireManaged()
+        ClearSeed()
+        InvalidateConfirmation()
+        state = "Unknown"
+        page = "Unlock"
+        PublishEmpty()
+        Changed?.Invoke()
+        try {
+            using let result = await rpc.JsonAsync("wallet/lock", WriteEmpty, ct)
+            state = "Locked"
+            PublishEmpty()
+        } catch (error WalletException) {
+            if error.StatusCode == 503 {
+                state = "Unloaded"
+                managed = false
+                page = "Welcome"
+            } else if error.StatusCode == 403 {
+                state = "Locked"
+            }
+            PublishEmpty()
+            throw error
         }
     }
 
@@ -858,6 +914,194 @@ class WalletController : IDisposable {
             await destination.FlushAsync(ct)
         } finally {
             Array.Clear(bytes)
+        }
+    }
+
+    async func RescanAsync(ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            Touch()
+            using let response = await rpc.JsonAsync("wallet/sync", WriteEmpty, ct)
+            while true {
+                using let balance = await rpc.JsonAsync("wallet/balance", ct: ct)
+                if WalletJson.Number(balance.RootElement, "synced_height") >=
+                WalletJson.Number(balance.RootElement, "chain_height") {
+                    break
+                }
+                await Task.Delay(500, ct)
+            }
+            await RefreshCoreAsync(ct)
+        } finally {
+            End()
+        }
+    }
+
+    async func SignAsync(message string, ct CancellationToken = default(CancellationToken)) string {
+        ValidateMessage(message)
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            Touch()
+            using let response = await rpc.JsonAsync(
+                "wallet/sign",
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteString("message", message)
+                    writer.WriteEndObject()
+                },
+                ct
+            )
+            return WalletJson.Text(response.RootElement, "signature")
+        } finally {
+            End()
+        }
+    }
+
+    async func VerifyAsync(
+        address string,
+        message string,
+        signature string,
+        ct CancellationToken = default(CancellationToken)
+    ) bool {
+        ValidateMessage(message)
+        await BeginAsync(ct)
+        try {
+            using let response = await rpc.JsonAsync(
+                "verify",
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteString("address", ValidateAddress(address))
+                    writer.WriteString("message", message)
+                    writer.WriteString("signature", signature)
+                    writer.WriteEndObject()
+                },
+                ct
+            )
+            return WalletJson.Flag(response.RootElement, "valid")
+        } finally {
+            End()
+        }
+    }
+
+    async func ProveAsync(txid string, ct CancellationToken = default(CancellationToken)) string {
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            Touch()
+            using let response = await rpc.JsonAsync(
+                "wallet/prove",
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteString("txid", txid)
+                    writer.WriteEndObject()
+                },
+                ct
+            )
+            return WalletJson.Text(response.RootElement, "tx_key")
+        } finally {
+            End()
+        }
+    }
+
+    async func VerifyProofAsync(
+        txid string,
+        txKey string,
+        address string,
+        amount string,
+        ct CancellationToken = default(CancellationToken)
+    ) bool {
+        let expected = WalletAmount.Parse(amount)
+        await BeginAsync(ct)
+        try {
+            using let response = await rpc.JsonAsync(
+                "verify-proof",
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteString("txid", txid)
+                    writer.WriteString("tx_key", txKey)
+                    writer.WriteString("address", ValidateAddress(address))
+                    writer.WriteEndObject()
+                },
+                ct
+            )
+            return WalletJson.Flag(response.RootElement, "valid") && WalletJson.Number(
+                response.RootElement,
+                "total_matched"
+            ) == expected
+        } finally {
+            End()
+        }
+    }
+
+    async func ExportViewKeysAsync(password[]char, ct CancellationToken = default(CancellationToken)) WalletViewKeys {
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            Touch()
+            return await rpc.ViewKeysAsync(password, "", []char{}, ct)
+        } finally {
+            End()
+        }
+    }
+
+    async func CreateViewOnlyAsync(
+        filename string,
+        password[]char,
+        filePassword[]char,
+        ct CancellationToken = default(CancellationToken)
+    ) {
+        await BeginAsync(ct)
+        try {
+            RequireUnlocked()
+            if !filename.EndsWith(".wallet.dat", StringComparison.Ordinal) {
+                throw WalletException("View-only file name must end in .wallet.dat")
+            }
+            RequireNewWallet(filename, filePassword)
+            if ReadOnlySpan[char](password).SequenceEqual(ReadOnlySpan[char](filePassword)) {
+                throw WalletException("View-only file password must differ from the wallet password")
+            }
+            Touch()
+            using let keys = await rpc.ViewKeysAsync(password, filename, filePassword, ct)
+        } finally {
+            End()
+        }
+    }
+
+    async func ImportViewOnlyAsync(
+        filename string,
+        spendPublic[]char,
+        viewPrivate[]char,
+        password[]char,
+        ct CancellationToken = default(CancellationToken)
+    ) {
+        await BeginAsync(ct)
+        try {
+            RequireUnloaded()
+            RequireNewWallet(filename, password)
+            await ConnectCoreAsync(ct)
+            using let response = await rpc.JsonAsync(
+                "wallet/import",
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteString("filename", filename)
+                    writer.WriteString("spend_pub", ReadOnlySpan[char](spendPublic))
+                    writer.WriteString("view_priv", ReadOnlySpan[char](viewPrivate))
+                    writer.WriteString("password", ReadOnlySpan[char](password))
+                    writer.WriteEndObject()
+                },
+                ct
+            )
+            managed = true
+            state = "Unlocked"
+            page = "Wallet"
+            Touch()
+            settings.ActiveWallet = filename
+            PublishEmpty()
+            await WalletSettings.SaveAsync(settings, ct)
+            await RefreshCoreAsync(ct)
+        } finally {
+            End()
         }
     }
 
@@ -1507,6 +1751,12 @@ class WalletController : IDisposable {
         let MemoLimit int32 = 124
         private let memoEncoding UTF8Encoding = UTF8Encoding(false, true)
         private let historyPage int32 = 50
+
+        private func ValidateMessage(message string) {
+            if message.Length == 0 || Encoding.UTF8.GetByteCount(message) > 1024 {
+                throw WalletException("Message must contain 1 to 1024 UTF-8 bytes")
+            }
+        }
 
         func ValidateAddress(address string) string {
             let recipient = address.Trim()

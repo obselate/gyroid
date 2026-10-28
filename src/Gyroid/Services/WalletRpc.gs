@@ -260,7 +260,7 @@ class WalletRpc : IDisposable {
         )
         try {
             try {
-                return ReadSeed(bytes)
+                return ReadSecret(bytes, "mnemonic")
             } catch (error JsonException) {
                 throw WalletException("Daemon returned an invalid recovery phrase response")
             }
@@ -269,10 +269,10 @@ class WalletRpc : IDisposable {
         }
     }
 
-    private func ReadSeed(bytes[]uint8)[]char {
+    private func ReadSecret(bytes[]uint8, name string)[]char {
         let reader = Utf8JsonReader(ReadOnlySpan[uint8](bytes), true, JsonReaderState())
         while reader.Read() {
-            if reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals("mnemonic") {
+            if reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals(name) {
                 if !reader.Read() || reader.TokenType != JsonTokenType.String {
                     break
                 }
@@ -287,7 +287,36 @@ class WalletRpc : IDisposable {
                 }
             }
         }
-        throw WalletException("Daemon returned no recovery phrase")
+        throw WalletException("Daemon returned no " + name)
+    }
+
+    async func ViewKeysAsync(password[]char, filename string, filePassword[]char, ct CancellationToken) WalletViewKeys {
+        let bytes = await BytesAsync(
+            "wallet/viewkeys",
+            writer -> {
+                writer.WriteStartObject()
+                writer.WriteString("password", ReadOnlySpan[char](password))
+                writer.WriteBoolean("create_file", filename.Length > 0)
+                if filename.Length > 0 {
+                    writer.WriteString("filename", filename)
+                    writer.WriteString("file_password", ReadOnlySpan[char](filePassword))
+                }
+                writer.WriteEndObject()
+            },
+            ct
+        )
+        let keys = WalletViewKeys()
+        try {
+            keys.SpendPublic = ReadSecret(bytes, "spend_pub")
+            keys.ViewPrivate = ReadSecret(bytes, "view_priv")
+            keys.ViewPublic = ReadSecret(bytes, "view_pub")
+            return keys
+        } catch (error Exception) {
+            keys.Dispose()
+            throw error
+        } finally {
+            Array.Clear(bytes)
+        }
     }
 
     func Dispose() {

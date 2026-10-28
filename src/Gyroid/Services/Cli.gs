@@ -20,6 +20,30 @@ class Cli {
                     (arguments[2] != "status" && arguments[2] != "start" && arguments[2] != "stop") {
                     return Usage(Console.Error)
                 }
+            } else if command == "settings" {
+                if arguments.Length != 2 && arguments.Length != 4 {
+                    return Usage(Console.Error)
+                }
+            } else if command == "sign" || command == "prove" || command == "load" {
+                if arguments.Length != 3 {
+                    return Usage(Console.Error)
+                }
+            } else if command == "verify" {
+                if arguments.Length != 5 {
+                    return Usage(Console.Error)
+                }
+            } else if command == "verify-proof" {
+                if arguments.Length != 6 {
+                    return Usage(Console.Error)
+                }
+            } else if command == "viewkeys" {
+                if arguments.Length != 3 || arguments[2] != "--show" {
+                    return Usage(Console.Error)
+                }
+            } else if command == "view-only" {
+                if arguments.Length != 4 || (arguments[2] != "create" && arguments[2] != "import") {
+                    return Usage(Console.Error)
+                }
             } else if command == "history" {
                 if arguments.Length != 2 &&
                     (
@@ -59,7 +83,9 @@ class Cli {
                     command != "balance" &&
                     command != "address" &&
                     command != "unlock" &&
-                    command != "lock"
+                    command != "lock" &&
+                    command != "unload" &&
+                    command != "rescan"
             ) {
                 return Usage(Console.Error)
             }
@@ -68,7 +94,8 @@ class Cli {
                 return 0
             }
             if command == "--version" {
-                let version = Assembly.GetExecutingAssembly().GetCustomAttribute[AssemblyInformationalVersionAttribute]()
+                let version = Assembly.GetExecutingAssembly()
+                    .GetCustomAttribute[AssemblyInformationalVersionAttribute]()
                 Console.WriteLine("Gyroid " + (version?.InformationalVersion ?? "unknown").Split('+')[0])
                 return 0
             }
@@ -81,6 +108,9 @@ class Cli {
                 if problem.Length > 0 {
                     Console.Error.WriteLine("Settings file not loaded: " + problem)
                     return 1
+                }
+                if command == "settings" {
+                    return RunSettings(wallet.Settings, arguments)
                 }
                 if command == "node" {
                     return RunNode(wallet, arguments[2])
@@ -105,7 +135,10 @@ class Cli {
                     if wallet.SendOutcome.Length > 0 {
                         Console.WriteLine(wallet.SendOutcome)
                     }
-                } else if command == "unlock" {
+                } else if command == "unlock" || command == "load" {
+                    if command == "load" {
+                        wallet.ChooseWalletAsync(arguments[2]).GetAwaiter().GetResult()
+                    }
                     let password = ReadPassword()
                     try {
                         wallet.UnlockAsync(password).GetAwaiter().GetResult()
@@ -116,6 +149,49 @@ class Cli {
                 } else if command == "lock" {
                     wallet.LockAsync().GetAwaiter().GetResult()
                     Console.WriteLine("Wallet locked")
+                } else if command == "unload" {
+                    wallet.UnloadAsync().GetAwaiter().GetResult()
+                    Console.WriteLine("Wallet unloaded")
+                } else if command == "rescan" {
+                    wallet.RescanAsync().GetAwaiter().GetResult()
+                    Console.WriteLine("Wallet rescan complete")
+                } else if command == "sign" {
+                    Console.WriteLine(wallet.SignAsync(arguments[2]).GetAwaiter().GetResult())
+                } else if command == "verify" {
+                    let valid = wallet.VerifyAsync(arguments[2], arguments[3], arguments[4]).GetAwaiter().GetResult()
+                    Console.WriteLine(
+                        if valid {
+                            "Signature valid"
+                        } else {
+                            "Signature invalid"
+                        }
+                    )
+                    return if valid {
+                        0
+                    } else {
+                        1
+                    }
+                } else if command == "prove" {
+                    Console.WriteLine(wallet.ProveAsync(arguments[2]).GetAwaiter().GetResult())
+                } else if command == "verify-proof" {
+                    let valid = wallet
+                        .VerifyProofAsync(arguments[2], arguments[3], arguments[4], arguments[5])
+                        .GetAwaiter()
+                        .GetResult()
+                    Console.WriteLine(
+                        if valid {
+                            "Payment proof valid"
+                        } else {
+                            "Payment proof invalid"
+                        }
+                    )
+                    return if valid {
+                        0
+                    } else {
+                        1
+                    }
+                } else if command == "viewkeys" || command == "view-only" {
+                    return RunViewOnly(wallet, arguments)
                 } else if command == "send" {
                     if resume {
                         if wallet.Pending == nil {
@@ -213,6 +289,77 @@ class Cli {
             }
         }
 
+        private func RunViewOnly(wallet WalletController, arguments[]string) int32 {
+            if arguments[1] == "viewkeys" {
+                RequireTerminal()
+                if Console.IsOutputRedirected {
+                    throw WalletException("View keys can only be shown on a terminal")
+                }
+                let password = ReadPassword()
+                try {
+                    using let keys = wallet.ExportViewKeysAsync(password).GetAwaiter().GetResult()
+                    Console.Write("Spend public key: ")
+                    Console.WriteLine(keys.SpendPublic)
+                    Console.Write("View private key: ")
+                    Console.WriteLine(keys.ViewPrivate)
+                    Console.Write("View public key: ")
+                    Console.WriteLine(keys.ViewPublic)
+                } finally {
+                    Array.Clear(password)
+                }
+            } else if arguments[2] == "create" {
+                let password = ReadPassword()
+                try {
+                    let filePassword = ReadPassword("View-only file password: ")
+                    try {
+                        wallet.CreateViewOnlyAsync(arguments[3], password, filePassword).GetAwaiter().GetResult()
+                    } finally {
+                        Array.Clear(filePassword)
+                    }
+                } finally {
+                    Array.Clear(password)
+                }
+                Console.WriteLine("View-only wallet file created")
+            } else {
+                let spendPublic = ReadPassword("Spend public key: ")
+                try {
+                    let viewPrivate = ReadPassword("View private key: ")
+                    try {
+                        let password = ReadPassword("View-only file password: ")
+                        try {
+                            wallet
+                                .ImportViewOnlyAsync(arguments[3], spendPublic, viewPrivate, password)
+                                .GetAwaiter()
+                                .GetResult()
+                        } finally {
+                            Array.Clear(password)
+                        }
+                    } finally {
+                        Array.Clear(viewPrivate)
+                    }
+                } finally {
+                    Array.Clear(spendPublic)
+                }
+                Console.WriteLine("View-only wallet imported")
+            }
+            return 0
+        }
+
+        private func RunSettings(settings WalletSettings, arguments[]string) int32 {
+            if arguments.Length == 4 {
+                if arguments[2] != "auto-lock" {
+                    return Usage(Console.Error)
+                }
+                if !Int32.TryParse(arguments[3], NumberStyles.None, CultureInfo.InvariantCulture, out let minutes) {
+                    throw WalletException("Auto-lock minutes must be zero or greater")
+                }
+                settings.AutoLockMinutes = minutes
+                WalletSettings.SaveAsync(settings, default(CancellationToken)).GetAwaiter().GetResult()
+            }
+            Console.WriteLine("Auto-lock minutes: " + settings.AutoLockMinutes.ToString(CultureInfo.InvariantCulture))
+            return 0
+        }
+
         private func RunNode(wallet WalletController, action string) int32 {
             if action == "start" {
                 wallet.StartNodeAsync().GetAwaiter().GetResult()
@@ -268,9 +415,9 @@ class Cli {
             }
         }
 
-        private func ReadPassword()[]char {
+        private func ReadPassword(prompt string = "Password: ")[]char {
             RequireTerminal()
-            Console.Error.Write("Password: ")
+            Console.Error.Write(prompt)
             var buffer = [64]char
             var length = 0
             let previous = Console.TreatControlCAsInput
@@ -316,6 +463,12 @@ class Cli {
             writer.WriteLine("       gyroid history [--limit N]")
             writer.WriteLine("       gyroid send <address> <amount> [--memo TEXT] [--dry-run]")
             writer.WriteLine("       gyroid send --resume")
+            writer.WriteLine("       gyroid rescan | unload | load <filename.dat>")
+            writer.WriteLine("       gyroid sign <message> | verify <address> <message> <signature>")
+            writer.WriteLine("       gyroid prove <txid> | verify-proof <txid> <tx-key> <address> <amount>")
+            writer.WriteLine("       gyroid viewkeys --show")
+            writer.WriteLine("       gyroid view-only create <filename.wallet.dat> | import <filename.dat>")
+            writer.WriteLine("       gyroid settings [auto-lock <minutes>]")
             return 2
         }
     }

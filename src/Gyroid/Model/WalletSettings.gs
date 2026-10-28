@@ -22,6 +22,7 @@ class WalletSettings {
     var NodeMode string = "automatic"
     var Language string = ""
     var Privacy bool
+    var AutoLockMinutes int32
     var OwnedProcessId int32
     var DiscoveredDataDirectory string = ""
     var DiscoveredEndpoint string = ""
@@ -41,6 +42,7 @@ class WalletSettings {
         NodeMode: NodeMode,
         Language: Language,
         Privacy: Privacy,
+        AutoLockMinutes: AutoLockMinutes,
         DiscoveredDataDirectory: DiscoveredDataDirectory,
         DiscoveredEndpoint: DiscoveredEndpoint,
         DiscoveredBinaryPath: DiscoveredBinaryPath,
@@ -66,6 +68,9 @@ class WalletSettings {
         }
         if Language != "" && Language != "en" && Language != "zh-Hans" {
             throw WalletException("Language must be en or zh-Hans")
+        }
+        if AutoLockMinutes < 0 {
+            throw WalletException("Auto-lock minutes must be zero or greater")
         }
         if !Uri.TryCreate(Endpoint, UriKind.Absolute, out let endpoint) ||
             endpoint == nil ||
@@ -385,6 +390,15 @@ class WalletSettings {
                     settings.NodeMode = WalletJson.Text(root, "node_mode", "automatic")
                     settings.Language = WalletJson.Text(root, "language")
                     settings.Privacy = WalletJson.Flag(root, "privacy")
+                    if root.TryGetProperty("auto_lock_minutes", out let minutes) {
+                        settings.AutoLockMinutes = if minutes.ValueKind == JsonValueKind.Number && minutes.TryGetInt32(
+                            out let value
+                        ) {
+                            value
+                        } else {
+                            -1
+                        }
+                    }
                 }
             } catch (error Exception) {
                 if !(error is IOException) &&
@@ -468,6 +482,7 @@ class WalletSettings {
                 WriteSetting(writer, root, "node_mode", "GYROID_NODE_MODE", settings.NodeMode)
                 writer.WriteString("language", settings.Language)
                 writer.WriteBoolean("privacy", settings.Privacy)
+                writer.WriteNumber("auto_lock_minutes", settings.AutoLockMinutes)
                 writer.WriteEndObject()
                 await writer.FlushAsync(ct)
                 writer.Dispose()
