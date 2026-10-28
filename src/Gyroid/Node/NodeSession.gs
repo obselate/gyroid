@@ -90,11 +90,7 @@ class NodeSession : IDisposable {
                 Source: Supervisor.Source,
                 Owned: Supervisor.Owned,
                 Running: true,
-                Version: if Supervisor.Owned {
-                    CoreRelease.Version
-                } else {
-                    ""
-                },
+                Version: CoreRelease.Version,
                 Network: Settings.Network,
                 Height: NodeJson.Number(root, "chain_height"),
                 ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),
