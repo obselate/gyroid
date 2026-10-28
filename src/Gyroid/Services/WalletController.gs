@@ -1591,7 +1591,7 @@ class WalletController : IDisposable {
             } else if status == "not_found" && state == "Unlocked" {
                 pending.State = "No send record. Outcome unknown"
                 pending.CanRetry = if pending.CoreStarted > 0 {
-                    pending.CoreStarted == rpc.ListenerStarted
+                    Math.Abs(pending.CoreStarted - rpc.ListenerStarted) < TimeSpan.TicksPerSecond
                 } else {
                     rpc.ListenerStarted < DateTimeOffset.FromUnixTimeSeconds(pending.Timestamp)
                         .UtcTicks +
