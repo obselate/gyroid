@@ -44,15 +44,11 @@ class HistoryService {
         }
         historyOffset = 0
         var more = await ReadHistoryAsync(outputs, keys, sentTransactions, ct)
-        if historyTotal == cachedTotal && sends.Length == knownSendCount {
+        if historyTotal == cachedTotal && sends.Length == knownSendCount && keys.Keys.All(
+            (key string) -> receivedPositions.ContainsKey(key)
+        ) {
             for output in outputs {
-                let key = output.TxId + ":" + output.OutputIndex.ToString()
-                if receivedPositions.TryGetValue(key, out let index) {
-                    received[index] = output
-                } else {
-                    receivedPositions.Add(key, received.Count)
-                    received.Add(output)
-                }
+                received[receivedPositions[output.TxId + ":" + output.OutputIndex.ToString()]] = output
             }
         } else {
             while more {
