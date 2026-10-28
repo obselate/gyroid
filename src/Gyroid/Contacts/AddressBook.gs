@@ -1,6 +1,7 @@
 package Gyroid.Contacts
 
 import Gyroid.Model
+import Gyroid.Platform
 import Gyroid.Services
 import System
 import System.Collections.Generic
@@ -22,7 +23,7 @@ class AddressBook {
                 return contacts
             }
             try {
-                using let json = JsonDocument.Parse(WalletFiles.ReadText(path, 1048576))
+                using let json = JsonDocument.Parse(PrivateFiles.ReadText(path, 1048576))
                 for entry in json.RootElement.EnumerateObject() {
                     contacts[entry.Name] = WalletValidation.ValidateDestination(entry.Value.GetString() ?? "")
                 }
@@ -37,7 +38,7 @@ class AddressBook {
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "")
             let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
             try {
-                using let stream = WalletFiles.CreatePrivate(temporary)
+                using let stream = PrivateFiles.CreatePrivate(temporary)
                 using let writer = Utf8JsonWriter(stream)
                 writer.WriteStartObject()
                 for (name, address) in contacts {

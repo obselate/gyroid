@@ -3,6 +3,8 @@ package Gyroid
 import Goo
 import Goo.Widgets.Layout
 import Gyroid.Model
+import Gyroid.Node
+import Gyroid.Platform
 import Gyroid.Services
 import Gyroid.View
 import System
@@ -18,7 +20,7 @@ func FreeConsole() int32;
 func Main() {
     let arguments = Environment.GetCommandLineArgs()
     if OperatingSystem.IsWindows() && arguments.Length >= 3 && arguments[1] == "--owned-core" {
-        Environment.ExitCode = WalletCore.RunWindows(arguments)
+        Environment.ExitCode = OwnedCoreWrapper.RunWindows(arguments)
         return
     }
     if arguments.Length > 1 && arguments[1] != "--width" && arguments[1] != "--height" && arguments[1] != "--scale" {
@@ -72,7 +74,7 @@ func Main() {
         ResizeBand: 6,
         Transparent: true,
         Background: Color.Transparent,
-        IconPng: WalletView.Resource("Gyroid.Icon.png"),
+        IconPng: Resources.Resource("Gyroid.Icon.png"),
         Root: view
     }
     if Array.IndexOf(arguments, "--scale") >= 0 {

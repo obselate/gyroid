@@ -1,6 +1,7 @@
 package Gyroid.Services
 
 import Gyroid.Model
+import Gyroid.Node
 import System
 import System.Globalization
 import System.IO
@@ -120,12 +121,10 @@ class Cli {
                     let root = status.RootElement
                     Console.WriteLine("Node: reachable")
                     Console.WriteLine(
-                        "Chain height: " + WalletJson.Number(root, "chain_height").ToString(
-                            CultureInfo.InvariantCulture
-                        )
+                        "Chain height: " + NodeJson.Number(root, "chain_height").ToString(CultureInfo.InvariantCulture)
                     )
-                    Console.WriteLine("Syncing: " + WalletJson.Flag(root, "syncing").ToString())
-                    if let height = WalletJson.OptionalNumber(root, "sync_progress") {
+                    Console.WriteLine("Syncing: " + NodeJson.Flag(root, "syncing").ToString())
+                    if let height = NodeJson.OptionalNumber(root, "sync_progress") {
                         Console.WriteLine("Sync height: " + height.ToString(CultureInfo.InvariantCulture))
                     }
                     Console.WriteLine("Wallet: " + wallet.Snapshot.State)

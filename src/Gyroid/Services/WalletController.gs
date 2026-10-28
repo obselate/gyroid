@@ -1,6 +1,8 @@
 package Gyroid.Services
 
 import Gyroid.Model
+import Gyroid.Node
+import Gyroid.Platform
 import System
 import System.Collections.Generic
 import System.IO
@@ -12,8 +14,8 @@ import System.Threading.Tasks
 
 class WalletController : IDisposable {
     var settings WalletSettings
-    var rpc WalletRpc
-    let daemon WalletDaemon = WalletDaemon()
+    var rpc NodeApi
+    let daemon NodeSupervisor = NodeSupervisor()
     let gate SemaphoreSlim = SemaphoreSlim(1, 1)
     let autoLockChanged SemaphoreSlim = SemaphoreSlim(0, 1)
     var snapshot WalletSnapshot = WalletSnapshot()
@@ -50,7 +52,7 @@ class WalletController : IDisposable {
 
     init() {
         settings = WalletSettings.Load()
-        rpc = WalletRpc(settings)
+        rpc = NodeApi(settings)
         daemon.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         daemon.Progress = value -> {
             nodeStatus.Progress = value
@@ -229,7 +231,7 @@ class WalletController : IDisposable {
                 }
                 nextRestart = DateTimeOffset.UtcNow.AddSeconds(10)
                 rpc.Dispose()
-                rpc = WalletRpc(settings)
+                rpc = NodeApi(settings)
                 await ConnectCoreAsync(ct)
                 UpdateEvents()
             } finally {
@@ -252,11 +254,11 @@ class WalletController : IDisposable {
             await daemon.ConnectAsync(settings, ct)
             if endpoint != settings.Endpoint {
                 rpc.Dispose()
-                rpc = WalletRpc(settings)
+                rpc = NodeApi(settings)
             }
             using let health = await rpc.JsonAsync("health", ct: ct)
             using let configuration = await rpc.JsonAsync("settings", ct: ct)
-            let walletFile = WalletJson.Text(configuration.RootElement.GetProperty("settings"), "wallet_file")
+            let walletFile = NodeJson.Text(configuration.RootElement.GetProperty("settings"), "wallet_file")
             if !Path.IsPathFullyQualified(walletFile) {
                 throw WalletException(
                     "Core wallet_file must be an absolute path. Configure the external daemon explicitly"
@@ -388,7 +390,7 @@ class WalletController : IDisposable {
             }
             rpc.Dispose()
             settings = next
-            rpc = WalletRpc(settings)
+            rpc = NodeApi(settings)
             connected = false
             page = if settings.ActiveWallet.Length == 0 {
                 "Welcome"
@@ -497,7 +499,7 @@ class WalletController : IDisposable {
         StopEvents()
         settings.OwnedProcessId = 0
         rpc.Dispose()
-        rpc = WalletRpc(settings)
+        rpc = NodeApi(settings)
         connected = false
         PublishEmpty()
         PublishNode()
@@ -514,7 +516,7 @@ class WalletController : IDisposable {
             }
             if endpoint != settings.Endpoint {
                 rpc.Dispose()
-                rpc = WalletRpc(settings)
+                rpc = NodeApi(settings)
             }
             await RefreshNodeCoreAsync(ct)
         } catch (error Exception) {
@@ -544,18 +546,18 @@ class WalletController : IDisposable {
                 Running: true,
                 Version: "0.22.0",
                 Network: settings.Network,
-                Height: WalletJson.Number(root, "chain_height"),
-                ChainHeight: WalletJson.OptionalNumber(root, "sync_target") ?? WalletJson.Number(root, "chain_height"),
-                Syncing: WalletJson.Flag(root, "syncing"),
-                SyncProgress: WalletJson.OptionalNumber(root, "sync_progress"),
-                Peers: WalletJson.Number(root, "peers"),
+                Height: NodeJson.Number(root, "chain_height"),
+                ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),
+                Syncing: NodeJson.Flag(root, "syncing"),
+                SyncProgress: NodeJson.OptionalNumber(root, "sync_progress"),
+                Peers: NodeJson.Number(root, "peers"),
                 Endpoint: settings.Endpoint,
                 DataDirectory: settings.DataDirectory,
                 Executable: daemon.Executable,
                 Progress: nodeStatus.Progress,
                 Phase: if daemon.Phase.Length > 0 {
                     daemon.Phase
-                } else if WalletJson.Flag(root, "syncing") {
+                } else if NodeJson.Flag(root, "syncing") {
                     "ChainSync"
                 } else {
                     ""
@@ -565,9 +567,9 @@ class WalletController : IDisposable {
             if settings.Network == "mainnet" && root.TryGetProperty("network_upgrade", out let upgrade) &&
                 upgrade.ValueKind == JsonValueKind
                 .Object {
-                current.UpgradeDate = WalletJson.Text(upgrade, "date")
-                current.UpgradeDeadline = WalletJson.Text(upgrade, "migration_deadline")
-                current.UpgradeNotice = WalletJson.Text(upgrade, "notice")
+                current.UpgradeDate = NodeJson.Text(upgrade, "date")
+                current.UpgradeDeadline = NodeJson.Text(upgrade, "migration_deadline")
+                current.UpgradeNotice = NodeJson.Text(upgrade, "notice")
                 current.UpgradeBlocksLeft = if current.Height < 103680 {
                     103680 - current.Height
                 } else {
@@ -658,14 +660,14 @@ class WalletController : IDisposable {
                 if !Path.IsPathFullyQualified(absolutePath) || !File.Exists(absolutePath) {
                     throw WalletException("Choose an existing wallet file with an absolute path")
                 }
-                using let input = WalletFiles.OpenRead(absolutePath)
+                using let input = PrivateFiles.OpenRead(absolutePath)
                 let filename = Path.GetFileName(absolutePath)
                 let destination = WalletPath(filename)
                 if Path.GetFullPath(absolutePath) != Path.GetFullPath(destination) {
                     Directory.CreateDirectory(settings.WalletDirectory)
                     let temporary = Path.Combine(settings.WalletDirectory, ".import-" + Guid.NewGuid().ToString("N"))
                     try {
-                        using let output = WalletFiles.CreatePrivate(temporary)
+                        using let output = PrivateFiles.CreatePrivate(temporary)
                         await input.CopyToAsync(output, ct)
                         await output.FlushAsync(ct)
                         output.Dispose()
@@ -941,8 +943,8 @@ class WalletController : IDisposable {
                 if state != "Unlocked" || disposed {
                     return
                 }
-                if WalletJson.Number(balance.RootElement, "synced_height") >=
-                WalletJson.Number(balance.RootElement, "chain_height") {
+                if NodeJson.Number(balance.RootElement, "synced_height") >=
+                NodeJson.Number(balance.RootElement, "chain_height") {
                     await RefreshAsync(token)
                     return
                 }
@@ -970,7 +972,7 @@ class WalletController : IDisposable {
                 },
                 ct
             )
-            return WalletJson.Text(response.RootElement, "signature")
+            return NodeJson.Text(response.RootElement, "signature")
         } finally {
             End()
         }
@@ -996,7 +998,7 @@ class WalletController : IDisposable {
                 },
                 ct
             )
-            return WalletJson.Flag(response.RootElement, "valid")
+            return NodeJson.Flag(response.RootElement, "valid")
         } catch (error WalletException) {
             if error.StatusCode == 400 {
                 return false
@@ -1021,7 +1023,7 @@ class WalletController : IDisposable {
                 },
                 ct
             )
-            return WalletJson.Text(response.RootElement, "tx_key")
+            return NodeJson.Text(response.RootElement, "tx_key")
         } finally {
             End()
         }
@@ -1048,7 +1050,7 @@ class WalletController : IDisposable {
                 },
                 ct
             )
-            return WalletJson.Flag(response.RootElement, "valid") && WalletJson.Number(
+            return NodeJson.Flag(response.RootElement, "valid") && NodeJson.Number(
                 response.RootElement,
                 "total_matched"
             ) == expected
@@ -1138,7 +1140,7 @@ class WalletController : IDisposable {
         try {
             if daemon.NeedsRestart && settings.NodeMode != "manual" {
                 rpc.Dispose()
-                rpc = WalletRpc(settings)
+                rpc = NodeApi(settings)
                 ClearSeed()
                 InvalidateConfirmation()
                 await ConnectCoreAsync(ct)
@@ -1161,14 +1163,14 @@ class WalletController : IDisposable {
             using let address = await rpc.JsonAsync("wallet/address", ct: ct)
             let sends = await ReadSendsAsync(ct)
             let root = balance.RootElement
-            let change = WalletJson.OptionalNumber(root, "pending_unconfirmed") ?? 0
+            let change = NodeJson.OptionalNumber(root, "pending_unconfirmed") ?? 0
             let amounts = WalletBalance{
-                Scanning: WalletJson.Flag(root, "scanning"),
-                ScanHeight: WalletJson.Number(root, "synced_height"),
-                ChainHeight: WalletJson.Number(root, "chain_height"),
-                Balance: WalletJson.OptionalNumber(root, "total") + change,
-                Spendable: WalletJson.OptionalNumber(root, "spendable"),
-                Pending: WalletJson.OptionalNumber(root, "pending") + change,
+                Scanning: NodeJson.Flag(root, "scanning"),
+                ScanHeight: NodeJson.Number(root, "synced_height"),
+                ChainHeight: NodeJson.Number(root, "chain_height"),
+                Balance: NodeJson.OptionalNumber(root, "total") + change,
+                Spendable: NodeJson.OptionalNumber(root, "spendable"),
+                Pending: NodeJson.OptionalNumber(root, "pending") + change,
             }
             let outputs = List[WalletOutput]()
             let wanted = Math.Max(historyPage, historyOffset)
@@ -1181,8 +1183,8 @@ class WalletController : IDisposable {
                 Page: page,
                 State: state,
                 Connected: connected,
-                Address: WalletJson.Text(address.RootElement, "address"),
-                ViewOnly: WalletJson.Flag(address.RootElement, "view_only"),
+                Address: NodeJson.Text(address.RootElement, "address"),
+                ViewOnly: NodeJson.Flag(address.RootElement, "view_only"),
                 Balance: amounts,
                 History: outputs.ToArray(),
                 HistoryTotal: historyTotal,
@@ -1227,21 +1229,21 @@ class WalletController : IDisposable {
             outputs.Select((output WalletOutput) -> output.TxId + ":" + output.OutputIndex.ToString())
         )
         for row in rows.EnumerateArray() {
-            let hex = WalletJson.Text(row, "memo_hex")
+            let hex = NodeJson.Text(row, "memo_hex")
             let output = WalletOutput{
-                TxId: WalletJson.Text(row, "txid"),
-                OutputIndex: int32(WalletJson.Number(row, "output_index")),
-                Amount: WalletJson.Number(row, "amount"),
-                BlockHeight: WalletJson.Number(row, "block_height"),
-                Spent: WalletJson.Flag(row, "spent"),
-                Memo: WalletJson.Memo(hex)
+                TxId: NodeJson.Text(row, "txid"),
+                OutputIndex: int32(NodeJson.Number(row, "output_index")),
+                Amount: NodeJson.Number(row, "amount"),
+                BlockHeight: NodeJson.Number(row, "block_height"),
+                Spent: NodeJson.Flag(row, "spent"),
+                Memo: NodeJson.Memo(hex)
             }
             if keys.Add(output.TxId + ":" + output.OutputIndex.ToString()) {
                 outputs.Add(output)
             }
         }
         historyOffset += rows.GetArrayLength()
-        historyTotal = WalletJson.Number(root, "total")
+        historyTotal = NodeJson.Number(root, "total")
         return rows.GetArrayLength() > 0 && uint64(historyOffset) < historyTotal
     }
 
@@ -1267,13 +1269,13 @@ class WalletController : IDisposable {
             using let response = await rpc.JsonAsync("tx/" + Uri.EscapeDataString(txid), ct: ct)
             let root = response.RootElement
             let details = TransactionDetails{
-                Height: WalletJson.OptionalNumber(root, "block_height") ?? uint64(0),
-                Confirmations: WalletJson.Number(root, "confirmations"),
-                InMempool: WalletJson.Flag(root, "in_mempool")
+                Height: NodeJson.OptionalNumber(root, "block_height") ?? uint64(0),
+                Confirmations: NodeJson.Number(root, "confirmations"),
+                InMempool: NodeJson.Flag(root, "in_mempool")
             }
             if details.Height > 0 {
                 using let block = await rpc.JsonAsync("block/" + details.Height.ToString(), ct: ct)
-                details.Timestamp = WalletJson.Signed(block.RootElement, "timestamp")
+                details.Timestamp = NodeJson.Signed(block.RootElement, "timestamp")
             }
             return details
         } finally {
@@ -1294,30 +1296,30 @@ class WalletController : IDisposable {
             for row in rows.EnumerateArray() {
                 let recipients = List[WalletRecipient]()
                 for recipient in row.GetProperty("recipients").EnumerateArray() {
-                    let hex = WalletJson.Text(recipient, "memo_hex")
+                    let hex = NodeJson.Text(recipient, "memo_hex")
                     recipients.Add(
                         WalletRecipient{
-                            Address: WalletJson.Text(recipient, "address"),
-                            Amount: WalletJson.Number(recipient, "amount"),
-                            Memo: WalletJson.Memo(hex)
+                            Address: NodeJson.Text(recipient, "address"),
+                            Amount: NodeJson.Number(recipient, "amount"),
+                            Memo: NodeJson.Memo(hex)
                         }
                     )
                 }
                 sends.Add(
                     WalletSend{
-                        TxId: WalletJson.Text(row, "txid"),
-                        Timestamp: WalletJson.Signed(row, "timestamp"),
-                        RecordedHeight: WalletJson.Number(row, "recorded_height"),
-                        Status: WalletJson.Text(row, "chain_state"),
-                        Confirmations: WalletJson.Number(row, "confirmations"),
-                        Fee: WalletJson.Number(row, "fee"),
-                        Amount: WalletJson.Number(row, "total_amount"),
+                        TxId: NodeJson.Text(row, "txid"),
+                        Timestamp: NodeJson.Signed(row, "timestamp"),
+                        RecordedHeight: NodeJson.Number(row, "recorded_height"),
+                        Status: NodeJson.Text(row, "chain_state"),
+                        Confirmations: NodeJson.Number(row, "confirmations"),
+                        Fee: NodeJson.Number(row, "fee"),
+                        Amount: NodeJson.Number(row, "total_amount"),
                         Recipients: recipients.ToArray()
                     }
                 )
             }
             offset = offset + rows.GetArrayLength()
-            if uint64(offset) >= WalletJson.Number(root, "total") {
+            if uint64(offset) >= NodeJson.Number(root, "total") {
                 return sends.ToArray()
             }
             if rows.GetArrayLength() == 0 {
@@ -1344,7 +1346,7 @@ class WalletController : IDisposable {
                 snapshot.Balance?.Spendable ?? throw WalletException("Spendable balance is unavailable")
             )
             using let walletAddress = await rpc.JsonAsync("wallet/address", ct: ct)
-            if WalletJson.Flag(walletAddress.RootElement, "view_only") {
+            if NodeJson.Flag(walletAddress.RootElement, "view_only") {
                 throw WalletException("View-only wallets cannot send")
             }
             var handle = ""
@@ -1361,12 +1363,12 @@ class WalletController : IDisposable {
                 ct
             )
             let root = result.RootElement
-            if !WalletJson.Flag(root, "dry_run") {
+            if !NodeJson.Flag(root, "dry_run") {
                 throw WalletException("Daemon did not return a dry-run estimate")
             }
-            let fee = WalletJson.Number(root, "fee")
-            let inputTotal = WalletJson.Number(root, "input_total")
-            let change = WalletJson.Number(root, "change")
+            let fee = NodeJson.Number(root, "fee")
+            let inputTotal = NodeJson.Number(root, "input_total")
+            let change = NodeJson.Number(root, "change")
             if request.Amount > uint64.MaxValue - fee ||
                 inputTotal < change ||
                 inputTotal - change != request.Amount +
@@ -1383,7 +1385,7 @@ class WalletController : IDisposable {
                 request.Amount,
                 request.Memo,
                 fee,
-                int32(WalletJson.Number(root, "input_count")),
+                int32(NodeJson.Number(root, "input_count")),
                 handle
             )
             confirmation = estimate
@@ -1415,7 +1417,7 @@ class WalletController : IDisposable {
             let key = confirmationKey
             InvalidateConfirmation()
             using let walletAddress = await rpc.JsonAsync("wallet/address", ct: ct)
-            if WalletJson.Flag(walletAddress.RootElement, "view_only") {
+            if NodeJson.Flag(walletAddress.RootElement, "view_only") {
                 throw WalletException("View-only wallets cannot send")
             }
             using let body = MemoryStream()
@@ -1467,19 +1469,19 @@ class WalletController : IDisposable {
         if settings.ActiveWallet.Length == 0 || !File.Exists(PendingSendPath()) {
             return
         }
-        using let json = JsonDocument.Parse(WalletFiles.ReadText(PendingSendPath(), 16384, true))
+        using let json = JsonDocument.Parse(PrivateFiles.ReadText(PendingSendPath(), 16384, true))
         let root = json.RootElement
         var coreStarted int64 = 0
         if root.TryGetProperty("core_started", out let started) {
             coreStarted = started.GetInt64()
         }
         let pending = PendingSend{
-            Key: WalletJson.Text(root, "idempotency_key"),
-            Body: WalletJson.Text(root, "body"),
-            Wallet: WalletJson.Text(root, "wallet"),
-            Network: WalletJson.Text(root, "network"),
+            Key: NodeJson.Text(root, "idempotency_key"),
+            Body: NodeJson.Text(root, "body"),
+            Wallet: NodeJson.Text(root, "wallet"),
+            Network: NodeJson.Text(root, "network"),
             CoreStarted: coreStarted,
-            Timestamp: WalletJson.Signed(root, "timestamp")
+            Timestamp: NodeJson.Signed(root, "timestamp")
         }
         if pending.Wallet != settings.ActiveWallet ||
             pending.Network != settings.Network ||
@@ -1506,7 +1508,7 @@ class WalletController : IDisposable {
         let path = PendingSendPath()
         let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
         try {
-            using let stream = WalletFiles.CreatePrivate(temporary)
+            using let stream = PrivateFiles.CreatePrivate(temporary)
             using let writer = Utf8JsonWriter(stream)
             writer.WriteStartObject()
             writer.WriteString("idempotency_key", pending.Key)
@@ -1521,7 +1523,7 @@ class WalletController : IDisposable {
             stream.Flush(true)
             stream.Dispose()
             File.Move(temporary, path)
-            WalletFiles.FlushDirectory(settings.DataDirectory)
+            PrivateFiles.FlushDirectory(settings.DataDirectory)
         } finally {
             File.Delete(temporary)
         }
@@ -1529,7 +1531,7 @@ class WalletController : IDisposable {
 
     private func ClearPendingSend() {
         File.Delete(PendingSendPath())
-        WalletFiles.FlushDirectory(settings.DataDirectory)
+        PrivateFiles.FlushDirectory(settings.DataDirectory)
         pendingSend = nil
     }
 
@@ -1554,7 +1556,7 @@ class WalletController : IDisposable {
                 ct: ct
             )
             let root = response.RootElement
-            let status = WalletJson.Text(root, "state")
+            let status = NodeJson.Text(root, "state")
             if state == "Unlocked" {
                 let sends = await ReadSendsAsync(ct)
                 snapshot.Sends = sends
@@ -1568,11 +1570,11 @@ class WalletController : IDisposable {
                         continue
                     }
                     let recorded = send.Recipients[0]
-                    if recorded.Address == WalletJson.Text(recipient, "address") &&
-                        recorded.Amount == WalletJson.Number(recipient, "amount") && recorded.Memo == WalletJson.Text(
+                    if recorded.Address == NodeJson.Text(recipient, "address") && recorded.Amount == NodeJson.Number(
                         recipient,
-                        "memo_text"
-                    ) {
+                        "amount"
+                    ) &&
+                        recorded.Memo == NodeJson.Text(recipient, "memo_text") {
                         sendOutcome = "Submitted: " + send.TxId
                         ClearPendingSend()
                         return
@@ -1580,13 +1582,13 @@ class WalletController : IDisposable {
                 }
             }
             if status == "completed" && root.TryGetProperty("result", out let result) {
-                let txid = WalletJson.Text(result, "txid")
-                if txid.Length > 0 && !WalletJson.Flag(result, "dry_run") {
+                let txid = NodeJson.Text(result, "txid")
+                if txid.Length > 0 && !NodeJson.Flag(result, "dry_run") {
                     sendOutcome = "Submitted: " + txid
                     ClearPendingSend()
                 }
             } else if status == "failed" {
-                sendOutcome = "Send failed: " + WalletJson.Text(root, "error")
+                sendOutcome = "Send failed: " + NodeJson.Text(root, "error")
                 ClearPendingSend()
             } else if status == "not_found" && state == "Unlocked" {
                 pending.State = "No send record. Outcome unknown"
@@ -1614,15 +1616,15 @@ class WalletController : IDisposable {
                 true
             )
             let root = response.RootElement
-            let txid = WalletJson.Text(root, "txid")
-            if txid.Length == 0 || WalletJson.Flag(root, "dry_run") {
+            let txid = NodeJson.Text(root, "txid")
+            if txid.Length == 0 || NodeJson.Flag(root, "dry_run") {
                 throw WalletException("Invalid send response", 0, true)
             }
             var inputCount int32
-            if let count = WalletJson.OptionalNumber(root, "input_count") {
+            if let count = NodeJson.OptionalNumber(root, "input_count") {
                 inputCount = int32(count)
             }
-            let result = SendResult(txid, WalletJson.Number(root, "fee"), WalletJson.Number(root, "change"), inputCount)
+            let result = SendResult(txid, NodeJson.Number(root, "fee"), NodeJson.Number(root, "change"), inputCount)
             ClearPendingSend()
             if result.InputCount > 0 {
                 return result

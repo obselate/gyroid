@@ -1,5 +1,7 @@
 package Gyroid.Model
 
+import Gyroid.Node
+import Gyroid.Platform
 import Gyroid.Services
 import System
 import System.Globalization
@@ -141,7 +143,7 @@ class WalletSettings {
                 return "Node program not found"
             }
             try {
-                WalletCore.VerifyExecutable(path)
+                CoreRelease.VerifyExecutable(path)
             } catch (error WalletException) {
                 return error.Message
             } catch (error IOException) {
@@ -183,7 +185,7 @@ class WalletSettings {
             } else {
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "bnt")
             }
-            let platform = WalletCore.Platform()
+            let platform = CoreRelease.Platform()
             let executable = "blocknet-core-" + platform + if OperatingSystem.IsWindows() {
                 ".exe"
             } else {
@@ -202,7 +204,7 @@ class WalletSettings {
             var active = ""
             if File.Exists(wrapper) {
                 try {
-                    WalletCore.VerifyExecutable(wrapper)
+                    CoreRelease.VerifyExecutable(wrapper)
                     binary = wrapper
                     settings.LauncherBinaryPath = wrapper
                     wrapped = true
@@ -213,21 +215,21 @@ class WalletSettings {
                 wallets = Path.Combine(cfg, "wallets")
                 let config = Path.Combine(cfg, "config.json")
                 if File.Exists(config) {
-                    using let json = JsonDocument.Parse(WalletFiles.ReadText(config, 65536))
+                    using let json = JsonDocument.Parse(PrivateFiles.ReadText(config, 65536))
                     if json.RootElement.TryGetProperty("cores", out let cores) && cores.TryGetProperty(
                         network,
                         out let core
                     ) {
-                        let configured = WalletJson.Text(core, "data_dir")
+                        let configured = NodeJson.Text(core, "data_dir")
                         if Path.IsPathFullyQualified(configured) {
                             data = configured
                         }
-                        let walletFile = WalletJson.Text(core, "wallet_file")
+                        let walletFile = NodeJson.Text(core, "wallet_file")
                         if Path.IsPathFullyQualified(walletFile) {
                             wallets = Path.GetDirectoryName(walletFile) ?? wallets
                             active = Path.GetFileName(walletFile)
                         }
-                        let address = WalletJson.Text(core, "api_addr")
+                        let address = NodeJson.Text(core, "api_addr")
                         if address.Length > 0 {
                             endpoint = if address.StartsWith("http://", StringComparison.Ordinal) {
                                 address
@@ -285,7 +287,7 @@ class WalletSettings {
                 for candidate in candidates {
                     if File.Exists(candidate) {
                         try {
-                            WalletCore.VerifyExecutable(candidate)
+                            CoreRelease.VerifyExecutable(candidate)
                         } catch (error WalletException) {
                             continue
                         }
@@ -314,14 +316,14 @@ class WalletSettings {
                     wallets = application
                     let selection = Path.Combine(application, "active_wallet")
                     active = if File.Exists(selection) {
-                        WalletFiles.ReadText(selection, 1024).Trim()
+                        PrivateFiles.ReadText(selection, 1024).Trim()
                     } else {
                         "wallet.dat"
                     }
                     let configuration = Path.Combine(data, "settings.json")
                     if File.Exists(configuration) {
-                        using let json = JsonDocument.Parse(WalletFiles.ReadText(configuration, 65536))
-                        let walletFile = WalletJson.Text(json.RootElement, "wallet_file")
+                        using let json = JsonDocument.Parse(PrivateFiles.ReadText(configuration, 65536))
+                        let walletFile = NodeJson.Text(json.RootElement, "wallet_file")
                         if Path.IsPathFullyQualified(walletFile) {
                             wallets = Path.GetDirectoryName(walletFile) ?? wallets
                             active = Path.GetFileName(walletFile)
@@ -331,11 +333,11 @@ class WalletSettings {
                 if binary.Length == 0 {
                     for candidate in[]string{
                         Path.Combine(DefaultData(network), executable),
-                        WalletCore.InstallationPath()
+                        CoreRelease.InstallationPath()
                     } {
                         if File.Exists(candidate) {
                             try {
-                                WalletCore.VerifyExecutable(candidate)
+                                CoreRelease.VerifyExecutable(candidate)
                             } catch (error WalletException) {
                                 continue
                             }
@@ -384,18 +386,18 @@ class WalletSettings {
             let path = ConfigurationPath()
             try {
                 if File.Exists(path) {
-                    using let json = JsonDocument.Parse(WalletFiles.ReadText(path, 65536, true))
+                    using let json = JsonDocument.Parse(PrivateFiles.ReadText(path, 65536, true))
                     let root = json.RootElement
-                    settings.ActiveWallet = WalletJson.Text(root, "active_wallet")
-                    settings.Network = WalletJson.Text(root, "network", "mainnet")
-                    settings.Endpoint = WalletJson.Text(root, "endpoint", settings.Endpoint)
-                    settings.DataDirectory = WalletJson.Text(root, "data_directory")
-                    settings.WalletDirectory = WalletJson.Text(root, "wallet_directory")
-                    settings.BinaryPath = WalletJson.Text(root, "binary_path")
-                    settings.ListenAddress = WalletJson.Text(root, "listen_address", settings.ListenAddress)
-                    settings.NodeMode = WalletJson.Text(root, "node_mode", "automatic")
-                    settings.Language = WalletJson.Text(root, "language")
-                    settings.Privacy = WalletJson.Flag(root, "privacy")
+                    settings.ActiveWallet = NodeJson.Text(root, "active_wallet")
+                    settings.Network = NodeJson.Text(root, "network", "mainnet")
+                    settings.Endpoint = NodeJson.Text(root, "endpoint", settings.Endpoint)
+                    settings.DataDirectory = NodeJson.Text(root, "data_directory")
+                    settings.WalletDirectory = NodeJson.Text(root, "wallet_directory")
+                    settings.BinaryPath = NodeJson.Text(root, "binary_path")
+                    settings.ListenAddress = NodeJson.Text(root, "listen_address", settings.ListenAddress)
+                    settings.NodeMode = NodeJson.Text(root, "node_mode", "automatic")
+                    settings.Language = NodeJson.Text(root, "language")
+                    settings.Privacy = NodeJson.Flag(root, "privacy")
                     if root.TryGetProperty("auto_lock_minutes", out let minutes) {
                         settings.AutoLockMinutes = if minutes.ValueKind == JsonValueKind.Number && minutes.TryGetInt32(
                             out let value
@@ -466,7 +468,7 @@ class WalletSettings {
             var text = "{}"
             try {
                 if File.Exists(path) {
-                    text = WalletFiles.ReadText(path, 65536, true)
+                    text = PrivateFiles.ReadText(path, 65536, true)
                     using let check = JsonDocument.Parse(text)
                 }
             } catch (error JsonException) {
@@ -475,7 +477,7 @@ class WalletSettings {
             using let stored = JsonDocument.Parse(text)
             let root = stored.RootElement
             try {
-                using let stream = WalletFiles.CreatePrivate(temporary)
+                using let stream = PrivateFiles.CreatePrivate(temporary)
                 using let writer = Utf8JsonWriter(stream)
                 writer.WriteStartObject()
                 writer.WriteString("active_wallet", settings.ActiveWallet)

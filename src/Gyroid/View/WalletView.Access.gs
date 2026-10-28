@@ -9,6 +9,7 @@ import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
 import Gyroid.Model
+import Gyroid.Node
 import Gyroid.Services
 import System
 import System.Collections.Generic

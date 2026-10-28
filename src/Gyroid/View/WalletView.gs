@@ -9,6 +9,7 @@ import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
 import Gyroid.Model
+import Gyroid.Platform
 import Gyroid.Services
 import System
 import System.Collections.Generic
@@ -84,8 +85,8 @@ partial class WalletView : Cell {
         receivedRow = (output WalletOutput) -> ReceivedRow(output)
         sentRow = (send WalletSend) -> SentRow(send)
         historyHandle.MetricsChanged += MoreHistory
-        background = ShaderEffect(ShaderEffectProgram(Resource("Gyroid.Background.goo-effect")))
-        appIcon = ImageSource.Decode(Resource("Gyroid.Icon.png"))
+        background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
+        appIcon = ImageSource.Decode(Resources.Resource("Gyroid.Icon.png"))
         privacy = wallet.Settings.Privacy
         LoadWallets()
         LoadContacts()
@@ -93,8 +94,8 @@ partial class WalletView : Cell {
 
     func Attach(owner Window) {
         window = owner
-        FontSource("JetBrains Mono", 400, false, Resource("Gyroid.Font.Regular.ttf")).Register()
-        FontSource("JetBrains Mono", 700, false, Resource("Gyroid.Font.Bold.ttf")).Register()
+        FontSource("JetBrains Mono", 400, false, Resources.Resource("Gyroid.Font.Regular.ttf")).Register()
+        FontSource("JetBrains Mono", 700, false, Resources.Resource("Gyroid.Font.Bold.ttf")).Register()
         let palette = (
             Theme.Ink with{
                 Translate = key -> strings.Get(key),

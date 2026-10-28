@@ -1,8 +1,8 @@
 package Gyroid.View
 
 import Goo
+import Gyroid.Platform
 import System
-import System.Reflection
 import System.Runtime.InteropServices
 
 partial class WalletView {
@@ -11,18 +11,6 @@ partial class WalletView {
     private var trayLockable bool
     private var hidden bool
     private var quitting bool
-
-    shared {
-        func Resource(name string)[]uint8 {
-            using let stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
-            if stream == nil {
-                throw InvalidOperationException("Missing resource " + name)
-            }
-            let bytes = [int32(stream.Length)]uint8
-            stream.ReadExactly(bytes, 0, bytes.Length)
-            return bytes
-        }
-    }
 
     func Start() {
         guard let host = window else {
@@ -89,7 +77,7 @@ partial class WalletView {
         Id: "dev.gyroid.wallet",
         Width: 64,
         Height: 64,
-        Rgba: Resource("Gyroid.Tray.rgba"),
+        Rgba: Resources.Resource("Gyroid.Tray.rgba"),
         Tooltip: strings.Get("Gyroid"),
         Menu: []NativeMenuItem{
             NativeMenuItem{Id: "show", Text: strings.Get("Show")},
