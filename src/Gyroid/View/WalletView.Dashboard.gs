@@ -563,7 +563,7 @@ partial class WalletView {
             qrPath = QrPath(request)
         }
         let size = Math.Clamp(height - 230 - bannerHeight, 160.0, 300.0)
-        let copied = clipboardText == receiving
+        let copied = ReadOnlySpan[char](clipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(receiving))
         panel.Add(
             Container{
                 FlexDirection: FlexDirection.Row,

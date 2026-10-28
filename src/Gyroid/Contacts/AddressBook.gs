@@ -17,7 +17,7 @@ class AddressBook {
             return Path.Combine(directory, "contacts.json")
         }
 
-        func ReadContacts() SortedDictionary[string, string] {
+        func ReadContacts(report Action[string]) SortedDictionary[string, string] {
             let contacts = SortedDictionary[string, string](StringComparer.Ordinal)
             let path = ContactsPath()
             if !File.Exists(path) {
@@ -26,7 +26,11 @@ class AddressBook {
             try {
                 using let json = JsonDocument.Parse(PrivateFiles.ReadText(path, 1048576))
                 for entry in json.RootElement.EnumerateObject() {
-                    contacts[entry.Name] = WalletValidation.ValidateDestination(entry.Value.GetString() ?? "")
+                    try {
+                        contacts[entry.Name] = WalletValidation.ValidateDestination(entry.Value.GetString() ?? "")
+                    } catch (error Exception) {
+                        report("Address book file is invalid")
+                    }
                 }
             } catch (error Exception) {
                 throw WalletException("Address book file is invalid")
@@ -35,6 +39,11 @@ class AddressBook {
         }
 
         func WriteContacts(contacts SortedDictionary[string, string]) {
+            ReadContacts(
+                message -> {
+                    throw WalletException(message)
+                }
+            )
             let path = ContactsPath()
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "")
             PrivateFiles

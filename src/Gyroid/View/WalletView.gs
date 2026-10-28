@@ -40,7 +40,7 @@ partial class WalletView : Cell {
     private var refreshTimer WindowTimer?
     private var statusTimer WindowTimer?
     private var clipboardTimer WindowTimer?
-    private var clipboardText string = ""
+    private var clipboardText[]char = []char{}
     private var wallets[]string
     private var name string = ""
     private var password string = ""
@@ -287,6 +287,9 @@ partial class WalletView : Cell {
         if !seeded && state == shownState {
             return
         }
+        if snapshot.State != "Unlocked" {
+            ClearSeed()
+        }
         shownState = state
         ResumePlayback()
         let node = wallet.Node.Status
@@ -510,6 +513,7 @@ partial class WalletView : Cell {
         guard let host = window else {
             return
         }
+        ReleaseClipboard()
         try {
             host.SetClipboardText(content)
         } catch (failure Exception) {
@@ -517,8 +521,7 @@ partial class WalletView : Cell {
             Rebuild()
             return
         }
-        clipboardTimer?.Dispose()
-        clipboardText = content
+        clipboardText = content.ToCharArray()
         clipboardTimer = host.SetTimeout(
             () -> {
                 ReleaseClipboard()
@@ -545,11 +548,7 @@ partial class WalletView : Cell {
                 .CryptographicOperations
                 .FixedTimeEquals(
                 System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](System.MemoryExtensions.AsSpan(current)),
-                System
-                    .Runtime
-                    .InteropServices
-                    .MemoryMarshal
-                    .AsBytes[char](System.MemoryExtensions.AsSpan(clipboardText))
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](ReadOnlySpan[char](clipboardText))
             ) {
                 host.SetClipboardText("")
             }
@@ -557,7 +556,8 @@ partial class WalletView : Cell {
             error = "Clipboard could not be cleared"
             Rebuild()
         } finally {
-            clipboardText = ""
+            Array.Clear(clipboardText)
+            clipboardText = []char{}
         }
     }
 
@@ -648,7 +648,7 @@ partial class WalletView : Cell {
     }
 
     private func Copyable(label string, value string, shown string, clearAfterMs float64 = 120000) Blob {
-        let copied = clipboardText == value
+        let copied = ReadOnlySpan[char](clipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(value))
         return Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.FlexStart,

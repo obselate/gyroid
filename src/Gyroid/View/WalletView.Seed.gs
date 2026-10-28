@@ -22,6 +22,7 @@ partial class WalletView {
     }
 
     private func ClearSeed() {
+        ReleaseClipboard()
         if let words = seed {
             Array.Clear(words)
         }

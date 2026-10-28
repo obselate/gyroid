@@ -279,7 +279,7 @@ partial class WalletView {
 
     private func LoadContacts() {
         try {
-            contacts = AddressBook.ReadContacts()
+            contacts = AddressBook.ReadContacts(message -> error = message)
         } catch (failure WalletException) {
             error = failure.Message
         }

@@ -206,6 +206,9 @@ partial class WalletView {
         error = ""
         name = ""
         screen = target
+        if target == "Contacts" {
+            LoadContacts()
+        }
         Decode("page")
         Rebuild()
     }
@@ -356,6 +359,7 @@ partial class WalletView {
         let filename = WalletFile(name)
         if kind == "Phrase" {
             let words = phrase.ToCharArray()
+            phrase = ""
             Run(wallet.ImportPhraseAsync(filename, words, secret), nil, secret, words)
         } else if kind == "ViewOnly" {
             let key = viewKey.ToCharArray()
