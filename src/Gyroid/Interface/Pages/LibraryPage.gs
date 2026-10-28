@@ -140,7 +140,6 @@ class LibraryPage : Cell[LibraryInput] {
         form = ""
         menu = false
         reveal = false
-        issue = ""
         name = ""
         password = ""
         confirmation = ""
@@ -167,6 +166,7 @@ class LibraryPage : Cell[LibraryInput] {
 
     private func Start(kind string) {
         Clear()
+        issue = ""
         form = kind
         Rebuild()
     }
@@ -288,6 +288,7 @@ class LibraryPage : Cell[LibraryInput] {
             Height: 38,
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.FlexStart,
             Gap: 10,
             Padding: Edges{Left: 10, Right: 10},
             BorderRadius: 7,
@@ -480,6 +481,7 @@ class LibraryPage : Cell[LibraryInput] {
                     false,
                     () -> {
                         Clear()
+                        issue = ""
                         Rebuild()
                     }
                 ),

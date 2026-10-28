@@ -511,6 +511,8 @@ partial class App : Cell {
             screen
         } else if snapshot.Page == "Wallet" {
             "Overview"
+        } else if snapshot.Page == "Welcome" || snapshot.Page == "Unlock" {
+            "Library"
         } else {
             snapshot.Page
         }
