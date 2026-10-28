@@ -9,10 +9,10 @@ Download the release for your platform and `SHA256SUMS` from [Releases](https://
 ```sh
 sudo apt install libvulkan1 mesa-vulkan-drivers libwayland-client0 libwayland-cursor0 libwayland-egl1 libxkbcommon0 libdbus-1-3 libglib2.0-0t64 libicu74 libssl3t64 ca-certificates libayatana-appindicator3-1
 version=0.1.2
-curl -fLO "https://github.com/obselate/gyroid/releases/download/v$version/gyroid-$version-linux-x64.tar.gz"
-curl -fLO "https://github.com/obselate/gyroid/releases/download/v$version/SHA256SUMS"
-sha256sum --ignore-missing --check SHA256SUMS
-tar -xzf "gyroid-$version-linux-x64.tar.gz"
+curl -fLO "https://github.com/obselate/gyroid/releases/download/v$version/gyroid-$version-linux-x64.tar.gz" &&
+curl -fLO "https://github.com/obselate/gyroid/releases/download/v$version/SHA256SUMS" &&
+sha256sum --ignore-missing --check SHA256SUMS &&
+tar -xzf "gyroid-$version-linux-x64.tar.gz" &&
 "./gyroid-$version-linux-x64/Gyroid"
 ```
 
