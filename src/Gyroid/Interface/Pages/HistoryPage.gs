@@ -218,7 +218,8 @@ class HistoryPage : Cell[HistoryInput] {
                         Session: input.Session,
                         Ui: ui,
                         Send: input.Snapshot.Sends.First((send WalletSend) -> send.TxId == observed),
-                        Recipient: ui.Short(row.Recipient),
+                        Recipient: ui.Short(row.Recipients.FirstOrDefault()?.Address ?? "") +
+                            (row.Recipients.Length > 1 ? " +" + (row.Recipients.Length - 1).ToString(): ""),
                         Privacy: input.Privacy,
                         Language: input.Language,
                         Width: input.Width,
