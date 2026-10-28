@@ -51,6 +51,7 @@ partial class WalletView : Cell {
     private var decodeSeed int32
     private var decodeTimer WindowTimer?
     private var frameTimer WindowTimer?
+    private var lastActivity int64 = Stopwatch.GetTimestamp()
     private let clock Stopwatch = Stopwatch.StartNew()
     private let background ShaderEffect
     private var sceneShift float64
@@ -163,7 +164,7 @@ partial class WalletView : Cell {
             Rebuild()
         }
         owner.PreviewKeyPressed += (key Key, modifiers KeyModifiers) -> {
-            wallet.Touch()
+            Touch()
             return false
         }
         wallet.Changed = () -> owner.Post(() -> Sync())
@@ -188,6 +189,7 @@ partial class WalletView : Cell {
 
     private func PlaybackActive() bool ->
     !hidden && window?.IsFocused == true && window?.IsVisible == true && window?.State != WindowState.Minimized
+    && Stopwatch.GetElapsedTime(lastActivity).TotalSeconds < 10
 
     private func UpdatePlayback() {
         if !PlaybackActive() {
@@ -203,7 +205,25 @@ partial class WalletView : Cell {
         }
     }
 
+    private func Touch() {
+        wallet.Touch()
+        ResumePlayback()
+    }
+
+    private func ResumePlayback() {
+        lastActivity = Stopwatch.GetTimestamp()
+        if frameTimer == nil {
+            UpdatePlayback()
+            Rebuild()
+        }
+    }
+
     private func Tick() {
+        if Stopwatch.GetElapsedTime(lastActivity).TotalSeconds >= 10 {
+            UpdatePlayback()
+            Rebuild()
+            return
+        }
         let now = clock.Elapsed.TotalSeconds
         let step = (now - background.ElapsedSeconds) / 1.2
         sceneShift = if WalletAvailable() {
@@ -254,6 +274,7 @@ partial class WalletView : Cell {
             return
         }
         shownState = state
+        ResumePlayback()
         let node = wallet.NodeStatus
         if node.Syncing || node.Running && node.Peers == 0 {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
@@ -612,7 +633,9 @@ partial class WalletView : Cell {
         Bottom: 0,
         AlignItems: AlignItems.Center,
         JustifyContent: JustifyContent.Center,
-        OnPointerDown: (event PointerEvent) -> wallet.Touch()
+        OnPointerDown: (event PointerEvent) -> Touch(),
+        OnPointerMove: (event PointerEvent) -> Touch(),
+        OnWheel: (event WheelEvent) -> Touch()
     }
 
     private func Copyable(label string, value string, shown string, clearAfterMs float64 = 120000) Blob {
@@ -1105,7 +1128,9 @@ partial class WalletView : Cell {
             FontFamily: font,
             Color: ink,
             KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
-            OnPointerDown: (event PointerEvent) -> wallet.Touch(),
+            OnPointerDown: (event PointerEvent) -> Touch(),
+            OnPointerMove: (event PointerEvent) -> Touch(),
+            OnWheel: (event WheelEvent) -> Touch(),
             Container{Position: PositionType.Absolute, Left: 0, Top: 0, Right: 0, Bottom: 0, ShaderEffect: background},
             Chrome()
         }

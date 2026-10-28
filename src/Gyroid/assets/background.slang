@@ -173,6 +173,10 @@ float4 code(float2 glyph, float2 bit, float resolve)
     bool blank = hash(float3(glyph, epoch + 0.3)) < 0.45;
     float roll = age < 0.1 ? floor(time * 15.0) : epoch;
     float digit = floor(hash(float3(glyph, roll + 0.7)) * 16.0);
+    if (resolve >= 1.0 && (blank || !lit(digit, bit)))
+    {
+        return tint;
+    }
     float3 color = float3(0.02 + 0.03 * hash(float3(glyph, 3.0)));
     if (hash(float3(glyph, epoch + 0.5)) < 0.015)
     {
@@ -206,6 +210,11 @@ float4 gooEffect(float2 uv, float4 source, float4 backdrop)
     }
     float2 mark = floor(pixel / shape.y);
     float2 glyph = floor(mark / GlyphCell);
+    float2 bit = mark - glyph * GlyphCell;
+    if (shape.x >= 1.0)
+    {
+        return bit.x > 2.0 || bit.y > 4.0 || length(pixel / shape.y - mark - 0.5) > 0.36 ? tint : code(glyph, bit, 1.0);
+    }
     float spread = length(scene((glyph + 0.5) * GlyphCell * shape.y, view));
     float order = 0.82 * (0.4 * hash(float3(glyph, 5.0)) + 0.6 * saturate(spread * 1.1));
     float resolve = (shape.x - order) / 0.18;
@@ -213,5 +222,5 @@ float4 gooEffect(float2 uv, float4 source, float4 backdrop)
     {
         return dotted ? gyroid(cell, view) : tint;
     }
-    return length(pixel / shape.y - mark - 0.5) > 0.36 ? tint : code(glyph, mark - glyph * GlyphCell, resolve);
+    return length(pixel / shape.y - mark - 0.5) > 0.36 ? tint : code(glyph, bit, resolve);
 }
