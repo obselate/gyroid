@@ -199,7 +199,13 @@ partial class WalletView : Cell {
     && Stopwatch.GetElapsedTime(lastActivity).TotalSeconds < 10
 
     private func UpdatePlayback() {
-        if !PlaybackActive() {
+        let active = PlaybackActive()
+        Motion.TimeScale = if active {
+            1.0
+        } else {
+            0.0
+        }
+        if !active {
             clock.Stop()
             frameTimer?.Dispose()
             frameTimer = nil
