@@ -160,11 +160,7 @@ partial class WalletView {
             strip.Add(close)
             return strip
         }
-        let inputCount = if result.InputCount > 0 {
-            result.InputCount
-        } else {
-            estimate.InputCount
-        }
+        let inputCount = result.InputCount
         let inputs = Math.Min(inputCount, 6)
         let coins = Label(
             String('◉', inputs) + if inputCount > inputs {

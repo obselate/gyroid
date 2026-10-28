@@ -1638,7 +1638,10 @@ class WalletController : IDisposable {
                 int32(WalletJson.OptionalNumber(root, "input_count") ?? 0)
             )
             ClearPendingSend()
-            return result
+            if result.InputCount > 0 {
+                return result
+            }
+            return SendResult(txid, result.Fee, result.Change, await SubmittedInputCountAsync(txid))
         } catch (error WalletException) {
             await RecoverSendCoreAsync(CancellationToken.None)
             let outcome = sendOutcome
@@ -1651,6 +1654,17 @@ class WalletController : IDisposable {
             }
             throw WalletException(outcome)
         }
+    }
+
+    private async func SubmittedInputCountAsync(txid string) int32 {
+        try {
+            using let response = await rpc.JsonAsync("tx/" + txid, ct: CancellationToken.None)
+            if response.RootElement.TryGetProperty("tx", out let tx) && tx.TryGetProperty("inputs", out let inputs) &&
+                inputs.ValueKind == JsonValueKind.Array {
+                return inputs.GetArrayLength()
+            }
+        } catch (error WalletException) { }
+        return 0
     }
 
     async func ResumeSendAsync(ct CancellationToken = default(CancellationToken)) SendResult {
