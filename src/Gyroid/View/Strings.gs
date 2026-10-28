@@ -104,6 +104,7 @@ class Strings {
             case "Send outcome unknown. Resolve the pending send before starting another": "发送结果未知，请先处理待定发送，再开始新的发送"
             case "Send outcome unknown. Resubmission is not available": "发送结果未知，目前无法重新提交"
             case "Pending send file is invalid": "待处理发送文件无效"
+            case "Pending send file is invalid or unreadable. Outcome unknown. Resolve the file before sending": "待处理发送文件无效或无法读取，发送结果未知。请先处理此文件，再进行发送"
             case "Pending send file could not be saved durably": "无法持久保存待处理发送文件"
             case "Another Gyroid process is handling this wallet's sends": "另一个 Gyroid 进程正在处理此钱包的发送"
             case "No pending send": "没有待处理的发送"

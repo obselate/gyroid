@@ -26,6 +26,7 @@ class WalletController : IDisposable {
     var confirmation SendEstimate? = nil
     var confirmationKey string = ""
     var pendingSend PendingSend? = nil
+    var pendingSendError string = ""
     var sendOutcome string = ""
     var sendLease FileStream? = nil
     var historyOffset int32
@@ -49,6 +50,7 @@ class WalletController : IDisposable {
     prop NodeStatus NodeStatus -> nodeStatus
     prop Busy bool -> isBusy
     prop Pending PendingSend? -> pendingSend
+    prop PendingSendError string -> pendingSendError
     prop SendOutcome string -> sendOutcome
     prop LockQueued bool -> lockQueued
 
@@ -1468,42 +1470,50 @@ class WalletController : IDisposable {
     private func LoadPendingSend() {
         let previous = pendingSend
         pendingSend = nil
-        if settings.ActiveWallet.Length == 0 || !File.Exists(PendingSendPath()) {
+        pendingSendError = ""
+        if settings.ActiveWallet.Length == 0 {
             return
         }
-        using let json = JsonDocument.Parse(PrivateFiles.ReadText(PendingSendPath(), 16384, true))
-        let root = json.RootElement
-        var coreStarted int64 = 0
-        if root.TryGetProperty("core_started", out let started) {
-            coreStarted = started.GetInt64()
-        }
-        let pending = PendingSend{
-            Key: NodeJson.Text(root, "idempotency_key"),
-            Body: NodeJson.Text(root, "body"),
-            Wallet: NodeJson.Text(root, "wallet"),
-            Network: NodeJson.Text(root, "network"),
-            CoreStarted: coreStarted,
-            Timestamp: NodeJson.Signed(root, "timestamp")
-        }
-        if pending.Wallet != settings.ActiveWallet ||
-            pending.Network != settings.Network ||
-            pending
-            .Key
-            .Length == 0 ||
-            pending
-            .Body
-            .Length == 0 ||
-            pending.Timestamp <= 0 {
-            throw WalletException("Pending send file is invalid")
-        }
-        using let body = JsonDocument.Parse(pending.Body)
-        if let prior = previous {
-            if prior.Key == pending.Key && prior.Body == pending.Body {
-                pending.State = prior.State
-                pending.CanRetry = prior.CanRetry
+        try {
+            if (File.GetAttributes(PendingSendPath()) & FileAttributes.Directory) != 0 {
+                throw WalletException("Pending send file is invalid")
             }
+            using let json = JsonDocument.Parse(PrivateFiles.ReadText(PendingSendPath(), 16384, true))
+            let root = json.RootElement
+            var coreStarted int64 = 0
+            if root.TryGetProperty("core_started", out let started) {
+                coreStarted = started.GetInt64()
+            }
+            let pending = PendingSend{
+                Key: NodeJson.Text(root, "idempotency_key"),
+                Body: NodeJson.Text(root, "body"),
+                Wallet: NodeJson.Text(root, "wallet"),
+                Network: NodeJson.Text(root, "network"),
+                CoreStarted: coreStarted,
+                Timestamp: NodeJson.Signed(root, "timestamp")
+            }
+            if pending.Wallet != settings.ActiveWallet ||
+                pending.Network != settings.Network ||
+                pending
+                .Key
+                .Length == 0 ||
+                pending
+                .Body
+                .Length == 0 ||
+                pending.Timestamp <= 0 {
+                throw WalletException("Pending send file is invalid")
+            }
+            using let body = JsonDocument.Parse(pending.Body)
+            if let prior = previous {
+                if prior.Key == pending.Key && prior.Body == pending.Body {
+                    pending.State = prior.State
+                    pending.CanRetry = prior.CanRetry
+                }
+            }
+            pendingSend = pending
+        } catch (error FileNotFoundException) { } catch (error DirectoryNotFoundException) { } catch (error Exception) {
+            pendingSendError = "Pending send file is invalid or unreadable. Outcome unknown. Resolve the file before sending"
         }
-        pendingSend = pending
     }
 
     private func SavePendingSend(pending PendingSend) {
@@ -1540,14 +1550,22 @@ class WalletController : IDisposable {
     private func RequireNoPendingSend() {
         AcquireSendLease()
         LoadPendingSend()
+        if pendingSendError.Length > 0 {
+            throw WalletException(pendingSendError)
+        }
         if pendingSend != nil {
             throw WalletException("Resolve the pending send before starting another")
         }
     }
 
     private async func RecoverSendCoreAsync(ct CancellationToken) {
-        AcquireSendLease()
-        LoadPendingSend()
+        try {
+            AcquireSendLease()
+            LoadPendingSend()
+        } catch (error WalletException) {
+            pendingSendError = error.Message
+            return
+        }
         guard let pending = pendingSend else {
             return
         }
@@ -1663,6 +1681,9 @@ class WalletController : IDisposable {
         try {
             RequireUnlocked()
             await RecoverSendCoreAsync(ct)
+            if pendingSendError.Length > 0 {
+                throw WalletException(pendingSendError)
+            }
             guard let pending = pendingSend else {
                 if sendOutcome.StartsWith("Submitted: ", StringComparison.Ordinal) {
                     return SendResult(sendOutcome.Substring(11), 0, 0, 0)
@@ -1690,6 +1711,10 @@ class WalletController : IDisposable {
         try {
             RequireUnlocked()
             AcquireSendLease()
+            LoadPendingSend()
+            if pendingSendError.Length > 0 {
+                throw WalletException(pendingSendError)
+            }
             ClearPendingSend()
             sendOutcome = ""
         } finally {

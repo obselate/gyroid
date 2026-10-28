@@ -292,6 +292,19 @@ partial class WalletView {
     }
 
     private func SendPanel() Blob {
+        if wallet.PendingSendError.Length > 0 {
+            let card = PageContent(strings.Get("send"), 640)
+            card.Add(
+                Text{
+                    Content: Explain(wallet.PendingSendError),
+                    FontFamily: font,
+                    FontSize: 13,
+                    Color: orange,
+                    TextWrap: TextWrap.Wrap
+                }
+            )
+            return card
+        }
         if wallet.Pending != nil || wallet.SendOutcome.Length > 0 {
             let card = PageContent(strings.Get("send"), 640)
             card.Add(PendingSendBanner())

@@ -283,6 +283,9 @@ class Cli {
                         }
                     }
                 }
+                if (command == "status" || command == "balance") && wallet.PendingSendError.Length > 0 {
+                    Console.WriteLine(wallet.PendingSendError)
+                }
                 return 0
             } catch (error Exception) {
                 Console.Error.WriteLine(error.Message.Replace('\r', ' ').Replace('\n', ' '))
