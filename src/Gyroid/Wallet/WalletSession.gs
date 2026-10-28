@@ -332,11 +332,11 @@ class WalletSession : IDisposable {
                 next.DiscoveredBinaryPath = ""
                 next.DiscoveredWalletFile = ""
                 next.LauncherBinaryPath = ""
-                WalletSettings.Discover(next)
+                NodeDiscovery.Discover(next)
             }
             next.Validate()
             if next.BinaryPath != settings.BinaryPath && next.BinaryPath.Length > 0 {
-                let program = WalletSettings.ProgramError(next.BinaryPath)
+                let program = NodeDiscovery.ProgramError(next.BinaryPath)
                 if program.Length > 0 {
                     throw WalletException(program)
                 }

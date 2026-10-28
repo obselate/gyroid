@@ -825,7 +825,7 @@ partial class WalletView {
     private func SaveSettings(value WalletSettings) {
         listenIssue = WalletSettings.ListenError(value.ListenAddress)
         programIssue = if value.BinaryPath != wallet.Settings.BinaryPath && value.BinaryPath.Length > 0 {
-            WalletSettings.ProgramError(value.BinaryPath)
+            NodeDiscovery.ProgramError(value.BinaryPath)
         } else {
             ""
         }

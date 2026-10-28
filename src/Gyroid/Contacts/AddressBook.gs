@@ -12,7 +12,7 @@ import System.Threading.Tasks
 class AddressBook {
     shared {
         private func ContactsPath() string {
-            let directory = Path.GetDirectoryName(WalletSettings.ConfigurationPath()) ??
+            let directory = Path.GetDirectoryName(AppSettings.ConfigurationPath()) ??
                 throw WalletException("Settings file must have a parent directory")
             return Path.Combine(directory, "contacts.json")
         }

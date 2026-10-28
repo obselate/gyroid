@@ -83,7 +83,7 @@ class NodeSupervisor : IDisposable {
                 ct
             )
         }
-        let program = WalletSettings.ProgramError(settings.BinaryPath)
+        let program = NodeDiscovery.ProgramError(settings.BinaryPath)
         if program.Length > 0 {
             throw WalletException(program)
         }
