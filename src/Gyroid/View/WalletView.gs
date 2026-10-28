@@ -36,7 +36,6 @@ partial class WalletView : Cell {
     private var bannerHeight float64
     private var refreshing bool
     private var refreshError string = ""
-    private var settingsNoticeDismissed bool
     private var refreshTimer WindowTimer?
     private var statusTimer WindowTimer?
     private var clipboardTimer WindowTimer?
@@ -816,17 +815,13 @@ partial class WalletView : Cell {
         }
         if message.Length == 0 {
             let problem = wallet.Settings.LoadError
-            if problem.Length == 0 || settingsNoticeDismissed {
+            if problem.Length == 0 {
                 return nil
             }
             return Banner{
                 Tone: Tone.Warning,
                 Content: strings.Get("Settings file not loaded") + ": " + Explain(problem),
                 FontFamily: font,
-                OnDismiss: () -> {
-                    settingsNoticeDismissed = true
-                    Rebuild()
-                }
             }.Build()
         }
         return Banner{

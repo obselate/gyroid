@@ -28,7 +28,12 @@ class Cli {
             let resume = command == "send" && arguments.Length == 3 && arguments[2] == "--resume"
             if command == "node" {
                 if arguments.Length != 3 ||
-                    (arguments[2] != "status" && arguments[2] != "start" && arguments[2] != "stop") {
+                    (
+                    arguments[2] != "status" &&
+                        arguments[2] != "start" &&
+                        arguments[2] != "stop" &&
+                        arguments[2] != "purge"
+                ) {
                     return Usage(Console.Error)
                 }
             } else if command == "settings" {
@@ -126,7 +131,7 @@ class Cli {
                 using let wallet = WalletSession()
                 started(wallet)
                 let problem = wallet.Settings.LoadError
-                if problem.Length > 0 {
+                if problem.Length > 0 && !(command == "settings" && arguments.Length == 4) {
                     Console.Error.WriteLine("Settings file not loaded: " + problem)
                     return 1
                 }
@@ -390,7 +395,15 @@ class Cli {
         }
 
         private func RunNode(wallet WalletSession, action string, stopped ManualResetEventSlim) int32 {
-            if action == "start" {
+            if action == "purge" {
+                RequireTerminal()
+                Console.Error.Write("Purge blockchain data? Wallet files will be kept. Type purge to confirm: ")
+                if Console.ReadLine() != "purge" {
+                    throw WalletException("Purge cancelled")
+                }
+                wallet.PurgeDataAsync().GetAwaiter().GetResult()
+                Console.WriteLine("Blockchain data purged. Wallet files were kept")
+            } else if action == "start" {
                 wallet.StartNodeAsync().GetAwaiter().GetResult()
             } else {
                 wallet.RefreshNodeAsync().GetAwaiter().GetResult()
@@ -488,7 +501,7 @@ class Cli {
         func Usage(writer TextWriter) int32 {
             writer.WriteLine("Usage: gyroid [--width N] [--height N] [--scale N]")
             writer.WriteLine("       gyroid --help | --version | status | balance | address | unlock | lock")
-            writer.WriteLine("       gyroid node status | start | stop")
+            writer.WriteLine("       gyroid node status | start | stop | purge")
             writer.WriteLine("       gyroid history [--limit N]")
             writer.WriteLine("       gyroid send <address> <amount> [--memo TEXT] [--dry-run]")
             writer.WriteLine("       gyroid send --resume")

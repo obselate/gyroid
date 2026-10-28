@@ -21,7 +21,7 @@ class NodeDiscovery {
             let wrapper = Path.Combine(cfg, "cores", "v" + CoreRelease.Version, executable)
             var wrapped = false
             var data = AppSettings.DefaultData(network)
-            var wallets = Path.Combine(data, "wallets")
+            var wallets = AppSettings.DefaultWallets(network)
             var endpoint = "http://127.0.0.1:" + if network == "testnet" {
                 "18332/"
             } else {
@@ -191,10 +191,10 @@ class NodeDiscovery {
                 )
             }
             if settings.WalletDirectory.Length == 0 {
-                settings.WalletDirectory = if settings.DataDirectory == data {
+                settings.WalletDirectory = if installed && settings.DataDirectory == data {
                     wallets
                 } else {
-                    Path.Combine(settings.DataDirectory, "wallets")
+                    AppSettings.DefaultWallets(network)
                 }
             }
             if settings.ActiveWallet.Length == 0 && settings.WalletDirectory == wallets {

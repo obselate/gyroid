@@ -37,36 +37,13 @@ open class AppSettings {
         if AutoLockMinutes < 0 {
             throw WalletException("Auto-lock minutes must be zero or greater")
         }
-        if !Uri.TryCreate(Endpoint, UriKind.Absolute, out let endpoint) ||
-            endpoint == nil ||
-            endpoint.Scheme != "http" ||
-            (endpoint.Host != "127.0.0.1" && endpoint.Host != "[::1]" && endpoint.Host != "::1") ||
-            endpoint
-            .UserInfo
-            .Length > 0 ||
-            endpoint
-            .Query
-            .Length > 0 ||
-            endpoint
-            .Fragment
-            .Length > 0 ||
-            endpoint.AbsolutePath != "/" {
+        if !ValidEndpoint(Endpoint) {
             throw WalletException("API endpoint must be a loopback HTTP origin")
         }
-        if !Path.IsPathFullyQualified(DataDirectory) || !Path.IsPathFullyQualified(WalletDirectory) {
-            throw WalletException("Data and wallet directories must be absolute paths")
-        }
-        try {
-            Path.GetFullPath(DataDirectory)
-            Path.GetFullPath(WalletDirectory)
-        } catch (error ArgumentException) {
-            throw WalletException("Data and wallet directories must be valid absolute paths")
-        } catch (error NotSupportedException) {
-            throw WalletException("Data and wallet directories must be valid absolute paths")
-        } catch (error PathTooLongException) {
+        if !ValidPath(DataDirectory) || !ValidPath(WalletDirectory) {
             throw WalletException("Data and wallet directories must be valid absolute paths")
         }
-        if BinaryPath.Length > 0 && !Path.IsPathFullyQualified(BinaryPath) {
+        if BinaryPath.Length > 0 && !ValidPath(BinaryPath) {
             throw WalletException("Daemon binary must be an absolute path")
         }
         let listen = ListenError(ListenAddress)
@@ -122,12 +99,53 @@ open class AppSettings {
             network
         )
 
+        func DefaultWallets(network string) string -> Path.Combine(
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData,
+                Environment.SpecialFolderOption.DoNotVerify
+            ),
+            "Gyroid",
+            "wallets",
+            network
+        )
+
+        private func ValidEndpoint(value string) bool ->
+        Uri.TryCreate(value, UriKind.Absolute, out let endpoint) &&
+            endpoint != nil &&
+            endpoint.Scheme == "http" &&
+            (endpoint.Host == "127.0.0.1" || endpoint.Host == "[::1]" || endpoint.Host == "::1") &&
+            endpoint
+            .UserInfo
+            .Length == 0 &&
+            endpoint
+            .Query
+            .Length == 0 &&
+            endpoint
+            .Fragment
+            .Length == 0 &&
+            endpoint.AbsolutePath == "/"
+
+        private func ValidPath(value string) bool {
+            try {
+                return Path.IsPathFullyQualified(value) && Path.GetFullPath(value).Length > 0
+            } catch (error ArgumentException) {
+                return false
+            } catch (error NotSupportedException) {
+                return false
+            } catch (error PathTooLongException) {
+                return false
+            }
+        }
+
         func Read(settings AppSettings) bool {
             let path = ConfigurationPath()
             try {
                 if File.Exists(path) {
                     using let json = JsonDocument.Parse(PrivateFiles.ReadText(path, 65536, true))
                     let root = json.RootElement
+                    if root.ValueKind != JsonValueKind.Object {
+                        throw JsonException()
+                    }
                     settings.ActiveWallet = Text(root, "active_wallet")
                     settings.Network = Text(root, "network", "mainnet")
                     settings.Endpoint = Text(root, "endpoint", settings.Endpoint)
@@ -145,8 +163,35 @@ open class AppSettings {
                         ) {
                             value
                         } else {
-                            -1
+                            0
                         }
+                    }
+                    if settings.Network != "mainnet" && settings.Network != "testnet" {
+                        settings.Network = "mainnet"
+                    }
+                    if settings.NodeMode != "automatic" && settings.NodeMode != "manual" {
+                        settings.NodeMode = "automatic"
+                    }
+                    if settings.Language != "" && settings.Language != "en" && settings.Language != "zh-Hans" {
+                        settings.Language = ""
+                    }
+                    if settings.AutoLockMinutes < 0 {
+                        settings.AutoLockMinutes = 0
+                    }
+                    if !ValidEndpoint(settings.Endpoint) {
+                        settings.Endpoint = ""
+                    }
+                    if !ValidPath(settings.DataDirectory) {
+                        settings.DataDirectory = ""
+                    }
+                    if !ValidPath(settings.WalletDirectory) {
+                        settings.WalletDirectory = ""
+                    }
+                    if !ValidPath(settings.BinaryPath) {
+                        settings.BinaryPath = ""
+                    }
+                    if ListenError(settings.ListenAddress).Length > 0 {
+                        settings.ListenAddress = "/ip4/127.0.0.1/tcp/0"
                     }
                 }
             } catch (error Exception) {
@@ -156,6 +201,7 @@ open class AppSettings {
                     !(error is InvalidOperationException) {
                     throw error
                 }
+                settings.LoadError = "Settings file is invalid. Save settings to replace it"
                 return false
             }
             return true

@@ -52,19 +52,17 @@ class WalletSettings : AppSettings {
 
     shared {
         func Load() WalletSettings {
-            var settings = WalletSettings()
-            if !AppSettings.Read(settings) {
-                settings = WalletSettings()
+            let settings = WalletSettings()
+            AppSettings.Read(settings)
+            if settings.ActiveWallet.Length > 0 {
+                try {
+                    WalletValidation.ValidateFilename(settings.ActiveWallet)
+                } catch (error WalletException) {
+                    settings.ActiveWallet = ""
+                }
             }
-
             Override(settings)
-            try {
-                settings.Validate()
-            } catch (error WalletException) {
-                settings = WalletSettings{LoadError: error.Message}
-                Override(settings)
-                settings.Validate()
-            }
+            settings.Validate()
             return settings
         }
 

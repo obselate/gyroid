@@ -120,9 +120,10 @@ class NodeApi : IDisposable {
         body Action[Utf8JsonWriter]? = nil,
         ct CancellationToken = default(CancellationToken),
         idempotencyKey string = "",
-        submitting bool = false
+        submitting bool = false,
+        method HttpMethod? = nil
     ) JsonDocument {
-        let bytes = await BytesAsync(path, body, ct, idempotencyKey, submitting)
+        let bytes = await BytesAsync(path, body, ct, idempotencyKey, submitting, method)
         try {
             try {
                 using let stream = MemoryStream(bytes, false)
@@ -140,14 +141,17 @@ class NodeApi : IDisposable {
         body Action[Utf8JsonWriter]? = nil,
         cancellation CancellationToken = default(CancellationToken),
         idempotencyKey string = "",
-        submitting bool = false
+        submitting bool = false,
+        method HttpMethod? = nil
     )[]uint8 {
         using let deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation)
         deadline.CancelAfter(TimeSpan.FromSeconds(180))
         let ct = deadline.Token
         using let payload = MemoryStream()
         using let request = HttpRequestMessage(
-            if body == nil {
+            if method != nil {
+                method
+            } else if body == nil {
                 HttpMethod.Get
             } else {
                 HttpMethod.Post

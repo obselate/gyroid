@@ -6,6 +6,7 @@ import System
 import System.Collections.Generic
 import System.IO
 import System.Linq
+import System.Net.Http
 import System.Text
 import System.Threading
 
@@ -104,6 +105,111 @@ class WalletLibrary {
             }
         } finally {
             session.End()
+        }
+    }
+
+    async func PreserveBeforePurgeAsync(ct CancellationToken) {
+        let settings = session.settings
+        if settings.LoadError.Length > 0 || Environment.GetEnvironmentVariable("GYROID_WALLET_DIR") != nil {
+            throw WalletException("Save wallet settings without a wallet folder override before purging")
+        }
+        let data = Path.GetFullPath(settings.DataDirectory)
+        let destination = Path.GetFullPath(AppSettings.DefaultWallets(settings.Network))
+        let relative = Path.GetRelativePath(data, destination)
+        if !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(
+            ".." + Path.DirectorySeparatorChar,
+            StringComparison.Ordinal
+        ) {
+            throw WalletException("Wallet preservation folder must be outside the core data folder")
+        }
+        for path in[]string{data, destination} {
+            var directory DirectoryInfo? = DirectoryInfo(path)
+            while directory != nil {
+                if directory.LinkTarget != nil {
+                    throw WalletException("Purge folders must not use symbolic links")
+                }
+                directory = directory.Parent
+            }
+        }
+        let sources = List[string]()
+        let names = HashSet[string](
+            if OperatingSystem.IsWindows() {
+                StringComparer.OrdinalIgnoreCase
+            } else {
+                StringComparer.Ordinal
+            }
+        )
+        let magic = Encoding.ASCII.GetBytes("BLKNTWLT")
+        let header = [magic.Length]byte
+        for path in Directory.EnumerateFiles(
+            data,
+            "*",
+            EnumerationOptions{
+                RecurseSubdirectories: true,
+                IgnoreInaccessible: false,
+                AttributesToSkip: FileAttributes.ReparsePoint
+            }
+        ) {
+            using let input = PrivateFiles.OpenRead(path)
+            if !path.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) &&
+                (input.Read(header, 0, header.Length) != header.Length || !header.SequenceEqual(magic)) {
+                continue
+            }
+            let name = Path.GetFileName(path)
+            if !names.Add(name) || File.Exists(Path.Combine(destination, name)) || Directory.Exists(
+                Path.Combine(destination, name)
+            ) {
+                throw WalletException("Wallet preservation found a duplicate filename. Purge was cancelled")
+            }
+            sources.Add(path)
+        }
+        Directory.CreateDirectory(destination)
+        PrivateFiles.ProtectDirectory(destination)
+        if !OperatingSystem.IsWindows() {
+            File.SetUnixFileMode(destination, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute)
+        }
+        for path in sources {
+            using let input = PrivateFiles.OpenRead(path)
+            await PrivateFiles.WriteAtomic(
+                Path.Combine(destination, Path.GetFileName(path)),
+                stream -> input.CopyToAsync(stream, ct),
+                false,
+                true
+            )
+        }
+        let walletRelative = Path.GetRelativePath(data, Path.GetFullPath(settings.WalletDirectory))
+        if !Path.IsPathRooted(walletRelative) && walletRelative != ".." && !walletRelative.StartsWith(
+            ".." + Path.DirectorySeparatorChar,
+            StringComparison.Ordinal
+        ) {
+            settings.WalletDirectory = destination
+        }
+        using let updated = await session
+            .Node
+            .Api
+            .JsonAsync(
+            "settings",
+            writer -> {
+                writer.WriteStartObject()
+                writer.WriteString(
+                    "wallet_file",
+                    Path.Combine(
+                        settings.WalletDirectory,
+                        if settings.ActiveWallet.Length > 0 {
+                            settings.ActiveWallet
+                        } else {
+                            "default.wallet.dat"
+                        }
+                    )
+                )
+                writer.WriteEndObject()
+            },
+            ct,
+            method: HttpMethod.Patch
+        )
+        await AppSettings.SaveAsync(settings, ct)
+        for path in sources {
+            File.Delete(path)
         }
     }
 

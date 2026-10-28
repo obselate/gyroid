@@ -16,6 +16,15 @@ class Strings {
             return key
         }
         return switch key {
+            case "Settings file is invalid. Save settings to replace it": "设置文件无效。保存设置以替换此文件"
+            case "Save wallet settings without a wallet folder override before purging": "清除前请保存钱包设置并移除钱包文件夹环境变量覆盖"
+            case "Wallet preservation folder must be outside the core data folder": "钱包保留文件夹必须位于核心数据文件夹之外"
+            case "Purge folders must not use symbolic links": "清除文件夹不得使用符号链接"
+            case "Wallet preservation found a duplicate filename. Purge was cancelled": "保留钱包时发现重复文件名。清除已取消"
+            case "Purge blockchain data? Wallet files will be kept. Type purge to confirm: ": "清除区块链数据？钱包文件将保留。输入 purge 以确认："
+            case "Purge cancelled": "清除已取消"
+            case "Blockchain data purged. Wallet files were kept": "区块链数据已清除。钱包文件已保留"
+            case "       gyroid node status | start | stop | purge": "       gyroid node status | start | stop | purge"
             case "Recipient address: ": "收款地址："
             case "Memo: ": "备注："
             case "Transaction key: ": "交易密钥："

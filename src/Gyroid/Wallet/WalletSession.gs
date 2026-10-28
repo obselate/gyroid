@@ -377,9 +377,11 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.AutoLockMinutes = minutes
+            next.LoadError = ""
             next.Validate()
             await WalletSettings.SaveAsync(next, ct)
             settings.AutoLockMinutes = minutes
+            settings.LoadError = ""
             if minutes == 0 {
                 WalletLockScheduler.Cancel(settings)
             }
@@ -395,8 +397,12 @@ class WalletSession : IDisposable {
     async func SavePrivacyAsync(value bool, ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
+            let next = settings.Copy()
+            next.Privacy = value
+            next.LoadError = ""
+            await WalletSettings.SaveAsync(next, ct)
             settings.Privacy = value
-            await WalletSettings.SaveAsync(settings, ct)
+            settings.LoadError = ""
         } finally {
             End()
         }
@@ -407,8 +413,10 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.Language = value
+            next.LoadError = ""
             await WalletSettings.SaveAsync(next, ct)
             settings.Language = value
+            settings.LoadError = ""
         } finally {
             End()
         }
@@ -419,8 +427,10 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.NodeMode = value
+            next.LoadError = ""
             await WalletSettings.SaveAsync(next, ct)
             settings.NodeMode = value
+            settings.LoadError = ""
         } finally {
             End()
         }
@@ -439,6 +449,39 @@ class WalletSession : IDisposable {
         await BeginAsync(ct)
         try {
             StopNode()
+        } finally {
+            End()
+        }
+    }
+
+    async func PurgeDataAsync(ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            await ConnectCoreAsync(ct)
+            if !Node.Supervisor.Owned {
+                throw WalletException("This process does not own the node. External nodes are never stopped")
+            }
+            await UnloadCoreAsync(ct)
+            await Library.PreserveBeforePurgeAsync(ct)
+            using let result = await Node.Api.JsonAsync(
+                "purge",
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteBoolean("confirm", true)
+                    writer.WriteEndObject()
+                },
+                ct
+            )
+            Node.StopOwned()
+            Directory.CreateDirectory(settings.DataDirectory)
+            using let marker = PrivateFiles.CreatePrivate(Path.Combine(settings.DataDirectory, "gyroid.owner"))
+            let identity = Encoding.ASCII.GetBytes("Gyroid:" + settings.Network)
+            marker.Write(identity, 0, identity.Length)
+            marker.Flush(true)
+            connected = false
+            page = "Unlock"
+            PublishEmpty()
+            Node.Publish()
         } finally {
             End()
         }
