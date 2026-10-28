@@ -460,7 +460,6 @@ class WalletSettings {
             let directory = Path.GetDirectoryName(path) ??
                 throw WalletException("Settings file must have a parent directory")
             Directory.CreateDirectory(directory)
-            let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
             var text = "{}"
             try {
                 if File.Exists(path) {
@@ -472,32 +471,28 @@ class WalletSettings {
             }
             using let stored = JsonDocument.Parse(text)
             let root = stored.RootElement
-            try {
-                using let stream = PrivateFiles.CreatePrivate(temporary)
-                using let writer = Utf8JsonWriter(stream)
-                writer.WriteStartObject()
-                writer.WriteString("active_wallet", settings.ActiveWallet)
-                WriteSetting(writer, root, "network", "GYROID_NETWORK", settings.Network)
-                WriteSetting(writer, root, "endpoint", "GYROID_ENDPOINT", settings.Endpoint)
-                WriteSetting(writer, root, "data_directory", "GYROID_DATA_DIR", settings.DataDirectory)
-                WriteSetting(writer, root, "wallet_directory", "GYROID_WALLET_DIR", settings.WalletDirectory)
-                WriteSetting(writer, root, "binary_path", "GYROID_BINARY", settings.BinaryPath)
-                WriteSetting(writer, root, "listen_address", "GYROID_LISTEN", settings.ListenAddress)
-                WriteSetting(writer, root, "node_mode", "GYROID_NODE_MODE", settings.NodeMode)
-                writer.WriteString("language", settings.Language)
-                writer.WriteBoolean("privacy", settings.Privacy)
-                writer.WriteNumber("auto_lock_minutes", settings.AutoLockMinutes)
-                writer.WriteEndObject()
-                await writer.FlushAsync(ct)
-                writer.Dispose()
-                stream.Flush(true)
-                stream.Dispose()
-                File.Move(temporary, path, true)
-            } finally {
-                if File.Exists(temporary) {
-                    File.Delete(temporary)
-                }
-            }
+            await PrivateFiles.WriteAtomic(
+                path,
+                async (stream) -> {
+                    using let writer = Utf8JsonWriter(stream)
+                    writer.WriteStartObject()
+                    writer.WriteString("active_wallet", settings.ActiveWallet)
+                    WriteSetting(writer, root, "network", "GYROID_NETWORK", settings.Network)
+                    WriteSetting(writer, root, "endpoint", "GYROID_ENDPOINT", settings.Endpoint)
+                    WriteSetting(writer, root, "data_directory", "GYROID_DATA_DIR", settings.DataDirectory)
+                    WriteSetting(writer, root, "wallet_directory", "GYROID_WALLET_DIR", settings.WalletDirectory)
+                    WriteSetting(writer, root, "binary_path", "GYROID_BINARY", settings.BinaryPath)
+                    WriteSetting(writer, root, "listen_address", "GYROID_LISTEN", settings.ListenAddress)
+                    WriteSetting(writer, root, "node_mode", "GYROID_NODE_MODE", settings.NodeMode)
+                    writer.WriteString("language", settings.Language)
+                    writer.WriteBoolean("privacy", settings.Privacy)
+                    writer.WriteNumber("auto_lock_minutes", settings.AutoLockMinutes)
+                    writer.WriteEndObject()
+                    await writer.FlushAsync(ct)
+                },
+                true,
+                false
+            )
         }
     }
 }

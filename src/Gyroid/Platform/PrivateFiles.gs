@@ -7,6 +7,7 @@ import System.Runtime.InteropServices
 import System.Security.AccessControl
 import System.Security.Principal
 import System.Text
+import System.Threading.Tasks
 
 @DllImport("libc", EntryPoint: "open", SetLastError: true)
 func OpenWalletFile(path string, flags int32) int32;
@@ -36,6 +37,22 @@ func OpenWindowsWalletFile(
 
 class PrivateFiles {
     shared {
+        async func WriteAtomic(path string, write Func[FileStream, Task], overwrite bool, flushDirectory bool) {
+            let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+            try {
+                using let stream = CreatePrivate(temporary)
+                await write(stream)
+                stream.Flush(true)
+                stream.Dispose()
+                File.Move(temporary, path, overwrite)
+                if flushDirectory {
+                    FlushDirectory(Path.GetDirectoryName(path) ?? "")
+                }
+            } finally {
+                File.Delete(temporary)
+            }
+        }
+
         func ProtectDirectory(path string) {
             if OperatingSystem.IsWindows() {
                 using let identity = WindowsIdentity.GetCurrent()

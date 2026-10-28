@@ -396,18 +396,7 @@ class NodeSupervisor : IDisposable {
         resource.ReadExactly(baseline, 0, baseline.Length)
         let selected = Checkpoints.Select(baseline, downloaded)
         let path = Path.Combine(settings.DataDirectory, "checkpoints.dat")
-        let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
-        try {
-            using let stream = PrivateFiles.CreatePrivate(temporary)
-            await stream.WriteAsync(selected, 0, selected.Length, ct)
-            stream.Flush(true)
-            stream.Dispose()
-            File.Move(temporary, path, true)
-        } finally {
-            if File.Exists(temporary) {
-                File.Delete(temporary)
-            }
-        }
+        await PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(selected, 0, selected.Length, ct), true, false)
         ReportProgress("Checkpoints", 100)
         return true
     }
@@ -445,37 +434,32 @@ class NodeSupervisor : IDisposable {
             (installed || NodeJson.Text(original.RootElement, "listen") == settings.ListenAddress) {
             return
         }
-        let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
         try {
-            try {
-                using let stream = PrivateFiles.CreatePrivate(temporary)
-                using let writer = Utf8JsonWriter(stream)
-                writer.WriteStartObject()
-                for field in original.RootElement.EnumerateObject() {
-                    if field.Name != "wallet_file" &&
-                        field.Name != "full_sync" &&
-                        (installed || field.Name != "listen") {
-                        field.WriteTo(writer)
+            await PrivateFiles.WriteAtomic(
+                path,
+                async (stream) -> {
+                    using let writer = Utf8JsonWriter(stream)
+                    writer.WriteStartObject()
+                    for field in original.RootElement.EnumerateObject() {
+                        if field.Name != "wallet_file" &&
+                            field.Name != "full_sync" &&
+                            (installed || field.Name != "listen") {
+                            field.WriteTo(writer)
+                        }
                     }
-                }
-                writer.WriteString("wallet_file", walletFile)
-                if !installed {
-                    writer.WriteString("listen", settings.ListenAddress)
-                }
-                writer.WriteBoolean("full_sync", fullSync)
-                writer.WriteEndObject()
-                await writer.FlushAsync(ct)
-                writer.Dispose()
-                stream.Flush(true)
-                stream.Dispose()
-                File.Move(temporary, path, true)
-            } catch (error JsonException) {
-                throw WalletException("Core settings could not be parsed")
-            }
-        } finally {
-            if File.Exists(temporary) {
-                File.Delete(temporary)
-            }
+                    writer.WriteString("wallet_file", walletFile)
+                    if !installed {
+                        writer.WriteString("listen", settings.ListenAddress)
+                    }
+                    writer.WriteBoolean("full_sync", fullSync)
+                    writer.WriteEndObject()
+                    await writer.FlushAsync(ct)
+                },
+                true,
+                false
+            )
+        } catch (error JsonException) {
+            throw WalletException("Core settings could not be parsed")
         }
     }
 

@@ -1518,27 +1518,27 @@ class WalletController : IDisposable {
 
     private func SavePendingSend(pending PendingSend) {
         let path = PendingSendPath()
-        let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
-        try {
-            using let stream = PrivateFiles.CreatePrivate(temporary)
-            using let writer = Utf8JsonWriter(stream)
-            writer.WriteStartObject()
-            writer.WriteString("idempotency_key", pending.Key)
-            writer.WriteString("body", pending.Body)
-            writer.WriteString("wallet", pending.Wallet)
-            writer.WriteString("network", pending.Network)
-            writer.WriteNumber("timestamp", pending.Timestamp)
-            writer.WriteNumber("core_started", pending.CoreStarted)
-            writer.WriteEndObject()
-            writer.Flush()
-            writer.Dispose()
-            stream.Flush(true)
-            stream.Dispose()
-            File.Move(temporary, path)
-            PrivateFiles.FlushDirectory(settings.DataDirectory)
-        } finally {
-            File.Delete(temporary)
-        }
+        PrivateFiles
+            .WriteAtomic(
+            path,
+            stream -> {
+                using let writer = Utf8JsonWriter(stream)
+                writer.WriteStartObject()
+                writer.WriteString("idempotency_key", pending.Key)
+                writer.WriteString("body", pending.Body)
+                writer.WriteString("wallet", pending.Wallet)
+                writer.WriteString("network", pending.Network)
+                writer.WriteNumber("timestamp", pending.Timestamp)
+                writer.WriteNumber("core_started", pending.CoreStarted)
+                writer.WriteEndObject()
+                writer.Flush()
+                return Task.CompletedTask
+            },
+            false,
+            true
+        )
+            .GetAwaiter()
+            .GetResult()
     }
 
     private func ClearPendingSend() {

@@ -7,6 +7,7 @@ import System
 import System.Collections.Generic
 import System.IO
 import System.Text.Json
+import System.Threading.Tasks
 
 class AddressBook {
     shared {
@@ -36,25 +37,24 @@ class AddressBook {
         func WriteContacts(contacts SortedDictionary[string, string]) {
             let path = ContactsPath()
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "")
-            let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
-            try {
-                using let stream = PrivateFiles.CreatePrivate(temporary)
-                using let writer = Utf8JsonWriter(stream)
-                writer.WriteStartObject()
-                for (name, address) in contacts {
-                    writer.WriteString(name, address)
-                }
-                writer.WriteEndObject()
-                writer.Flush()
-                writer.Dispose()
-                stream.Flush(true)
-                stream.Dispose()
-                File.Move(temporary, path, true)
-            } finally {
-                if File.Exists(temporary) {
-                    File.Delete(temporary)
-                }
-            }
+            PrivateFiles
+                .WriteAtomic(
+                path,
+                stream -> {
+                    using let writer = Utf8JsonWriter(stream)
+                    writer.WriteStartObject()
+                    for entry in contacts {
+                        writer.WriteString(entry.Key, entry.Value)
+                    }
+                    writer.WriteEndObject()
+                    writer.Flush()
+                    return Task.CompletedTask
+                },
+                true,
+                false
+            )
+                .GetAwaiter()
+                .GetResult()
         }
     }
 }
