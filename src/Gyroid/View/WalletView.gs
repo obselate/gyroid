@@ -154,7 +154,14 @@ partial class WalletView : Cell {
             UpdatePlayback()
             Rebuild()
         }
-        owner.FocusChanged += _ -> Rebuild()
+        owner.FocusChanged += _ -> {
+            UpdatePlayback()
+            Rebuild()
+        }
+        owner.VisibilityChanged += _ -> {
+            UpdatePlayback()
+            Rebuild()
+        }
         owner.PreviewKeyPressed += (key Key, modifiers KeyModifiers) -> {
             wallet.Touch()
             return false
@@ -179,12 +186,20 @@ partial class WalletView : Cell {
         wallet.Changed = nil
     }
 
+    private func PlaybackActive() bool ->
+    !hidden && window?.IsFocused == true && window?.IsVisible == true && window?.State != WindowState.Minimized
+
     private func UpdatePlayback() {
-        if hidden || window?.State == WindowState.Minimized {
+        if !PlaybackActive() {
+            clock.Stop()
             frameTimer?.Dispose()
             frameTimer = nil
+            decodeTimer?.Dispose()
+            decodeTimer = nil
+            decoding.Clear()
         } else {
-            frameTimer ??= window?.SetInterval(() -> Tick(), 33)
+            clock.Start()
+            frameTimer ??= window?.SetInterval(() -> Tick(), 50)
         }
     }
 
@@ -282,6 +297,9 @@ partial class WalletView : Cell {
     }
 
     private func Decode(channel string) {
+        if !PlaybackActive() {
+            return
+        }
         decoding[channel] = Stopwatch.GetTimestamp()
         decodeSeed = Random.Shared.Next()
         decodeTimer ??= window?.SetInterval(
@@ -662,7 +680,7 @@ partial class WalletView : Cell {
                     FontFamily = font
                 }
             ).Build(),
-            if busy {
+            if busy && PlaybackActive() {
                 Container{
                     Position: PositionType.Absolute,
                     Left: 0,
