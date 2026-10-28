@@ -412,7 +412,7 @@ partial class WalletView {
         try {
             let next = SortedDictionary[string, string](contacts, StringComparer.Ordinal)
             next.Remove(editingContact)
-            next[label] = WalletController.ValidateDestination(contactAddress)
+            next[label] = WalletValidation.ValidateDestination(contactAddress)
             StoreContacts(next, () -> ResetContact())
         } catch (failure WalletException) {
             contactIssue = failure.Message

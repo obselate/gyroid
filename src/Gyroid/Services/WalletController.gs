@@ -956,7 +956,7 @@ class WalletController : IDisposable {
     }
 
     async func SignAsync(message string, ct CancellationToken = default(CancellationToken)) string {
-        ValidateMessage(message)
+        WalletValidation.ValidateMessage(message)
         await BeginAsync(ct)
         try {
             RequireUnlocked()
@@ -982,14 +982,14 @@ class WalletController : IDisposable {
         signature string,
         ct CancellationToken = default(CancellationToken)
     ) bool {
-        ValidateMessage(message)
+        WalletValidation.ValidateMessage(message)
         await BeginAsync(ct)
         try {
             using let response = await rpc.JsonAsync(
                 "verify",
                 writer -> {
                     writer.WriteStartObject()
-                    writer.WriteString("address", ValidateAddress(address))
+                    writer.WriteString("address", WalletValidation.ValidateAddress(address))
                     writer.WriteString("message", message)
                     writer.WriteString("signature", signature)
                     writer.WriteEndObject()
@@ -1043,7 +1043,7 @@ class WalletController : IDisposable {
                     writer.WriteStartObject()
                     writer.WriteString("txid", txid)
                     writer.WriteString("tx_key", txKey)
-                    writer.WriteString("address", ValidateAddress(address))
+                    writer.WriteString("address", WalletValidation.ValidateAddress(address))
                     writer.WriteEndObject()
                 },
                 ct
@@ -1337,7 +1337,7 @@ class WalletController : IDisposable {
             RequireUnlocked()
             RequireNoPendingSend()
             InvalidateConfirmation()
-            let request = ValidateSend(
+            let request = WalletValidation.ValidateSend(
                 address,
                 amount,
                 memo,
@@ -1352,7 +1352,7 @@ class WalletController : IDisposable {
             if recipient.StartsWith("$", StringComparison.Ordinal) {
                 let resolved = await BlocknetId.ResolveAsync(recipient, ct)
                 handle = resolved.Handle
-                recipient = ValidateAddress(resolved.Address)
+                recipient = WalletValidation.ValidateAddress(resolved.Address)
             }
             await Task.Delay(2000, ct)
             using let result = await rpc.JsonAsync(
@@ -1403,7 +1403,12 @@ class WalletController : IDisposable {
                 throw WalletException("Estimate is no longer valid. Request a new estimate")
             }
             let available = snapshot.Balance?.Spendable ?? throw WalletException("Spendable balance is unavailable")
-            ValidateSend(estimate.Address, WalletAmount.Format(estimate.Amount), estimate.Memo, available)
+            WalletValidation.ValidateSend(
+                estimate.Address,
+                WalletAmount.Format(estimate.Amount),
+                estimate.Memo,
+                available
+            )
             if estimate.Total > available {
                 throw WalletException("Amount and fee exceed spendable balance")
             }
@@ -1779,66 +1784,7 @@ class WalletController : IDisposable {
     }
 
     shared {
-        let MemoLimit int32 = 124
-        private let memoEncoding UTF8Encoding = UTF8Encoding(false, true)
         private let historyPage int32 = 50
-
-        private func ValidateMessage(message string) {
-            if message.Length == 0 || Encoding.UTF8.GetByteCount(message) > 1024 {
-                throw WalletException("Message must contain 1 to 1024 UTF-8 bytes")
-            }
-        }
-
-        func ValidateAddress(address string) string {
-            let recipient = address.Trim()
-            if recipient.Length < 64 || recipient.Length > 93 {
-                throw WalletException("Address must contain 64 to 93 Base58 characters")
-            }
-            for character in recipient {
-                if !"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".Contains(character) {
-                    throw WalletException("Address contains an invalid character")
-                }
-            }
-            return recipient
-        }
-
-        func MemoBytes(memo string) int32 {
-            for character in memo {
-                if char.IsControl(character) {
-                    throw WalletException("Memo cannot contain control characters")
-                }
-            }
-            try {
-                let count = memoEncoding.GetByteCount(memo)
-                if count > MemoLimit {
-                    throw WalletException("Memo must not exceed 124 UTF-8 bytes")
-                }
-                return count
-            } catch (error EncoderFallbackException) {
-                throw WalletException("Memo must contain valid Unicode text")
-            }
-        }
-
-        func ValidateDestination(address string) string {
-            let recipient = address.Trim()
-            return if recipient.StartsWith("$", StringComparison.Ordinal) {
-                "$" + BlocknetId.Normalize(recipient)
-            } else {
-                ValidateAddress(recipient)
-            }
-        }
-
-        func ValidateSend(address string, amount string, memo string, spendable uint64? = nil) WalletRecipient {
-            let destination = ValidateDestination(address)
-            let atoms = WalletAmount.Parse(amount)
-            MemoBytes(memo)
-            if let available = spendable {
-                if atoms > available {
-                    throw WalletException("Amount exceeds spendable balance")
-                }
-            }
-            return WalletRecipient{Address: destination, Amount: atoms, Memo: memo}
-        }
 
         private func WriteCredentials(
             writer Utf8JsonWriter,
@@ -1889,7 +1835,7 @@ class WalletController : IDisposable {
             try {
                 using let json = JsonDocument.Parse(WalletFiles.ReadText(path, 1048576))
                 for entry in json.RootElement.EnumerateObject() {
-                    contacts[entry.Name] = ValidateDestination(entry.Value.GetString() ?? "")
+                    contacts[entry.Name] = WalletValidation.ValidateDestination(entry.Value.GetString() ?? "")
                 }
             } catch (error Exception) {
                 throw WalletException("Address book file is invalid")

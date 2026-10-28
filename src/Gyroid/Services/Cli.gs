@@ -101,7 +101,7 @@ class Cli {
             }
             try {
                 if command == "send" && !resume {
-                    WalletController.ValidateSend(arguments[2], arguments[3], memo)
+                    WalletValidation.ValidateSend(arguments[2], arguments[3], memo)
                 }
                 using let wallet = WalletController()
                 let problem = wallet.Settings.LoadError

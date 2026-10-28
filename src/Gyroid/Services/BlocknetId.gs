@@ -120,7 +120,7 @@ class BlocknetId(handle string, address string) {
                     .ToUnixTimeSeconds() {
                     throw WalletException("Could not verify the Blocknet ID destination")
                 }
-                WalletController.ValidateAddress(address)
+                WalletValidation.ValidateAddress(address)
                 return BlocknetId("$" + handle, address)
             } catch (error WalletException) {
                 throw error

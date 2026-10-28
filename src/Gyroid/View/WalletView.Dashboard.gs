@@ -195,7 +195,7 @@ partial class WalletView {
 
     private func MemoIssue(value string) string {
         try {
-            WalletController.MemoBytes(value)
+            WalletValidation.MemoBytes(value)
             return ""
         } catch (error WalletException) {
             return error.Message
@@ -297,7 +297,7 @@ partial class WalletView {
         let blank = address.Trim().Length == 0 || amount.Trim().Length == 0
         let amountIssue = AmountIssue(amount, wallet.Snapshot.Balance?.Spendable)
         let memoIssue = MemoIssue(memo)
-        let remaining = WalletController.MemoLimit - Encoding.UTF8.GetByteCount(memo)
+        let remaining = WalletValidation.MemoLimit - Encoding.UTF8.GetByteCount(memo)
         let card = PageContent(
             strings.Get("send"),
             640,

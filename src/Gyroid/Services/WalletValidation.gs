@@ -70,6 +70,65 @@ class WalletAmount {
 
 class WalletValidation {
     shared {
+        let MemoLimit int32 = 124
+        private let memoEncoding UTF8Encoding = UTF8Encoding(false, true)
+        func ValidateMessage(message string) {
+            if message.Length == 0 || Encoding.UTF8.GetByteCount(message) > 1024 {
+                throw WalletException("Message must contain 1 to 1024 UTF-8 bytes")
+            }
+        }
+
+        func ValidateAddress(address string) string {
+            let recipient = address.Trim()
+            if recipient.Length < 64 || recipient.Length > 93 {
+                throw WalletException("Address must contain 64 to 93 Base58 characters")
+            }
+            for character in recipient {
+                if !"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".Contains(character) {
+                    throw WalletException("Address contains an invalid character")
+                }
+            }
+            return recipient
+        }
+
+        func MemoBytes(memo string) int32 {
+            for character in memo {
+                if char.IsControl(character) {
+                    throw WalletException("Memo cannot contain control characters")
+                }
+            }
+            try {
+                let count = memoEncoding.GetByteCount(memo)
+                if count > MemoLimit {
+                    throw WalletException("Memo must not exceed 124 UTF-8 bytes")
+                }
+                return count
+            } catch (error EncoderFallbackException) {
+                throw WalletException("Memo must contain valid Unicode text")
+            }
+        }
+
+        func ValidateDestination(address string) string {
+            let recipient = address.Trim()
+            return if recipient.StartsWith("$", StringComparison.Ordinal) {
+                "$" + BlocknetId.Normalize(recipient)
+            } else {
+                ValidateAddress(recipient)
+            }
+        }
+
+        func ValidateSend(address string, amount string, memo string, spendable uint64? = nil) WalletRecipient {
+            let destination = ValidateDestination(address)
+            let atoms = WalletAmount.Parse(amount)
+            MemoBytes(memo)
+            if let available = spendable {
+                if atoms > available {
+                    throw WalletException("Amount exceeds spendable balance")
+                }
+            }
+            return WalletRecipient{Address: destination, Amount: atoms, Memo: memo}
+        }
+
         func PasswordError(password[]char, confirmation[]char) string {
             if password.Length < 3 {
                 return "Password must contain at least 3 characters"
