@@ -1,6 +1,7 @@
 package Gyroid.Wallet
 
 import Gyroid.History
+import Gyroid.Mining
 import Gyroid.Node
 import Gyroid.Platform
 import Gyroid.Send
@@ -19,6 +20,7 @@ class WalletSession : IDisposable {
     let Library WalletLibrary
     let Keys WalletKeys
     let Proofs MessageProofs
+    let Mining MiningService
     let gate SemaphoreSlim = SemaphoreSlim(1, 1)
     let autoLockChanged SemaphoreSlim = SemaphoreSlim(0, 1)
     var snapshot WalletSnapshot = WalletSnapshot()
@@ -52,6 +54,7 @@ class WalletSession : IDisposable {
         Library = WalletLibrary(this)
         Keys = WalletKeys(this)
         Proofs = MessageProofs(this)
+        Mining = MiningService(this)
         Node.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         Node.Changed = () -> Changed?.Invoke()
         if settings.ActiveWallet.Length > 0 {

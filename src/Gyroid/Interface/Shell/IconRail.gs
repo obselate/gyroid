@@ -87,6 +87,7 @@ partial class App {
         rail.Add(RailItem("history", "schedule", page == "Transactions", blocked, () -> Navigate("Transactions")))
         rail.Add(RailItem("tools", "tune", page == "Tools", blocked, () -> Navigate("Tools")))
         rail.Add(RailItem("contacts", "person", page == "Contacts", blocked, () -> Navigate("Contacts")))
+        rail.Add(RailItem("mining", "hardware", page == "Mining", blocked, () -> Navigate("Mining")))
         rail.Add(Container{FlexGrow: 1})
         rail.Add(NodeBadge())
         rail.Add(

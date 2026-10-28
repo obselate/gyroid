@@ -34,6 +34,8 @@ partial class App : Cell {
 
     private let receiveRequest ReceiveRequest = ReceiveRequest()
 
+    private let miningHistory MiningHistory = MiningHistory()
+
     private var proofTx string = ""
 
     private var proofKey string = ""
@@ -514,6 +516,20 @@ partial class App : Cell {
                     Request: receiveRequest
                 }
             )
+        } else if page == "Mining" {
+            Cell.Mount[MiningPageInput, MiningPage](
+                "mining",
+                MiningPageInput{
+                    Ui: ui,
+                    Session: wallet,
+                    Window: window,
+                    History: miningHistory,
+                    Wallet: WalletName(wallet.Settings.ActiveWallet),
+                    Language: ui.Strings.Language,
+                    Busy: ui.Working(),
+                    Height: height
+                }
+            )
         } else if page == "Transactions" {
             HistoryView(snapshot)
         } else if page == "Seed" {
@@ -585,7 +601,7 @@ partial class App : Cell {
         if page == "Overview" && (wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0) {
             main.Add(PendingSendBanner())
         }
-        if page == "Overview" || page == "Transactions" {
+        if page == "Overview" || page == "Transactions" || page == "Mining" {
             main.Add(content)
         } else {
             let stage = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, FlexDirection: FlexDirection.Row}
