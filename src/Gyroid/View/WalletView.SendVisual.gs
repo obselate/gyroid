@@ -112,7 +112,7 @@ partial class WalletView {
             Content: String('●', filled) + String('○', 10 - filled),
             StyleRanges: []TextStyleRange{TextStyleRange(TextRange(0, filled), Style{Color: lime})},
             FontFamily: font,
-            FontSize: 11,
+            FontSize: 13,
             Color: dim,
             TextWrap: TextWrap.NoWrap
         }
