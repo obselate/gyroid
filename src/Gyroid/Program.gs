@@ -17,6 +17,10 @@ func FreeConsole() int32;
 
 func Main() {
     let arguments = Environment.GetCommandLineArgs()
+    if OperatingSystem.IsWindows() && arguments.Length >= 3 && arguments[1] == "--owned-core" {
+        Environment.ExitCode = WalletCore.RunWindows(arguments)
+        return
+    }
     if arguments.Length > 1 && arguments[1] != "--width" && arguments[1] != "--height" && arguments[1] != "--scale" {
         Environment.ExitCode = Cli.Run(arguments)
         return

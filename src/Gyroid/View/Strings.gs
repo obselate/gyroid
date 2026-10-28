@@ -267,6 +267,11 @@ class Strings {
             case "Installed wallet file must have a parent directory": "已安装的钱包文件须位于有效目录中"
             case "Running core network does not match the configured network": "运行中的节点网络与设置不一致"
             case "Wallet name must be a basename ending in .dat": "钱包名称须以 .dat 结尾，且不能包含目录。"
+            case "Application executable is unavailable": "无法获取应用程序路径"
+            case "File ownership could not be verified": "无法验证文件所有者"
+            case "Core process arguments could not be verified": "无法验证节点进程参数"
+            case "Could not allocate the owned core console": "无法为节点进程分配控制台"
+            case "Could not register the owned core console handler": "无法注册节点控制台处理程序"
             default: key
         }
     }

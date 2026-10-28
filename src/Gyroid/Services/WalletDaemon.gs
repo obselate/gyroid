@@ -11,7 +11,9 @@ import System.IO.Compression
 import System.Net.Http
 import System.Reflection
 import System.Runtime.InteropServices
+import System.Security.AccessControl
 import System.Security.Cryptography
+import System.Security.Principal
 import System.Text
 import System.Text.Json
 import System.Threading
@@ -60,6 +62,36 @@ func CloseWalletHandle(handle IntPtr) bool;
 
 @DllImport("libproc", EntryPoint: "proc_pidpath")
 func WalletMacProcessPath(pid int32, path[]uint8, size uint32) int32;
+
+@DllImport("kernel32.dll", EntryPoint: "AllocConsole")
+func AllocateWalletConsole() bool;
+
+@DllImport("kernel32.dll", EntryPoint: "FreeConsole")
+func ReleaseWalletConsole() bool;
+
+@DllImport("kernel32.dll", EntryPoint: "GetConsoleWindow")
+func WalletConsoleWindow() IntPtr;
+
+@DllImport("user32.dll", EntryPoint: "ShowWindow")
+func ShowWalletConsole(window IntPtr, command int32) bool;
+
+@UnmanagedFunctionPointer(CallingConvention.Winapi)
+delegate WalletConsoleHandler(signal uint32) int32;
+
+@DllImport("kernel32.dll", EntryPoint: "SetConsoleCtrlHandler")
+func SetWalletConsoleHandler(handler WalletConsoleHandler, add bool) bool;
+
+@DllImport("kernel32.dll", EntryPoint: "GenerateConsoleCtrlEvent")
+func SignalWalletConsole(signal uint32, group uint32) bool;
+
+@DllImport("ntdll.dll", EntryPoint: "NtQueryInformationProcess")
+func WalletProcessInformation(process IntPtr, kind uint32, buffer IntPtr, size int32, out length int32) int32;
+
+@DllImport("shell32.dll", EntryPoint: "CommandLineToArgvW", CharSet: CharSet.Unicode)
+func WalletCommandArguments(command string, out count int32) IntPtr;
+
+@DllImport("kernel32.dll", EntryPoint: "LocalFree")
+func FreeWalletMemory(memory IntPtr) IntPtr;
 
 class WalletDaemon : IDisposable {
     var process Process? = nil
@@ -137,9 +169,13 @@ class WalletDaemon : IDisposable {
         let installed = settings.DataDirectory == settings.DiscoveredDataDirectory
         if !installed {
             EnsureOwnedData(settings)
+            WalletFiles.ProtectDirectory(settings.DataDirectory)
         }
         let walletsExist = Directory.Exists(settings.WalletDirectory)
         Directory.CreateDirectory(settings.WalletDirectory)
+        if !walletsExist {
+            WalletFiles.ProtectDirectory(settings.WalletDirectory)
+        }
         if !OperatingSystem.IsWindows() {
             if !installed {
                 File.SetUnixFileMode(
@@ -199,6 +235,11 @@ class WalletDaemon : IDisposable {
             RedirectStandardInput: true
         }
         settings.OwnedProcessId = 0
+        if OperatingSystem.IsWindows() {
+            start.FileName = Environment.ProcessPath ?? throw WalletException("Application executable is unavailable")
+            start.ArgumentList.Add("--owned-core")
+            start.ArgumentList.Add(settings.BinaryPath)
+        }
         start.ArgumentList.Add("--data")
         start.ArgumentList.Add(settings.DataDirectory)
         start.ArgumentList.Add("--api")
@@ -210,6 +251,8 @@ class WalletDaemon : IDisposable {
         start.Environment["USERPROFILE"] = Path.Combine(settings.DataDirectory, "home")
         start.Environment["XDG_CONFIG_HOME"] = Path.Combine(settings.DataDirectory, "config")
         start.Environment["XDG_DATA_HOME"] = settings.DataDirectory
+        start.Environment["APPDATA"] = Path.Combine(settings.DataDirectory, "config")
+        start.Environment["LOCALAPPDATA"] = settings.DataDirectory
         start.Environment["BLOCKNET_P2P_KEY"] = Path.Combine(settings.DataDirectory, "identity.key")
         start.Environment.Remove("BLOCKNET_VIEW_PRIV")
         try {
@@ -225,14 +268,20 @@ class WalletDaemon : IDisposable {
             if owned == nil {
                 throw WalletException("Could not start the configured core executable")
             }
-            settings.OwnedProcessId = owned.Id
+            settings.OwnedProcessId = if OperatingSystem.IsWindows() {
+                int32.Parse(owned.StandardOutput.ReadLine() ?? "0", CultureInfo.InvariantCulture)
+            } else {
+                owned.Id
+            }
             Executable = settings.BinaryPath
             Source = if Executable == settings.LauncherBinaryPath {
                 "Launcher"
             } else {
                 "Gyroid"
             }
-            owned.StandardInput.Close()
+            if !OperatingSystem.IsWindows() {
+                owned.StandardInput.Close()
+            }
             owned.StandardOutput.BaseStream.CopyToAsync(Stream.Null)
             owned.StandardError.BaseStream.CopyToAsync(Stream.Null)
             owned.Exited += (_, _) -> {
@@ -308,7 +357,7 @@ class WalletDaemon : IDisposable {
                 return true
             }
         }
-        if OperatingSystem.IsLinux() {
+        if OperatingSystem.IsLinux() || OperatingSystem.IsWindows() {
             for candidate in Process.GetProcesses() {
                 using let current = candidate
                 try {
@@ -317,11 +366,11 @@ class WalletDaemon : IDisposable {
                     }
                     let executable = WalletCore.ProcessExecutable(current.Id)
                     WalletCore.VerifyExecutable(executable)
-                    let arguments = File.ReadAllText("/proc/" + current.Id.ToString() + "/cmdline").Split('\0')
+                    let arguments = WalletCore.Arguments(current.Id)
                     var endpoint = ""
                     var data = ""
                     var testnet = false
-                    for index in 0 ... (arguments.Length - 1) {
+                    for index in 0 ... arguments.Length {
                         if arguments[index] == "--testnet" ||
                             arguments[index] == "-testnet" ||
                             arguments[index] == "--testnet=true" ||
@@ -547,11 +596,11 @@ class WalletDaemon : IDisposable {
             try {
                 if !owned.HasExited {
                     if OperatingSystem.IsWindows() {
-                        owned.Kill()
+                        owned.StandardInput.Close()
                     } else {
                         SignalWalletDaemon(owned.Id, 15)
                     }
-                    if !owned.WaitForExit(5000) {
+                    if !owned.WaitForExit(7000) {
                         owned.Kill(true)
                         owned.WaitForExit(2000)
                     }
@@ -578,6 +627,26 @@ class WalletDaemon : IDisposable {
 
 class WalletFiles {
     shared {
+        func ProtectDirectory(path string) {
+            if OperatingSystem.IsWindows() {
+                using let identity = WindowsIdentity.GetCurrent()
+                let owner = identity.User ?? throw WalletException("File ownership could not be verified")
+                let security = DirectorySecurity()
+                security.SetOwner(owner)
+                security.SetAccessRuleProtection(true, false)
+                security.AddAccessRule(
+                    FileSystemAccessRule(
+                        owner,
+                        FileSystemRights.FullControl,
+                        InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                        PropagationFlags.None,
+                        AccessControlType.Allow
+                    )
+                )
+                FileSystemAclExtensions.SetAccessControl(DirectoryInfo(path), security)
+            }
+        }
+
         func FlushDirectory(path string) {
             if OperatingSystem.IsWindows() {
                 return
@@ -603,6 +672,38 @@ class WalletFiles {
                 ) != 0 {
                     handle.Dispose()
                     throw WalletException("File must be a regular no-follow file")
+                }
+                let stream = FileStream(handle, FileAccess.Read)
+                try {
+                    let security = FileSystemAclExtensions.GetAccessControl(stream)
+                    using let identity = WindowsIdentity.GetCurrent()
+                    let owner = identity.User ?? throw WalletException("File ownership could not be verified")
+                    let tokenOwner = identity.Owner ?? owner
+                    let fileOwner = security.GetOwner(typeof(SecurityIdentifier))
+                    if !owner.Equals(fileOwner) && !tokenOwner.Equals(fileOwner) {
+                        throw WalletException("File ownership or permissions are not private")
+                    }
+                    if privateFile {
+                        for entry in security.GetAccessRules(true, true, typeof(SecurityIdentifier)) {
+                            let rule = entry as FileSystemAccessRule
+                            if rule != nil &&
+                                rule.AccessControlType == AccessControlType.Allow &&
+                                !rule
+                                .IdentityReference
+                                .Equals(owner) && !rule.IdentityReference.Equals(
+                                SecurityIdentifier(WellKnownSidType.LocalSystemSid, nil)
+                            ) &&
+                                !rule
+                                .IdentityReference
+                                .Equals(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, nil)) {
+                                throw WalletException("File ownership or permissions are not private")
+                            }
+                        }
+                    }
+                    return stream
+                } catch (error Exception) {
+                    stream.Dispose()
+                    throw error
                 }
             } else {
                 let flags = if OperatingSystem.IsMacOS() {
@@ -689,6 +790,25 @@ class WalletFiles {
         }
 
         func CreatePrivate(path string) FileStream {
+            if OperatingSystem.IsWindows() {
+                using let identity = WindowsIdentity.GetCurrent()
+                let owner = identity.User ?? throw WalletException("File ownership could not be verified")
+                let security = FileSecurity()
+                security.SetOwner(owner)
+                security.SetAccessRuleProtection(true, false)
+                security.AddAccessRule(
+                    FileSystemAccessRule(owner, FileSystemRights.FullControl, AccessControlType.Allow)
+                )
+                return FileSystemAclExtensions.Create(
+                    FileInfo(path),
+                    FileMode.CreateNew,
+                    FileSystemRights.Read | FileSystemRights.Write,
+                    FileShare.None,
+                    4096,
+                    FileOptions.None,
+                    security
+                )
+            }
             let options = FileStreamOptions{Mode: FileMode.CreateNew, Access: FileAccess.Write, Share: FileShare.None}
             if !OperatingSystem.IsWindows() {
                 options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite
@@ -842,9 +962,85 @@ class WalletCheckpoints {
 
 class WalletCore {
     shared {
-        func VerifyNetwork(pid int32, network string) {
+        func RunWindows(arguments[]string) int32 {
+            using let input = Console.OpenStandardInput()
+            let output = Console.Out
+            ReleaseWalletConsole()
+            if !AllocateWalletConsole() {
+                throw WalletException("Could not allocate the owned core console")
+            }
+            ShowWalletConsole(WalletConsoleWindow(), 0)
+            let handler WalletConsoleHandler = _ -> 1
+            if !SetWalletConsoleHandler(handler, true) {
+                throw WalletException("Could not register the owned core console handler")
+            }
+            let start = ProcessStartInfo{
+                FileName: arguments[2],
+                UseShellExecute: false,
+                RedirectStandardOutput: true,
+                RedirectStandardError: true,
+                RedirectStandardInput: true
+            }
+            for index in 3 ... arguments.Length {
+                start.ArgumentList.Add(arguments[index])
+            }
+            using let core = Process.Start(start) ??
+                throw WalletException("Could not start the configured core executable")
+            output.WriteLine(core.Id.ToString(CultureInfo.InvariantCulture))
+            output.Flush()
+            core.StandardInput.Close()
+            core.StandardOutput.BaseStream.CopyToAsync(Stream.Null)
+            core.StandardError.BaseStream.CopyToAsync(Stream.Null)
+            let closed = input.ReadAsync([1]uint8, 0, 1)
+            Task.WhenAny(closed, core.WaitForExitAsync()).GetAwaiter().GetResult()
+            if !core.HasExited {
+                SignalWalletConsole(1, 0)
+                if !core.WaitForExit(5000) {
+                    core.Kill(true)
+                    core.WaitForExit(2000)
+                }
+            }
+            GC.KeepAlive(handler)
+            return core.ExitCode
+        }
+
+        func Arguments(pid int32)[]string {
             if OperatingSystem.IsLinux() {
-                let arguments = File.ReadAllText("/proc/" + pid.ToString() + "/cmdline").Split('\0')
+                return File.ReadAllText("/proc/" + pid.ToString() + "/cmdline").Split('\0')
+            }
+            let process = OpenWalletProcess(4096, false, pid)
+            let buffer = Marshal.AllocHGlobal(65536)
+            try {
+                if process == IntPtr.Zero || WalletProcessInformation(process, 60, buffer, 65536, out _) != 0 {
+                    throw WalletException("Core process arguments could not be verified")
+                }
+                let command = Marshal.PtrToStringUni(
+                    Marshal.ReadIntPtr(buffer, 8),
+                    int32(uint16(Marshal.ReadInt16(buffer))) / 2
+                ) ??
+                    throw WalletException("Core process arguments could not be verified")
+                let arguments = WalletCommandArguments(command, out let count)
+                if arguments == IntPtr.Zero {
+                    throw WalletException("Core process arguments could not be verified")
+                }
+                try {
+                    let values = [count]string
+                    for index in 0 ... count {
+                        values[index] = Marshal.PtrToStringUni(Marshal.ReadIntPtr(arguments, index * IntPtr.Size)) ?? ""
+                    }
+                    return values
+                } finally {
+                    FreeWalletMemory(arguments)
+                }
+            } finally {
+                Marshal.FreeHGlobal(buffer)
+                CloseWalletHandle(process)
+            }
+        }
+
+        func VerifyNetwork(pid int32, network string) {
+            if OperatingSystem.IsLinux() || OperatingSystem.IsWindows() {
+                let arguments = Arguments(pid)
                 var testnet = false
                 for argument in arguments {
                     if argument == "--testnet" ||
@@ -882,6 +1078,7 @@ class WalletCore {
             let directory = Path.GetDirectoryName(path) ??
                 throw WalletException("Core installation directory is unavailable")
             Directory.CreateDirectory(directory)
+            WalletFiles.ProtectDirectory(directory)
             if !OperatingSystem.IsWindows() {
                 File.SetUnixFileMode(
                     directory,

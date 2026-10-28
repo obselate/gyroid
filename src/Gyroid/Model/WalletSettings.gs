@@ -178,11 +178,11 @@ class WalletSettings {
 
         func Discover(settings WalletSettings) {
             let network = settings.Network
-            let cfg = Environment.GetEnvironmentVariable("BNT_CONFIG_DIR") ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".config",
-                "bnt"
-            )
+            let cfg = Environment.GetEnvironmentVariable("BNT_CONFIG_DIR") ?? if OperatingSystem.IsWindows() {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "bnt")
+            } else {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "bnt")
+            }
             let platform = WalletCore.Platform()
             let executable = "blocknet-core-" + platform + if OperatingSystem.IsWindows() {
                 ".exe"
@@ -268,10 +268,16 @@ class WalletSettings {
                 } else {
                     []string{
                         Path.Combine(local, "blocknet", "binaries", "blocknet-amd64-windows.exe"),
+                        Path.Combine(local, "blocknet", "blocknet-amd64-windows.exe"),
                         Path.Combine(
                             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                             "blocknet",
                             "binaries",
+                            "blocknet-amd64-windows.exe"
+                        ),
+                        Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                            "blocknet",
                             "blocknet-amd64-windows.exe"
                         )
                     }
@@ -378,7 +384,7 @@ class WalletSettings {
             let path = ConfigurationPath()
             try {
                 if File.Exists(path) {
-                    using let json = JsonDocument.Parse(WalletFiles.ReadText(path, 65536))
+                    using let json = JsonDocument.Parse(WalletFiles.ReadText(path, 65536, true))
                     let root = json.RootElement
                     settings.ActiveWallet = WalletJson.Text(root, "active_wallet")
                     settings.Network = WalletJson.Text(root, "network", "mainnet")
@@ -460,7 +466,7 @@ class WalletSettings {
             var text = "{}"
             try {
                 if File.Exists(path) {
-                    text = WalletFiles.ReadText(path, 65536)
+                    text = WalletFiles.ReadText(path, 65536, true)
                     using let check = JsonDocument.Parse(text)
                 }
             } catch (error JsonException) {
