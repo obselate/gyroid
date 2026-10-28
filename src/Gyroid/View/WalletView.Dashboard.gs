@@ -370,6 +370,11 @@ partial class WalletView {
                             AccessibilityName: strings.Get("contacts"),
                             Searchable: contacts.Count > 8,
                             Width: 180,
+                            CreateRow: (input ComboBoxInput, option ComboBoxOption, row Container) -> {
+                                row.Margin = 0
+                                row.BorderRadius = 0
+                                return row
+                            },
                             Disabled: Working(),
                             OnSelect: id -> {
                                 address = contacts[id]
