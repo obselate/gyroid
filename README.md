@@ -1,57 +1,35 @@
 # Gyroid
 
-A Blocknet (BNT) wallet with a graphical interface and command-line tools for Linux x64 and Windows x64.
+A Blocknet (BNT) wallet for Linux x64 and Windows x64. One binary has the graphical interface and the command-line tools.
 
 ## Install
 
-Download the archive for your platform and `SHA256SUMS` from [Releases](https://github.com/obselate/gyroid/releases).
+Download the release for your platform and `SHA256SUMS` from [Releases](https://github.com/obselate/gyroid/releases). Check the archive against `SHA256SUMS` before you run it. Linux needs Vulkan and a Wayland session.
 
 ```sh
+sudo apt install libvulkan1 mesa-vulkan-drivers libwayland-client0 libwayland-cursor0 libwayland-egl1 libxkbcommon0 libdbus-1-3 libglib2.0-0t64 libicu74 libssl3t64 ca-certificates libayatana-appindicator3-1
 version=0.1.2
+curl -fLO "https://github.com/obselate/gyroid/releases/download/v$version/gyroid-$version-linux-x64.tar.gz"
+curl -fLO "https://github.com/obselate/gyroid/releases/download/v$version/SHA256SUMS"
 sha256sum --ignore-missing --check SHA256SUMS
 tar -xzf "gyroid-$version-linux-x64.tar.gz"
-cd "gyroid-$version-linux-x64"
-./Gyroid --version
-./Gyroid
+"./gyroid-$version-linux-x64/Gyroid"
 ```
 
-Use the glibc version listed in that release's notes or later. The release script measures the highest required `GLIBC_` symbol across all bundled ELF files. No .NET runtime is needed. The bundle includes libsodium, fonts, icons, checkpoints and shaders.
+On Windows, download `gyroid-<version>-win-x64.zip`, compare `Get-FileHash` with `SHA256SUMS`, extract it and run `Gyroid.exe`.
 
-The Linux GUI needs a Vulkan loader and driver, and a native Wayland session (X11 and XWayland are not supported). Install the runtime packages on Ubuntu 24.04:
+On first start, Gyroid downloads the Blocknet core and checks its SHA-256 before it runs it.
+
+## Build from source
 
 ```sh
-sudo apt install libvulkan1 mesa-vulkan-drivers libwayland-client0 libwayland-cursor0 libwayland-egl1 libxkbcommon0 libdbus-1-3 libglib2.0-0t64 libicu74 libssl3t64 ca-certificates
+git clone https://github.com/obselate/gyroid && cd gyroid
+curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --jsonfile global.json && export PATH="$HOME/.dotnet:$PATH"
+GITHUB_ENV=artifacts/tools.env bash scripts/install-shader-tools.sh "$PWD/artifacts/tools" && export $(cat artifacts/tools.env)
+dotnet run --project src/Gyroid/Gyroid.gsproj -c Release
 ```
-
-Use your GPU vendor's Vulkan driver instead of Mesa when needed. Tray support also uses `libayatana-appindicator3-1`.
-
-For Windows x64, download `gyroid-<version>-win-x64.zip`. Tested on Windows 11 with a GPU vendor's Vulkan driver. In PowerShell, compare the hash below with the matching line in `SHA256SUMS` before extraction:
-
-```powershell
-$version = '0.1.2'
-Get-FileHash "gyroid-$version-win-x64.zip" -Algorithm SHA256
-Get-Content SHA256SUMS
-Expand-Archive "gyroid-$version-win-x64.zip" .
-& ".\gyroid-$version-win-x64\Gyroid.exe" --version
-& ".\gyroid-$version-win-x64\Gyroid.exe"
-```
-
-Builds need the .NET SDK version in `global.json`, Linux NativeAOT prerequisites, and the pinned shader tools installed by `scripts/install-shader-tools.sh`.
-Tagged releases must match the project version, use an annotated `v<version>` tag on `main`, and pass verification. The release workflow uploads both tested archives and one checksum file to a draft for review.
-
-## Build and run
-
-From a clean clone:
-
-```sh
-dotnet build src/Gyroid/Gyroid.gsproj -c Release
-dotnet run --project src/Gyroid/Gyroid.gsproj -c Release --no-build
-```
-
-Run `bash scripts/verify.sh` to check the source and build.
-
-Run `bash scripts/verify-testnet.sh <path to Gyroid>` before a release to send funds between two isolated testnet nodes. Mining the funds takes about 17 minutes. Set `GYROID_TESTNET_SNAPSHOT_OUT` to save the funded chain and `GYROID_TESTNET_SNAPSHOT_IN` to reuse it.
 
 ## Links
 
-[License](LICENSE)
+- [Blocknet](https://github.com/blocknetprivacy)
+- [MIT License](LICENSE)
