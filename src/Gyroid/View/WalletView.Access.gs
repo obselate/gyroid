@@ -639,7 +639,7 @@ partial class WalletView {
             }
         }
         let actions = Container{FlexDirection: FlexDirection.Row, Gap: 8, FlexShrink: 0}
-        if !status.Running && current.NodeMode == "automatic" && wallet.NodeProgress.Length == 0 {
+        if !status.Running && current.NodeMode == "automatic" && wallet.NodeStatus.Progress.Length == 0 {
             actions.Add(Button("Start", () -> Run(wallet.StartNodeAsync()), Working()))
         }
         if status.Owned {

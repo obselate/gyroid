@@ -107,7 +107,6 @@ class WalletDaemon : IDisposable {
     var Executable string = ""
     var Phase string = ""
     var DownloadPercent int32?
-    var TrustedCheckpoints bool?
 
     init() {
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit
@@ -221,7 +220,6 @@ class WalletDaemon : IDisposable {
             return
         }
         let trusted = await SaveCheckpointsAsync(settings, ct)
-        TrustedCheckpoints = trusted
         await SaveCoreSettingsAsync(settings, !trusted, ct)
         ReportProgress("Starting", nil)
         let endpoint = Uri(settings.Endpoint)
@@ -328,7 +326,6 @@ class WalletDaemon : IDisposable {
         }
         WalletCore.VerifyNetwork(pid, settings.Network)
         if !Owned {
-            TrustedCheckpoints = nil
             settings.OwnedProcessId = 0
         } else if settings.OwnedProcessId != pid {
             throw WalletException("API listener is not the app-owned core process")
@@ -590,7 +587,6 @@ class WalletDaemon : IDisposable {
         lock ownership {
             stopped = process
             process = nil
-            TrustedCheckpoints = nil
         }
         if let owned = stopped {
             try {

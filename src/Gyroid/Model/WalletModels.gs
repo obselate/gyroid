@@ -16,7 +16,6 @@ class WalletSnapshot {
     var Page string = "Welcome"
     var State string = "Unloaded"
     var Connected bool
-    var OwnedDaemon bool
     var ViewOnly bool
     var Address string = ""
     var Balance WalletBalance? = nil
@@ -43,7 +42,6 @@ class NodeStatus {
     var Progress string = ""
     var Phase string = ""
     var DownloadPercent int32?
-    var TrustedCheckpoints bool?
     var UpgradeDate string = ""
     var UpgradeDeadline string = ""
     var UpgradeNotice string = ""
@@ -57,10 +55,6 @@ class WalletBalance {
     var Balance uint64? = nil
     var Spendable uint64? = nil
     var Pending uint64? = nil
-    var OutputsTotal uint64? = nil
-    var OutputsUnspent uint64? = nil
-    var MemoDecryptFailures uint64? = nil
-    var MemoDecryptLastHeight uint64? = nil
 }
 
 class WalletOutput {
@@ -68,17 +62,13 @@ class WalletOutput {
     var OutputIndex int32
     var Amount uint64
     var BlockHeight uint64
-    var IsCoinbase bool
     var Spent bool
-    var SpentHeight uint64? = nil
-    var MemoHex string = ""
     var Memo string = ""
 }
 
 class WalletRecipient {
     var Address string = ""
     var Amount uint64
-    var MemoHex string = ""
     var Memo string = ""
 }
 
@@ -88,7 +78,6 @@ class WalletSend {
     var RecordedHeight uint64
     var Status string = ""
     var Confirmations uint64
-    var InMempool bool
     var Amount uint64
     var Fee uint64
     var Recipients[]WalletRecipient = []WalletRecipient{}
@@ -101,16 +90,7 @@ class TransactionDetails {
     var Timestamp int64? = nil
 }
 
-class SendEstimate(
-    address string,
-    amount uint64,
-    memo string,
-    fee uint64,
-    inputCount int32,
-    change uint64,
-    inputTotal uint64,
-    handle string = ""
-) {
+class SendEstimate(address string, amount uint64, memo string, fee uint64, inputCount int32, handle string = "") {
     let Address string = address
     let Handle string = handle
     let Amount uint64 = amount
@@ -118,13 +98,6 @@ class SendEstimate(
     let Fee uint64 = fee
     let Total uint64 = amount + fee
     let InputCount int32 = inputCount
-    let Change uint64 = change
-    let InputTotal uint64 = inputTotal
-    let OutputCount int32 = if change > 0 {
-        2
-    } else {
-        1
-    }
 }
 
 class SendResult(txId string, fee uint64, change uint64, inputCount int32) {
@@ -132,7 +105,6 @@ class SendResult(txId string, fee uint64, change uint64, inputCount int32) {
     let Fee uint64 = fee
     let Change uint64 = change
     let InputCount int32 = inputCount
-    let Status string = "submitted"
 }
 
 class PendingSend {

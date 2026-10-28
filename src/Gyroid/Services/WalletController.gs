@@ -47,15 +47,12 @@ class WalletController : IDisposable {
     prop Pending PendingSend? -> pendingSend
     prop SendOutcome string -> sendOutcome
     prop LockQueued bool -> lockQueued
-    prop NodeProgress string -> nodeProgress
-    var nodeProgress string = ""
 
     init() {
         settings = WalletSettings.Load()
         rpc = WalletRpc(settings)
         daemon.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         daemon.Progress = value -> {
-            nodeProgress = value
             nodeStatus.Progress = value
             nodeStatus.Phase = if value == "Detecting" {
                 "Detecting"
@@ -63,7 +60,6 @@ class WalletController : IDisposable {
                 daemon.Phase
             }
             nodeStatus.DownloadPercent = daemon.DownloadPercent
-            nodeStatus.TrustedCheckpoints = daemon.TrustedCheckpoints
             Changed?.Invoke()
         }
         if settings.ActiveWallet.Length > 0 {
@@ -556,7 +552,7 @@ class WalletController : IDisposable {
                 Endpoint: settings.Endpoint,
                 DataDirectory: settings.DataDirectory,
                 Executable: daemon.Executable,
-                Progress: nodeProgress,
+                Progress: nodeStatus.Progress,
                 Phase: if daemon.Phase.Length > 0 {
                     daemon.Phase
                 } else if WalletJson.Flag(root, "syncing") {
@@ -565,7 +561,6 @@ class WalletController : IDisposable {
                     ""
                 },
                 DownloadPercent: daemon.DownloadPercent,
-                TrustedCheckpoints: daemon.TrustedCheckpoints
             }
             if settings.Network == "mainnet" && root.TryGetProperty("network_upgrade", out let upgrade) &&
                 upgrade.ValueKind == JsonValueKind
@@ -611,10 +606,9 @@ class WalletController : IDisposable {
             } else {
                 settings.BinaryPath
             },
-            Progress: nodeProgress,
+            Progress: nodeStatus.Progress,
             Phase: daemon.Phase,
             DownloadPercent: daemon.DownloadPercent,
-            TrustedCheckpoints: daemon.TrustedCheckpoints
         }
     }
 
@@ -1175,10 +1169,6 @@ class WalletController : IDisposable {
                 Balance: WalletJson.OptionalNumber(root, "total") + change,
                 Spendable: WalletJson.OptionalNumber(root, "spendable"),
                 Pending: WalletJson.OptionalNumber(root, "pending") + change,
-                OutputsTotal: WalletJson.OptionalNumber(root, "outputs_total"),
-                OutputsUnspent: WalletJson.OptionalNumber(root, "outputs_unspent"),
-                MemoDecryptFailures: WalletJson.OptionalNumber(root, "memo_decrypt_failures"),
-                MemoDecryptLastHeight: WalletJson.OptionalNumber(root, "memo_decrypt_last_height")
             }
             let outputs = List[WalletOutput]()
             let wanted = Math.Max(historyPage, historyOffset)
@@ -1191,7 +1181,6 @@ class WalletController : IDisposable {
                 Page: page,
                 State: state,
                 Connected: connected,
-                OwnedDaemon: daemon.Owned,
                 Address: WalletJson.Text(address.RootElement, "address"),
                 ViewOnly: WalletJson.Flag(address.RootElement, "view_only"),
                 Balance: amounts,
@@ -1244,10 +1233,7 @@ class WalletController : IDisposable {
                 OutputIndex: int32(WalletJson.Number(row, "output_index")),
                 Amount: WalletJson.Number(row, "amount"),
                 BlockHeight: WalletJson.Number(row, "block_height"),
-                IsCoinbase: WalletJson.Flag(row, "is_coinbase"),
                 Spent: WalletJson.Flag(row, "spent"),
-                SpentHeight: WalletJson.OptionalNumber(row, "spent_height"),
-                MemoHex: hex,
                 Memo: WalletJson.Memo(hex)
             }
             if keys.Add(output.TxId + ":" + output.OutputIndex.ToString()) {
@@ -1313,7 +1299,6 @@ class WalletController : IDisposable {
                         WalletRecipient{
                             Address: WalletJson.Text(recipient, "address"),
                             Amount: WalletJson.Number(recipient, "amount"),
-                            MemoHex: hex,
                             Memo: WalletJson.Memo(hex)
                         }
                     )
@@ -1325,7 +1310,6 @@ class WalletController : IDisposable {
                         RecordedHeight: WalletJson.Number(row, "recorded_height"),
                         Status: WalletJson.Text(row, "chain_state"),
                         Confirmations: WalletJson.Number(row, "confirmations"),
-                        InMempool: WalletJson.Flag(row, "in_mempool"),
                         Fee: WalletJson.Number(row, "fee"),
                         Amount: WalletJson.Number(row, "total_amount"),
                         Recipients: recipients.ToArray()
@@ -1400,8 +1384,6 @@ class WalletController : IDisposable {
                 request.Memo,
                 fee,
                 int32(WalletJson.Number(root, "input_count")),
-                change,
-                inputTotal,
                 handle
             )
             confirmation = estimate
@@ -1748,7 +1730,7 @@ class WalletController : IDisposable {
     private func PublishEmpty() {
         historyOffset = 0
         historyTotal = 0
-        snapshot = WalletSnapshot{Page: page, State: state, Connected: connected, OwnedDaemon: daemon.Owned}
+        snapshot = WalletSnapshot{Page: page, State: state, Connected: connected}
     }
 
     private func PublishCurrent() {
@@ -1756,7 +1738,6 @@ class WalletController : IDisposable {
             Page: page,
             State: state,
             Connected: connected,
-            OwnedDaemon: daemon.Owned,
             Address: snapshot.Address,
             ViewOnly: snapshot.ViewOnly,
             Balance: snapshot.Balance,
