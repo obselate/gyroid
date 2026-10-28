@@ -40,6 +40,29 @@ data struct ToolsInput {
     var OnNodeSettings Action
 }
 
+data struct PrivacyCardInput {
+    var Render Func[bool, Action[PointerEvent], Action[PointerEvent], Blob]
+}
+
+class PrivacyCard : Cell[PrivacyCardInput] {
+    private var hovered bool
+    private let enter Action[PointerEvent]
+    private let leave Action[PointerEvent]
+
+    init() {
+        enter = _ -> {
+            hovered = true
+            Rebuild()
+        }
+        leave = _ -> {
+            hovered = false
+            Rebuild()
+        }
+    }
+
+    protected override func Build(input PrivacyCardInput) Blob -> input.Render(hovered, enter, leave)
+}
+
 class ToolsPage : Cell[ToolsInput] {
     private var message string = ""
     private var signature string = ""
@@ -50,7 +73,6 @@ class ToolsPage : Cell[ToolsInput] {
     private var proofAmount string = ""
     private var verdict bool?
     private var verdictRun int32
-    private var hovered string = ""
     private var editing bool
     private var loaded bool
     private var checkedAt DateTime?
@@ -249,27 +271,30 @@ class ToolsPage : Cell[ToolsInput] {
         } else {
             Container{}
         }
-        let lockValue = Goo
-            .Button{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 10,
-            BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
-            Disabled: input.Busy,
-            Accessibility: Accessibility{
-                Role: AccessibilityRole.Button,
-                Name: ui.Strings.Get("auto-lock") + " " + LockText(input)
-            },
-            OnClick: () -> {
-                editing = !editing
-                Rebuild()
-            },
-            Arc(LockShare(input.AutoLock), compact ? 20.0: 26.0),
-            ui.Label(LockText(input), size, input.AutoLock == 0 ? ui.Orange: ui.Ink, "")
-        }
-        if hovered == "lock" && !editing {
-            lockValue.Add(MaterialIcons.Create("expand_more", 16, ui.Ink))
+        let lockValue Func[bool, Blob] = (hovered) -> {
+            let value = Goo
+                .Button{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 10,
+                BackgroundColor: Color.Transparent,
+                Focus: Theme.Read().FocusStyle,
+                Disabled: input.Busy,
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.Button,
+                    Name: ui.Strings.Get("auto-lock") + " " + LockText(input)
+                },
+                OnClick: () -> {
+                    editing = !editing
+                    Rebuild()
+                },
+                Arc(LockShare(input.AutoLock), compact ? 20.0: 26.0),
+                ui.Label(LockText(input), size, input.AutoLock == 0 ? ui.Orange: ui.Ink, "")
+            }
+            if hovered && !editing {
+                value.Add(MaterialIcons.Create("expand_more", 16, ui.Ink))
+            }
+            return value
         }
         let amountsValue = Container{
             FlexDirection: FlexDirection.Row,
@@ -285,20 +310,23 @@ class ToolsPage : Cell[ToolsInput] {
             }.Build(),
             ui.Label(ui.Strings.Get(input.Privacy ? "on": "off"), size, input.Privacy ? ui.Ink: ui.Orange, "")
         }
-        let nodeValue = Goo
-            .Button{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 8,
-            BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
-            Disabled: input.Busy,
-            Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get("Node settings")},
-            OnClick: input.OnNodeSettings,
-            ui.Label(ui.Strings.Get("local"), size, ui.Ink, "")
-        }
-        if hovered == "node" {
-            nodeValue.Add(MaterialIcons.Create("north_east", 16, ui.Ink))
+        let nodeValue Func[bool, Blob] = (hovered) -> {
+            let value = Goo
+                .Button{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 8,
+                BackgroundColor: Color.Transparent,
+                Focus: Theme.Read().FocusStyle,
+                Disabled: input.Busy,
+                Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get("Node settings")},
+                OnClick: input.OnNodeSettings,
+                ui.Label(ui.Strings.Get("local"), size, ui.Ink, "")
+            }
+            if hovered {
+                value.Add(MaterialIcons.Create("north_east", 16, ui.Ink))
+            }
+            return value
         }
         let peers = input.Node.Peers
         let outputsValue = if auditing {
@@ -359,7 +387,7 @@ class ToolsPage : Cell[ToolsInput] {
                 "phrase",
                 "key",
                 "recovery phrase",
-                phraseValue,
+                _ -> phraseValue,
                 phraseFoot,
                 []string{
                     "Checks that your paper copy matches this wallet",
@@ -384,7 +412,7 @@ class ToolsPage : Cell[ToolsInput] {
                 "amounts",
                 input.Privacy ? "visibility_off": "visibility",
                 "hide amounts",
-                amountsValue,
+                _ -> amountsValue,
                 if input.Privacy {
                     Container{}
                 } else {
@@ -409,7 +437,7 @@ class ToolsPage : Cell[ToolsInput] {
                 "relay",
                 "share",
                 "send relay",
-                Number(
+                _ -> Number(
                     input,
                     "peers",
                     "send relay",
@@ -425,7 +453,7 @@ class ToolsPage : Cell[ToolsInput] {
                 "outputs",
                 "grid_view",
                 "outputs",
-                outputsValue,
+                _ -> outputsValue,
                 outputsFoot,
                 []string{"Coins this wallet owns, spent or not", "Audit checks them against the main chain"}
             ),
@@ -434,7 +462,7 @@ class ToolsPage : Cell[ToolsInput] {
                 "memo",
                 "notes",
                 "memo errors",
-                Number(input, "memos", "memo errors", ui.Count(memos), memos > 0 ? ui.Orange: ui.Ink, size),
+                _ -> Number(input, "memos", "memo errors", ui.Count(memos), memos > 0 ? ui.Orange: ui.Ink, size),
                 if memos > 0 {
                     Small(input, "View", false, () -> input.OnNavigate("Transactions"))
                 } else {
@@ -447,7 +475,7 @@ class ToolsPage : Cell[ToolsInput] {
                 "file",
                 "description",
                 "wallet file",
-                fileValue,
+                _ -> fileValue,
                 fileFoot,
                 []string{"Only your user account should read the wallet file"}
             )
@@ -497,7 +525,7 @@ class ToolsPage : Cell[ToolsInput] {
         key string,
         icon string,
         label string,
-        value Blob,
+        value Func[bool, Blob],
         foot Blob,
         lines[]string
     ) Blob {
@@ -510,53 +538,55 @@ class ToolsPage : Cell[ToolsInput] {
         }
         top.Add(ui.Grow(ui.Label(ui.Strings.Get(label), 12, ui.Body, "")))
         top.Add(Info(input, "info-" + key, label, lines))
-        return Container{
-            FlexGrow: 1,
-            FlexBasis: 0,
-            MinWidth: 0,
-            MinHeight: if compact {
-                124.0
-            } else {
-                Math.Clamp(input.Height * 0.19, 136, 210)
-            },
-            Padding: compact ? 11.0: 14.0,
-            Gap: compact ? 8.0: 10.0,
-            BorderWidth: 1,
-            BorderRadius: 10,
-            BorderColor: if edit {
-                ui.Lime
-            } else if hovered == key {
-                Color.Parse("#3a3a3a")
-            } else {
-                ui.Rule
-            },
-            BackgroundColor: hovered == key && !edit ? Color.Parse("#121212"): tile,
-            BoxShadows: if edit {
-                []BoxShadow{BoxShadow{Spread: 3, Color: ring}}
-            } else {
-                []BoxShadow{}
-            },
-            OnPointerEnter: (event PointerEvent) -> {
-                hovered = key
-                Rebuild()
-            },
-            OnPointerLeave: (event PointerEvent) -> {
-                if hovered == key {
-                    hovered = ""
-                    Rebuild()
+        return Cell.Mount[PrivacyCardInput, PrivacyCard](
+            "privacy-" + key,
+            PrivacyCardInput{
+                Render: (hovered bool, enter Action[PointerEvent], leave Action[PointerEvent]) -> Container{
+                    FlexGrow: 1,
+                    FlexBasis: 0,
+                    MinWidth: 0,
+                    MinHeight: if compact {
+                        124.0
+                    } else {
+                        Math.Clamp(input.Height * 0.19, 136, 210)
+                    },
+                    Padding: compact ? 11.0: 14.0,
+                    Gap: compact ? 8.0: 10.0,
+                    BorderWidth: 1,
+                    BorderRadius: 10,
+                    BorderColor: if edit {
+                        ui.Lime
+                    } else if hovered {
+                        Color.Parse("#3a3a3a")
+                    } else {
+                        ui.Rule
+                    },
+                    BackgroundColor: hovered && !edit ? Color.Parse("#121212"): tile,
+                    BoxShadows: if edit {
+                        []BoxShadow{BoxShadow{Spread: 3, Color: ring}}
+                    } else {
+                        []BoxShadow{}
+                    },
+                    OnPointerEnter: enter,
+                    OnPointerLeave: leave,
+                    top,
+                    Container{
+                        FlexDirection: FlexDirection.Row,
+                        AlignItems: AlignItems.Center,
+                        MinHeight: 30,
+                        value(hovered)
+                    },
+                    Container{FlexGrow: 1},
+                    Container{
+                        FlexDirection: FlexDirection.Row,
+                        AlignItems: AlignItems.Center,
+                        JustifyContent: edit ? JustifyContent.Center: JustifyContent.FlexStart,
+                        MinHeight: 28,
+                        foot
+                    }
                 }
-            },
-            top,
-            Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, MinHeight: 30, value},
-            Container{FlexGrow: 1},
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                JustifyContent: edit ? JustifyContent.Center: JustifyContent.FlexStart,
-                MinHeight: 28,
-                foot
             }
-        }
+        )
     }
 
     private func LockShare(minutes int32) float64 -> if minutes == 0 {
