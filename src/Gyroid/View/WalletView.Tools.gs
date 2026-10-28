@@ -7,6 +7,7 @@ import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
+import Gyroid.Contacts
 import Gyroid.Model
 import Gyroid.Services
 import System
@@ -278,7 +279,7 @@ partial class WalletView {
 
     private func LoadContacts() {
         try {
-            contacts = WalletController.ReadContacts()
+            contacts = AddressBook.ReadContacts()
         } catch (failure WalletException) {
             error = failure.Message
         }
@@ -422,7 +423,7 @@ partial class WalletView {
 
     private func StoreContacts(next SortedDictionary[string, string], done Action) {
         Run(
-            Task.Run(() -> WalletController.WriteContacts(next)),
+            Task.Run(() -> AddressBook.WriteContacts(next)),
             () -> {
                 contacts = next
                 done()
