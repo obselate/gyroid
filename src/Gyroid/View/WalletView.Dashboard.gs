@@ -640,7 +640,7 @@ partial class WalletView {
                             issue: memoIssue
                         ),
                         if request != receiving {
-                            Copyable("Request", request, Hidden(request))
+                            Copyable("Request", request, Hidden("blocknet://…?" + String.Join("&", query)))
                         } else {
                             Container{}
                         }

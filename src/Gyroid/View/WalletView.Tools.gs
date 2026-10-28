@@ -108,7 +108,7 @@ partial class WalletView {
                 )
             )
             if signature.Length > 0 {
-                panel.Add(Copyable("Signature", signature, signature))
+                panel.Add(Copyable("Signature", signature, Grouped(signature)))
             }
             panel.Add(ActionRow([]Blob{Button("Sign", () -> Sign(), Working() || message.Length == 0, true)}))
             return panel

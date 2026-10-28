@@ -1076,7 +1076,6 @@ partial class WalletView : Cell {
             case "Send": 640.0
             case "Tools": 640.0
             case "Contacts": 640.0
-            case "Welcome": 600.0
             default: 520.0
         }
         let side = Math.Min(span * 0.45, span - cardWidth - 48)
@@ -1123,7 +1122,7 @@ partial class WalletView : Cell {
                     FlexBasis: 0,
                     MinWidth: 0,
                     AlignItems: AlignItems.Center,
-                    JustifyContent: if page == "Settings" {
+                    JustifyContent: if page == "Settings" || page == "Tools" || page == "Contacts" {
                         JustifyContent.FlexStart
                     } else {
                         JustifyContent.Center
