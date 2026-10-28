@@ -41,26 +41,24 @@ data struct ToolsInput {
 }
 
 data struct PrivacyCardInput {
-    var Render Func[bool, Action[PointerEvent], Action[PointerEvent], Blob]
+    var HasIndicator bool
+    var Render Func[Anim[float64]?, Action[PointerEvent]?, Action[PointerEvent]?, Blob]
 }
 
 class PrivacyCard : Cell[PrivacyCardInput] {
-    private var hovered bool
-    private let enter Action[PointerEvent]
-    private let leave Action[PointerEvent]
+    private var opacity Anim[float64]?
+    private var enter Action[PointerEvent]?
+    private var leave Action[PointerEvent]?
 
-    init() {
-        enter = _ -> {
-            hovered = true
-            Rebuild()
+    protected override func Build(input PrivacyCardInput) Blob {
+        if input.HasIndicator && opacity == nil {
+            let value = AnimateValue(0.0)
+            opacity = value
+            enter = _ -> value.Set(1.0)
+            leave = _ -> value.Set(0.0)
         }
-        leave = _ -> {
-            hovered = false
-            Rebuild()
-        }
+        return input.Render(opacity, enter, leave)
     }
-
-    protected override func Build(input PrivacyCardInput) Blob -> input.Render(hovered, enter, leave)
 }
 
 class ToolsPage : Cell[ToolsInput] {
@@ -271,7 +269,7 @@ class ToolsPage : Cell[ToolsInput] {
         } else {
             Container{}
         }
-        let lockValue Func[bool, Blob] = (hovered) -> {
+        let lockValue Func[Anim[float64]?, Blob] = (opacity) -> {
             let value = Goo
                 .Button{
                 FlexDirection: FlexDirection.Row,
@@ -291,8 +289,15 @@ class ToolsPage : Cell[ToolsInput] {
                 Arc(LockShare(input.AutoLock), compact ? 20.0: 26.0),
                 ui.Label(LockText(input), size, input.AutoLock == 0 ? ui.Orange: ui.Ink, "")
             }
-            if hovered && !editing {
-                value.Add(MaterialIcons.Create("expand_more", 16, ui.Ink))
+            if !editing {
+                value.Add(
+                    Container{
+                        Width: 16,
+                        Height: 16,
+                        OpacityAnim: opacity,
+                        MaterialIcons.Create("expand_more", 16, ui.Ink)
+                    }
+                )
             }
             return value
         }
@@ -310,7 +315,7 @@ class ToolsPage : Cell[ToolsInput] {
             }.Build(),
             ui.Label(ui.Strings.Get(input.Privacy ? "on": "off"), size, input.Privacy ? ui.Ink: ui.Orange, "")
         }
-        let nodeValue Func[bool, Blob] = (hovered) -> {
+        let nodeValue Func[Anim[float64]?, Blob] = (opacity) -> {
             let value = Goo
                 .Button{
                 FlexDirection: FlexDirection.Row,
@@ -323,9 +328,9 @@ class ToolsPage : Cell[ToolsInput] {
                 OnClick: input.OnNodeSettings,
                 ui.Label(ui.Strings.Get("local"), size, ui.Ink, "")
             }
-            if hovered {
-                value.Add(MaterialIcons.Create("north_east", 16, ui.Ink))
-            }
+            value.Add(
+                Container{Width: 16, Height: 16, OpacityAnim: opacity, MaterialIcons.Create("north_east", 16, ui.Ink)}
+            )
             return value
         }
         let peers = input.Node.Peers
@@ -525,7 +530,7 @@ class ToolsPage : Cell[ToolsInput] {
         key string,
         icon string,
         label string,
-        value Func[bool, Blob],
+        value Func[Anim[float64]?, Blob],
         foot Blob,
         lines[]string
     ) Blob {
@@ -541,7 +546,8 @@ class ToolsPage : Cell[ToolsInput] {
         return Cell.Mount[PrivacyCardInput, PrivacyCard](
             "privacy-" + key,
             PrivacyCardInput{
-                Render: (hovered bool, enter Action[PointerEvent], leave Action[PointerEvent]) -> Container{
+                HasIndicator: key == "lock" || key == "node",
+                Render: (opacity Anim[float64]?, enter Action[PointerEvent]?, leave Action[PointerEvent]?) -> Container{
                     FlexGrow: 1,
                     FlexBasis: 0,
                     MinWidth: 0,
@@ -554,14 +560,12 @@ class ToolsPage : Cell[ToolsInput] {
                     Gap: compact ? 8.0: 10.0,
                     BorderWidth: 1,
                     BorderRadius: 10,
-                    BorderColor: if edit {
-                        ui.Lime
-                    } else if hovered {
-                        Color.Parse("#3a3a3a")
-                    } else {
-                        ui.Rule
+                    BorderColor: edit ? ui.Lime: ui.Rule,
+                    BackgroundColor: tile,
+                    Hover: edit ? Style{}: Style{
+                        BorderColor: Color.Parse("#3a3a3a"),
+                        BackgroundColor: Color.Parse("#121212")
                     },
-                    BackgroundColor: hovered && !edit ? Color.Parse("#121212"): tile,
                     BoxShadows: if edit {
                         []BoxShadow{BoxShadow{Spread: 3, Color: ring}}
                     } else {
@@ -574,7 +578,7 @@ class ToolsPage : Cell[ToolsInput] {
                         FlexDirection: FlexDirection.Row,
                         AlignItems: AlignItems.Center,
                         MinHeight: 30,
-                        value(hovered)
+                        value(opacity)
                     },
                     Container{FlexGrow: 1},
                     Container{
