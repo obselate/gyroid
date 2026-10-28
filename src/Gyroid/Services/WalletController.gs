@@ -1641,7 +1641,8 @@ class WalletController : IDisposable {
             if result.InputCount > 0 {
                 return result
             }
-            return SendResult(txid, result.Fee, result.Change, await SubmittedInputCountAsync(txid))
+            let inputs = await SubmittedInputCountAsync(txid)
+            return SendResult(txid, result.Fee, result.Change, inputs)
         } catch (error WalletException) {
             await RecoverSendCoreAsync(CancellationToken.None)
             let outcome = sendOutcome
