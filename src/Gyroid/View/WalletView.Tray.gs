@@ -26,8 +26,9 @@ partial class WalletView {
         guard let host = window else {
             return
         }
+        wallet.EnableEvents()
         Run(wallet.ConnectAsync())
-        refreshTimer = host.SetInterval(() -> Refresh(), 10000)
+        refreshTimer = host.SetInterval(() -> Refresh(), 60000)
         UpdatePlayback()
         trayLockable = Lockable()
         tray = TrayIcon.Create(host, TraySettings()).Icon

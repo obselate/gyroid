@@ -129,6 +129,9 @@ class Cli {
                                 }
                             )
                         }
+                        if wallet.Pending?.Retryable != true {
+                            throw WalletException("Send outcome unknown. Resubmission is not available")
+                        }
                         RequireTerminal()
                         Console.Error.WriteLine(
                             "Resubmitting an unknown send can pay twice if the node forgot its record"

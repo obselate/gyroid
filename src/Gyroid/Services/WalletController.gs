@@ -30,6 +30,10 @@ class WalletController : IDisposable {
     var lockQueued bool
     var disposed bool
     var Changed Action? = nil
+    let shutdown CancellationTokenSource = CancellationTokenSource()
+    var events CancellationTokenSource? = nil
+    var eventsEnabled bool
+    var nextRestart DateTimeOffset
 
     prop Settings WalletSettings -> settings.Copy()
     prop Snapshot WalletSnapshot -> snapshot
@@ -44,6 +48,7 @@ class WalletController : IDisposable {
     init() {
         settings = WalletSettings.Load()
         rpc = WalletRpc(settings)
+        daemon.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         daemon.Progress = value -> {
             nodeProgress = value
             nodeStatus.Progress = value
@@ -89,7 +94,109 @@ class WalletController : IDisposable {
         sendLease?.Dispose()
         sendLease = nil
         isBusy = false
+        UpdateEvents()
         gate.Release()
+        if !disposed {
+            Changed?.Invoke()
+        }
+    }
+
+    func EnableEvents() {
+        eventsEnabled = true
+        UpdateEvents()
+    }
+
+    private func StopEvents() {
+        events?.Cancel()
+        events?.Dispose()
+        events = nil
+    }
+
+    private func UpdateEvents() {
+        if disposed || !connected || state == "Locked" || state == "Unknown" {
+            StopEvents()
+        } else if eventsEnabled && events == nil {
+            let source = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token)
+            events = source
+            let ct = source.Token
+            Task.Run(() -> ListenEventsAsync(ct))
+        }
+    }
+
+    private async func ListenEventsAsync(ct CancellationToken) {
+        while !ct.IsCancellationRequested {
+            try {
+                await rpc.EventsAsync(_ -> RefreshEventAsync(ct), ct)
+            } catch (error Exception) {
+                if ct.IsCancellationRequested {
+                    return
+                }
+            }
+            try {
+                await Task.Delay(2000, ct)
+            } catch (error OperationCanceledException) {
+                return
+            }
+        }
+    }
+
+    private async func RefreshEventAsync(ct CancellationToken) {
+        await gate.WaitAsync(ct)
+        try {
+            ct.ThrowIfCancellationRequested()
+            await RefreshNodeCoreAsync(ct)
+            if state == "Unlocked" {
+                await RefreshCoreAsync(ct)
+            }
+        } finally {
+            sendLease?.Dispose()
+            sendLease = nil
+            UpdateEvents()
+            gate.Release()
+            if !disposed {
+                Changed?.Invoke()
+            }
+        }
+    }
+
+    private async func RestartOwnedAsync() {
+        let ct = shutdown.Token
+        try {
+            await Task.Delay(2000, ct)
+            await gate.WaitAsync(ct)
+            try {
+                if disposed || settings.NodeMode == "manual" || !daemon.NeedsRestart {
+                    return
+                }
+                StopEvents()
+                connected = false
+                managed = false
+                ClearSeed()
+                InvalidateConfirmation()
+                state = "Unloaded"
+                page = if settings.ActiveWallet.Length > 0 {
+                    "Unlock"
+                } else {
+                    "Welcome"
+                }
+                PublishEmpty()
+                PublishNode()
+                Changed?.Invoke()
+                let delay = nextRestart - DateTimeOffset.UtcNow
+                if delay > TimeSpan.Zero {
+                    await Task.Delay(delay, ct)
+                }
+                nextRestart = DateTimeOffset.UtcNow.AddSeconds(10)
+                rpc.Dispose()
+                rpc = WalletRpc(settings)
+                await ConnectCoreAsync(ct)
+                UpdateEvents()
+            } finally {
+                gate.Release()
+            }
+        } catch (error Exception) {
+            PublishNode()
+        }
         if !disposed {
             Changed?.Invoke()
         }
@@ -226,6 +333,7 @@ class WalletController : IDisposable {
             ) {
                 throw WalletException("Choose a separate data directory when changing network")
             }
+            StopEvents()
             await UnloadCoreAsync(ct)
             await WalletSettings.SaveAsync(next, ct)
             if daemon.Owned && next.StartupDiffers(settings) {
@@ -325,6 +433,7 @@ class WalletController : IDisposable {
             throw WalletException("Unload the wallet before stopping or restarting the node")
         }
         daemon.Stop()
+        StopEvents()
         settings.OwnedProcessId = 0
         rpc.Dispose()
         rpc = WalletRpc(settings)
@@ -626,6 +735,7 @@ class WalletController : IDisposable {
             throw error
         }
         try {
+            StopEvents()
             lockQueued = false
             RequireManaged()
             ClearSeed()
@@ -667,6 +777,7 @@ class WalletController : IDisposable {
     }
 
     private async func UnloadCoreAsync(ct CancellationToken) {
+        StopEvents()
         ClearSeed()
         InvalidateConfirmation()
         if managed {
@@ -737,7 +848,7 @@ class WalletController : IDisposable {
     async func RefreshAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            if daemon.NeedsRestart {
+            if daemon.NeedsRestart && settings.NodeMode != "manual" {
                 rpc.Dispose()
                 rpc = WalletRpc(settings)
                 ClearSeed()
@@ -838,7 +949,6 @@ class WalletController : IDisposable {
         let sends = List[WalletSend]()
         var offset int32 = 0
         while true {
-            await Task.Delay(2000, ct)
             using let response = await rpc.JsonAsync(
                 "wallet/sends?limit=500&offset=" + offset.ToString() + "&order=desc",
                 ct: ct
@@ -980,6 +1090,7 @@ class WalletController : IDisposable {
                 Body: Encoding.UTF8.GetString(body.GetBuffer(), 0, int32(body.Length)),
                 Wallet: settings.ActiveWallet,
                 Network: settings.Network,
+                CoreStarted: rpc.ListenerStarted,
                 Timestamp: DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             }
             SavePendingSend(pending)
@@ -1022,11 +1133,16 @@ class WalletController : IDisposable {
         }
         using let json = JsonDocument.Parse(WalletFiles.ReadText(PendingSendPath(), 16384, true))
         let root = json.RootElement
+        var coreStarted int64 = 0
+        if root.TryGetProperty("core_started", out let started) {
+            coreStarted = started.GetInt64()
+        }
         let pending = PendingSend{
             Key: WalletJson.Text(root, "idempotency_key"),
             Body: WalletJson.Text(root, "body"),
             Wallet: WalletJson.Text(root, "wallet"),
             Network: WalletJson.Text(root, "network"),
+            CoreStarted: coreStarted,
             Timestamp: WalletJson.Signed(root, "timestamp")
         }
         if pending.Wallet != settings.ActiveWallet ||
@@ -1044,7 +1160,7 @@ class WalletController : IDisposable {
         if let prior = previous {
             if prior.Key == pending.Key && prior.Body == pending.Body {
                 pending.State = prior.State
-                pending.Retryable = prior.Retryable
+                pending.CanRetry = prior.CanRetry
             }
         }
         pendingSend = pending
@@ -1062,6 +1178,7 @@ class WalletController : IDisposable {
             writer.WriteString("wallet", pending.Wallet)
             writer.WriteString("network", pending.Network)
             writer.WriteNumber("timestamp", pending.Timestamp)
+            writer.WriteNumber("core_started", pending.CoreStarted)
             writer.WriteEndObject()
             writer.Flush()
             writer.Dispose()
@@ -1095,7 +1212,6 @@ class WalletController : IDisposable {
             return
         }
         try {
-            await Task.Delay(2000, ct)
             using let response = await rpc.JsonAsync(
                 "wallet/send/status?idempotency_key=" + Uri.EscapeDataString(pending.Key),
                 ct: ct
@@ -1137,10 +1253,16 @@ class WalletController : IDisposable {
                 ClearPendingSend()
             } else if status == "not_found" && state == "Unlocked" {
                 pending.State = "No send record. Outcome unknown"
-                pending.Retryable = true
+                pending.CanRetry = if pending.CoreStarted > 0 {
+                    pending.CoreStarted == rpc.ListenerStarted
+                } else {
+                    rpc.ListenerStarted < DateTimeOffset.FromUnixTimeSeconds(pending.Timestamp)
+                        .UtcTicks +
+                        TimeSpan.TicksPerSecond
+                }
             }
         } catch (error WalletException) {
-            pending.Retryable = false
+            pending.CanRetry = false
         }
     }
 
@@ -1195,7 +1317,7 @@ class WalletController : IDisposable {
             if !pending.Retryable {
                 throw WalletException("Send outcome unknown. Resubmission is not available")
             }
-            pending.Retryable = false
+            pending.CanRetry = false
             return await SubmitPendingCoreAsync(pending, ct)
         } finally {
             End()
@@ -1288,6 +1410,8 @@ class WalletController : IDisposable {
             return
         }
         disposed = true
+        shutdown.Cancel()
+        StopEvents()
         ClearSeed()
         InvalidateConfirmation()
         rpc.Dispose()

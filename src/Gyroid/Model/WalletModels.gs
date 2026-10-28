@@ -129,6 +129,11 @@ class PendingSend {
     var Wallet string = ""
     var Network string = ""
     var Timestamp int64
-    var Retryable bool
+    var CoreStarted int64
+    var CanRetry bool
+    prop Retryable bool -> CanRetry && DateTimeOffset.UtcNow.ToUnixTimeSeconds() >= Timestamp &&
+        DateTimeOffset
+        .UtcNow
+        .ToUnixTimeSeconds() - Timestamp < 2592000
     var State string = "Send outcome unknown"
 }

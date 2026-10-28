@@ -70,6 +70,7 @@ class WalletDaemon : IDisposable {
     var nextStart DateTimeOffset
     var termination PosixSignalRegistration? = nil
     var Progress Action[string]? = nil
+    var Exited Action? = nil
     var Source string = "External"
     var Executable string = ""
     var Phase string = ""
@@ -234,6 +235,12 @@ class WalletDaemon : IDisposable {
             owned.StandardInput.Close()
             owned.StandardOutput.BaseStream.CopyToAsync(Stream.Null)
             owned.StandardError.BaseStream.CopyToAsync(Stream.Null)
+            owned.Exited += (_, _) -> {
+                if Object.ReferenceEquals(process, owned) && !disposed {
+                    Exited?.Invoke()
+                }
+            }
+            owned.EnableRaisingEvents = true
             while !owned.HasExited {
                 if await ReachableAsync(settings.Endpoint, ct) {
                     Attach(settings)

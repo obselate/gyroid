@@ -73,6 +73,46 @@ class WalletRpc : IDisposable {
         }
     }
 
+    prop ListenerStarted int64 {
+        get {
+            VerifyListener()
+            return verifiedStart
+        }
+    }
+
+    async func EventsAsync(receive Func[string, Task], ct CancellationToken) {
+        using let client = NewHttp()
+        client.Timeout = Timeout.InfiniteTimeSpan
+        using let request = HttpRequestMessage(HttpMethod.Get, "api/events")
+        VerifyListener()
+        request
+            .Headers
+            .Authorization = AuthenticationHeaderValue(
+            "Bearer",
+            WalletFiles.Cookie(Path.Combine(settings.DataDirectory, "api.cookie"))
+        )
+        request.Headers.Accept.Add(MediaTypeWithQualityHeaderValue("text/event-stream"))
+        using let response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+        response.EnsureSuccessStatusCode()
+        using let stream = await response.Content.ReadAsStreamAsync(ct)
+        using let reader = StreamReader(stream)
+        var eventName = ""
+        while !ct.IsCancellationRequested {
+            let line = await reader.ReadLineAsync(ct)
+            if line == nil {
+                return
+            }
+            if line.Length == 0 {
+                if eventName == "connected" || eventName == "new_block" || eventName == "mined_block" {
+                    await receive(eventName)
+                }
+                eventName = ""
+            } else if line.StartsWith("event:", StringComparison.Ordinal) {
+                eventName = line.Substring(6).Trim()
+            }
+        }
+    }
+
     async func JsonAsync(
         path string,
         body Action[Utf8JsonWriter]? = nil,
