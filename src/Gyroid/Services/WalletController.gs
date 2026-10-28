@@ -944,7 +944,8 @@ class WalletController : IDisposable {
         } catch (error OperationCanceledException) when shutdown.IsCancellationRequested { } catch (
             error WalletException
         ) when state != "Unlocked" ||
-            disposed { } catch (error ObjectDisposedException) when disposed { }
+            disposed { } catch (error ObjectDisposedException) when state != "Unlocked" ||
+            disposed { }
     }
 
     async func SignAsync(message string, ct CancellationToken = default(CancellationToken)) string {
