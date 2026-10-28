@@ -918,23 +918,33 @@ class WalletController : IDisposable {
     }
 
     async func RescanAsync(ct CancellationToken = default(CancellationToken)) {
-        await BeginAsync(ct)
+        using let source = CancellationTokenSource.CreateLinkedTokenSource(ct, shutdown.Token)
+        let token = source.Token
+        await BeginAsync(token)
         try {
             RequireUnlocked()
             Touch()
-            using let response = await rpc.JsonAsync("wallet/sync", WriteEmpty, ct)
-            while true {
-                using let balance = await rpc.JsonAsync("wallet/balance", ct: ct)
-                if WalletJson.Number(balance.RootElement, "synced_height") >=
-                WalletJson.Number(balance.RootElement, "chain_height") {
-                    break
-                }
-                await Task.Delay(500, ct)
-            }
-            await RefreshCoreAsync(ct)
+            using let response = await rpc.JsonAsync("wallet/sync", WriteEmpty, token)
         } finally {
             End()
         }
+        try {
+            while state == "Unlocked" && !disposed {
+                using let balance = await rpc.JsonAsync("wallet/balance", ct: token)
+                if state != "Unlocked" || disposed {
+                    return
+                }
+                if WalletJson.Number(balance.RootElement, "synced_height") >=
+                WalletJson.Number(balance.RootElement, "chain_height") {
+                    await RefreshAsync(token)
+                    return
+                }
+                await Task.Delay(500, token)
+            }
+        } catch (error OperationCanceledException) when shutdown.IsCancellationRequested { } catch (
+            error WalletException
+        ) when state != "Unlocked" ||
+            disposed { } catch (error ObjectDisposedException) when disposed { }
     }
 
     async func SignAsync(message string, ct CancellationToken = default(CancellationToken)) string {
