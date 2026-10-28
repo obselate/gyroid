@@ -110,7 +110,7 @@ class ToolsPage : Cell[ToolsInput] {
         AlignItems: AlignItems.Center,
         Gap: 16,
         FlexShrink: 0,
-        input.Ui.Label(input.Ui.Strings.Get(title), 17, input.Ui.Ink),
+        input.Ui.Label(input.Ui.Strings.Get(title), 17, input.Ui.Ink, ""),
         Container{FlexGrow: 1},
         trailing
     }

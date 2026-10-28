@@ -44,6 +44,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 () -> {
                     if loading == send.TxId {
                         view = task.Result
+                        Rebuild()
                     }
                 }
             )
