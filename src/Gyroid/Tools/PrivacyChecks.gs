@@ -47,7 +47,7 @@ class PrivacyChecks {
 
     private func PhraseStatePath() string -> AppSettings.ConfigurationPath() + ".phrase-checks.json"
 
-    private func WalletKey() string -> session.Library.WalletPath(session.settings.ActiveWallet)
+    private func WalletKey() string -> session.settings.Network + ":" + session.settings.ActiveWallet
 
     func PhraseChecked() DateTime? {
         if !File.Exists(PhraseStatePath()) {
