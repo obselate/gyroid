@@ -150,7 +150,7 @@ class WalletLibrary {
                 AttributesToSkip: FileAttributes.ReparsePoint
             }
         ) {
-            if Path.GetFileName(path).Equals("checkpoints.dat", StringComparison.OrdinalIgnoreCase) {
+            if path.Equals(Path.Combine(data, "checkpoints.dat"), StringComparison.OrdinalIgnoreCase) {
                 continue
             }
             using let input = PrivateFiles.OpenRead(path)
