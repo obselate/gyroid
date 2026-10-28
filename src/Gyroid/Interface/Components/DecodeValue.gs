@@ -11,22 +11,22 @@ data struct DecodeValueInput {
     var Color Color
     var FractionColor Color
     var Live AccessibilityLive
-    var Settled Action
+    var Ui Presentation
 }
 
 class DecodeValue : Cell[DecodeValueInput] {
     private var from string = ""
     private var target string = ""
     private let progress Anim[float64]
-    private var settled Action?
+    private var ui Presentation?
 
     init() {
         progress = Animate(1.0)
-        progress.Completed += reason -> settled?.Invoke()
+        progress.Completed += reason -> ui?.SettleMotion()
     }
 
     protected override func Build(input DecodeValueInput) Blob {
-        settled = input.Settled
+        ui = input.Ui
         if input.Value != target {
             from = target
             target = input.Value

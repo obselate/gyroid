@@ -386,7 +386,7 @@ class OverviewPage : Cell[OverviewInput] {
                 "balance",
                 DecodeValueInput{
                     Value: value,
-                    Settled: ui.SettleMotion,
+                    Ui: ui,
                     Name: if masked {
                         ui.Strings.Get("Amounts hidden")
                     } else if known {
@@ -551,7 +551,7 @@ class OverviewPage : Cell[OverviewInput] {
                 label,
                 DecodeValueInput{
                     Value: text,
-                    Settled: ui.SettleMotion,
+                    Ui: ui,
                     Name: ui.Strings.Get(label) + " " + if masked {
                         ui.Strings.Get("Amounts hidden")
                     } else {
