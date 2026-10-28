@@ -155,7 +155,10 @@ partial class WalletView : Cell {
             UpdatePlayback()
             Rebuild()
         }
-        owner.FocusChanged += _ -> {
+        owner.FocusChanged += focused -> {
+            if focused {
+                lastActivity = Stopwatch.GetTimestamp()
+            }
             UpdatePlayback()
             Rebuild()
         }
@@ -634,7 +637,6 @@ partial class WalletView : Cell {
         AlignItems: AlignItems.Center,
         JustifyContent: JustifyContent.Center,
         OnPointerDown: (event PointerEvent) -> Touch(),
-        OnPointerMove: (event PointerEvent) -> Touch(),
         OnWheel: (event WheelEvent) -> Touch()
     }
 
@@ -1129,7 +1131,6 @@ partial class WalletView : Cell {
             Color: ink,
             KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
             OnPointerDown: (event PointerEvent) -> Touch(),
-            OnPointerMove: (event PointerEvent) -> Touch(),
             OnWheel: (event WheelEvent) -> Touch(),
             Container{Position: PositionType.Absolute, Left: 0, Top: 0, Right: 0, Bottom: 0, ShaderEffect: background},
             Chrome()

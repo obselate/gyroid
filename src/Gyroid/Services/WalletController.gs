@@ -15,6 +15,7 @@ class WalletController : IDisposable {
     var rpc WalletRpc
     let daemon WalletDaemon = WalletDaemon()
     let gate SemaphoreSlim = SemaphoreSlim(1, 1)
+    let autoLockChanged SemaphoreSlim = SemaphoreSlim(0, 1)
     var snapshot WalletSnapshot = WalletSnapshot()
     var nodeStatus NodeStatus = NodeStatus()
     var pendingSeed[]?char = nil
@@ -100,6 +101,9 @@ class WalletController : IDisposable {
         sendLease = nil
         isBusy = false
         UpdateEvents()
+        if settings.AutoLockMinutes > 0 && autoLockChanged.CurrentCount == 0 {
+            autoLockChanged.Release()
+        }
         gate.Release()
         if !disposed {
             Changed?.Invoke()
@@ -116,10 +120,16 @@ class WalletController : IDisposable {
 
     private async func AutoLockAsync() {
         let ct = shutdown.Token
-        using let timer = PeriodicTimer(TimeSpan.FromSeconds(1))
         try {
-            while await timer.WaitForNextTickAsync(ct) {
-                if !managed || state != "Unlocked" || !IdleExpired() {
+            while !ct.IsCancellationRequested {
+                if settings.AutoLockMinutes == 0 || !managed || state != "Unlocked" {
+                    await autoLockChanged.WaitAsync(ct)
+                    continue
+                }
+                let remaining = int64(settings.AutoLockMinutes) * 60000
+                - (Environment.TickCount64 - Interlocked.Read(ref lastActivity))
+                if remaining > 0 {
+                    await autoLockChanged.WaitAsync(int32(Math.Min(remaining, int32.MaxValue)), ct)
                     continue
                 }
                 await BeginAsync(ct)
@@ -406,6 +416,9 @@ class WalletController : IDisposable {
             await WalletSettings.SaveAsync(next, ct)
             settings.AutoLockMinutes = minutes
             Touch()
+            if autoLockChanged.CurrentCount == 0 {
+                autoLockChanged.Release()
+            }
         } finally {
             End()
         }
