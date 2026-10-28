@@ -297,7 +297,6 @@ partial class App : Cell {
             () -> {
                 ui.Operations--
                 if unknown {
-
                     screen = "Send"
                     Refresh()
                 } else {

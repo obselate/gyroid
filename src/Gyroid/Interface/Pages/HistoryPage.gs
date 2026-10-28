@@ -117,6 +117,7 @@ class HistoryPage : Cell[HistoryInput] {
             case "30d": 8640UL
             default: Math.Max(288UL, tip + 1 - Math.Min(tip, oldest))
         }
+        span = Math.Min(span, Math.Max(1UL, tip))
         low = tip > span ? tip - span: 0
         if input.Snapshot.HistoryMore && period != "all" && all.Count > 0 && all[all.Count - 1].Height > low {
             LoadMore()
@@ -1091,7 +1092,7 @@ class HistoryPage : Cell[HistoryInput] {
         let missing = heights
             .Where((height uint64) -> height > 0 && !requested.Contains(height))
             .Distinct()
-            .Take(60)
+            .Take(16)
             .ToArray()
         guard let window = current.Window else {
             return
@@ -1108,8 +1109,11 @@ class HistoryPage : Cell[HistoryInput] {
 
     private async func FetchTimes(window Window, history HistoryService, heights[]uint64) {
         var fetched = Dictionary[uint64, int64]()
+        var failure Exception? = nil
         try {
             fetched = await Task.Run(() -> history.BlockTimesAsync(heights))
+        } catch (error Exception) {
+            failure = error
         } finally {
             window.TryPost(
                 () -> {
@@ -1117,6 +1121,9 @@ class HistoryPage : Cell[HistoryInput] {
                         times[entry.Key] = entry.Value
                     }
                     fetching = false
+                    if let error = failure {
+                        current.Ui.Run(Task.FromException(error))
+                    }
                     Rebuild()
                 }
             )
