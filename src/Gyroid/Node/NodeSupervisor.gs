@@ -59,9 +59,6 @@ class NodeSupervisor : IDisposable {
         if Owned {
             throw WalletException("Owned daemon is running but its API is not ready")
         }
-        if settings.NodeMode == "manual" {
-            throw WalletException("Node is not running. Manual mode never starts or downloads a core")
-        }
         if settings.BinaryPath.Length == 0 || settings.BinaryPath == CoreRelease.InstallationPath() && !File.Exists(
             settings.BinaryPath
         ) {
@@ -166,6 +163,7 @@ class NodeSupervisor : IDisposable {
         start.Environment["LOCALAPPDATA"] = settings.DataDirectory
         start.Environment["BLOCKNET_P2P_KEY"] = Path.Combine(settings.DataDirectory, "identity.key")
         start.Environment.Remove("BLOCKNET_VIEW_PRIV")
+        stop.CancelAfter(TimeSpan.FromSeconds(60))
         try {
             lock ownership {
                 ct.ThrowIfCancellationRequested()
@@ -180,7 +178,7 @@ class NodeSupervisor : IDisposable {
                 throw WalletException("Could not start the configured core executable")
             }
             settings.OwnedProcessId = if OperatingSystem.IsWindows() {
-                int32.Parse(owned.StandardOutput.ReadLine() ?? "0", CultureInfo.InvariantCulture)
+                int32.Parse(await owned.StandardOutput.ReadLineAsync(ct) ?? "0", CultureInfo.InvariantCulture)
             } else {
                 owned.Id
             }
@@ -201,7 +199,15 @@ class NodeSupervisor : IDisposable {
                 }
             }
             owned.EnableRaisingEvents = true
+            using let core = Process.GetProcessById(settings.OwnedProcessId)
+            var processorTime = core.TotalProcessorTime
             while !owned.HasExited {
+                core.Refresh()
+                let currentProcessorTime = core.TotalProcessorTime
+                if currentProcessorTime > processorTime {
+                    processorTime = currentProcessorTime
+                    stop.CancelAfter(TimeSpan.FromSeconds(60))
+                }
                 if await ReachableAsync(settings.Endpoint, ct) {
                     Attach(settings)
                     return
@@ -211,6 +217,11 @@ class NodeSupervisor : IDisposable {
             throw WalletException("Configured core exited before its API became ready")
         } catch (error Exception) {
             Stop()
+            if error is OperationCanceledException &&
+                !cancellation.IsCancellationRequested &&
+                !shutdown.IsCancellationRequested {
+                throw WalletException("Core startup timed out")
+            }
             if error is WalletException {
                 throw error
             }
@@ -256,6 +267,9 @@ class NodeSupervisor : IDisposable {
         if await ReachableAsync(settings.Endpoint, ct) {
             Attach(settings)
             return true
+        }
+        if settings.NodeMode == "manual" {
+            throw WalletException("Node is not running. Manual mode never starts or downloads a core")
         }
         if settings.DiscoveredEndpoint.Length > 0 && settings.DiscoveredEndpoint != settings.Endpoint {
             let installation = settings.Copy()
@@ -365,6 +379,18 @@ class NodeSupervisor : IDisposable {
         if settings.Network != "mainnet" {
             return false
         }
+        let path = Path.Combine(settings.DataDirectory, "checkpoints.dat")
+        using let resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("Gyroid.Checkpoints.Mainnet") ??
+            throw WalletException("Mainnet checkpoints are missing")
+        let baseline = [int32(resource.Length)]uint8
+        resource.ReadExactly(baseline, 0, baseline.Length)
+        if File.Exists(path) && FileInfo(path).Length <= 1048576 {
+            let existing = Checkpoints.Parse(System.Text.Encoding.UTF8.GetBytes(PrivateFiles.ReadText(path, 1048576)))
+            let trusted = Checkpoints.Parse(baseline)
+            if Checkpoints.Height(existing) >= Checkpoints.Height(trusted) && Checkpoints.Extends(trusted, existing) {
+                return true
+            }
+        }
         ReportProgress("Checkpoints", 0)
         using let deadline = CancellationTokenSource.CreateLinkedTokenSource(ct)
         deadline.CancelAfter(TimeSpan.FromSeconds(5))
@@ -380,12 +406,7 @@ class NodeSupervisor : IDisposable {
             ct,
             deadline.Token
         )
-        using let resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("Gyroid.Checkpoints.Mainnet") ??
-            throw WalletException("Mainnet checkpoints are missing")
-        let baseline = [int32(resource.Length)]uint8
-        resource.ReadExactly(baseline, 0, baseline.Length)
         let selected = Checkpoints.Select(baseline, downloaded)
-        let path = Path.Combine(settings.DataDirectory, "checkpoints.dat")
         await PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(selected, 0, selected.Length, ct), true, false)
         ReportProgress("Checkpoints", 100)
         return true
@@ -406,6 +427,8 @@ class NodeSupervisor : IDisposable {
         if original.RootElement.ValueKind != JsonValueKind.Object {
             throw WalletException("Core settings must be a JSON object")
         }
+        let syncEnabled = fullSync || original.RootElement.TryGetProperty("full_sync", out let configuredSync) &&
+            configuredSync.ValueKind == JsonValueKind.True
         let installed = settings.DataDirectory == settings.DiscoveredDataDirectory
         let walletFile = Path.Combine(
             settings.WalletDirectory,
@@ -420,7 +443,7 @@ class NodeSupervisor : IDisposable {
             out let sync
         ) &&
             (sync.ValueKind == JsonValueKind.True || sync.ValueKind == JsonValueKind.False) &&
-            sync.GetBoolean() == fullSync &&
+            sync.GetBoolean() == syncEnabled &&
             (installed || NodeJson.Text(original.RootElement, "listen") == settings.ListenAddress) {
             return
         }
@@ -441,7 +464,7 @@ class NodeSupervisor : IDisposable {
                     if !installed {
                         writer.WriteString("listen", settings.ListenAddress)
                     }
-                    writer.WriteBoolean("full_sync", fullSync)
+                    writer.WriteBoolean("full_sync", syncEnabled)
                     writer.WriteEndObject()
                     await writer.FlushAsync(ct)
                 },
