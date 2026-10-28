@@ -242,7 +242,7 @@ try:
             shutil.copytree(snapshot_path / f"node{index}", data)
         else:
             data.mkdir()
-        settings = dict(listen=f"/ip4/127.0.0.1/tcp/{ports[index + 2]}", seed=False,
+        settings = dict(listen=f"/ip4/127.0.0.1/tcp/{ports[index + 2]}", seed=index == 1,
                         full_sync=True, wallet_file=str(data / "wallet.dat"),
                         identity_key_path=str(data / "identity.key"), p2p_max_inbound=1,
                         p2p_max_outbound=1, p2p_whitelist=[], extra_peers=[])
@@ -262,9 +262,11 @@ try:
     for index in range(2):
         peer_id = peer_ids[1 - index]
         other = f"/ip4/127.0.0.1/tcp/{ports[3 - index]}/p2p/{peer_id}"
-        configurations[index].update(extra_peers=[other], p2p_whitelist=[peer_id])
+        configurations[index].update(extra_peers=[] if index == 1 else [other], p2p_whitelist=[peer_id])
         (root / f"node{index}" / "settings.json").write_text(json.dumps(configurations[index]))
-    active = [launch(index) for index in range(2)]
+    active = [launch(1)]
+    wait_for(lambda: ready(1), seconds=mining_timeout)
+    active.append(launch(0))
     for index in range(2):
         wait_for(lambda index=index: ready(index), seconds=mining_timeout)
         report(f"Startup{index}", since)
@@ -302,7 +304,7 @@ try:
     step = "Maturity"
     since = time.monotonic()
     if not snapshot:
-        api(0, "mining/threads", {"threads": 4})
+        api(0, "mining/threads", {"threads": 1})
         api(0, "mining/start", {})
         milestone = 10
         def mature():
@@ -368,7 +370,7 @@ try:
     transaction = transaction[1]
     print("Submit PASS", flush=True)
     confirmation_started = time.monotonic()
-    api(0, "mining/threads", {"threads": 4})
+    api(0, "mining/threads", {"threads": 1})
     api(0, "mining/start", {})
     wait_for(lambda: api(1, "wallet/balance").get("total", 0) == amount, seconds=300)
     report("Receive", since)
