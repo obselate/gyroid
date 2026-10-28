@@ -11,6 +11,7 @@ class NodeStatus {
     var Syncing bool
     var SyncProgress uint64?
     var Peers uint64
+    var Mempool uint64
     var Endpoint string = ""
     var DataDirectory string = ""
     var Executable string = ""

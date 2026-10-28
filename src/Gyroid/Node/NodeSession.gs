@@ -88,13 +88,18 @@ class NodeSession : IDisposable {
                 Source: Supervisor.Source,
                 Owned: Supervisor.Owned,
                 Running: true,
-                Version: CoreRelease.Version,
+                Version: if Supervisor.Owned {
+                    CoreRelease.Version
+                } else {
+                    ""
+                },
                 Network: Settings.Network,
                 Height: NodeJson.Number(root, "chain_height"),
                 ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),
                 Syncing: NodeJson.Flag(root, "syncing"),
                 SyncProgress: NodeJson.OptionalNumber(root, "sync_progress"),
                 Peers: NodeJson.Number(root, "peers"),
+                Mempool: NodeJson.Number(root, "mempool_size"),
                 Endpoint: Settings.Endpoint,
                 DataDirectory: Settings.DataDirectory,
                 Executable: Supervisor.Executable,

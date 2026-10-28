@@ -105,6 +105,11 @@ partial class App : Cell {
         receivedRow = (output WalletOutput) -> ReceivedRow(output)
         sentRow = (send WalletSend) -> SentRow(send)
         historyHandle.MetricsChanged += MoreHistory
+        nodeAnchor.MetricsChanged += _ -> {
+            if nodeOpen {
+                Rebuild()
+            }
+        }
         background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
         appIcon = ImageSource.Decode(Resources.Resource("Gyroid.Icon.png"))
         LoadWallets()
@@ -174,7 +179,7 @@ partial class App : Cell {
     private func Fingerprint(snapshot WalletSnapshot) string {
         let node = wallet.Node.Status
         let text = StringBuilder(
-            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${snapshot.HistoryTotal} ${wallet.Send.Pending?.Retryable} ${wallet.Send.Pending?.State} ${wallet.LockQueued} ${wallet.Node.Status.Progress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.SyncProgress} ${node.Phase} ${node.Peers} ${node.Endpoint} ${node.DataDirectory}"
+            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${snapshot.HistoryTotal} ${wallet.Send.Pending?.Retryable} ${wallet.Send.Pending?.State} ${wallet.LockQueued} ${wallet.Node.Status.Progress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.SyncProgress} ${node.Phase} ${node.Peers} ${node.Mempool} ${node.Endpoint} ${node.DataDirectory}"
         )
         if let value = snapshot.Balance {
             text.Append(
@@ -483,7 +488,7 @@ partial class App : Cell {
             WelcomePage()
         }
         let left = if WalletAvailable() {
-            224.0
+            102.0
         } else {
             24.0
         }
@@ -554,9 +559,16 @@ partial class App : Cell {
         }
         let frame = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, FlexDirection: FlexDirection.Row}
         if WalletAvailable() {
+            main.Padding = 0
+            main.Width = Percent(100)
+            main.MaxWidth = 1400
+            frame.Padding = Edges{Left: 14, Right: 20, Bottom: 20}
+            frame.Gap = 16
             frame.Add(Sidebar(page))
+            frame.Add(Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, AlignItems: AlignItems.Center, main})
+        } else {
+            frame.Add(main)
         }
-        frame.Add(main)
         root.Add(frame)
         if WalletAvailable() {
             if let pending = estimate {

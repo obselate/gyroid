@@ -23,117 +23,95 @@ import System.Text
 import System.Threading.Tasks
 
 partial class App {
-    private func SideItem(
+    private func RailItem(
         label string,
+        icon string,
         selected bool,
         disabled bool,
         action Action,
-        icon string = "",
         checked AccessibilityChecked = AccessibilityChecked.Unspecified
-    ) Blob -> Goo
-        .Button{
-        Height: 40,
-        FlexShrink: 0,
-        Padding: Edges{Left: 9, Right: 8},
-        BorderWidth: Edges{Left: 3, Top: 1, Right: 1, Bottom: 1},
-        BorderRadius: 4,
-        BorderColor: if selected {
-            ui.Rule
-        } else {
-            Color.Transparent
-        },
-        BorderStartColor: if selected {
+    ) Blob {
+        let color = if disabled {
+            ui.Dim
+        } else if selected {
             ui.Lime
         } else {
-            Color.Transparent
-        },
-        BackgroundColor: if selected {
-            Color.Parse("#0b1203")
-        } else {
-            Color.Transparent
-        },
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        JustifyContent: JustifyContent.FlexStart,
-        Gap: if icon.Length > 0 {
-            10.0
-        } else {
-            0.0
-        },
-        Disabled: disabled,
-        Hover: Style{BackgroundColor: ui.Rule},
-        Focus: Theme.Read().FocusStyle,
-        Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label), Checked: checked},
-        OnClick: action,
-        if icon.Length > 0 {
-            Container{FlexShrink: 0, MaterialIcons.Create(icon, 16, ui.Dim)}
-        } else {
-            Container{}
-        },
-        ui.Label(
-            ui.Strings.Get(label),
-            14,
-            if disabled {
-                ui.Dim
-            } else if selected {
-                ui.Lime
-            } else if icon.Length > 0 {
-                ui.Body
+            ui.Body
+        }
+        return Goo
+            .Button{
+            Width: 60,
+            Height: height < 700 ? 44.0: 48.0,
+            FlexShrink: 0,
+            FlexDirection: FlexDirection.Column,
+            AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.Center,
+            Gap: 4,
+            BorderRadius: 10,
+            BackgroundColor: if selected {
+                ui.Lime.WithAlpha(0.08)
             } else {
-                ui.Ink
+                Color.Transparent
             },
-            ""
-        )
+            Disabled: disabled,
+            Hover: Style{BackgroundColor: ui.Ink.WithAlpha(0.06)},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Button,
+                Name: ui.Strings.Get(label),
+                Selected: selected,
+                Checked: checked
+            },
+            OnClick: action,
+            MaterialIcons.Create(icon, 20, color),
+            ui.Label(ui.Strings.Get(label), 11, color, "")
+        }
     }
 
     private func Sidebar(page string) Blob {
         let blocked = ui.Working()
-        let island = ui.Glass()
-        island.Width = 176
-        island.FlexShrink = 0
-        island.Margin = Edges{Top: 24, Left: 24, Bottom: 24}
-        island.Padding = 8
-        island.Add(
-            Container{
-                FlexGrow: 1,
-                Gap: 4,
-                SideItem("overview", page == "Overview", blocked, () -> Navigate("Overview")),
-                if wallet.Snapshot.ViewOnly {
-                    Container{}
-                } else {
-                    SideItem("send", page == "Send", blocked, () -> Navigate("Send"))
-                },
-                SideItem("receive", page == "Receive", blocked, () -> Navigate("Receive")),
-                SideItem("history", page == "Transactions", blocked, () -> Navigate("Transactions")),
-                SideItem("tools", page == "Tools", blocked, () -> Navigate("Tools")),
-                SideItem("contacts", page == "Contacts", blocked, () -> Navigate("Contacts")),
-                Container{FlexGrow: 1},
-                if let indicator = SyncIndicator(16, 12) {
-                    Container{Padding: Edges{Left: 10}, FlexShrink: 0, indicator}
-                } else {
-                    Container{}
-                },
-                Container{Height: 1, FlexShrink: 0, Margin: Edges{Top: 8, Bottom: 8}, BackgroundColor: ui.Rule},
-                SideItem(
-                    "privacy",
-                    ui.Privacy,
-                    false,
-                    () -> TogglePrivacy(),
-                    if ui.Privacy {
-                        "visibility_off"
-                    } else {
-                        "visibility"
-                    },
-                    if ui.Privacy {
-                        AccessibilityChecked.True
-                    } else {
-                        AccessibilityChecked.False
-                    }
-                ),
-                SideItem("settings", page == "Settings", blocked, () -> Navigate("Settings"), "settings"),
-                SideItem("lock", false, wallet.LockQueued, () -> Lock(), "lock")
-            }
+        let compact = height < 700
+        let inset = compact ? 4.0: 8.0
+        let rail = ui.Glass()
+        rail.Width = 72
+        rail.FlexShrink = 0
+        rail.BorderRadius = 14
+        rail.AlignItems = AlignItems.Center
+        rail.Padding = Edges{Top: inset, Bottom: inset}
+        rail.Gap = compact ? 0.0: 2.0
+        rail.Add(RailItem("overview", "grid_view", page == "Overview", blocked, () -> Navigate("Overview")))
+        if !wallet.Snapshot.ViewOnly {
+            rail.Add(RailItem("send", "north_east", page == "Send", blocked, () -> Navigate("Send")))
+        }
+        rail.Add(RailItem("receive", "south_west", page == "Receive", blocked, () -> Navigate("Receive")))
+        rail.Add(RailItem("history", "schedule", page == "Transactions", blocked, () -> Navigate("Transactions")))
+        rail.Add(RailItem("tools", "tune", page == "Tools", blocked, () -> Navigate("Tools")))
+        rail.Add(RailItem("contacts", "person", page == "Contacts", blocked, () -> Navigate("Contacts")))
+        rail.Add(Container{FlexGrow: 1})
+        rail.Add(NodeBadge())
+        rail.Add(
+            Container{Width: 32, Height: 1, FlexShrink: 0, Margin: Edges{Top: 4, Bottom: 4}, BackgroundColor: ui.Rule}
         )
-        return island
+        rail.Add(
+            RailItem(
+                "privacy",
+                if ui.Privacy {
+                    "visibility_off"
+                } else {
+                    "visibility"
+                },
+                false,
+                false,
+                () -> TogglePrivacy(),
+                if ui.Privacy {
+                    AccessibilityChecked.True
+                } else {
+                    AccessibilityChecked.False
+                }
+            )
+        )
+        rail.Add(RailItem("settings", "settings", page == "Settings", blocked, () -> Navigate("Settings")))
+        rail.Add(RailItem("lock", "lock", false, wallet.LockQueued, () -> Lock()))
+        return rail
     }
 }

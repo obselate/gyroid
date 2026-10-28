@@ -381,6 +381,34 @@ class Presentation {
         Label(value, size, color, channel)
     }
 
+    func Badge(content string, color Color, icon string = "") Container {
+        let badge = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 5,
+            Height: 20,
+            Padding: Edges{Left: 6, Right: 6},
+            BorderWidth: 1,
+            BorderColor: color,
+            BorderRadius: 3,
+            FlexShrink: 0
+        }
+        if icon.Length > 0 {
+            badge.Add(MaterialIcons.Create(icon, 12, color))
+        }
+        badge.Add(Label(content, 11.5, color, ""))
+        return badge
+    }
+
+    func Status(content string, color Color, icon string = "") Container {
+        let status = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 6, FlexShrink: 0}
+        if icon.Length > 0 {
+            status.Add(MaterialIcons.Create(icon, 14, color))
+        }
+        status.Add(Label(content, 12.5, color, ""))
+        return status
+    }
+
     func DialogRoot(dialog ModalDialog, backdrop Goo.Button, panel Container) Container -> Container{
         Position: PositionType.Absolute,
         Left: 0,
