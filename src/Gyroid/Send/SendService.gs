@@ -199,26 +199,6 @@ class SendService {
                 let sends = await session.History.ReadSendsAsync(ct)
                 session.PublishSends(sends)
             }
-            if status == "not_found" && session.State == "Unlocked" {
-                using let body = JsonDocument.Parse(pending.Body)
-                let recipients = body.RootElement.GetProperty("recipients")
-                let recipient = recipients[0]
-                for send in session.Snapshot.Sends {
-                    if send.Timestamp < pending.Timestamp || send.Recipients.Length != 1 {
-                        continue
-                    }
-                    let recorded = send.Recipients[0]
-                    if recorded.Address == NodeJson.Text(recipient, "address") && recorded.Amount == NodeJson.Number(
-                        recipient,
-                        "amount"
-                    ) &&
-                        recorded.Memo == NodeJson.Text(recipient, "memo_text") {
-                        Outcome = SendOutcome(send.TxId)
-                        store.Clear()
-                        return
-                    }
-                }
-            }
             if status == "completed" && root.TryGetProperty("result", out let result) {
                 let txid = NodeJson.Text(result, "txid")
                 if txid.Length > 0 && !NodeJson.Flag(result, "dry_run") {
@@ -268,6 +248,10 @@ class SendService {
             let inputs = await SubmittedInputCountAsync(txid)
             return SendResult(txid, result.Fee, result.Change, inputs)
         } catch (error WalletException) {
+            if error.StatusCode == 429 {
+                store.Clear()
+                throw error
+            }
             await RecoverCoreAsync(CancellationToken.None)
             let outcome = Outcome
             Outcome = SendOutcome()

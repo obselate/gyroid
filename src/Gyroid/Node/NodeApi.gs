@@ -183,12 +183,39 @@ class NodeApi : IDisposable {
                         case 503: "No wallet is loaded or the daemon is not ready"
                         default: "Daemon request failed with HTTP " + code.ToString()
                     }
-                    if code == 401 && (await response.Content.ReadAsStringAsync(ct)).Contains(
-                        "password",
-                        StringComparison.Ordinal
-                    ) {
-                        message = "Wrong wallet password"
-                    }
+                    try {
+                        using let errorBody = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct))
+                        if errorBody.RootElement.ValueKind == JsonValueKind.Object {
+                            let coreError = NodeJson.Text(errorBody.RootElement, "error")
+                            message = switch coreError {
+                                case "incorrect password": "Wrong wallet password"
+                                case "wrong password": "Wrong wallet password"
+                                case "wallet is locked": "Wallet is locked or this operation is not allowed"
+                                case "no wallet loaded": "No wallet is loaded or the daemon is not ready"
+                                case "wallet already loaded": "A wallet is already loaded or the target file already exists. Unload explicitly or choose another name"
+                                case "wallet file not found": "Wallet file or requested resource was not found"
+                                case "wallet file not readable (permission denied)": "Access to the selected wallet file was denied"
+                                case "wallet file is corrupted": "Wallet file is corrupted or truncated"
+                                case "wallet file is corrupted or truncated": "Wallet file is corrupted or truncated"
+                                case "transaction was not sent by this wallet": "Transaction was not sent by this wallet"
+                                case "transaction not found on chain": "Transaction was not found on chain"
+                                case "transaction not found": "Transaction was not found"
+                                case "txid must be 64 hex characters": "Transaction ID must contain 64 hexadecimal characters"
+                                case "fee estimation did not converge": "Fee estimation did not converge"
+                                case "view-only wallet cannot send": "View-only wallets cannot send"
+                                case "send rate limit exceeded": "Too many attempts. Wait before trying again"
+                                case "send busy, retry later": "Too many attempts. Wait before trying again"
+                                default: if coreError.Length > 0 {
+                                    coreError
+                                } else {
+                                    message
+                                }
+                            }
+                            if coreError.StartsWith("wallet file already exists:", StringComparison.Ordinal) {
+                                message = "A wallet is already loaded or the target file already exists. Unload explicitly or choose another name"
+                            }
+                        }
+                    } catch (error JsonException) { }
                     throw WalletException(message, code, submitting && code >= 500)
                 }
                 using let stream = await response.Content.ReadAsStreamAsync(ct)
