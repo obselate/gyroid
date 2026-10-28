@@ -12,4 +12,5 @@ if [[ ! -x "$root/vulkan-sdk/bin/spirv-val" ]]; then
   tar -xJf "$root/vulkan-sdk.tar.xz" -C "$root/vulkan-sdk/bin" --strip-components=3 1.4.357.0/x86_64/bin/spirv-val
   rm "$root/vulkan-sdk.tar.xz"
 fi
+echo "45cb90cbc77a92012b5073aa2af5ef3676740c4574f6e4072b3e8f16fec3708d  $root/vulkan-sdk/bin/spirv-val" | sha256sum -c -
 printf 'SLANG_SDK=%s/slang\nVULKAN_SDK=%s/vulkan-sdk\n' "$root" "$root" >> "${GITHUB_ENV:?Set GITHUB_ENV to the environment output file}"

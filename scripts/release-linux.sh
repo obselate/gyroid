@@ -60,7 +60,7 @@ assert ctypes.CDLL(str(Path(sys.argv[1]) / "libsodium.so")).sodium_init() >= 0
 print("libsodium initialization: passed")
 baseline = max(versions, key=lambda version: tuple(map(int, version.split("."))))
 print(f"Linux x64 glibc baseline: {baseline}")
-Path(sys.argv[2]).write_text(f"## Linux x64\n\nRequires glibc {baseline} or later. The GUI requires a Vulkan loader, a Vulkan driver, and a Wayland or X11 desktop. No .NET runtime is required.\n\nThe bundle includes libsodium and embedded fonts, icons, checkpoints, and shaders. SHA256SUMS covers the tested archive.\n")
+Path(sys.argv[2]).write_text(f"## Linux x64\n\nRequires glibc {baseline} or later. The GUI requires a Vulkan loader, a Vulkan driver, and a native Wayland session (X11 and XWayland are not supported). No .NET runtime is required.\n\nThe bundle includes libsodium and embedded fonts, icons, checkpoints, and shaders. SHA256SUMS covers both tested archives.\n\n## Windows x64\n\nTested on Windows 11 x64. The GUI requires a GPU vendor's Vulkan driver. No .NET runtime is required.\n")
 PY
 (cd "$output" && sha256sum "$name.tar.gz" > SHA256SUMS && sha256sum -c SHA256SUMS)
 tar -tzvf "$output/$name.tar.gz"
