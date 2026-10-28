@@ -4,6 +4,7 @@ import Gyroid.Model
 import System
 import System.Globalization
 import System.IO
+import System.Reflection
 import System.Threading
 
 class Cli {
@@ -67,7 +68,8 @@ class Cli {
                 return 0
             }
             if command == "--version" {
-                Console.WriteLine("Gyroid 0.1.0")
+                let version = Assembly.GetExecutingAssembly().GetCustomAttribute[AssemblyInformationalVersionAttribute]()
+                Console.WriteLine("Gyroid " + (version?.InformationalVersion ?? "unknown").Split('+')[0])
                 return 0
             }
             try {
