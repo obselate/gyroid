@@ -576,4 +576,101 @@ class Presentation {
         }
         return row
     }
+
+    func UpgradeTimeline(status NodeStatus, span float64) Blob {
+        let style = DateTimeStyles.None
+        if !DateTime.TryParseExact(
+            status.UpgradeDate,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            style,
+            out let date
+        ) ||
+            !DateTime
+            .TryParseExact(
+            status.UpgradeDeadline,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            style,
+            out let deadline
+        ) {
+            return Container{}
+        }
+        let end = float64(CoreRelease.UpgradeHeight) + (deadline - date).TotalDays * 288
+        let now = Math.Min(span, span * status.Height / end)
+        let upgrade = span * CoreRelease.UpgradeHeight / end
+        let bar = Container{
+            Width: span,
+            Height: 8,
+            Accessibility: Accessibility{
+                Name: Count(status.Height) + " / " + Count(CoreRelease.UpgradeHeight) + " · " + status.UpgradeDeadline
+            },
+            Container{Position: PositionType.Absolute, Width: now, Height: 8, BorderRadius: 2, BackgroundColor: Lime}
+        }
+        if upgrade > now {
+            let dashes = PathBuilder(0, 0, upgrade - now, 8)
+            var dash = 0.0
+            while dash < upgrade - now {
+                let right = Math.Min(dash + 6, upgrade - now)
+                dashes.MoveTo(dash, 0).LineTo(right, 0).LineTo(right, 8).LineTo(dash, 8).Close()
+                dash += 10
+            }
+            bar.Add(
+                Shape{
+                    Position: PositionType.Absolute,
+                    Left: now,
+                    Width: upgrade - now,
+                    Height: 8,
+                    Path: dashes.Build(),
+                    Fit: ShapeFit.Fill,
+                    BackgroundColor: Orange
+                }
+            )
+        }
+        let stripes = PathBuilder(0, 0, span - upgrade, 8)
+        var x = -8.0
+        while x < span - upgrade {
+            stripes.MoveTo(x, 8).LineTo(x + 8, 0).LineTo(x + 12, 0).LineTo(x + 4, 8).Close()
+            x += 10
+        }
+        bar.Add(
+            Container{
+                Position: PositionType.Absolute,
+                Left: upgrade,
+                Width: span - upgrade,
+                Height: 8,
+                BorderRadius: 2,
+                Overflow: Overflow.Hidden,
+                BackgroundColor: Color.Parse("#3a0026"),
+                Shape{
+                    Width: span - upgrade,
+                    Height: 8,
+                    Path: stripes.Build(),
+                    Fit: ShapeFit.Fill,
+                    BackgroundColor: Pink
+                }
+            }
+        )
+        bar.Add(
+            Container{
+                Position: PositionType.Absolute,
+                Left: now - 1,
+                Top: -5,
+                Width: 2,
+                Height: 18,
+                BackgroundColor: Lime
+            }
+        )
+        bar.Add(
+            Container{
+                Position: PositionType.Absolute,
+                Left: upgrade - 1,
+                Top: -5,
+                Width: 2,
+                Height: 18,
+                BackgroundColor: Orange
+            }
+        )
+        return bar
+    }
 }

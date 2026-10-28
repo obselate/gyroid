@@ -22,4 +22,5 @@ class WalletBalance {
     var Balance uint64? = nil
     var Spendable uint64? = nil
     var Pending uint64? = nil
+    var Unconfirmed uint64
 }

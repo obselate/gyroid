@@ -82,7 +82,7 @@ partial class App : Cell {
 
     private var statusTimer WindowTimer?
 
-    private var shownBalance uint64?
+    private let navigate Action[string]
 
     private var shownHeight string = ""
 
@@ -103,6 +103,11 @@ partial class App : Cell {
             }
         )
         receivedRow = (output WalletOutput) -> ReceivedRow(output)
+        navigate = target -> Navigate(target)
+        showUpgrade = () -> {
+            upgradeShown = true
+            Rebuild()
+        }
         sentRow = (send WalletSend) -> SentRow(send)
         historyHandle.MetricsChanged += MoreHistory
         nodeAnchor.MetricsChanged += _ -> {
@@ -239,12 +244,7 @@ partial class App : Cell {
             lastPage = page
             seedFromWallet = seedFromWallet && page == "Seed"
         }
-        let balance = snapshot.Balance
-        if balance?.Balance != shownBalance {
-            shownBalance = balance?.Balance
-            ui.Decode("balance")
-        }
-        let heights = if let value = balance {
+        let heights = if let value = snapshot.Balance {
             value.ScanHeight.ToString() + " " + value.ChainHeight.ToString()
         } else {
             ""
@@ -416,7 +416,6 @@ partial class App : Cell {
 
     private async func TogglePrivacy() {
         ui.Privacy = !ui.Privacy
-        ui.Decode("balance")
         Rebuild()
         try {
             await wallet.SavePrivacyAsync(ui.Privacy)
@@ -465,7 +464,19 @@ partial class App : Cell {
             0.0
         }
         let content = if page == "Overview" {
-            Dashboard()
+            Cell.Mount[OverviewInput, OverviewPage](
+                "overview",
+                OverviewInput{
+                    Ui: ui,
+                    Snapshot: snapshot,
+                    Node: wallet.Node.Status,
+                    Contacts: contacts,
+                    Privacy: ui.Privacy,
+                    Height: height,
+                    OnNavigate: navigate,
+                    OnUpgrade: showUpgrade
+                }
+            )
         } else if page == "Send" {
             SendPanel()
         } else if page == "Receive" {
@@ -537,6 +548,9 @@ partial class App : Cell {
         let main = Container{Key: page, FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MinHeight: 0, Gap: 16, Padding: 24}
         if let shown = banner {
             main.Add(Container{FlexShrink: 0, shown})
+        }
+        if page == "Overview" && (wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0) {
+            main.Add(PendingSendBanner())
         }
         if page == "Overview" || page == "Transactions" {
             main.Add(content)

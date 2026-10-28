@@ -83,6 +83,7 @@ class HistoryService {
                 Amount: NodeJson.Number(row, "amount"),
                 BlockHeight: NodeJson.Number(row, "block_height"),
                 Spent: NodeJson.Flag(row, "spent"),
+                Coinbase: NodeJson.Flag(row, "is_coinbase"),
                 Memo: NodeJson.Memo(hex)
             }
             if !sentTransactions.Contains(output.TxId) && keys.TryAdd(

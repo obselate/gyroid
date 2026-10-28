@@ -14,6 +14,10 @@ partial class App {
 
     private let nodeAnchor ElementHandle = ElementHandle()
 
+    private var upgradeShown bool
+
+    private let showUpgrade Action
+
     private func NodeState() string {
         let status = wallet.Node.Status
         return if !status.Running {
@@ -162,7 +166,7 @@ partial class App {
                             }
                         }.Build()
                     },
-                    UpgradeTimeline(status),
+                    ui.UpgradeTimeline(status, 294),
                     Container{
                         FlexDirection: FlexDirection.Row,
                         JustifyContent: JustifyContent.SpaceBetween,
@@ -233,106 +237,6 @@ partial class App {
         )
     }
 
-    private func UpgradeTimeline(status NodeStatus) Blob {
-        let style = DateTimeStyles.None
-        if !DateTime.TryParseExact(
-            status.UpgradeDate,
-            "yyyy-MM-dd",
-            CultureInfo.InvariantCulture,
-            style,
-            out let date
-        ) ||
-            !DateTime
-            .TryParseExact(
-            status.UpgradeDeadline,
-            "yyyy-MM-dd",
-            CultureInfo.InvariantCulture,
-            style,
-            out let deadline
-        ) {
-            return Container{}
-        }
-        let span = 294.0
-        let end = float64(CoreRelease.UpgradeHeight) + (deadline - date).TotalDays * 288
-        let now = Math.Min(span, span * status.Height / end)
-        let upgrade = span * CoreRelease.UpgradeHeight / end
-        let bar = Container{
-            Width: span,
-            Height: 8,
-            Accessibility: Accessibility{
-                Name: ui.Count(status.Height) + " / " + ui.Count(CoreRelease.UpgradeHeight) +
-                    " · " +
-                    status.UpgradeDeadline
-            },
-            Container{Position: PositionType.Absolute, Width: now, Height: 8, BorderRadius: 2, BackgroundColor: ui.Lime}
-        }
-        if upgrade > now {
-            let dashes = PathBuilder(0, 0, upgrade - now, 8)
-            var dash = 0.0
-            while dash < upgrade - now {
-                let right = Math.Min(dash + 6, upgrade - now)
-                dashes.MoveTo(dash, 0).LineTo(right, 0).LineTo(right, 8).LineTo(dash, 8).Close()
-                dash += 10
-            }
-            bar.Add(
-                Shape{
-                    Position: PositionType.Absolute,
-                    Left: now,
-                    Width: upgrade - now,
-                    Height: 8,
-                    Path: dashes.Build(),
-                    Fit: ShapeFit.Fill,
-                    BackgroundColor: ui.Orange
-                }
-            )
-        }
-        let stripes = PathBuilder(0, 0, span - upgrade, 8)
-        var x = -8.0
-        while x < span - upgrade {
-            stripes.MoveTo(x, 8).LineTo(x + 8, 0).LineTo(x + 12, 0).LineTo(x + 4, 8).Close()
-            x += 10
-        }
-        bar.Add(
-            Container{
-                Position: PositionType.Absolute,
-                Left: upgrade,
-                Width: span - upgrade,
-                Height: 8,
-                BorderRadius: 2,
-                Overflow: Overflow.Hidden,
-                BackgroundColor: Color.Parse("#3a0026"),
-                Shape{
-                    Width: span - upgrade,
-                    Height: 8,
-                    Path: stripes.Build(),
-                    Fit: ShapeFit.Fill,
-                    BackgroundColor: ui.Pink
-                }
-            }
-        )
-        bar.Add(
-            Container{
-                Position: PositionType.Absolute,
-                Left: now - 1,
-                Top: -5,
-                Width: 2,
-                Height: 18,
-                BackgroundColor: ui.Lime
-            }
-        )
-        bar.Add(
-            Container{
-                Position: PositionType.Absolute,
-                Left: upgrade - 1,
-                Top: -5,
-                Width: 2,
-                Height: 18,
-                BackgroundColor: ui.Orange
-            }
-        )
-        return bar
-    }
-
     private func NodeReading(label string, value string, total string = "") Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Baseline,
@@ -340,5 +244,39 @@ partial class App {
         Container{FlexGrow: 1},
         ui.Label(value, 14, ui.Ink, ""),
         ui.Label(total, 14, ui.Dim, "")
+    }
+
+    private func UpgradeDialog() Blob {
+        let node = wallet.Node.Status
+        let close Action = () -> {
+            upgradeShown = false
+            Rebuild()
+        }
+        return Cell.Mount[ModalDialog, ModalDialogHost](
+            "upgrade",
+            ModalDialog{
+                Open: true,
+                CreateRoot: ui.DialogRoot,
+                AccessibilityName: ui.Strings.Get("Network upgrade"),
+                Width: Math.Min(width - 48, 600),
+                Header: ui.Label(ui.Strings.Get("Network upgrade"), 18, ui.Ink, ""),
+                Content: Container{
+                    Gap: 14,
+                    ui.Figure("Date", node.UpgradeDate, ui.Ink),
+                    ui.Figure("Blocks left", ui.Count(node.UpgradeBlocksLeft), ui.Orange),
+                    ui.Figure("Migration deadline", node.UpgradeDeadline, ui.Ink),
+                    Text{
+                        Content: node.UpgradeNotice,
+                        FontFamily: ui.Font,
+                        FontSize: 13,
+                        Color: ui.Body,
+                        TextWrap: TextWrap.Wrap
+                    }
+                },
+                Footer: ui.ActionRow([]Blob{ui.Button("Close", close)}),
+                OnCancel: close,
+                OnClose: close
+            }
+        )
     }
 }

@@ -273,4 +273,20 @@ partial class App {
             }
         )
     }
+
+    private func Chain(snapshot WalletSnapshot) Blob {
+        guard let value = snapshot.Balance else {
+            return ui.Figure("Height", ui.Strings.Get("Unavailable"), ui.Body)
+        }
+        if value.Scanning {
+            return ui.Figure(
+                "Height",
+                ui.Count(value.ScanHeight) + " / " + ui.Count(value.ChainHeight),
+                ui.Orange,
+                14,
+                "sync"
+            )
+        }
+        return ui.Figure("Height", ui.Count(value.ChainHeight), ui.Ink, 14, "sync")
+    }
 }

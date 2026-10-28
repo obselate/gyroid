@@ -6,6 +6,7 @@ class WalletOutput {
     var Amount uint64
     var BlockHeight uint64
     var Spent bool
+    var Coinbase bool
     var Memo string = ""
 }
 
