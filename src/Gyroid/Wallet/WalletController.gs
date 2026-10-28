@@ -1666,8 +1666,9 @@ class WalletController : IDisposable {
     }
 
     private async func SubmittedInputCountAsync(txid string) int32 {
+        using let deadline = CancellationTokenSource(TimeSpan.FromSeconds(5))
         try {
-            using let response = await rpc.JsonAsync("tx/" + txid, ct: CancellationToken.None)
+            using let response = await rpc.JsonAsync("tx/" + txid, ct: deadline.Token)
             if response.RootElement.TryGetProperty("tx", out let tx) && tx.TryGetProperty("inputs", out let inputs) &&
                 inputs.ValueKind == JsonValueKind.Array {
                 return inputs.GetArrayLength()
