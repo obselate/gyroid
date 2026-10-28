@@ -8,9 +8,11 @@ import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
-import Gyroid.Model
+import Gyroid.History
+import Gyroid.Node
 import Gyroid.Platform
-import Gyroid.Services
+import Gyroid.Settings
+import Gyroid.Wallet
 import System
 import System.Collections.Generic
 import System.Diagnostics

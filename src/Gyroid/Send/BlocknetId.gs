@@ -1,6 +1,7 @@
-package Gyroid.Services
+package Gyroid.Send
 
-import Gyroid.Model
+import Gyroid.Platform
+import Gyroid.Wallet
 import NSec.Cryptography
 import System
 import System.IO

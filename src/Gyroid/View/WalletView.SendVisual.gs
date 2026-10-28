@@ -4,7 +4,7 @@ import Goo
 import Goo.Widgets
 import Goo.Widgets.Actions
 import Goo.Widgets.Icons
-import Gyroid.Model
+import Gyroid.Send
 import System
 import System.Collections.Generic
 import System.Text

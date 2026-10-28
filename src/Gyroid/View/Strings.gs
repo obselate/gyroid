@@ -1,5 +1,6 @@
 package Gyroid.View
 
+import Gyroid.Node
 import System
 import System.Globalization
 

@@ -1,4 +1,4 @@
-package Gyroid.Model
+package Gyroid.Wallet
 
 class Bip39Wordlist {
     shared {

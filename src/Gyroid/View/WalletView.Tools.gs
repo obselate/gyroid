@@ -8,8 +8,8 @@ import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
 import Gyroid.Contacts
-import Gyroid.Model
-import Gyroid.Services
+import Gyroid.Platform
+import Gyroid.Wallet
 import System
 import System.Collections.Generic
 import System.Threading.Tasks

@@ -1,8 +1,8 @@
 package Gyroid.Contacts
 
-import Gyroid.Model
 import Gyroid.Platform
-import Gyroid.Services
+import Gyroid.Settings
+import Gyroid.Wallet
 import System
 import System.Collections.Generic
 import System.IO

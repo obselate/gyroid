@@ -8,8 +8,11 @@ import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
-import Gyroid.Model
-import Gyroid.Services
+import Gyroid.History
+import Gyroid.Node
+import Gyroid.Platform
+import Gyroid.Send
+import Gyroid.Wallet
 import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic

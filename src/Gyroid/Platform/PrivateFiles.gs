@@ -1,6 +1,5 @@
 package Gyroid.Platform
 
-import Gyroid.Model
 import Microsoft.Win32.SafeHandles
 import System
 import System.IO

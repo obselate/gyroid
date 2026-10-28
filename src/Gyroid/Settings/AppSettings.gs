@@ -1,8 +1,8 @@
-package Gyroid.Model
+package Gyroid.Settings
 
 import Gyroid.Node
 import Gyroid.Platform
-import Gyroid.Services
+import Gyroid.Wallet
 import System
 import System.Globalization
 import System.IO

@@ -2,11 +2,11 @@ package Gyroid
 
 import Goo
 import Goo.Widgets.Layout
-import Gyroid.Model
+import Gyroid.Cli
 import Gyroid.Node
 import Gyroid.Platform
-import Gyroid.Services
 import Gyroid.View
+import Gyroid.Wallet
 import System
 import System.Globalization
 import System.Runtime.InteropServices

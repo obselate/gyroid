@@ -1,7 +1,8 @@
 package Gyroid.Node
 
-import Gyroid.Model
 import Gyroid.Platform
+import Gyroid.Settings
+import Gyroid.Wallet
 import System
 import System.Diagnostics
 import System.IO

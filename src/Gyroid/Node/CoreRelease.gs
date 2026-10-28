@@ -1,6 +1,5 @@
 package Gyroid.Node
 
-import Gyroid.Model
 import Gyroid.Platform
 import System
 import System.IO

@@ -1,8 +1,7 @@
 package Gyroid.Node
 
-import Gyroid.Model
 import Gyroid.Platform
-import Gyroid.Services
+import Gyroid.Settings
 import System
 import System.Diagnostics
 import System.Globalization
