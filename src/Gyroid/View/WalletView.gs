@@ -1133,11 +1133,7 @@ partial class WalletView : Cell {
                     FlexBasis: 0,
                     MinWidth: 0,
                     AlignItems: AlignItems.Center,
-                    JustifyContent: if page == "Settings" || page == "Tools" || page == "Contacts" {
-                        JustifyContent.FlexStart
-                    } else {
-                        JustifyContent.Center
-                    },
+                    JustifyContent: JustifyContent.Center,
                     content
                 }
             )
