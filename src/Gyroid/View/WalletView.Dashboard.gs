@@ -422,6 +422,9 @@ partial class WalletView {
                 }
             )
         )
+        if let trace = SendTrace() {
+            card.Add(trace)
+        }
         return card
     }
 
@@ -446,14 +449,16 @@ partial class WalletView {
             return
         }
         estimate = nil
+        let task = wallet.SubmitAsync(pending)
         Run(
-            wallet.SubmitAsync(pending),
+            task,
             () -> {
                 address = ""
                 amount = ""
                 memo = ""
                 historyTab = "sent"
                 screen = "Transactions"
+                TraceSend(pending, task.Result)
                 Refresh()
             }
         )
@@ -757,6 +762,9 @@ partial class WalletView {
                 Chain(snapshot)
             }
         )
+        if let trace = SendTrace() {
+            panel.Add(trace)
+        }
         if rows > 0 {
             panel.Add(Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Overflow: Overflow.Hidden, list})
         }

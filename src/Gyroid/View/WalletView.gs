@@ -186,6 +186,8 @@ partial class WalletView : Cell {
         decodeTimer = nil
         frameTimer?.Dispose()
         frameTimer = nil
+        traceTimer?.Dispose()
+        traceTimer = nil
         ReleaseClipboard()
         ClearSecrets()
         ClearSeed()
@@ -291,6 +293,7 @@ partial class WalletView : Cell {
         if page != lastPage {
             ClearSecrets()
             ClearTools()
+            traceResult = nil
             if lastPage == "Seed" {
                 ClearSeed()
             }
