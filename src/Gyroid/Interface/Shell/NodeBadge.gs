@@ -57,9 +57,9 @@ partial class App {
             BorderWidth: 1,
             BorderRadius: 4,
             BorderColor: nodeOpen ? ui.Edge: ui.Rule,
-            BackgroundColor: nodeOpen ? ui.Ink.WithAlpha(0.07): ui.Black.WithAlpha(0.35),
+            BackgroundColor: nodeOpen ? ui.Rule: ui.Black.WithAlpha(0.35),
             Overflow: Overflow.Hidden,
-            Hover: Style{BackgroundColor: ui.Ink.WithAlpha(0.06)},
+            Hover: Style{BackgroundColor: ui.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,

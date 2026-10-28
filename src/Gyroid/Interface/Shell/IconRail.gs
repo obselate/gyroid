@@ -49,12 +49,12 @@ partial class App {
             Gap: 4,
             BorderRadius: 10,
             BackgroundColor: if selected {
-                ui.Lime.WithAlpha(0.08)
+                Color.Parse("#121906")
             } else {
                 Color.Transparent
             },
             Disabled: disabled,
-            Hover: Style{BackgroundColor: ui.Ink.WithAlpha(0.06)},
+            Hover: Style{BackgroundColor: ui.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
