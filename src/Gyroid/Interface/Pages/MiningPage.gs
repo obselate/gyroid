@@ -196,7 +196,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             samples.Clear()
         }
         history.Status = status
-        if !status.Running {
+        if !status.Running || status.Hashes == 0 {
             return
         }
         let now = DateTimeOffset.Now
@@ -404,10 +404,12 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         for sample in samples {
             peak = Math.Max(peak, sample.Rate)
         }
-        let top = Math.Max(4.0, Math.Ceiling(peak * 1.3 / 4) * 4)
+        let raw = Math.Max(peak, 0.1) * 1.3 / 4
+        let magnitude = Math.Pow(10, Math.Floor(Math.Log10(raw)))
+        let top = Math.Ceiling(raw / magnitude) * magnitude * 4
         let axis = Container{FlexGrow: 1, JustifyContent: JustifyContent.SpaceBetween, AlignItems: AlignItems.FlexEnd}
         for step in 0 ... 5 {
-            axis.Add(Tick(ui, (top * (4 - step) / 4).ToString(CultureInfo.InvariantCulture)))
+            axis.Add(Tick(ui, (top * (4 - step) / 4).ToString("0.##", CultureInfo.InvariantCulture)))
         }
         let area = Container{
             Handle: plot,
