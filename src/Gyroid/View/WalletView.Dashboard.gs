@@ -458,7 +458,9 @@ partial class WalletView {
                 memo = ""
                 historyTab = "sent"
                 screen = "Transactions"
-                TraceSend(pending, task.Result)
+                if task.Result.Fee > 0 {
+                    TraceSend(pending, task.Result)
+                }
                 Refresh()
             }
         )
