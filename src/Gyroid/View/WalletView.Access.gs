@@ -784,7 +784,7 @@ partial class WalletView {
                     }
                 )
             )
-            actions.Add(Button("Rescan", () -> Rescan(), Working()))
+            actions.Add(Button("Sync", () -> Rescan(), Working()))
             if rescan?.IsCompleted == false {
                 actions.Add(
                     Cell.Mount[SpinnerInput, Spinner](

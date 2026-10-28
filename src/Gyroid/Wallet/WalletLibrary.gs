@@ -5,6 +5,8 @@ import Gyroid.Settings
 import System
 import System.Collections.Generic
 import System.IO
+import System.Linq
+import System.Text
 import System.Threading
 
 class WalletLibrary {
@@ -19,6 +21,8 @@ class WalletLibrary {
             return []string{}
         }
         let files = List[string]()
+        let magic = Encoding.ASCII.GetBytes("BLKNTWLT")
+        let header = [magic.Length]byte
         for path in Directory.EnumerateFiles(session.settings.WalletDirectory, "*.dat") {
             if FileInfo(path).LinkTarget != nil {
                 continue
@@ -26,7 +30,15 @@ class WalletLibrary {
             let filename = Path.GetFileName(path)
             try {
                 WalletValidation.ValidateFilename(filename)
+                using let input = PrivateFiles.OpenRead(path)
+                if input.Read(header, 0, header.Length) != header.Length || !header.SequenceEqual(magic) {
+                    continue
+                }
             } catch (error WalletException) {
+                continue
+            } catch (error IOException) {
+                continue
+            } catch (error UnauthorizedAccessException) {
                 continue
             }
             files.Add(filename)

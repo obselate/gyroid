@@ -272,7 +272,7 @@ partial class WalletView {
     }
 
     private func Rescan() {
-        let task = wallet.RescanAsync()
+        let task = wallet.SyncAsync()
         rescan = task
         Run(task)
     }

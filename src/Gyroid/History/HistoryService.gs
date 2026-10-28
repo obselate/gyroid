@@ -12,9 +12,11 @@ class HistoryService {
     let session WalletSession
     var historyOffset int32
     var historyTotal uint64
+    var received List[WalletOutput] = List[WalletOutput]()
+    var loaded int32
 
-    prop Total uint64 -> historyTotal
-    prop More bool -> uint64(historyOffset) < historyTotal
+    prop Total uint64 -> uint64(received.Count)
+    prop More bool -> loaded < received.Count
 
     init(session WalletSession) {
         this.session = session
@@ -23,32 +25,39 @@ class HistoryService {
     func Reset() {
         historyOffset = 0
         historyTotal = 0
+        received.Clear()
+        loaded = 0
     }
 
-    async func ReloadAsync(ct CancellationToken)[]WalletOutput {
+    async func ReloadAsync(sends[]WalletSend, ct CancellationToken)[]WalletOutput {
         let outputs = List[WalletOutput]()
-        let wanted = Math.Max(historyPage, historyOffset)
+        let sentTransactions = HashSet[string](StringComparer.Ordinal)
+        let keys = HashSet[string](StringComparer.Ordinal)
+        for send in sends {
+            sentTransactions.Add(send.TxId)
+        }
         historyOffset = 0
         var more = true
-        while more && historyOffset < wanted {
-            more = await ReadHistoryAsync(outputs, Math.Min(500, wanted - historyOffset), ct)
+        while more {
+            more = await ReadHistoryAsync(outputs, keys, sentTransactions, ct)
         }
-        return outputs.ToArray()
+        received = outputs
+        loaded = Math.Min(Math.Max(historyPage, loaded), received.Count)
+        return received.Take(loaded).ToArray()
     }
 
-    private async func ReadHistoryAsync(outputs List[WalletOutput], limit int32, ct CancellationToken) bool {
+    private async func ReadHistoryAsync(
+        outputs List[WalletOutput],
+        keys HashSet[string],
+        sentTransactions HashSet[string],
+        ct CancellationToken
+    ) bool {
         using let response = await session
             .Node
             .Api
-            .JsonAsync(
-            "wallet/history/page?limit=" + limit.ToString() + "&offset=" + historyOffset.ToString() + "&order=desc",
-            ct: ct
-        )
+            .JsonAsync("wallet/history/page?limit=500&offset=" + historyOffset.ToString() + "&order=desc", ct: ct)
         let root = response.RootElement
         let rows = root.GetProperty("outputs")
-        let keys = HashSet[string](
-            outputs.Select((output WalletOutput) -> output.TxId + ":" + output.OutputIndex.ToString())
-        )
         for row in rows.EnumerateArray() {
             let hex = NodeJson.Text(row, "memo_hex")
             let output = WalletOutput{
@@ -59,23 +68,25 @@ class HistoryService {
                 Spent: NodeJson.Flag(row, "spent"),
                 Memo: NodeJson.Memo(hex)
             }
-            if keys.Add(output.TxId + ":" + output.OutputIndex.ToString()) {
+            if !sentTransactions.Contains(output.TxId) && keys.Add(output.TxId + ":" + output.OutputIndex.ToString()) {
                 outputs.Add(output)
             }
         }
         historyOffset += rows.GetArrayLength()
         historyTotal = NodeJson.Number(root, "total")
-        return rows.GetArrayLength() > 0 && uint64(historyOffset) < historyTotal
+        if rows.GetArrayLength() == 0 && uint64(historyOffset) < historyTotal {
+            throw WalletException("Daemon returned an incomplete received history page")
+        }
+        return uint64(historyOffset) < historyTotal
     }
 
     async func LoadMoreAsync(ct CancellationToken = default(CancellationToken)) {
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()
-            if uint64(historyOffset) < historyTotal {
-                let outputs = List[WalletOutput](session.Snapshot.History)
-                await ReadHistoryAsync(outputs, historyPage, ct)
-                session.PublishHistory(outputs.ToArray())
+            if More {
+                loaded = Math.Min(loaded + historyPage, received.Count)
+                session.PublishHistory(received.Take(loaded).ToArray())
             }
         } finally {
             session.End()

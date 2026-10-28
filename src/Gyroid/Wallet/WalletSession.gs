@@ -8,6 +8,7 @@ import Gyroid.Settings
 import Gyroid.Tools
 import System
 import System.IO
+import System.Text
 import System.Text.Json
 import System.Threading
 import System.Threading.Tasks
@@ -562,8 +563,8 @@ class WalletSession : IDisposable {
     async func UnlockAsync(password[]char, ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            if password.Length < 3 {
-                throw WalletException("Password must contain at least 3 characters")
+            if Encoding.UTF8.GetByteCount(password) < 3 {
+                throw WalletException("Password must contain at least 3 UTF-8 bytes")
             }
             await ConnectCoreAsync(ct)
             if state == "Unloaded" {
@@ -677,7 +678,7 @@ class WalletSession : IDisposable {
         Send.Reset()
     }
 
-    async func RescanAsync(ct CancellationToken = default(CancellationToken)) {
+    async func SyncAsync(ct CancellationToken = default(CancellationToken)) {
         using let source = CancellationTokenSource.CreateLinkedTokenSource(ct, shutdown.Token)
         let token = source.Token
         await BeginAsync(token)
@@ -781,7 +782,7 @@ class WalletSession : IDisposable {
                 Spendable: NodeJson.OptionalNumber(root, "spendable"),
                 Pending: NodeJson.OptionalNumber(root, "pending") + change,
             }
-            let outputs = await History.ReloadAsync(ct)
+            let outputs = await History.ReloadAsync(sends, ct)
             snapshot = WalletSnapshot{
                 Page: page,
                 State: state,

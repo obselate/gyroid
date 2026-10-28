@@ -16,6 +16,16 @@ class Strings {
             return key
         }
         return switch key {
+            case "Recipient address: ": "收款地址："
+            case "Memo: ": "备注："
+            case "Transaction key: ": "交易密钥："
+            case "Wallet address: ": "钱包地址："
+            case "Input ended before a value was provided": "输入在提供值之前结束"
+            case "Wallet sync complete": "钱包同步完成"
+            case "Daemon returned an incomplete received history page": "节点返回的收款历史记录页面不完整"
+            case "       Use - for an address, transaction key or memo to read one line from stdin or a terminal": "       地址、交易密钥或备注使用 -，可从标准输入或终端读取一行"
+            case "       gyroid sync | unload | load <filename.dat>": "       gyroid sync | unload | load <文件名.dat>"
+            case "       gyroid sign [--] <message> | verify <address> <message> <signature>": "       gyroid sign [--] <消息> | verify <地址> <消息> <签名>"
             case "wallets": "钱包"
             case "new wallet": "新建钱包"
             case "create wallet": "创建钱包"
@@ -163,7 +173,7 @@ class Strings {
             case "Auto-lock": "自动锁定"
             case "Off": "关闭"
             case "min": "分钟"
-            case "Rescan": "重新扫描"
+            case "Sync": "同步"
             case "About signing": "关于签名"
             case "Prove you own this wallet's address": "证明你拥有此钱包的地址"
             case "Signs your message with this wallet's key": "用此钱包的密钥对消息签名"
@@ -275,6 +285,7 @@ class Strings {
             case "Amount must be greater than zero": "金额须大于零"
             case "Recovery phrase must contain 12 words": "助记词须包含 12 个单词"
             case "Password must contain at least 3 characters": "密码至少需要 3 个字符"
+            case "Password must contain at least 3 UTF-8 bytes": "密码至少需要 3 个 UTF-8 字节"
             case "Passwords do not match": "两次密码不一致"
             case "Choose a wallet first": "请先选择钱包"
             case "Selected wallet file does not exist": "所选钱包文件不存在"

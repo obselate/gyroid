@@ -12,8 +12,16 @@ import System.Threading
 
 class Cli {
     shared {
-        func Run(arguments[]string) int32 {
+        func Run(input[]string) int32 {
+            var arguments = input
             let command = arguments[1]
+            if arguments.Length > 2 && arguments[2] == "--help" {
+                Usage(Console.Out)
+                return 0
+            }
+            if command == "sign" && arguments.Length == 4 && arguments[2] == "--" {
+                arguments = []string{arguments[0], command, arguments[3]}
+            }
             var limit int32 = 20
             var memo = ""
             var dryRun = false
@@ -88,7 +96,7 @@ class Cli {
                     command != "unlock" &&
                     command != "lock" &&
                     command != "unload" &&
-                    command != "rescan"
+                    command != "sync"
             ) {
                 return Usage(Console.Error)
             }
@@ -103,6 +111,15 @@ class Cli {
                 return 0
             }
             try {
+                if command == "send" && !resume {
+                    arguments[2] = ReadValue(arguments[2], "Recipient address: ")
+                    memo = ReadValue(memo, "Memo: ")
+                } else if command == "verify-proof" {
+                    arguments[3] = ReadValue(arguments[3], "Transaction key: ")
+                    arguments[4] = ReadValue(arguments[4], "Recipient address: ")
+                } else if command == "verify" {
+                    arguments[2] = ReadValue(arguments[2], "Wallet address: ")
+                }
                 if command == "send" && !resume {
                     WalletValidation.ValidateSend(arguments[2], arguments[3], memo)
                 }
@@ -151,9 +168,9 @@ class Cli {
                 } else if command == "unload" {
                     wallet.UnloadAsync().GetAwaiter().GetResult()
                     Console.WriteLine("Wallet unloaded")
-                } else if command == "rescan" {
-                    wallet.RescanAsync().GetAwaiter().GetResult()
-                    Console.WriteLine("Wallet rescan complete")
+                } else if command == "sync" {
+                    wallet.SyncAsync().GetAwaiter().GetResult()
+                    Console.WriteLine("Wallet sync complete")
                 } else if command == "sign" {
                     Console.WriteLine(wallet.Proofs.SignAsync(arguments[2]).GetAwaiter().GetResult())
                 } else if command == "verify" {
@@ -247,6 +264,9 @@ class Cli {
                 } else {
                     wallet.RefreshAsync().GetAwaiter().GetResult()
                     var snapshot = wallet.Snapshot
+                    if command == "address" || command == "history" {
+                        wallet.RequireUnlocked()
+                    }
                     while command == "history" && snapshot.HistoryMore && snapshot.History.Length < limit {
                         wallet.History.LoadMoreAsync().GetAwaiter().GetResult()
                         snapshot = wallet.Snapshot
@@ -416,6 +436,16 @@ class Cli {
             "unavailable"
         }
 
+        private func ReadValue(value string, prompt string) string {
+            if value != "-" {
+                return value
+            }
+            if !Console.IsInputRedirected {
+                Console.Error.Write(prompt)
+            }
+            return Console.ReadLine() ?? throw WalletException("Input ended before a value was provided")
+        }
+
         private func RequireTerminal() {
             if Console.IsInputRedirected {
                 throw WalletException("This command requires terminal input")
@@ -470,9 +500,12 @@ class Cli {
             writer.WriteLine("       gyroid history [--limit N]")
             writer.WriteLine("       gyroid send <address> <amount> [--memo TEXT] [--dry-run]")
             writer.WriteLine("       gyroid send --resume")
-            writer.WriteLine("       gyroid rescan | unload | load <filename.dat>")
-            writer.WriteLine("       gyroid sign <message> | verify <address> <message> <signature>")
+            writer.WriteLine("       gyroid sync | unload | load <filename.dat>")
+            writer.WriteLine("       gyroid sign [--] <message> | verify <address> <message> <signature>")
             writer.WriteLine("       gyroid prove <txid> | verify-proof <txid> <tx-key> <address> <amount>")
+            writer.WriteLine(
+                "       Use - for an address, transaction key or memo to read one line from stdin or a terminal"
+            )
             writer.WriteLine("       gyroid viewkeys --show")
             writer.WriteLine("       gyroid view-only create <filename.wallet.dat> | import <filename.dat>")
             writer.WriteLine("       gyroid settings [auto-lock <minutes>]")
