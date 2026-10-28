@@ -432,7 +432,7 @@ partial class WalletView {
         if Working() || address.Trim().Length == 0 || amount.Trim().Length == 0 {
             return
         }
-        let task = wallet.EstimateAsync(address, amount, memo)
+        let task = Task.Run(() -> wallet.EstimateAsync(address, amount, memo))
         Run(
             task,
             () -> {
@@ -449,7 +449,7 @@ partial class WalletView {
             return
         }
         estimate = nil
-        let task = wallet.SubmitAsync(pending)
+        let task = Task.Run(() -> wallet.SubmitAsync(pending))
         Run(
             task,
             () -> {
