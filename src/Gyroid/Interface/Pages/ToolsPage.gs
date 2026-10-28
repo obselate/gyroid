@@ -141,7 +141,13 @@ class ToolsPage : Cell[ToolsInput] {
     private func Info(input ToolsInput, key string, topic string, lines[]string) Blob ->
     Cell.Mount[InfoTipInput, InfoTip](
         key,
-        InfoTipInput{Ui: input.Ui, Topic: topic, Lines: lines, Language: input.Language, Width: 300}
+        InfoTipInput{
+            Ui: input.Ui,
+            Topic: input.Ui.Strings.Get(topic) + " " + input.Ui.Strings.Get("info"),
+            Lines: lines,
+            Language: input.Language,
+            Width: 300
+        }
     )
 
     private func Arc(fraction float64, size float64) Blob {
@@ -262,8 +268,8 @@ class ToolsPage : Cell[ToolsInput] {
             Arc(LockShare(input.AutoLock), compact ? 20.0: 26.0),
             ui.Label(LockText(input), size, input.AutoLock == 0 ? ui.Orange: ui.Ink, "")
         }
-        if hovered == "lock" || editing {
-            lockValue.Add(MaterialIcons.Create(editing ? "expand_less": "expand_more", 16, ui.Ink))
+        if hovered == "lock" && !editing {
+            lockValue.Add(MaterialIcons.Create("expand_more", 16, ui.Ink))
         }
         let amountsValue = Container{
             FlexDirection: FlexDirection.Row,
@@ -392,7 +398,7 @@ class ToolsPage : Cell[ToolsInput] {
                 "dns",
                 "node",
                 nodeValue,
-                Note(input, CoreRelease.Version),
+                Note(input, "v" + CoreRelease.Version),
                 []string{
                     "This wallet uses a node on this computer",
                     "Every node program is checked against the pinned release"
@@ -407,7 +413,7 @@ class ToolsPage : Cell[ToolsInput] {
                     input,
                     "peers",
                     "send relay",
-                    String.Format(ui.Strings.Get("{0} peers"), ui.Count(peers)),
+                    ui.Count(peers) + " " + ui.Strings.Get(peers == 1 ? "peer": "peers"),
                     peers == 0 ? ui.Orange: ui.Ink,
                     size
                 ),
@@ -621,11 +627,12 @@ class ToolsPage : Cell[ToolsInput] {
     }
 
     private func RestrictFile(input ToolsInput) {
-        try {
-            input.Session.Checks.RestrictWalletFile()
-        } catch (failure Exception) { }
-        fileMode = FileMode(input)
-        Rebuild()
+        input.Ui.Run(
+            Task.Run(() -> input.Session.Checks.RestrictWalletFile()),
+            () -> {
+                fileMode = FileMode(input)
+            }
+        )
     }
 
     private func StartPhrase() {

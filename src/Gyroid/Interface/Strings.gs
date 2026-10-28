@@ -274,6 +274,7 @@ class Strings {
             case "public": "公开"
             case "to": "收款"
             case "observer view": "观察者视图"
+            case "info": "说明"
             case "you": "你"
             case "yours": "你的"
             case "About view-only wallets": "关于观察钱包"
