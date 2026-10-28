@@ -67,7 +67,14 @@ partial class WalletView {
         }
         guard let percent = PhasePercent() else {
             row.Add(
-                Cell.Mount[SpinnerInput, Spinner]("sync", SpinnerInput{Size: size, Color: lime, Label: PhaseName()})
+                Cell.Mount[SpinnerInput, Spinner](
+                    if PlaybackActive() {
+                        "sync"
+                    } else {
+                        "sync-idle"
+                    },
+                    SpinnerInput{Size: size, Color: lime, Label: PhaseName()}
+                )
             )
             row.Add(Label(PhaseName(), fontSize, body, ""))
             return row
@@ -780,7 +787,11 @@ partial class WalletView {
             if rescan?.IsCompleted == false {
                 actions.Add(
                     Cell.Mount[SpinnerInput, Spinner](
-                        "rescan",
+                        if PlaybackActive() {
+                            "rescan"
+                        } else {
+                            "rescan-idle"
+                        },
                         SpinnerInput{Size: 16, Color: lime, Label: strings.Get("Scanning")}
                     )
                 )
