@@ -57,7 +57,7 @@ jobs:
           path: ${{ runner.temp }}/vulkan-sdk
           key: spirv-val-linux-x64-1.4.357.0-9a49b0883b9b635689a85b5647dbfcb223268151
       - run: bash scripts/install-shader-tools.sh
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends lld wine64 wine
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends wine64 wine
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ runner.temp }}/xwin/splat
