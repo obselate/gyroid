@@ -348,6 +348,7 @@ partial class WalletView {
             "delete-contact",
             ModalDialog{
                 Open: true,
+                CreateRoot: DialogRoot,
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: strings.Get("Delete"),
                 Width: Math.Min(width - 48, 420),
@@ -400,6 +401,7 @@ partial class WalletView {
             "view-keys",
             ModalDialog{
                 Open: true,
+                CreateRoot: DialogRoot,
                 AccessibilityName: strings.Get("View keys"),
                 Width: Math.Min(width - 48, 600),
                 Header: Label(strings.Get("View keys"), 18, ink, ""),
@@ -518,6 +520,7 @@ partial class WalletView {
             "view-only",
             ModalDialog{
                 Open: true,
+                CreateRoot: DialogRoot,
                 AccessibilityName: strings.Get("Create view-only"),
                 Width: Math.Min(width - 48, 520),
                 Header: Label(strings.Get("Create view-only"), 18, ink, ""),

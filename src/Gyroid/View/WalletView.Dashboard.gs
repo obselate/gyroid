@@ -248,6 +248,7 @@ partial class WalletView {
             "pending-send",
             ModalDialog{
                 Open: true,
+                CreateRoot: DialogRoot,
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: strings.Get("Pending send"),
                 Width: Math.Min(width - 48, 600),
@@ -483,6 +484,7 @@ partial class WalletView {
             "confirm-send",
             ModalDialog{
                 Open: true,
+                CreateRoot: DialogRoot,
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: strings.Get("Confirm send"),
                 Width: Math.Min(width - 48, 600),
@@ -924,6 +926,7 @@ partial class WalletView {
             "upgrade",
             ModalDialog{
                 Open: true,
+                CreateRoot: DialogRoot,
                 AccessibilityName: strings.Get("Network upgrade"),
                 Width: Math.Min(width - 48, 600),
                 Header: Label(strings.Get("Network upgrade"), 18, ink, ""),
@@ -1110,6 +1113,7 @@ partial class WalletView {
             "transaction",
             ModalDialog{
                 Open: true,
+                CreateRoot: DialogRoot,
                 AccessibilityName: strings.Get(title),
                 Width: Math.Min(width - 48, 600),
                 Header: Label(strings.Get(title), 18, ink, ""),

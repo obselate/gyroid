@@ -821,6 +821,7 @@ partial class WalletView {
         }
         return ModalDialog{
             Open: true,
+            CreateRoot: DialogRoot,
             AccessibilityName: strings.Get("Apply settings"),
             Width: Math.Min(width - 48, 420),
             Content: Label(strings.Get("Apply settings"), 18, ink, ""),

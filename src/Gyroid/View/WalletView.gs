@@ -584,6 +584,17 @@ partial class WalletView : Cell {
         Label(value, size, color, channel)
     }
 
+    private func DialogRoot(dialog ModalDialog, backdrop Goo.Button, panel Container) Container -> Container{
+        Position: PositionType.Absolute,
+        Left: 0,
+        Right: 0,
+        Top: 0,
+        Bottom: 0,
+        AlignItems: AlignItems.Center,
+        JustifyContent: JustifyContent.Center,
+        OnPointerDown: (event PointerEvent) -> wallet.Touch()
+    }
+
     private func Copyable(label string, value string, shown string, clearAfterMs float64 = 120000) Blob {
         let copied = clipboardText == value
         return Container{
