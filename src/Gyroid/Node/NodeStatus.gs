@@ -12,6 +12,8 @@ class NodeStatus {
     var SyncProgress uint64?
     var Peers uint64
     var Mempool uint64
+    var LastBlockTime int64
+    var SyncRate float64
     var Endpoint string = ""
     var DataDirectory string = ""
     var Executable string = ""

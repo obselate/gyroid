@@ -7,6 +7,7 @@ import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.Node
 import System
+import System.Globalization
 
 partial class App {
     private var nodeOpen bool
@@ -106,21 +107,37 @@ partial class App {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                ui.Status(ui.Strings.Get(state), NodeColor(state)),
+                ui.Label(ui.Strings.Get(state), 14, NodeColor(state), ""),
                 ui.Label(ui.Strings.Get(status.Network) + " · " + version, 14, ui.Dim, "")
             }
         }
         if status.Running {
             let readings = Container{Gap: 10}
+            let syncing = state == "syncing"
             readings.Add(
-                NodeReading(
-                    "Height",
-                    ui.Count(status.Height),
-                    state == "syncing" ? " / " + ui.Count(status.ChainHeight): ""
-                )
+                NodeReading("Height", ui.Count(status.Height), syncing ? " / " + ui.Count(status.ChainHeight): "")
             )
+            if syncing && status.SyncRate > 0 {
+                let minutes = Math.Max(
+                    1.0,
+                    Math.Ceiling(float64(status.ChainHeight - status.Height) / status.SyncRate / 60)
+                )
+                readings.Add(
+                    NodeReading("Speed", String.Format(ui.Strings.Get("{0} blk/s"), Math.Round(status.SyncRate)))
+                )
+                readings.Add(NodeReading("Remaining", String.Format(ui.Strings.Get("~{0} min"), minutes)))
+            }
+            if !syncing && status.LastBlockTime > 0 {
+                let time = DateTimeOffset.FromUnixTimeSeconds(status.LastBlockTime).ToLocalTime()
+                readings.Add(
+                    NodeReading(
+                        "Last block",
+                        ui.Count(status.Height) + " · " + time.ToString("HH:mm", CultureInfo.InvariantCulture)
+                    )
+                )
+            }
             readings.Add(NodeReading("Peers", status.Peers.ToString()))
-            if state != "syncing" {
+            if !syncing {
                 readings.Add(NodeReading("Mempool", status.Mempool.ToString() + " " + ui.Strings.Get("tx")))
             }
             card.Add(readings)
@@ -145,6 +162,7 @@ partial class App {
                             }
                         }.Build()
                     },
+                    UpgradeTimeline(status),
                     Container{
                         FlexDirection: FlexDirection.Row,
                         JustifyContent: JustifyContent.SpaceBetween,
@@ -178,6 +196,7 @@ partial class App {
                 Width: 10,
                 Height: 18,
                 Path: fill,
+                Fit: ShapeFit.Fill,
                 BackgroundColor: ui.Raised
             },
             Shape{
@@ -186,6 +205,7 @@ partial class App {
                 Width: 10,
                 Height: 18,
                 Path: edge,
+                Fit: ShapeFit.Fill,
                 BorderWidth: 1,
                 BorderColor: ui.Edge
             }
@@ -211,6 +231,106 @@ partial class App {
                 }
             }
         )
+    }
+
+    private func UpgradeTimeline(status NodeStatus) Blob {
+        let style = DateTimeStyles.None
+        if !DateTime.TryParseExact(
+            status.UpgradeDate,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            style,
+            out let date
+        ) ||
+            !DateTime
+            .TryParseExact(
+            status.UpgradeDeadline,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            style,
+            out let deadline
+        ) {
+            return Container{}
+        }
+        let span = 294.0
+        let end = float64(CoreRelease.UpgradeHeight) + (deadline - date).TotalDays * 288
+        let now = Math.Min(span, span * status.Height / end)
+        let upgrade = span * CoreRelease.UpgradeHeight / end
+        let bar = Container{
+            Width: span,
+            Height: 8,
+            Accessibility: Accessibility{
+                Name: ui.Count(status.Height) + " / " + ui.Count(CoreRelease.UpgradeHeight) +
+                    " · " +
+                    status.UpgradeDeadline
+            },
+            Container{Position: PositionType.Absolute, Width: now, Height: 8, BorderRadius: 2, BackgroundColor: ui.Lime}
+        }
+        if upgrade > now {
+            let dashes = PathBuilder(0, 0, upgrade - now, 8)
+            var dash = 0.0
+            while dash < upgrade - now {
+                let right = Math.Min(dash + 6, upgrade - now)
+                dashes.MoveTo(dash, 0).LineTo(right, 0).LineTo(right, 8).LineTo(dash, 8).Close()
+                dash += 10
+            }
+            bar.Add(
+                Shape{
+                    Position: PositionType.Absolute,
+                    Left: now,
+                    Width: upgrade - now,
+                    Height: 8,
+                    Path: dashes.Build(),
+                    Fit: ShapeFit.Fill,
+                    BackgroundColor: ui.Orange
+                }
+            )
+        }
+        let stripes = PathBuilder(0, 0, span - upgrade, 8)
+        var x = -8.0
+        while x < span - upgrade {
+            stripes.MoveTo(x, 8).LineTo(x + 8, 0).LineTo(x + 12, 0).LineTo(x + 4, 8).Close()
+            x += 10
+        }
+        bar.Add(
+            Container{
+                Position: PositionType.Absolute,
+                Left: upgrade,
+                Width: span - upgrade,
+                Height: 8,
+                BorderRadius: 2,
+                Overflow: Overflow.Hidden,
+                BackgroundColor: Color.Parse("#3a0026"),
+                Shape{
+                    Width: span - upgrade,
+                    Height: 8,
+                    Path: stripes.Build(),
+                    Fit: ShapeFit.Fill,
+                    BackgroundColor: ui.Pink
+                }
+            }
+        )
+        bar.Add(
+            Container{
+                Position: PositionType.Absolute,
+                Left: now - 1,
+                Top: -5,
+                Width: 2,
+                Height: 18,
+                BackgroundColor: ui.Lime
+            }
+        )
+        bar.Add(
+            Container{
+                Position: PositionType.Absolute,
+                Left: upgrade - 1,
+                Top: -5,
+                Width: 2,
+                Height: 18,
+                BackgroundColor: ui.Orange
+            }
+        )
+        return bar
     }
 
     private func NodeReading(label string, value string, total string = "") Blob -> Container{

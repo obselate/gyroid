@@ -3,6 +3,7 @@ package Gyroid.Node
 import Gyroid.Platform
 import Gyroid.Settings
 import System
+import System.Diagnostics
 import System.IO
 import System.Text.Json
 import System.Threading
@@ -14,6 +15,7 @@ class NodeSession : IDisposable {
     var Status NodeStatus = NodeStatus()
     var Changed Action? = nil
     var Exited Action? = nil
+    private var heightChanged int64
 
     init(settings WalletSettings) {
         Settings = settings
@@ -124,6 +126,19 @@ class NodeSession : IDisposable {
                 } else {
                     0
                 }
+            }
+            current.LastBlockTime = Status.LastBlockTime
+            current.SyncRate = Status.SyncRate
+            if current.Height != Status.Height {
+                if current.Syncing && Status.Height > 0 && current.Height > Status.Height {
+                    current.SyncRate = float64(current.Height - Status.Height) /
+                    Stopwatch.GetElapsedTime(heightChanged).TotalSeconds
+                }
+                heightChanged = Stopwatch.GetTimestamp()
+            }
+            if !current.Syncing && (current.Height != Status.Height || current.LastBlockTime == 0) {
+                using let block = await Api.JsonAsync("block/" + current.Height.ToString(), ct: ct)
+                current.LastBlockTime = int64(NodeJson.Number(block.RootElement, "timestamp"))
             }
             Status = current
         } catch (error Exception) {
