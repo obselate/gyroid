@@ -1,0 +1,40 @@
+name: Linux release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: src/Gyroid/packages.lock.json
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/vulkan-sdk
+          key: spirv-val-linux-x64-1.4.357.0-9a49b0883b9b635689a85b5647dbfcb223268151
+      - run: bash scripts/install-shader-tools.sh
+      - run: bash scripts/verify.sh
+      - run: bash scripts/release-linux.sh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" artifacts/release/*.tar.gz artifacts/release/SHA256SUMS --verify-tag --draft --generate-notes --notes-file artifacts/release/release-notes.md --title "Gyroid $RELEASE_TAG"
