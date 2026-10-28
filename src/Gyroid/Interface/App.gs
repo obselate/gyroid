@@ -28,9 +28,9 @@ import System.Text
 import System.Threading.Tasks
 
 partial class App : Cell {
-    private var traceEstimate SendEstimate?
+    private let sendDone Action
 
-    private var traceResult SendResult?
+    private let chooseFile Action[FileDialogKind, string, string, Action[string]]
 
     private func Prove(send WalletSend) {
         let task = wallet.Proofs.ProveAsync(send.TxId)
@@ -100,7 +100,8 @@ partial class App : Cell {
             Touch,
             message -> {
                 error = message
-            }
+            },
+            (task, done) -> Run(task, done)
         )
         receivedRow = (output WalletOutput) -> ReceivedRow(output)
         navigate = target -> Navigate(target)
@@ -108,6 +109,8 @@ partial class App : Cell {
             upgradeShown = true
             Rebuild()
         }
+        sendDone = () -> Refresh()
+        chooseFile = (kind, title, path, chosen) -> ChooseFile(kind, title, path, chosen)
         sentRow = (send WalletSend) -> SentRow(send)
         historyHandle.MetricsChanged += MoreHistory
         nodeAnchor.MetricsChanged += _ -> {
@@ -163,8 +166,6 @@ partial class App : Cell {
         ui.DecodeTimer = nil
         frameTimer?.Dispose()
         frameTimer = nil
-        traceTimer?.Dispose()
-        traceTimer = nil
         ui.ReleaseClipboard()
         ClearSecrets()
         ClearSeed()
@@ -230,7 +231,6 @@ partial class App : Cell {
             ResumePlayback()
             ClearSecrets()
             ClearTools()
-            CloseTrace()
             if lastPage == "Seed" {
                 ClearSeed()
             }
@@ -266,7 +266,6 @@ partial class App : Cell {
         spendKey = ""
         viewKey = ""
         revealPassword = ""
-        estimate = nil
         shownOutput = nil
         shownSend = nil
         upgradeShown = false
@@ -311,10 +310,6 @@ partial class App : Cell {
             () -> {
                 ui.Operations--
                 if unknown {
-                    address = ""
-                    amount = ""
-                    memo = ""
-                    historyTab = "sent"
                     screen = "Send"
                     Refresh()
                 } else {
@@ -478,9 +473,43 @@ partial class App : Cell {
                 }
             )
         } else if page == "Send" {
-            SendPanel()
+            if wallet.Send.Error.Length > 0 || wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0 {
+                PendingSendCard()
+            } else {
+                Cell.Mount[SendPageInput, SendPage](
+                    "send",
+                    SendPageInput{
+                        Session: wallet,
+                        Ui: ui,
+                        Window: window,
+                        Snapshot: snapshot,
+                        Contacts: contacts,
+                        Network: wallet.Settings.Network,
+                        Privacy: ui.Privacy,
+                        Busy: ui.Working(),
+                        Language: ui.Strings.Language,
+                        Animate: PlaybackActive(),
+                        Height: height,
+                        OnSent: sendDone
+                    }
+                )
+            }
         } else if page == "Receive" {
-            ReceivePanel(snapshot.Address)
+            Cell.Mount[ReceivePageInput, ReceivePage](
+                "receive",
+                ReceivePageInput{
+                    Ui: ui,
+                    Address: snapshot.Address,
+                    History: snapshot.History,
+                    ChainHeight: snapshot.Balance?.ChainHeight ?? uint64(0),
+                    Privacy: ui.Privacy,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    Clipboard: ui.ClipboardText,
+                    Height: height,
+                    ChooseFile: chooseFile
+                }
+            )
         } else if page == "Transactions" {
             History(snapshot)
         } else if page == "Seed" {
@@ -585,9 +614,6 @@ partial class App : Cell {
         }
         root.Add(frame)
         if WalletAvailable() {
-            if let pending = estimate {
-                root.Add(ConfirmSend(pending))
-            }
             if confirmPendingSend {
                 root.Add(ConfirmPendingSend())
             }

@@ -1,5 +1,6 @@
 package Gyroid.Send
 
+import Gyroid.History
 import Gyroid.Node
 import Gyroid.Platform
 import Gyroid.Wallet
@@ -36,9 +37,7 @@ class SendService {
     }
 
     async func EstimateAsync(
-        address string,
-        amount string,
-        memo string,
+        requests[]WalletRecipient,
         ct CancellationToken = default(CancellationToken)
     ) SendEstimate {
         await session.BeginAsync(ct)
@@ -47,32 +46,33 @@ class SendService {
             using let lease = store.AcquireLease()
             RequireNoPendingSend()
             InvalidateConfirmation()
-            let request = WalletValidation.ValidateSend(
-                address,
-                amount,
-                memo,
-                session.Snapshot.Balance?.Spendable ?? throw WalletException("Spendable balance is unavailable")
-            )
+            let spendable = session
+                .Snapshot
+                .Balance
+                ?.Spendable ??
+                throw WalletException("Spendable balance is unavailable")
+            let recipients = Validate(requests, spendable)
             using let walletAddress = await session.Node.Api.JsonAsync("wallet/address", ct: ct)
             if NodeJson.Flag(walletAddress.RootElement, "view_only") {
                 throw WalletException("View-only wallets cannot send")
             }
-            var handle = ""
-            var recipient = request.Address
-            if recipient.StartsWith("$", StringComparison.Ordinal) {
-                let resolved = await BlocknetId.ResolveAsync(recipient, ct)
-                handle = resolved.Handle
-                recipient = WalletValidation.ValidateAddress(resolved.Address)
+            let handles = [recipients.Length]string
+            for index in 0 ... recipients.Length {
+                handles[index] = ""
+                if recipients[index].Address.StartsWith("$", StringComparison.Ordinal) {
+                    let resolved = await BlocknetId.ResolveAsync(recipients[index].Address, ct)
+                    handles[index] = resolved.Handle
+                    recipients[index] = WalletRecipient{
+                        ... recipients[index],
+                        Address: WalletValidation.ValidateAddress(resolved.Address)
+                    }
+                }
             }
             await Task.Delay(2000, ct)
             using let result = await session
                 .Node
                 .Api
-                .JsonAsync(
-                "wallet/send",
-                writer -> WriteSend(writer, recipient, request.Amount, request.Memo, true),
-                ct
-            )
+                .JsonAsync("wallet/send", writer -> WriteSend(writer, recipients, true), ct)
             let root = result.RootElement
             if !NodeJson.Flag(root, "dry_run") {
                 throw WalletException("Daemon did not return a dry-run estimate")
@@ -80,31 +80,38 @@ class SendService {
             let fee = NodeJson.Number(root, "fee")
             let inputTotal = NodeJson.Number(root, "input_total")
             let change = NodeJson.Number(root, "change")
-            if request.Amount > uint64.MaxValue - fee ||
-                inputTotal < change ||
-                inputTotal - change != request.Amount +
-                fee {
+            let estimate = SendEstimate(recipients, handles, fee, change, int32(NodeJson.Number(root, "input_count")))
+            if estimate.Amount > uint64.MaxValue - fee || inputTotal < change || inputTotal - change != estimate.Total {
                 throw WalletException("Node returned an invalid send total")
             }
-            if let available = session.Snapshot.Balance?.Spendable {
-                if request.Amount + fee > available {
-                    throw WalletException("Amount and fee exceed spendable balance")
-                }
+            if estimate.Total > spendable {
+                throw WalletException("Amount and fee exceed spendable balance")
             }
-            let estimate = SendEstimate(
-                recipient,
-                request.Amount,
-                request.Memo,
-                fee,
-                int32(NodeJson.Number(root, "input_count")),
-                handle
-            )
             confirmation = estimate
             confirmationKey = Guid.NewGuid().ToString("N")
             return estimate
         } finally {
             session.End()
         }
+    }
+
+    private func Validate(requests[]WalletRecipient, spendable uint64)[]WalletRecipient {
+        if requests.Length == 0 {
+            throw WalletException("Add a recipient")
+        }
+        let recipients = [requests.Length]WalletRecipient
+        var total uint64 = 0
+        for index in 0 ... requests.Length {
+            let request = requests[index]
+            recipients[index] = WalletValidation.ValidateSend(
+                request.Address,
+                WalletAmount.Format(request.Amount),
+                request.Memo,
+                spendable - total
+            )
+            total += recipients[index].Amount
+        }
+        return recipients
     }
 
     async func SubmitAsync(estimate SendEstimate, ct CancellationToken = default(CancellationToken)) SendResult {
@@ -121,12 +128,7 @@ class SendService {
                 .Balance
                 ?.Spendable ??
                 throw WalletException("Spendable balance is unavailable")
-            WalletValidation.ValidateSend(
-                estimate.Address,
-                WalletAmount.Format(estimate.Amount),
-                estimate.Memo,
-                available
-            )
+            Validate(estimate.Recipients, available)
             if estimate.Total > available {
                 throw WalletException("Amount and fee exceed spendable balance")
             }
@@ -138,7 +140,7 @@ class SendService {
             }
             using let body = MemoryStream()
             using let writer = Utf8JsonWriter(body)
-            WriteSend(writer, estimate.Address, estimate.Amount, estimate.Memo, false)
+            WriteSend(writer, estimate.Recipients, false)
             writer.Flush()
             let pending = PendingSend{
                 Key: key,
@@ -325,17 +327,19 @@ class SendService {
     }
 
     shared {
-        private func WriteSend(writer Utf8JsonWriter, address string, amount uint64, memo string, dryRun bool) {
+        private func WriteSend(writer Utf8JsonWriter, recipients[]WalletRecipient, dryRun bool) {
             writer.WriteStartObject()
             writer.WriteBoolean("dry_run", dryRun)
             writer.WriteStartArray("recipients")
-            writer.WriteStartObject()
-            writer.WriteString("address", address)
-            writer.WriteNumber("amount", amount)
-            if memo.Length > 0 {
-                writer.WriteString("memo_text", memo)
+            for recipient in recipients {
+                writer.WriteStartObject()
+                writer.WriteString("address", recipient.Address)
+                writer.WriteNumber("amount", recipient.Amount)
+                if recipient.Memo.Length > 0 {
+                    writer.WriteString("memo_text", recipient.Memo)
+                }
+                writer.WriteEndObject()
             }
-            writer.WriteEndObject()
             writer.WriteEndArray()
             writer.WriteEndObject()
         }

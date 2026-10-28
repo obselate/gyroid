@@ -1,5 +1,6 @@
 package Gyroid.Cli
 
+import Gyroid.History
 import Gyroid.Node
 import Gyroid.Platform
 import Gyroid.Settings
@@ -250,11 +251,17 @@ class Cli {
                         return 0
                     }
                     wallet.RefreshAsync().GetAwaiter().GetResult()
-                    let estimate = wallet.Send.EstimateAsync(arguments[2], arguments[3], memo).GetAwaiter().GetResult()
-                    if estimate.Handle.Length > 0 {
-                        Console.WriteLine("Blocknet ID: " + estimate.Handle)
+                    let estimate = wallet
+                        .Send
+                        .EstimateAsync(
+                        []WalletRecipient{WalletValidation.ValidateSend(arguments[2], arguments[3], memo)}
+                    )
+                        .GetAwaiter()
+                        .GetResult()
+                    if estimate.Handles[0].Length > 0 {
+                        Console.WriteLine("Blocknet ID: " + estimate.Handles[0])
                     }
-                    Console.WriteLine("Recipient: " + estimate.Address)
+                    Console.WriteLine("Recipient: " + estimate.Recipients[0].Address)
                     Console.WriteLine("Amount: " + WalletAmount.Format(estimate.Amount) + " BNT")
                     Console.WriteLine("Fee: " + WalletAmount.Format(estimate.Fee) + " BNT")
                     Console.WriteLine("Total: " + WalletAmount.Format(estimate.Total) + " BNT")

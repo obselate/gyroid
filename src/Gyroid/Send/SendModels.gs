@@ -1,15 +1,27 @@
 package Gyroid.Send
 
+import Gyroid.History
 import System
+import System.Linq
 
-class SendEstimate(address string, amount uint64, memo string, fee uint64, inputCount int32, handle string = "") {
-    let Address string = address
-    let Handle string = handle
-    let Amount uint64 = amount
-    let Memo string = memo
-    let Fee uint64 = fee
-    let Total uint64 = amount + fee
-    let InputCount int32 = inputCount
+class SendEstimate {
+    let Recipients[]WalletRecipient
+    let Handles[]string
+    let Amount uint64
+    let Fee uint64
+    let Change uint64
+    let Total uint64
+    let InputCount int32
+
+    init(recipients[]WalletRecipient, handles[]string, fee uint64, change uint64, inputCount int32) {
+        Recipients = recipients
+        Handles = handles
+        Amount = recipients.Aggregate(uint64(0), (sum uint64, recipient WalletRecipient) -> sum + recipient.Amount)
+        Fee = fee
+        Change = change
+        Total = Amount + fee
+        InputCount = inputCount
+    }
 }
 
 class SendResult(txId string, fee uint64, change uint64, inputCount int32) {

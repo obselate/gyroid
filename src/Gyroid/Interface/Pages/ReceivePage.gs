@@ -3,179 +3,488 @@ package Gyroid.Interface
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Actions
-import Goo.Widgets.Data
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
-import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
 import Gyroid.History
-import Gyroid.Node
-import Gyroid.Platform
-import Gyroid.Send
 import Gyroid.Wallet
 import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic
-import System.Globalization
-import System.Linq
+import System.IO
 import System.Text
 import System.Threading.Tasks
 
-partial class App {
-    private var requestAmount string = ""
+data struct ReceivePageInput {
+    var Ui Presentation
+    var Address string
+    var History[]WalletOutput
+    var ChainHeight uint64
+    var Privacy bool
+    var Busy bool
+    var Language string
+    var Clipboard[]char
+    var Height float64
+    var ChooseFile Action[FileDialogKind, string, string, Action[string]]
+}
 
-    private var requestMemo string = ""
+class ReceivePage : Cell[ReceivePageInput] {
+    private var amount string = ""
+
+    private var memo string = ""
+
+    private var reference string = ""
+
+    private var since uint64
+
+    private var format string = "link"
 
     private var qrText string = ""
 
+    private var qrCode QrCode?
+
     private var qrPath VectorPath = VectorPath.Empty
 
-    private func ReceivePanel(receiving string) Blob {
-        let panel = ui.PageContent(ui.Strings.Get("receive"), 640)
-        if receiving.Length == 0 {
-            return panel
+    protected override func Build(input ReceivePageInput) Blob {
+        let ui = input.Ui
+        let empty = amount.Length == 0 && memo.Length == 0
+        if empty {
+            reference = ""
+        } else if reference.Length == 0 {
+            reference = "#" + Random.Shared.Next(0x1000000).ToString("x6")
+            since = input.ChainHeight
         }
-        let amountIssue = ui.AmountIssue(requestAmount)
-        let memoIssue = ui.MemoIssue(requestMemo)
-        let query = List[string]()
-        if requestAmount.Length > 0 && amountIssue.Length == 0 {
-            query.Add("amount=" + requestAmount)
-        }
-        if requestMemo.Length > 0 && memoIssue.Length == 0 {
-            query.Add("memo=" + Uri.EscapeDataString(requestMemo))
-        }
-        let request = if query.Count > 0 {
-            "blocknet://" + receiving + "?" + String.Join("&", query)
+        let full = if memo.Length > 0 {
+            memo + " " + reference
         } else {
-            receiving
+            reference
         }
-        if request != qrText {
-            qrText = request
-            qrPath = QrPath(request)
+        let amountIssue = ui.AmountIssue(amount)
+        let memoIssue = ui.MemoIssue(full)
+        let shown = if empty && format == "link" {
+            "address"
+        } else {
+            format
         }
-        let size = Math.Clamp(height - 230 - bannerHeight, 160.0, 300.0)
-        let copied = ReadOnlySpan[char](ui.ClipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(receiving))
-        panel.Add(
+        let query = List[string]()
+        if amount.Length > 0 && amountIssue.Length == 0 {
+            query.Add("amount=" + amount)
+        }
+        if full.Length > 0 && memoIssue.Length == 0 {
+            query.Add("memo=" + Uri.EscapeDataString(full))
+        }
+        let link = "blocknet://" + input.Address + if query.Count > 0 {
+            "?" + String.Join("&", query)
+        } else {
+            ""
+        }
+        let dim = List[TextStyleRange]{TextStyleRange(TextRange(0, 11), Style{Color: ui.Dim})}
+        var start = 11 + input.Address.Length
+        for part in query {
+            dim.Add(TextStyleRange(TextRange(start, part.IndexOf('=') + 2), Style{Color: ui.Dim}))
+            start += part.Length + 1
+        }
+        let payload = if shown == "address" {
+            input.Address
+        } else {
+            link
+        }
+        if payload != qrText {
+            let encoded = QrCode.EncodeText(payload, QrCode.Ecc.Medium)
+            qrText = payload
+            qrCode = encoded
+            qrPath = QrPath(encoded)
+        }
+        let paid = Payment(input, full)
+        let possible = if paid == nil && amount.Length > 0 {
+            Payment(input, memo)
+        } else {
+            nil
+        }
+        let status = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8}
+        if let output = paid {
+            let confirmations = Confirmations(input, output)
+            status.Add(MaterialIcons.Create("check", 14, ui.Lime))
+            status.Add(ui.Label(ui.Amount(output.Amount), 12.5, ui.Ink, ""))
+            if confirmations < 10 {
+                status.Add(ui.Label(confirmations.ToString() + "/10", 12.5, ui.Dim, ""))
+            }
+        } else if let output = possible {
+            status.Add(ui.Badge(ui.Strings.Get("possible payment"), ui.Orange, "warning"))
+            status.Add(ui.Label(ui.Amount(output.Amount), 14, ui.Ink, ""))
+            status.Add(
+                Cell.Mount[InfoTipInput, InfoTip](
+                    "possible",
+                    InfoTipInput{
+                        Ui: ui,
+                        Topic: "About possible payment",
+                        Lines: []string{
+                            ui
+                                .Strings
+                                .Get("Amount and memo match, but the reference {0} is missing. Check with the sender")
+                                .Replace("{0}", reference)
+                        },
+                        Language: input.Language,
+                        Width: 300
+                    }
+                )
+            )
+        }
+        let side = Math.Clamp(input.Height - 340, 180.0, 320.0)
+        let code = Container{
+            Width: side,
+            Height: side,
+            BorderRadius: 10,
+            Overflow: Overflow.Hidden,
+            BackgroundColor: if input.Privacy || paid != nil {
+                ui.Surface
+            } else {
+                ui.Ink
+            },
+            AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.Center,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Image,
+                Name: ui.Strings.Get(
+                    if input.Privacy {
+                        "Address QR code hidden"
+                    } else {
+                        "Payment request QR code"
+                    }
+                )
+            }
+        }
+        if input.Privacy {
+            code.Add(MaterialIcons.Create("visibility_off", 32, ui.Dim))
+        } else if paid != nil {
+            code.Add(
+                Shape{
+                    Position: PositionType.Absolute,
+                    Width: side,
+                    Height: side,
+                    Path: qrPath,
+                    Fit: ShapeFit.Fill,
+                    BackgroundColor: ui.Rule
+                }
+            )
+            code.Add(MaterialIcons.Create("check", 56, ui.Mint))
+        } else {
+            code.Add(Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: ui.Black})
+        }
+        let copied = ReadOnlySpan[char](input.Clipboard).SequenceEqual(System.MemoryExtensions.AsSpan(payload))
+        let tabs = Container{
+            FlexDirection: FlexDirection.Row,
+            Padding: 3,
+            BorderRadius: 10,
+            BackgroundColor: ui.Black,
+            BorderWidth: 1,
+            BorderColor: ui.Rule,
+            FlexShrink: 0,
+            Accessibility: Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("Share as")}
+        }
+        for (id, label) in[]KeyValuePair[string, string]{
+            KeyValuePair[string, string]("link", "Link"),
+            KeyValuePair[string, string]("address", "Address"),
+            KeyValuePair[string, string]("qr", "QR")
+        } {
+            if id == "link" && empty {
+                continue
+            }
+            tabs.Add(
+                Goo
+                    .Button{
+                    FlexGrow: 1,
+                    FlexBasis: 0,
+                    Height: 28,
+                    AlignItems: AlignItems.Center,
+                    JustifyContent: JustifyContent.Center,
+                    BorderRadius: 7,
+                    BackgroundColor: shown == id ? Color.Parse("#1a1a1a"): Color.Transparent,
+                    Hover: Style{BackgroundColor: ui.Rule},
+                    Focus: Theme.Read().FocusStyle,
+                    Accessibility: Accessibility{
+                        Role: AccessibilityRole.Tab,
+                        Name: ui.Strings.Get(label),
+                        Selected: shown == id
+                    },
+                    OnClick: () -> {
+                        format = id
+                        Rebuild()
+                    },
+                    ui.Label(ui.Strings.Get(label), 13, shown == id ? ui.Ink: ui.Body, "")
+                }
+            )
+        }
+        let grouped = ui.Grouped(input.Address)
+        let first = grouped.IndexOf(' ')
+        let preview = Text{
+            Content: if input.Privacy {
+                "••••••••"
+            } else if shown == "address" {
+                grouped
+            } else {
+                link
+            },
+            StyleRanges: if input.Privacy || shown == "address" && first < 0 {
+                []TextStyleRange{}
+            } else if shown == "address" {
+                []TextStyleRange{
+                    TextStyleRange(TextRange(first, grouped.LastIndexOf(' ') - first), Style{Color: ui.Body})
+                }
+            } else if shown == "qr" {
+                []TextStyleRange{TextStyleRange(TextRange(0, link.Length), Style{Color: ui.Dim})}
+            } else {
+                dim.ToArray()
+            },
+            FontFamily: ui.Font,
+            FontSize: 12.5,
+            Color: ui.Ink,
+            TextWrap: TextWrap.Wrap
+        }
+        let action = if paid != nil {
+            Action(
+                input,
+                "add",
+                "New request",
+                ui.Ink,
+                ui.Edge,
+                Color.Parse("#0b0b0b"),
+                "",
+                () -> {
+                    amount = ""
+                    memo = ""
+                    reference = ""
+                    Rebuild()
+                }
+            )
+        } else if copied {
+            Action(input, "check", "Copied", ui.Mint, ui.Mint, Color.Parse("#00140d"), "clears in 2 min", () -> { })
+        } else if shown == "qr" {
+            Action(
+                input,
+                "download",
+                "Save QR image",
+                ui.Lime,
+                ui.Lime,
+                Color.Parse("#0b1203"),
+                "",
+                () -> SaveQr(input)
+            )
+        } else {
+            Action(
+                input,
+                "content_copy",
+                shown == "link" ? "Copy link": "Copy address",
+                ui.Lime,
+                ui.Lime,
+                Color.Parse("#0b1203"),
+                "",
+                () -> ui.Copy(payload, 120000)
+            )
+        }
+        let card = ui.Glass()
+        card.Width = Percent(100)
+        card.MaxWidth = 900
+        card.MaxHeight = Percent(100)
+        card.BorderRadius = 14
+        card.Padding = input.Height < 700 ? 18.0: 22.0
+        card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
-                Gap: 24,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.SpaceBetween,
+                Gap: 12,
+                MinHeight: 26,
                 FlexShrink: 0,
-                if ui.Privacy {
-                    Container{
-                        Width: size,
-                        Height: size,
-                        FlexShrink: 0,
-                        BackgroundColor: ui.Surface,
-                        BorderWidth: 1,
-                        BorderColor: ui.Edge,
-                        BorderRadius: 4,
-                        AlignItems: AlignItems.Center,
-                        JustifyContent: JustifyContent.Center,
-                        Accessibility: Accessibility{
-                            Role: AccessibilityRole.Image,
-                            Name: ui.Strings.Get("Address QR code hidden")
-                        },
-                        MaterialIcons.Create("visibility_off", 32, ui.Dim)
-                    }
-                } else {
-                    Container{
-                        Width: size,
-                        Height: size,
-                        FlexShrink: 0,
-                        BackgroundColor: ui.Ink,
-                        BorderRadius: 4,
-                        Accessibility: Accessibility{
-                            Role: AccessibilityRole.Image,
-                            Name: ui.Strings.Get("Address QR code")
-                        },
-                        Shape{Width: size, Height: size, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: ui.Black}
-                    }
+                ui.Label(ui.Strings.Get("receive"), 17, ui.Ink, ""),
+                status
+            }
+        )
+        card.Add(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 28,
+                MinHeight: 0,
+                Container{
+                    FlexShrink: 0,
+                    Padding: 4,
+                    BorderWidth: 2,
+                    BorderRadius: 14,
+                    BorderColor: shown == "qr" && paid == nil ? ui.Lime: Color.Transparent,
+                    Margin: -6,
+                    code
                 },
                 ui.Grow(
                     Container{
-                        Gap: 16,
-                        JustifyContent: JustifyContent.Center,
+                        Gap: 18,
                         Container{
-                            Gap: 6,
-                            ui.Label(ui.Strings.Get("Address"), 12, ui.Body),
+                            FlexDirection: FlexDirection.Row,
+                            Gap: 10,
+                            FlexShrink: 0,
                             Container{
-                                FlexDirection: FlexDirection.Row,
-                                AlignItems: AlignItems.FlexStart,
-                                Gap: 8,
-                                ui.Grow(
-                                    Text{
-                                        Content: if ui.Privacy {
-                                            "•••••••• •••••••• •••••••• ••••••••"
+                                FlexGrow: 0.7,
+                                TextAlign: TextAlign.Right,
+                                FlexBasis: 0,
+                                MinWidth: 0,
+                                ui.Entry(
+                                    TextField{
+                                        AccessibilityName: ui.Strings.Get("Amount"),
+                                        Placeholder: ui.Strings.Get("amount"),
+                                        Value: amount,
+                                        Controlled: true,
+                                        Password: input.Privacy,
+                                        Disabled: input.Busy || paid != nil,
+                                        Invalid: amountIssue.Length > 0,
+                                        IssueText: if amountIssue.Length > 0 {
+                                            ui.Strings.Explain(amountIssue)
                                         } else {
-                                            ui.Grouped(receiving)
+                                            nil
                                         },
-                                        FontFamily: ui.Font,
-                                        FontSize: 14,
-                                        Color: ui.Ink,
-                                        TextWrap: TextWrap.Wrap,
-                                        Accessibility: Accessibility{
-                                            Name: if ui.Privacy {
-                                                ui.Strings.Get("Address hidden")
+                                        Trailing: ui.Label("BNT", 12, ui.Dim, ""),
+                                        OnChange: value -> {
+                                            amount = value.Trim()
+                                            Rebuild()
+                                        }
+                                    }
+                                )
+                            },
+                            ui.Grow(
+                                Container{
+                                    MinWidth: 0,
+                                    ui.Entry(
+                                        TextField{
+                                            AccessibilityName: ui.Strings.Get("Memo"),
+                                            Placeholder: ui.Strings.Get("memo"),
+                                            Value: memo,
+                                            Controlled: true,
+                                            Password: input.Privacy,
+                                            Disabled: input.Busy || paid != nil,
+                                            Invalid: memoIssue.Length > 0,
+                                            IssueText: if memoIssue.Length > 0 {
+                                                ui.Strings.Explain(memoIssue)
                                             } else {
-                                                ui.Strings.Get("Address") + " " + receiving
+                                                nil
+                                            },
+                                            Leading: MaterialIcons.Create("notes", 16, ui.Dim),
+                                            Trailing: Container{
+                                                FlexDirection: FlexDirection.Row,
+                                                AlignItems: AlignItems.Center,
+                                                Gap: 8,
+                                                ui.Label(ui.Hidden(reference), 14, ui.Dim, ""),
+                                                ui.Meter(
+                                                    Encoding.UTF8.GetByteCount(full),
+                                                    WalletValidation.MemoLimit,
+                                                    true
+                                                )
+                                            },
+                                            OnChange: value -> {
+                                                memo = value
+                                                Rebuild()
                                             }
                                         }
-                                    }
-                                ),
-                                IconButton{
-                                    Icon: MaterialIcons.Create(
-                                        if copied {
-                                            "check"
-                                        } else {
-                                            "content_copy"
-                                        },
-                                        16,
-                                        if copied {
-                                            ui.Lime
-                                        } else {
-                                            ui.Body
-                                        }
-                                    ),
-                                    AccessibilityName: ui.Strings.Get("Copy address"),
-                                    OnClick: () -> {
-                                        ui.Copy(receiving, 120000)
-                                        Rebuild()
-                                    }
-                                }.Build()
-                            }
+                                    )
+                                }
+                            )
                         },
-                        ui.Field(
-                            "Amount",
-                            requestAmount,
-                            value -> {
-                                requestAmount = value.Trim()
-                                Rebuild()
+                        Container{
+                            Gap: 12,
+                            FlexShrink: 0,
+                            tabs,
+                            Container{
+                                MinHeight: 72,
+                                Padding: Edges{Left: 14, Right: 14, Top: 12, Bottom: 12},
+                                BorderWidth: 1,
+                                BorderRadius: 8,
+                                BorderColor: copied ? ui.Mint: Color.Parse("#2a2a2a"),
+                                BackgroundColor: Color.Parse("#080808"),
+                                Accessibility: Accessibility{Role: AccessibilityRole.Status},
+                                preview
                             },
-                            issue: amountIssue
-                        ),
-                        ui.Field(
-                            "Memo",
-                            requestMemo,
-                            value -> {
-                                requestMemo = value
-                                Rebuild()
-                            },
-                            issue: memoIssue
-                        ),
-                        if request != receiving {
-                            ui.Copyable("Request", request, ui.Hidden("blocknet://…?" + String.Join("&", query)))
-                        } else {
-                            Container{}
+                            action
                         }
                     }
                 )
             }
         )
-        return panel
+        return card
     }
 
-    private func QrPath(content string) VectorPath {
-        let code = QrCode.EncodeText(content, QrCode.Ecc.Medium)
+    private func Action(
+        input ReceivePageInput,
+        icon string,
+        label string,
+        color Color,
+        border Color,
+        fill Color,
+        note string,
+        click Action
+    ) Blob {
+        let ui = input.Ui
+        let button = Goo
+            .Button{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.Center,
+            Gap: 8,
+            Height: 38,
+            FlexShrink: 0,
+            BorderWidth: 1,
+            BorderRadius: 8,
+            BorderColor: border,
+            BackgroundColor: fill,
+            Disabled: input.Busy,
+            Hover: Style{BackgroundColor: ui.Rule},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
+            OnClick: click,
+            MaterialIcons.Create(icon, 16, color),
+            ui.Label(ui.Strings.Get(label), 14, color, "")
+        }
+        if note.Length > 0 {
+            button.Add(ui.Label(ui.Strings.Get(note), 14, ui.Dim, ""))
+        }
+        return button
+    }
+
+    private func Payment(input ReceivePageInput, expected string) WalletOutput? {
+        let atoms = if amount.Length > 0 && input.Ui.AmountIssue(amount).Length == 0 {
+            WalletAmount.Parse(amount)
+        } else {
+            uint64(0)
+        }
+        if reference.Length == 0 || amount.Length > 0 && atoms == 0 {
+            return nil
+        }
+        for output in input.History {
+            if (output.BlockHeight == 0 || output.BlockHeight >= since) &&
+                output.Memo == expected &&
+                (atoms == 0 || output.Amount == atoms) {
+                return output
+            }
+        }
+        return nil
+    }
+
+    private func Confirmations(input ReceivePageInput, output WalletOutput) uint64 -> if output.BlockHeight == 0 ||
+        input.ChainHeight < output.BlockHeight {
+        uint64(0)
+    } else {
+        input.ChainHeight - output.BlockHeight + 1
+    }
+
+    private func SaveQr(input ReceivePageInput) {
+        guard let code = qrCode else {
+            return
+        }
+        input.ChooseFile.Invoke(
+            FileDialogKind.SaveFile,
+            "Save QR image",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "blocknet-request.png"),
+            (path string) -> input.Ui.Run(File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8)))
+        )
+    }
+
+    private func QrPath(code QrCode) VectorPath {
         let margin = 4
         let path = PathBuilder(0, 0, code.Size + margin * 2, code.Size + margin * 2)
         var y = 0

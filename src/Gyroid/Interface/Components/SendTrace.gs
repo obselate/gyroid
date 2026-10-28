@@ -4,6 +4,7 @@ import Goo
 import Goo.Widgets
 import Goo.Widgets.Actions
 import Goo.Widgets.Icons
+import Gyroid.History
 import Gyroid.Send
 import System
 import System.Collections.Generic
@@ -20,37 +21,54 @@ class SendCue(Delay float64, From float64, Target float64, Wobble float64) : Sim
     override func Done(elapsed float64) bool -> elapsed >= Delay + 0.25
 }
 
-partial class App {
-    private let traceFades[]Anim[float64] = [6]Anim[float64]
+data struct SendTraceInput {
+    var Ui Presentation
+    var Estimate SendEstimate
+    var Result SendResult
+    var Sends[]WalletSend
+    var Animate bool
+    var Privacy bool
+    var Language string
+    var OnClose Action
+}
 
-    private let traceShifts[]Anim[Point] = [6]Anim[Point]
+class SendTrace : Cell[SendTraceInput], IDisposable {
+    private let fades[]Anim[float64] = [6]Anim[float64]
 
-    private var traceSeal Anim[float64]?
+    private let shifts[]Anim[Point] = [6]Anim[Point]
 
-    private var traceCompact bool
+    private let seal Anim[float64]
 
-    private var traceTimer WindowTimer?
+    private var traced SendResult?
 
-    private func TraceSend(estimate SendEstimate, result SendResult) {
-        traceEstimate = estimate
-        traceResult = result
-        traceCompact = false
-        traceTimer?.Dispose()
-        traceTimer = window?.SetTimeout(
-            () -> {
-                traceCompact = true
-                Rebuild()
-            },
-            6000
-        )
-        if traceSeal == nil {
-            for index in 0 ... 6 {
-                traceFades[index] = AnimateValue(1.0)
-                traceShifts[index] = AnimateValue(Point{X: 0, Y: 0})
-            }
-            traceSeal = AnimateValue(1.0)
+    private var compact bool
+
+    private var timer WindowTimer?
+
+    init() {
+        for index in 0 ... 6 {
+            fades[index] = AnimateValue(1.0)
+            shifts[index] = AnimateValue(Point{X: 0, Y: 0})
         }
-        let animate = PlaybackActive()
+        seal = AnimateValue(1.0)
+    }
+
+    func Dispose() {
+        timer?.Dispose()
+        timer = nil
+    }
+
+    private func Start(input SendTraceInput) {
+        traced = input.Result
+        compact = false
+        timer?.Dispose()
+        timer = input.Ui.Delay(
+            6000,
+            () -> {
+                compact = true
+                Rebuild()
+            }
+        )
         let still = Point{X: 0, Y: 0}
         for index in 0 ... 6 {
             let delay = index * 0.35
@@ -64,50 +82,45 @@ partial class App {
             } else {
                 0.0
             }
-            if animate {
-                traceFades[index].Snap(0)
-                traceFades[index].To(1, (start, end, velocity) -> SendCue(delay, start, end, 0))
-                traceShifts[index].Snap(from)
-                traceShifts[index].To(
+            if input.Animate {
+                fades[index].Snap(0)
+                fades[index].To(1, (start, end, velocity) -> SendCue(delay, start, end, 0))
+                shifts[index].Snap(from)
+                shifts[index].To(
                     still,
                     (start float64, end float64, velocity float64) -> SendCue(delay, start, end, wobble),
                     (start float64, end float64, velocity float64) -> SendCue(delay, start, end, 0)
                 )
             } else {
-                traceFades[index].Snap(1)
-                traceShifts[index].Snap(still)
+                fades[index].Snap(1)
+                shifts[index].Snap(still)
             }
         }
-        if animate {
-            traceSeal?.Snap(1.8)
-            traceSeal?.To(1, (start, end, velocity) -> SendCue(1.4, start, end, 0))
+        if input.Animate {
+            seal.Snap(1.8)
+            seal.To(1, (start, end, velocity) -> SendCue(1.4, start, end, 0))
         } else {
-            traceSeal?.Snap(1)
+            seal.Snap(1)
         }
     }
 
-    private func CloseTrace() {
-        traceEstimate = nil
-        traceResult = nil
-        traceTimer?.Dispose()
-        traceTimer = nil
-        Rebuild()
-    }
-
-    private func SendTrace() Blob? {
-        guard let result = traceResult, let estimate = traceEstimate else {
-            return nil
+    protected override func Build(input SendTraceInput) Blob {
+        if !Object.ReferenceEquals(traced, input.Result) {
+            Start(input)
         }
+        let ui = input.Ui
+        let result = input.Result
+        let estimate = input.Estimate
         var state = "mempool"
         var confirmations uint64 = 0
-        for send in wallet.Snapshot.Sends {
+        for send in input.Sends {
             if send.TxId == result.TxId {
                 state = send.Status
                 confirmations = send.Confirmations
             }
         }
         if confirmations >= 10 {
-            return nil
+            return Container{}
         }
         let status = ui.ChainState(state, confirmations)
         let filled = int32(confirmations)
@@ -133,11 +146,11 @@ partial class App {
         let close = IconButton{
             Icon: MaterialIcons.Create("close", 16, ui.Body),
             AccessibilityName: ui.Strings.Get("Close"),
-            OnClick: () -> CloseTrace()
+            OnClick: input.OnClose
         }.Build()
         let strip = Container{
             FlexDirection: FlexDirection.Row,
-            AlignItems: if traceCompact {
+            AlignItems: if compact {
                 AlignItems.Center
             } else {
                 AlignItems.FlexStart
@@ -153,7 +166,7 @@ partial class App {
                 Name: ui.Strings.Get("sent") + " " + ui.Amount(estimate.Amount) + " BNT " + status
             }
         }
-        if traceCompact {
+        if compact {
             strip.Add(ui.Label("◆", 14, ui.Lime, ""))
             strip.Add(txid)
             strip.Add(ui.Label("-" + ui.Amount(estimate.Amount), 12, ui.Pink, ""))
@@ -215,19 +228,20 @@ partial class App {
             Container{
                 FlexDirection: FlexDirection.Row,
                 Gap: 6,
-                OpacityAnim: traceFades[3],
-                TranslateAnim: traceShifts[3],
+                OpacityAnim: fades[3],
+                TranslateAnim: shifts[3],
                 ui.Label("↘ " + ui.Amount(result.Fee), 12, ui.Orange, ""),
                 ui.Label(ui.Strings.Get("Fee"), 11, ui.Dim, "")
             }
         )
-        let ringStage = TraceStage("ring ×16", 1, ring)
+        let ringStage = Stage(ui, "ring ×16", 1, ring)
         ringStage.FlexShrink = 1
         ringStage.MinWidth = 0
         let stages = Container{
             FlexDirection: FlexDirection.Row,
             Gap: 12,
-            TraceStage(
+            Stage(
+                ui,
                 "inputs",
                 0,
                 Container{
@@ -237,30 +251,31 @@ partial class App {
                 }
             ),
             ringStage,
-            TraceStage("outputs", 2, outputs),
-            TraceStage(
+            Stage(ui, "outputs", 2, outputs),
+            Stage(
+                ui,
                 "sealed",
                 4,
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 6,
-                    Container{ScaleAnim: traceSeal, ui.Label("◆", 16, ui.Lime, "")},
+                    Container{ScaleAnim: seal, ui.Label("◆", 16, ui.Lime, "")},
                     txid
                 }
             ),
-            TraceStage("broadcast", 5, Container{Gap: 2, chain, ticks})
+            Stage(ui, "broadcast", 5, Container{Gap: 2, chain, ticks})
         }
         strip.Add(ui.Grow(stages))
         strip.Add(close)
         return strip
     }
 
-    private func TraceStage(label string, stage int32, content Blob) Container -> Container{
+    private func Stage(ui Presentation, label string, stage int32, content Blob) Container -> Container{
         Gap: 4,
         FlexShrink: 0,
-        OpacityAnim: traceFades[stage],
-        TranslateAnim: traceShifts[stage],
+        OpacityAnim: fades[stage],
+        TranslateAnim: shifts[stage],
         ui.Label(
             if stage > 0 {
                 "→ " + ui.Strings.Get(label)

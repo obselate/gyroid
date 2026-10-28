@@ -24,6 +24,24 @@ import System.Threading.Tasks
 partial class App {
     private var confirmPendingSend bool
 
+    private func PendingSendCard() Blob {
+        let card = ui.PageContent(ui.Strings.Get("send"), 640)
+        if wallet.Send.Error.Length > 0 {
+            card.Add(
+                Text{
+                    Content: ui.Strings.Explain(wallet.Send.Error),
+                    FontFamily: ui.Font,
+                    FontSize: 13,
+                    Color: ui.Orange,
+                    TextWrap: TextWrap.Wrap
+                }
+            )
+        } else {
+            card.Add(PendingSendBanner())
+        }
+        return card
+    }
+
     private func PendingSendBanner() Blob {
         let pending = wallet.Send.Pending
         let content = ui.Glass()

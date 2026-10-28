@@ -3,259 +3,674 @@ package Gyroid.Interface
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Actions
-import Goo.Widgets.Data
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
 import Gyroid.History
-import Gyroid.Node
 import Gyroid.Platform
 import Gyroid.Send
 import Gyroid.Wallet
-import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic
-import System.Globalization
 import System.Linq
 import System.Text
 import System.Threading.Tasks
 
-partial class App {
-    private var address string = ""
+class SendRow {
+    var Address string = ""
+    var Amount string = ""
+    var Memo string = ""
+    var MemoOpen bool
+    var Suggest bool
+    let Anchor ElementHandle = ElementHandle()
+}
 
-    private var amount string = ""
+data struct SendPageInput {
+    var Session WalletSession
+    var Ui Presentation
+    var Window Window?
+    var Snapshot WalletSnapshot
+    var Contacts SortedDictionary[string, string]
+    var Network string
+    var Privacy bool
+    var Busy bool
+    var Language string
+    var Animate bool
+    var Height float64
+    var OnSent Action
+}
 
-    private var memo string = ""
+class SendPage : Cell[SendPageInput] {
+    private let rows List[SendRow] = List[SendRow]()
 
     private var estimate SendEstimate?
 
-    private func SendPanel() Blob {
-        if wallet.Send.Error.Length > 0 {
-            let card = ui.PageContent(ui.Strings.Get("send"), 640)
-            card.Add(
-                Text{
-                    Content: ui.Strings.Explain(wallet.Send.Error),
-                    FontFamily: ui.Font,
-                    FontSize: 13,
-                    Color: ui.Orange,
-                    TextWrap: TextWrap.Wrap
-                }
-            )
-            return card
+    private var sent SendEstimate?
+
+    private var result SendResult?
+
+    private var openRow int32 = -1
+
+    init() {
+        rows.Add(SendRow())
+    }
+
+    protected override func Build(input SendPageInput) Blob {
+        let ui = input.Ui
+        let spendable = input.Snapshot.Balance?.Spendable ?? uint64(0)
+        let compact = input.Height < 700
+        let multi = rows.Count > 1
+        var total uint64 = 0
+        var ready = !input.Busy
+        for row in rows {
+            let atoms = Atoms(row.Amount)
+            total = Add(total, atoms ?? uint64(0))
+            ready = ready && atoms != nil && Kind(input, row.Address).Length > 0 && ui.MemoIssue(row.Memo).Length == 0
         }
-        if wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0 {
-            let card = ui.PageContent(ui.Strings.Get("send"), 640)
-            card.Add(PendingSendBanner())
-            return card
-        }
-        let blank = address.Trim().Length == 0 || amount.Trim().Length == 0
-        let amountIssue = ui.AmountIssue(amount, wallet.Snapshot.Balance?.Spendable)
-        let memoIssue = ui.MemoIssue(memo)
-        let remaining = WalletValidation.MemoLimit - Encoding.UTF8.GetByteCount(memo)
-        let card = ui.PageContent(
-            ui.Strings.Get("send"),
-            640,
-            if let units = wallet.Snapshot.Balance?.Spendable {
-                ui.Figure("Available", ui.Amount(units) + " BNT", ui.Lime, 14)
-            } else {
-                nil
-            }
-        )
-        let memoField = Container{
-            MinWidth: 0,
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 8,
-            ui.Grow(
-                Container{
-                    MinWidth: 0,
-                    ui.Field(
-                        "Memo",
-                        memo,
-                        value -> {
-                            memo = value
-                            Rebuild()
-                        },
-                        () -> Review(),
-                        issue: memoIssue
-                    )
-                }
-            )
-        }
-        if remaining >= 0 && remaining < 25 {
-            memoField.Add(ui.Label(remaining.ToString(CultureInfo.InvariantCulture), 12, ui.Body))
-        }
-        var chosen string? = nil
-        for (label, destination) in contacts {
-            if destination == address {
-                chosen = label
-            }
-        }
+        let over = total > spendable
+        let card = ui.Glass()
+        card.Width = Percent(100)
+        card.MaxWidth = multi ? 780.0: 600.0
+        card.MaxHeight = Percent(100)
+        card.BorderRadius = 14
+        card.Padding = compact ? 18.0: 22.0
+        card.Gap = compact ? 13.0: 16.0
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.FlexEnd,
-                Gap: 8,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.SpaceBetween,
+                Gap: 12,
                 FlexShrink: 0,
-                ui.Grow(
-                    Container{
-                        MinWidth: 0,
-                        ui.Field(
-                            "Address",
-                            address,
-                            value -> {
-                                address = value.Trim()
-                                Rebuild()
-                            },
-                            () -> Review()
-                        )
-                    }
-                ),
-                if contacts.Count > 0 {
-                    Cell.Mount[ComboBoxInput, ComboBox](
-                        "contact",
-                        ComboBoxInput{
-                            Items: contacts
-                                .Keys
-                                .Select((label string) -> ComboBoxOption{Id: label, Label: label})
-                                .ToArray(),
-                            SelectedId: chosen,
-                            Placeholder: ui.Strings.Get("contacts"),
-                            AccessibilityName: ui.Strings.Get("contacts"),
-                            Searchable: contacts.Count > 8,
-                            Width: 180,
-                            CreateRow: (input ComboBoxInput, option ComboBoxOption, row Container) -> {
-                                row.Margin = 0
-                                row.BorderRadius = 0
-                                return row
-                            },
-                            Disabled: ui.Working(),
-                            OnSelect: id -> {
-                                address = contacts[id]
-                                Rebuild()
-                            }
-                        }
-                    )
+                ui.Label(ui.Strings.Get("send"), 17, ui.Ink, ""),
+                if input.Snapshot.Balance?.Spendable != nil {
+                    ui.Figure("Spendable", ui.Amount(spendable), ui.Ink, 14, "")
                 } else {
                     Container{}
                 }
             }
         )
+        if multi {
+            let size = Math.Clamp(input.Height * 0.05, 28.0, 40.0)
+            let sum = ui.Hidden(WalletAmount.Format(total))
+            card.Add(Hero(input, ui.Label(sum, size, ui.Lime, ""), sum.Length, size))
+            let list = Container{Gap: 8, MinHeight: 0, FlexShrink: 1, OverflowY: Overflow.Scroll}
+            for index in 0 ... rows.Count {
+                list.Add(Line(input, index))
+            }
+            card.Add(list)
+        } else {
+            let size = Math.Clamp(input.Height * 0.07, 36.0, 60.0)
+            card.Add(Hero(input, Amount(input, over, size), rows[0].Amount.Length, size))
+            card.Add(Container{Gap: 10, FlexShrink: 0, AddressField(input, rows[0]), MemoField(input, rows[0])})
+        }
+        card.Add(Bar(input, rows.Select((row SendRow) -> Atoms(row.Amount) ?? uint64(0)).ToArray(), 0, 0, spendable))
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
-                Gap: 16,
+                JustifyContent: JustifyContent.FlexEnd,
                 FlexShrink: 0,
-                ui.Grow(
-                    Container{
-                        MinWidth: 0,
-                        ui.Field(
-                            "Amount",
-                            amount,
-                            value -> {
-                                amount = value
-                                Rebuild()
-                            },
-                            () -> Review(),
-                            issue: amountIssue
-                        )
-                    }
-                ),
-                ui.Grow(memoField)
+                ui.Figure(
+                    "Remaining",
+                    if over {
+                        "−" + ui.Amount(total - spendable)
+                    } else {
+                        ui.Amount(spendable - total)
+                    },
+                    over ? ui.Pink: ui.Ink,
+                    14,
+                    ""
+                )
             }
         )
+        let review = ui.Button("Review", () -> Review(input), !ready || over || total == 0, true)
+        review.MinWidth = 140
         card.Add(
-            ui.ActionRow(
-                []Blob{
-                    ui.Button(
-                        "Review",
-                        () -> Review(),
-                        ui.Working() || blank || amountIssue.Length > 0 || memoIssue.Length > 0,
-                        true
-                    )
-                }
-            )
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.SpaceBetween,
+                Gap: 12,
+                FlexShrink: 0,
+                Goo
+                    .Button{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 8,
+                    Height: 30,
+                    Padding: Edges{Left: 6, Right: 6},
+                    BorderRadius: 6,
+                    Disabled: input.Busy,
+                    Hover: Style{BackgroundColor: ui.Rule},
+                    Focus: Theme.Read().FocusStyle,
+                    Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Add recipient")},
+                    OnClick: () -> {
+                        rows.Add(SendRow())
+                        Rebuild()
+                    },
+                    MaterialIcons.Create("add", 16, ui.Lime),
+                    ui.Label(ui.Strings.Get("recipient"), 14, ui.Lime, "")
+                },
+                review
+            }
         )
-        if let trace = SendTrace() {
-            card.Add(trace)
+        if let shown = sent, let outcome = result {
+            card.Add(
+                Cell.Mount[SendTraceInput, SendTrace](
+                    "trace",
+                    SendTraceInput{
+                        Ui: ui,
+                        Estimate: shown,
+                        Result: outcome,
+                        Sends: input.Snapshot.Sends,
+                        Animate: input.Animate,
+                        Privacy: input.Privacy,
+                        Language: input.Language,
+                        OnClose: () -> {
+                            sent = nil
+                            result = nil
+                            Rebuild()
+                        }
+                    }
+                )
+            )
+        }
+        if let pending = estimate {
+            card.Add(Confirm(input, pending, spendable))
         }
         return card
     }
 
-    private func Review() {
-        if ui.Working() || address.Trim().Length == 0 || amount.Trim().Length == 0 {
-            return
-        }
-        let task = Task.Run(() -> wallet.Send.EstimateAsync(address, amount, memo))
-        Run(
-            task,
-            () -> {
-                estimate = task.Result
-            }
-        )
-    }
-
-    private func Submit() {
-        guard let pending = estimate else {
-            return
-        }
-        if ui.Working() {
-            return
-        }
-        estimate = nil
-        let task = Task.Run(() -> wallet.Send.SubmitAsync(pending))
-        Run(
-            task,
-            () -> {
-                address = ""
-                amount = ""
-                memo = ""
-                historyTab = "sent"
-                screen = "Transactions"
-                if task.Result.Fee > 0 {
-                    TraceSend(pending, task.Result)
-                } else {
-                    CloseTrace()
+    private func Hero(input SendPageInput, amount Blob, digits int32, size float64) Blob {
+        let ui = input.Ui
+        let hero = Container{
+            AlignItems: AlignItems.Center,
+            Gap: 14,
+            FlexShrink: 0,
+            Padding: Edges{
+                Top: Math.Clamp(input.Height * 0.032, 4.0, 30.0),
+                Bottom: Math.Clamp(input.Height * 0.032, 4.0, 30.0)
+            },
+            Container{
+                Width: Percent(100),
+                TextAlign: TextAlign.Center,
+                amount,
+                Container{
+                    Position: PositionType.Absolute,
+                    Left: Percent(50),
+                    Bottom: size * 0.25,
+                    Margin: Edges{Left: Math.Max(1, digits) * size * 0.3 + 12},
+                    ui.Label("BNT", 15, ui.Dim, "")
                 }
-                Refresh()
+            }
+        }
+        if rows.Count == 1 {
+            let spendable = input.Snapshot.Balance?.Spendable ?? uint64(0)
+            hero.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    Gap: 8,
+                    Share(input, "25%", spendable / 4),
+                    Share(input, "50%", spendable / 2),
+                    Share(input, "max", spendable)
+                }
+            )
+        } else {
+            hero.Padding = Edges{
+                Top: Math.Clamp(input.Height * 0.01, 0.0, 10.0),
+                Bottom: Math.Clamp(input.Height * 0.01, 0.0, 10.0)
+            }
+        }
+        return hero
+    }
+
+    private func Amount(input SendPageInput, over bool, size float64) Blob {
+        let ui = input.Ui
+        let row = rows[0]
+        return (
+            TextField{
+                AccessibilityName: ui.Strings.Get("Amount"),
+                Value: row.Amount,
+                Controlled: true,
+                Placeholder: "0",
+                Password: input.Privacy,
+                Disabled: input.Busy,
+                FontFamily: ui.Font,
+                FontSize: size,
+                TextColor: over ? ui.Pink: ui.Lime,
+                BackgroundColor: Color.Transparent,
+                BorderWidth: 0,
+                FocusRingWidth: 0,
+                PaddingHorizontal: 0,
+                EntryHeight: size * 1.25,
+                Width: Percent(100),
+                OnChange: value -> {
+                    row.Amount = value.Trim()
+                    Rebuild()
+                },
+                OnSubmit: _ -> Review(input)
+            }
+        ).Build()
+    }
+
+    private func Share(input SendPageInput, label string, atoms uint64) Blob {
+        let ui = input.Ui
+        return Goo
+            .Button{
+            Height: 28,
+            Padding: Edges{Left: 14, Right: 14},
+            JustifyContent: JustifyContent.Center,
+            BorderWidth: 1,
+            BorderColor: Color.Parse("#2a2a2a"),
+            BorderRadius: 6,
+            BackgroundColor: ui.Black,
+            Disabled: input.Busy || atoms == 0,
+            Hover: Style{BackgroundColor: ui.Rule},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
+            OnClick: () -> {
+                rows[0].Amount = WalletAmount.Format(atoms)
+                Rebuild()
+            },
+            ui.Label(ui.Strings.Get(label), 12, ui.Body, "")
+        }
+    }
+
+    private func Line(input SendPageInput, index int32) Blob {
+        let ui = input.Ui
+        let row = rows[index]
+        let memoUsed = Encoding.UTF8.GetByteCount(row.Memo)
+        let line = Container{
+            Gap: 8,
+            FlexShrink: 0,
+            ZIndex: rows.Count - index,
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.FlexStart,
+                Gap: 8,
+                Container{
+                    Width: 18,
+                    Height: 38,
+                    AlignItems: AlignItems.Center,
+                    JustifyContent: JustifyContent.Center,
+                    ui.Label((index + 1).ToString(), 12, ui.Dim, "")
+                },
+                ui.Grow(AddressField(input, row)),
+                Container{
+                    Width: 150,
+                    TextAlign: TextAlign.Right,
+                    FlexShrink: 0,
+                    ui.Entry(
+                        TextField{
+                            AccessibilityName: ui.Strings.Get("Amount") + " " + (index + 1).ToString(),
+                            Value: row.Amount,
+                            Controlled: true,
+                            Password: input.Privacy,
+                            Disabled: input.Busy,
+                            Invalid: ui.AmountIssue(row.Amount).Length > 0,
+                            Trailing: ui.Label("BNT", 12, ui.Dim, ""),
+                            OnChange: value -> {
+                                row.Amount = value.Trim()
+                                Rebuild()
+                            },
+                            OnSubmit: _ -> Review(input)
+                        }
+                    )
+                },
+                Icon(
+                    input,
+                    if memoUsed > 0 {
+                        ui.Meter(memoUsed, WalletValidation.MemoLimit, false)
+                    } else {
+                        MaterialIcons.Create("notes", 16, ui.Dim)
+                    },
+                    "Memo",
+                    row.MemoOpen,
+                    () -> {
+                        row.MemoOpen = !row.MemoOpen
+                        Rebuild()
+                    }
+                ),
+                Icon(
+                    input,
+                    MaterialIcons.Create("close", 16, ui.Dim),
+                    "Remove recipient",
+                    false,
+                    () -> {
+                        rows.RemoveAt(index)
+                        Rebuild()
+                    }
+                )
+            }
+        }
+        if row.MemoOpen {
+            line.Add(Container{Padding: Edges{Left: 26, Right: 76}, MemoField(input, row)})
+        }
+        return line
+    }
+
+    private func Icon(input SendPageInput, icon Blob, label string, active bool, action Action) Blob -> Goo
+        .Button{
+        Width: 30,
+        Height: 30,
+        Margin: Edges{Top: 4},
+        FlexShrink: 0,
+        AlignItems: AlignItems.Center,
+        JustifyContent: JustifyContent.Center,
+        BorderRadius: 8,
+        BackgroundColor: active ? input.Ui.Rule: Color.Transparent,
+        Disabled: input.Busy,
+        Hover: Style{BackgroundColor: input.Ui.Rule},
+        Focus: Theme.Read().FocusStyle,
+        Accessibility: Accessibility{
+            Role: AccessibilityRole.Button,
+            Name: input.Ui.Strings.Get(label),
+            Expanded: active
+        },
+        OnClick: action,
+        icon
+    }
+
+    private func AddressField(input SendPageInput, row SendRow) Blob {
+        let ui = input.Ui
+        let text = row.Address.Trim()
+        let issue = Issue(input, text)
+        let kind = Kind(input, text)
+        let trailing = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, MinWidth: 0}
+        if kind == "contact" {
+            trailing.Add(ui.Label(ui.Hidden(ui.Short(input.Contacts[text])), 14, ui.Dim, ""))
+        }
+        if issue.Length > 0 {
+            trailing.Add(MaterialIcons.Create("warning", 16, ui.Pink))
+        } else if kind.Length > 0 {
+            trailing.Add(MaterialIcons.Create("check", 16, ui.Mint))
+        } else if text.Length == 0 && input.Contacts.Count > 0 {
+            trailing.Add(
+                Icon(
+                    input,
+                    MaterialIcons.Create("menu_book", 16, ui.Body),
+                    "contacts",
+                    row.Suggest,
+                    () -> {
+                        row.Suggest = !row.Suggest
+                        Rebuild()
+                    }
+                )
+            )
+        }
+        let field = Container{
+            MinWidth: 0,
+            Handle: row.Anchor,
+            ui.Entry(
+                TextField{
+                    AccessibilityName: ui.Strings.Get("Recipient"),
+                    Placeholder: ui.Strings.Get("address, contact or $$id"),
+                    Value: row.Address,
+                    Controlled: true,
+                    Password: input.Privacy,
+                    Disabled: input.Busy,
+                    Invalid: issue.Length > 0,
+                    IssueText: if issue.Length > 0 {
+                        ui.Strings.Explain(issue)
+                    } else {
+                        nil
+                    },
+                    TextColor: kind == "handle" ? ui.Blue: ui.Ink,
+                    Leading: switch kind {
+                        case "contact": MaterialIcons.Create("person", 14, ui.Dim)
+                        case "handle": MaterialIcons.Create("alternate_email", 14, ui.Blue)
+                        default: nil
+                    },
+                    Trailing: trailing,
+                    OnChange: value -> {
+                        row.Address = value
+                        row.Suggest = true
+                        Rebuild()
+                    },
+                    OnSubmit: _ -> Review(input)
+                }
+            )
+        }
+        if input.Privacy || !row.Suggest || kind.Length > 0 || issue.Length > 0 {
+            return field
+        }
+        let matches = input
+            .Contacts
+            .Where(
+            (entry KeyValuePair[string, string]) -> entry.Key.StartsWith(text, StringComparison.OrdinalIgnoreCase)
+        )
+            .Take(5)
+            .ToArray()
+        if matches.Length == 0 {
+            return field
+        }
+        let list = Container{
+            Accessibility: Accessibility{Role: AccessibilityRole.List, Name: ui.Strings.Get("contacts")}
+        }
+        for (name, destination) in matches {
+            list.Add(
+                Goo
+                    .Button{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 10,
+                    Height: 36,
+                    Padding: Edges{Left: 10, Right: 10},
+                    BorderRadius: 7,
+                    Hover: Style{BackgroundColor: ui.Rule},
+                    Focus: Theme.Read().FocusStyle,
+                    Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: name},
+                    OnClick: () -> {
+                        row.Address = name
+                        row.Suggest = false
+                        Rebuild()
+                    },
+                    MaterialIcons.Create("person", 14, ui.Dim),
+                    ui.Grow(
+                        Text{
+                            Content: name,
+                            StyleRanges: []TextStyleRange{
+                                TextStyleRange(TextRange(0, text.Length), Style{Color: ui.Lime})
+                            },
+                            FontFamily: ui.Font,
+                            FontSize: 14,
+                            Color: ui.Ink,
+                            TextWrap: TextWrap.NoWrap,
+                            TextTrimming: TextTrimming.Ellipsis
+                        }
+                    ),
+                    ui.Label(ui.Short(destination), 13, ui.Dim, "")
+                }
+            )
+        }
+        field.Add(
+            Cell.Mount[PopoverInput, Popover](
+                "suggest",
+                PopoverInput{
+                    Open: true,
+                    Anchor: row.Anchor,
+                    Placement: PopoverPlacement.BottomStart,
+                    Gap: 6,
+                    Width: Math.Max(240.0, row.Anchor.BorderBox.Width),
+                    Padding: 6,
+                    TakeFocus: false,
+                    Content: list,
+                    AccessibilityName: ui.Strings.Get("contacts"),
+                    OnDismiss: reason -> {
+                        row.Suggest = false
+                        Rebuild()
+                    }
+                }
+            )
+        )
+        return field
+    }
+
+    private func MemoField(input SendPageInput, row SendRow) Blob {
+        let ui = input.Ui
+        let issue = ui.MemoIssue(row.Memo)
+        return ui.Entry(
+            TextField{
+                AccessibilityName: ui.Strings.Get("Memo"),
+                Placeholder: ui.Strings.Get("memo"),
+                Value: row.Memo,
+                Controlled: true,
+                Password: input.Privacy,
+                Disabled: input.Busy,
+                Invalid: issue.Length > 0,
+                IssueText: if issue.Length > 0 {
+                    ui.Strings.Explain(issue)
+                } else {
+                    nil
+                },
+                Leading: MaterialIcons.Create("notes", 16, ui.Dim),
+                Trailing: ui.Meter(Encoding.UTF8.GetByteCount(row.Memo), WalletValidation.MemoLimit, true),
+                OnChange: value -> {
+                    row.Memo = value
+                    Rebuild()
+                },
+                OnSubmit: _ -> Review(input)
             }
         )
     }
 
-    private func ConfirmSend(pending SendEstimate) Blob {
+    private func Bar(input SendPageInput, amounts[]uint64, fee uint64, change uint64, spendable uint64) Blob {
+        let ui = input.Ui
+        let bar = Container{FlexDirection: FlexDirection.Row, Height: 8, Gap: 2, FlexShrink: 0}
+        var total = Add(fee, change)
+        for amount in amounts {
+            total = Add(total, amount)
+        }
+        if input.Privacy || spendable == 0 {
+            bar.Add(Segment(1, Color.Parse("#262626")))
+            return bar
+        }
+        if total > spendable {
+            bar.Add(Segment(float64(spendable), ui.Lime))
+            bar.Add(Segment(float64(total - spendable), ui.Pink))
+            return bar
+        }
+        for index in 0 ... amounts.Length {
+            if amounts[index] == 0 {
+                continue
+            }
+            let segment = Segment(float64(amounts[index]), ui.Lime)
+            if amounts.Length < 2 || input.Window == nil {
+                bar.Add(segment)
+                continue
+            }
+            let lines = Container{Gap: 4}
+            for other in 0 ... amounts.Length {
+                lines.Add(
+                    Container{
+                        FlexDirection: FlexDirection.Row,
+                        JustifyContent: JustifyContent.SpaceBetween,
+                        Gap: 24,
+                        ui.Label(Name(input, rows[other].Address), 12.5, other == index ? ui.Ink: ui.Dim, ""),
+                        ui.Label(WalletAmount.Format(amounts[other]), 12.5, other == index ? ui.Ink: ui.Dim, "")
+                    }
+                )
+            }
+            bar.Add(
+                Cell.Mount[TooltipInput, Tooltip](
+                    "share" + index.ToString(),
+                    TooltipInput{
+                        Window: input.Window,
+                        Target: segment,
+                        Content: lines,
+                        Placement: PortalPlacement.Top,
+                        RootStyle: Style{FlexGrow: float64(amounts[index]), FlexBasis: 0, MinWidth: 3}
+                    }
+                )
+            )
+        }
+        if fee > 0 {
+            bar.Add(Segment(0, ui.Orange))
+        }
+        if change > 0 {
+            bar.Add(Segment(float64(change), ui.Mint))
+        }
+        bar.Add(Segment(float64(spendable - total), Color.Parse("#262626")))
+        return bar
+    }
+
+    private func Segment(share float64, color Color) Blob -> Container{
+        FlexGrow: share,
+        FlexBasis: 0,
+        MinWidth: 3,
+        Height: 8,
+        BorderRadius: 2,
+        BackgroundColor: color
+    }
+
+    private func Confirm(input SendPageInput, pending SendEstimate, spendable uint64) Blob {
+        let ui = input.Ui
+        let compact = input.Height < 700
         let close Action = () -> {
             estimate = nil
+            openRow = -1
             Rebuild()
         }
-        let recipient = Container{
-            Gap: 6,
-            Accessibility: Accessibility{
-                Name: ui.Strings.Get("Recipient") + " " + pending.Handle + " " + pending.Address
-            },
-            ui.Label(ui.Strings.Get("Recipient"), 12, ui.Body)
+        let list = Container{
+            MinHeight: 0,
+            FlexShrink: 1,
+            OverflowY: Overflow.Scroll,
+            BorderWidth: Edges{Top: 1},
+            BorderColor: Color.Parse("#1a1a1a")
         }
-        if pending.Handle.Length > 0 {
-            recipient.Add(ui.Label(pending.Handle, 16, ui.Lime, ""))
+        for index in 0 ... pending.Recipients.Length {
+            list.Add(Recipient(input, pending, index))
         }
-        recipient.Add(
-            Text{
-                Content: ui.Grouped(pending.Address),
-                FontFamily: ui.Font,
-                FontSize: 14,
-                Color: ui.Ink,
-                TextWrap: TextWrap.Wrap
-            }
-        )
+        let remaining = spendable - Math.Min(spendable, pending.Total)
         let content = Container{
-            Gap: 14,
-            ui.Accent(ui.Pink, recipient),
-            ui.Figure("Amount", ui.Money(pending.Amount) + " BNT", ui.Ink),
-            ui.Figure("Fee", ui.Money(pending.Fee) + " BNT", ui.Ink),
-            ui.Figure("Total", ui.Money(pending.Total) + " BNT", ui.Lime, 18)
-        }
-        if pending.Memo.Length > 0 {
-            content.Add(ui.Figure("Memo", pending.Memo, ui.Ink))
+            Gap: compact ? 14.0: 18.0,
+            MinHeight: 0,
+            FlexShrink: 1,
+            Container{
+                Gap: 6,
+                FlexShrink: 0,
+                ui.Label(ui.Strings.Get("send"), 14, ui.Dim, ""),
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Baseline,
+                    Gap: 10,
+                    ui.Label(ui.Amount(pending.Total), Math.Clamp(input.Height * 0.05, 28.0, 40.0), ui.Lime, ""),
+                    ui.Label("BNT", 14, ui.Dim, "")
+                }
+            },
+            list,
+            Bar(
+                input,
+                pending.Recipients.Select((recipient WalletRecipient) -> recipient.Amount).ToArray(),
+                pending.Fee,
+                pending.Change,
+                spendable
+            ),
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 24,
+                FlexShrink: 0,
+                ui.Figure("Fee", ui.Amount(pending.Fee), ui.Orange, 14, ""),
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 2,
+                    ui.Figure("Change", ui.Amount(pending.Change), ui.Mint, 14, ""),
+                    Cell.Mount[InfoTipInput, InfoTip](
+                        "change",
+                        InfoTipInput{
+                            Ui: ui,
+                            Topic: "About change",
+                            Lines: changeLines,
+                            Language: input.Language,
+                            Width: 280
+                        }
+                    )
+                },
+                Container{FlexGrow: 1},
+                ui.Figure("Remaining", ui.Amount(remaining), ui.Ink, 14, "")
+            }
         }
         return Cell.Mount[ModalDialog, ModalDialogHost](
             "confirm-send",
@@ -264,14 +679,219 @@ partial class App {
                 CreateRoot: ui.DialogRoot,
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Confirm send"),
-                Width: Math.Min(width - 48, 600),
+                Width: 640,
+                MaxHeight: Percent(100),
+                Padding: compact ? 20.0: 24.0,
+                BackgroundColor: ui.Raised,
+                BorderRadius: 14,
                 Content: content,
                 ConfirmText: ui.Strings.Get("Send"),
                 CancelText: ui.Strings.Get("Cancel"),
-                ConfirmDisabled: ui.Working(),
-                OnConfirm: () -> Submit(),
+                ConfirmDisabled: input.Busy,
+                OnConfirm: () -> Submit(input),
                 OnCancel: close,
                 OnClose: close
+            }
+        )
+    }
+
+    private let changeLines[]string = []string{"Returns to this wallet. Spendable after 10 confirmations"}
+
+    private func Recipient(input SendPageInput, pending SendEstimate, index int32) Blob {
+        let ui = input.Ui
+        let recipient = pending.Recipients[index]
+        let handle = pending.Handles[index]
+        let expanded = openRow == index
+        let typed = rows[index].Address.Trim()
+        let head = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 10, MinWidth: 0}
+        if input.Contacts.ContainsKey(typed) {
+            head.Add(ui.Label(ui.Hidden(typed), 14, ui.Ink, ""))
+        }
+        if handle.Length > 0 {
+            head.Add(ui.Label(ui.Hidden(handle), 14, ui.Blue, ""))
+            head.Add(MaterialIcons.Create("check", 14, ui.Mint))
+        }
+        head.Add(
+            ui.Grow(ui.Label(ui.Hidden(ui.Short(recipient.Address)), 14, head.Children.Count > 0 ? ui.Dim: ui.Ink, ""))
+        )
+        head.Add(ui.Label(ui.Amount(recipient.Amount), 15, ui.Ink, ""))
+        head.Add(MaterialIcons.Create(expanded ? "expand_less": "expand_more", 14, ui.Dim))
+        let entry = Goo
+            .Button{
+            Gap: 6,
+            AlignItems: AlignItems.Stretch,
+            FlexShrink: 0,
+            Padding: Edges{Top: 11, Bottom: 11, Left: expanded ? 10.0: 4.0, Right: expanded ? 10.0: 4.0},
+            BorderRadius: expanded ? 8.0: 0.0,
+            BackgroundColor: expanded ? Color.Parse("#080808"): Color.Transparent,
+            BorderWidth: Edges{Bottom: 1},
+            BorderColor: Color.Parse("#1a1a1a"),
+            Hover: Style{BackgroundColor: Color.Parse("#080808")},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Button,
+                Name: ui.Strings.Get("Recipient") + " " + (index + 1).ToString(),
+                Expanded: expanded
+            },
+            OnClick: () -> {
+                openRow = expanded ? -1: index
+                Rebuild()
+            },
+            head
+        }
+        if recipient.Memo.Length > 0 {
+            entry.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: expanded ? AlignItems.FlexStart: AlignItems.Center,
+                    Gap: 8,
+                    MinWidth: 0,
+                    MaterialIcons.Create("notes", 13, ui.Dim),
+                    ui.Grow(
+                        Text{
+                            Content: ui.Hidden(recipient.Memo),
+                            FontFamily: ui.Font,
+                            FontSize: 12.5,
+                            Color: ui.Dim,
+                            TextWrap: expanded ? TextWrap.Wrap: TextWrap.NoWrap,
+                            TextTrimming: TextTrimming.Ellipsis
+                        }
+                    )
+                }
+            )
+        }
+        if expanded {
+            let grouped = ui.Grouped(recipient.Address)
+            let first = grouped.IndexOf(' ')
+            let last = grouped.LastIndexOf(' ')
+            entry.Add(
+                Text{
+                    Content: ui.Hidden(grouped),
+                    StyleRanges: if input.Privacy || first < 0 {
+                        []TextStyleRange{}
+                    } else {
+                        []TextStyleRange{TextStyleRange(TextRange(first, last - first), Style{Color: ui.Body})}
+                    },
+                    FontFamily: ui.Font,
+                    FontSize: 12.5,
+                    Color: ui.Ink,
+                    TextWrap: TextWrap.Wrap
+                }
+            )
+            if handle.Length > 0 {
+                entry.Add(ui.Status(ui.Strings.Get("signed by blocknet.id"), ui.Mint, "check"))
+            }
+        }
+        return entry
+    }
+
+    private func Name(input SendPageInput, value string) string {
+        let text = value.Trim()
+        return if input.Contacts.ContainsKey(text) || text.StartsWith("$", StringComparison.Ordinal) {
+            text
+        } else {
+            input.Ui.Short(text)
+        }
+    }
+
+    private func Kind(input SendPageInput, value string) string {
+        let text = value.Trim()
+        return if text.Length == 0 || Issue(input, text).Length > 0 {
+            ""
+        } else if input.Contacts.ContainsKey(text) {
+            "contact"
+        } else if text.StartsWith("$", StringComparison.Ordinal) {
+            "handle"
+        } else if text.Length >= 64 {
+            "address"
+        } else {
+            ""
+        }
+    }
+
+    private func Issue(input SendPageInput, text string) string {
+        if text.Length == 0 || input.Contacts.ContainsKey(text) {
+            return ""
+        }
+        try {
+            if text.StartsWith("$", StringComparison.Ordinal) {
+                BlocknetId.Normalize(text)
+                return ""
+            }
+            return if text.Length < 64 {
+                ""
+            } else {
+                WalletValidation.AddressIssue(WalletValidation.ValidateAddress(text), input.Network)
+            }
+        } catch (error WalletException) {
+            return error.Message
+        }
+    }
+
+    private func Atoms(text string) uint64? {
+        try {
+            return WalletAmount.Parse(text)
+        } catch (error WalletException) {
+            return nil
+        }
+    }
+
+    private func Add(left uint64, right uint64) uint64 -> if left > uint64.MaxValue - right {
+        uint64.MaxValue
+    } else {
+        left + right
+    }
+
+    private func Review(input SendPageInput) {
+        if input.Busy {
+            return
+        }
+        let requests = rows.Select(
+            (row SendRow) -> WalletRecipient{
+                Address: if input.Contacts.TryGetValue(row.Address.Trim(), out let destination) {
+                    destination
+                } else {
+                    row.Address.Trim()
+                },
+                Amount: Atoms(row.Amount) ?? uint64(0),
+                Memo: row.Memo
+            }
+        )
+            .ToArray()
+        let task = Task.Run(() -> input.Session.Send.EstimateAsync(requests))
+        input.Ui.Run(
+            task,
+            () -> {
+                estimate = task.Result
+                Rebuild()
+            }
+        )
+    }
+
+    private func Submit(input SendPageInput) {
+        guard let pending = estimate else {
+            return
+        }
+        if input.Busy {
+            return
+        }
+        estimate = nil
+        openRow = -1
+        let task = Task.Run(() -> input.Session.Send.SubmitAsync(pending))
+        input.Ui.Run(
+            task,
+            () -> {
+                rows.Clear()
+                rows.Add(SendRow())
+                if task.Result.Fee > 0 {
+                    sent = pending
+                    result = task.Result
+                } else {
+                    sent = nil
+                    result = nil
+                }
+                Rebuild()
+                input.OnSent()
             }
         )
     }

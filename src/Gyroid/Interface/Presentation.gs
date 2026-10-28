@@ -34,6 +34,7 @@ class Presentation {
     private let playbackActive Func[bool]
     private let touch Action
     private let report Action[string]
+    private let run Action[Task, Action?]
 
     init(
         language string,
@@ -41,7 +42,8 @@ class Presentation {
         rebuild Action,
         playbackActive Func[bool],
         touch Action,
-        report Action[string]
+        report Action[string],
+        run Action[Task, Action?]
     ) {
         Strings = Gyroid.Interface.Strings(language)
         Privacy = privacy
@@ -49,6 +51,7 @@ class Presentation {
         this.playbackActive = playbackActive
         this.touch = touch
         this.report = report
+        this.run = run
     }
 
     func Attach(owner Window) {
@@ -118,6 +121,18 @@ class Presentation {
     func Amount(value uint64) string -> Hidden(Money(value))
 
     func Count(value uint64) string -> value.ToString("N0", CultureInfo.InvariantCulture)
+
+    func Short(address string) string -> if address.Length > 13 {
+        address.Substring(0, 8) + "…" + address.Substring(address.Length - 5)
+    } else {
+        address
+    }
+
+    func Run(task Task, done Action? = nil) {
+        run(task, done)
+    }
+
+    func Delay(ms float64, action Action) WindowTimer? -> window?.SetTimeout(action, ms)
 
     func Grouped(value string) string {
         let groups = List[string]()
@@ -518,7 +533,8 @@ class Presentation {
         secret bool = false,
         issue string = "",
         disabled bool = false,
-        labelled bool = true
+        labelled bool = true,
+        hidden bool = false
     ) Blob -> TextField{
         Label: if labelled {
             Strings.Get(label)
@@ -528,7 +544,7 @@ class Presentation {
         AccessibilityName: Strings.Get(label),
         Value: value,
         Controlled: true,
-        Password: secret,
+        Password: secret || hidden,
         RevealButton: secret,
         IssueText: if issue.Length > 0 {
             Strings.Explain(issue)
@@ -547,6 +563,79 @@ class Presentation {
             }
         }
     }.Build()
+
+    func Entry(field TextField) Blob -> (
+        field with{
+            Width = Percent(100),
+            EntryHeight = 38,
+            BorderRadius = 8,
+            BackgroundColor = Color.Parse("#080808"),
+            BorderColor = Color.Parse("#2a2a2a"),
+            FontFamily = Font
+        }
+    ).Build()
+
+    func Meter(used int32, limit int32, counted bool) Blob {
+        let share = Math.Min(float64(used) / limit, 1.0)
+        let color = if share >= 1 {
+            Pink
+        } else if share >= 0.75 {
+            Orange
+        } else {
+            Dim
+        }
+        let track = PathBuilder(0, 0, 18, 18)
+        let arc = PathBuilder(0, 0, 18, 18)
+        for step in 0 ... 33 {
+            let turn = step / 32.0 * Math.PI * 2
+            let sweep = turn * share - Math.PI / 2
+            if step == 0 {
+                track.MoveTo(16, 9)
+                arc.MoveTo(9 + 7 * Math.Cos(sweep), 9 + 7 * Math.Sin(sweep))
+            } else {
+                track.LineTo(9 + 7 * Math.Cos(turn), 9 + 7 * Math.Sin(turn))
+                arc.LineTo(9 + 7 * Math.Cos(sweep), 9 + 7 * Math.Sin(sweep))
+            }
+        }
+        let meter = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 6,
+            FlexShrink: 0,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.ProgressBar,
+                Name: Strings.Get("Memo bytes") + " " + used.ToString() + "/" + limit.ToString()
+            }
+        }
+        if counted && share >= 0.75 {
+            meter.Add(Label((limit - used).ToString(), 11.5, color, ""))
+        }
+        meter.Add(
+            Container{
+                Width: 18,
+                Height: 18,
+                Shape{
+                    Position: PositionType.Absolute,
+                    Width: 18,
+                    Height: 18,
+                    Path: track.Build(),
+                    Fit: ShapeFit.Fill,
+                    BorderWidth: 2,
+                    BorderColor: Color.Parse("#1f1f1f")
+                },
+                Shape{
+                    Position: PositionType.Absolute,
+                    Width: 18,
+                    Height: 18,
+                    Path: arc.Build(),
+                    Fit: ShapeFit.Fill,
+                    BorderWidth: 2,
+                    BorderColor: used > 0 ? color: Color.Transparent
+                }
+            }
+        )
+        return meter
+    }
 
     func PageContent(title string, maxWidth float64 = 520, trailing Blob? = nil) Container {
         let card = Glass()
