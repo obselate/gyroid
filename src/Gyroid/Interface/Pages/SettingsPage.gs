@@ -3,278 +3,480 @@ package Gyroid.Interface
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Actions
-import Goo.Widgets.Data
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
-import Gyroid.Contacts
-import Gyroid.History
 import Gyroid.Node
 import Gyroid.Platform
-import Gyroid.Send
 import Gyroid.Settings
 import Gyroid.Wallet
-import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic
 import System.Diagnostics
 import System.Globalization
 import System.IO
 import System.Linq
-import System.Numerics
-import System.Text
 import System.Threading.Tasks
 
-partial class App {
-    private var settingsTab string = "general"
+data struct SettingsPageInput {
+    var Session WalletSession
+    var Ui Presentation
+    var Snapshot WalletSnapshot
+    var Node NodeStatus
+    var Section string
+    var Available bool
+    var Privacy bool
+    var Busy bool
+    var Language string
+    var Clipboard[]char
+    var Width float64
+    var Height float64
+    var ChooseFile Action[FileDialogKind, string, string, Action[string]]
+    var OnSection Action[string]
+    var OnLanguage Action[string]
+    var OnPreference Action
+    var OnRevealSeed Action[[]char]
+    var OnNavigate Action[string]
+    var OnClose Action
+}
 
-    private var applyPending bool
+class SettingsPage : Cell[SettingsPageInput], IDisposable {
+    private var draft WalletSettings?
+
+    private var startupOpen bool
 
     private var listenIssue string = ""
 
     private var programIssue string = ""
 
-    private func Pinned(variable string) bool -> Environment.GetEnvironmentVariable("GYROID_" + variable) != nil
+    private var applyPending bool
 
-    private func SettingsPage() Blob {
-        let panel = ui.PageContent(
-            ui.Strings.Get("settings"),
-            860,
-            ui.Tabs(
-                "settings-tabs",
-                "Settings",
-                []NavigationItem{
-                    NavigationItem{Id: "general", Label: ui.Strings.Get("General")},
-                    NavigationItem{Id: "node", Label: ui.Strings.Get("Node")},
-                    NavigationItem{Id: "wallet", Label: ui.Strings.Get("Wallet")}
-                },
-                settingsTab,
-                id -> {
-                    settingsTab = id
-                    Rebuild()
+    private var dialog string = ""
+
+    private var password string = ""
+
+    private var passwordIssue string = ""
+
+    private var viewKeys WalletViewKeys?
+
+    private var viewPrivateShown bool
+
+    private var viewOnlyName string = ""
+
+    private var viewOnlyPassword string = ""
+
+    private var viewOnlyCreated string = ""
+
+    private var purgeText string = ""
+
+    private var purging bool
+
+    private var chainLoaded bool
+
+    private var dataSize int64 = -1
+
+    private var sizeText string = "-"
+
+    private var sizeUnit string = "GB"
+
+    private var freeSpace int64
+
+    private var dataWallets int32
+
+    private var trustedCheckpoint uint64
+
+    private var localCheckpoint uint64
+
+    private var autoSave bool?
+
+    private var certificate ChainCertificate?
+
+    private var rescan Task?
+
+    func Dispose() {
+        viewKeys?.Dispose()
+        viewKeys = nil
+        password = ""
+        viewOnlyPassword = ""
+    }
+
+    protected override func Build(input SettingsPageInput) Blob {
+        let ui = input.Ui
+        let settings = input.Session.Settings
+        draft ??= settings
+        let sections = List[string]{"general", "security", "node"}
+        if input.Snapshot.State == "Unlocked" {
+            sections.Add("wallet")
+        }
+        sections.Add("advanced")
+        let section = sections.Contains(input.Section) ? input.Section: "general"
+        if section == "advanced" && !chainLoaded {
+            chainLoaded = true
+            ui.Delay(0, () -> ui.Run(LoadChain(input.Session)))
+        }
+        let navWidth = input.Width < 1100 ? 132.0: 168.0
+        let nav = ui.Glass()
+        nav.Width = navWidth
+        nav.FlexShrink = 0
+        nav.Padding = 8
+        nav.Gap = 2
+        nav.BorderRadius = 14
+        nav.Accessibility = Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("settings")}
+        for id in sections {
+            let selected = id == section
+            let fill = selected ? Color.Parse("#121906"): Color.Transparent
+            nav.Add(
+                Goo.Button{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 10,
+                    Height: 38,
+                    FlexShrink: 0,
+                    Padding: Edges{Left: 12, Right: 12},
+                    BorderRadius: 8,
+                    BackgroundColor: fill,
+                    Hover: Style{BackgroundColor: selected ? fill: ui.Rule},
+                    Focus: Theme.Read().FocusStyle,
+                    Accessibility: Accessibility{
+                        Role: AccessibilityRole.Tab,
+                        Name: ui.Strings.Get(id),
+                        Selected: selected
+                    },
+                    OnClick: () -> input.OnSection(id),
+                    MaterialIcons.Create(
+                        switch id {
+                            case "security": "lock"
+                            case "node": "dns"
+                            case "wallet": "account_balance_wallet"
+                            case "advanced": "build"
+                            default: "notes"
+                        },
+                        18,
+                        selected ? ui.Lime: ui.Body
+                    ),
+                    ui.Label(ui.Strings.Get(id), 14, selected ? ui.Lime: ui.Body, "")
                 }
             )
-        )
-        guard let value = draft else {
-            return panel
         }
-        panel.Add(
-            switch settingsTab {
-                case "node": NodeSettings(value)
-                case "wallet": WalletTab(value)
-                default: GeneralSettings()
+        if !input.Available {
+            nav.Add(Container{FlexGrow: 1})
+            nav.Add(ui.Button("Back", input.OnClose, input.Busy))
+        }
+        let header = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            FlexShrink: 0,
+            Padding: Edges{Top: 6, Left: 2, Right: 2, Bottom: 2},
+            ui.Label(ui.Strings.Get(section), 17, ui.Ink, "")
+        }
+        if section == "wallet" && input.Snapshot.ViewOnly {
+            header.Add(ui.Badge(ui.Strings.Get("view-only"), ui.Blue, "key"))
+        }
+        let pane = Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MaxWidth: 820, MinHeight: 0, Gap: 12, header}
+        switch section {
+            case "security": pane.Add(Security(input, settings))
+            case "node": pane.Add(NodeSection(input, settings))
+            case "wallet": WalletSection(input, settings, pane)
+            case "advanced": Advanced(input, pane)
+            default: pane.Add(General(input, settings))
+        }
+        let root = Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: 16,
+            Width: Percent(100),
+            MaxWidth: navWidth + 836,
+            Height: Percent(100),
+            MinHeight: 0,
+            nav,
+            pane
+        }
+        if applyPending {
+            root.Add(ConfirmApply(input))
+        }
+        if dialog.Length > 0 {
+            root.Add(Dialog(input, settings))
+        }
+        return root
+    }
+
+    private func General(input SettingsPageInput, settings WalletSettings) Blob {
+        let ui = input.Ui
+        return Rows(
+            ui,
+            []Container{
+                Line(
+                    ui,
+                    "language",
+                    []Blob{
+                        Segment(
+                            input,
+                            "language",
+                            []string{"en", "zh-Hans"},
+                            []string{"English", "简体中文"},
+                            input.Language,
+                            false,
+                            input.OnLanguage
+                        )
+                    }
+                ),
+                Line(
+                    ui,
+                    "background",
+                    []Blob{
+                        Segment(
+                            input,
+                            "background",
+                            []string{"gyroid", "glyphs", "off"},
+                            []string{"gyroid", "glyphs", "off"},
+                            settings.Background,
+                            false,
+                            id -> Prefer(
+                                input,
+                                value -> {
+                                    value.Background = id
+                                }
+                            )
+                        )
+                    }
+                ),
+                Line(
+                    ui,
+                    "reduce motion",
+                    []Blob{
+                        Toggle(
+                            input,
+                            "reduce motion",
+                            settings.ReduceMotion,
+                            () -> Prefer(
+                                input,
+                                value -> {
+                                    value.ReduceMotion = !settings.ReduceMotion
+                                }
+                            )
+                        )
+                    }
+                ),
+                Line(
+                    ui,
+                    "start in tray",
+                    []Blob{
+                        Toggle(
+                            input,
+                            "start in tray",
+                            settings.StartInTray,
+                            () -> Prefer(
+                                input,
+                                value -> {
+                                    value.StartInTray = !settings.StartInTray
+                                }
+                            )
+                        )
+                    }
+                )
             }
         )
-        let actions = List[Blob]()
-        if !WalletAvailable() {
-            actions.Add(ui.Button("Back", () -> Back(), ui.Working()))
+    }
+
+    private func Security(input SettingsPageInput, settings WalletSettings) Blob {
+        let ui = input.Ui
+        let rows = List[Container]{
+            Line(
+                ui,
+                "auto-lock",
+                []Blob{
+                    Segment(
+                        input,
+                        "auto-lock",
+                        []string{"5", "15", "60", "0"},
+                        []string{"5m", "15m", "1h", "never"},
+                        settings.AutoLockMinutes.ToString(),
+                        false,
+                        id -> ui.Run(input.Session.SaveAutoLockAsync(int32.Parse(id)))
+                    )
+                }
+            ),
+            Line(
+                ui,
+                "lock on minimize",
+                []Blob{
+                    Toggle(
+                        input,
+                        "lock on minimize",
+                        settings.LockOnMinimize,
+                        () -> Prefer(
+                            input,
+                            value -> {
+                                value.LockOnMinimize = !settings.LockOnMinimize
+                            }
+                        )
+                    )
+                }
+            ),
+            Line(
+                ui,
+                "hide values on start",
+                []Blob{
+                    MaterialIcons.Create("visibility_off", 16, ui.Dim),
+                    Toggle(
+                        input,
+                        "hide values on start",
+                        settings.Privacy,
+                        () -> ui.Run(input.Session.SavePrivacyAsync(!settings.Privacy))
+                    )
+                }
+            )
         }
-        if settingsTab != "general" {
-            actions.Add(Container{FlexGrow: 1})
-            actions.Add(
-                ui.Button(
-                    "Save",
-                    () -> SaveSettings(value),
-                    ui.Working() || !value.StartupDiffers(wallet.Settings) && value.LoadError.Length == 0,
-                    true
+        if input.Snapshot.State == "Unlocked" && !input.Snapshot.ViewOnly {
+            rows.Add(
+                Line(
+                    ui,
+                    "recovery phrase",
+                    []Blob{
+                        ui.Label(ui.Strings.Get("12 words"), 14, ui.Dim, ""),
+                        ui.Button("Show", () -> Open("phrase"), input.Busy),
+                        Info(input, "phrase", "About recovery phrase", "The 12 words restore this wallet and can spend it")
+                    }
                 )
             )
         }
-        if actions.Count > 0 {
-            panel.Add(ui.ActionRow(actions.ToArray()))
+        return Rows(ui, rows.ToArray())
+    }
+
+    private func NodeSection(input SettingsPageInput, settings WalletSettings) Blob {
+        let ui = input.Ui
+        let status = input.Node
+        let automatic = settings.NodeMode == "automatic"
+        let height = List[Blob]()
+        if status.Running {
+            height.Add(Value(input, "height", "Height", ui.Count(status.Height), 14, ui.Mint))
+            if status.Syncing {
+                height.Add(ui.Label("/ " + ui.Count(status.ChainHeight), 14, ui.Dim, ""))
+            }
+            height.Add(ui.Label(ui.Strings.Get("{0} peers").Replace("{0}", ui.Count(status.Peers)), 14, ui.Dim, ""))
+        } else {
+            height.Add(ui.Label(ui.Strings.Get("Stopped"), 14, ui.Dim, ""))
+            if automatic && status.Progress.Length == 0 {
+                height.Add(ui.Button("Start", () -> ui.Run(input.Session.StartNodeAsync()), input.Busy))
+            }
         }
-        return panel
-    }
-
-    private func Setting(label string, control Blob) Blob -> Container{
-        Gap: Theme.Read().ControlGap,
-        FlexShrink: 0,
-        AlignItems: AlignItems.FlexStart,
-        ui.Label(ui.Strings.Get(label), Theme.Read().LabelFontSize, ui.Body),
-        control
-    }
-
-    private func Choice(
-        key string,
-        label string,
-        options[]ToggleOption,
-        selected string,
-        disabled bool,
-        chosen Action[string]
-    ) Blob -> Setting(
-        label,
-        Cell.Mount[ToggleGroupInput, ToggleGroup](
-            key,
-            ToggleGroupInput{
-                Items: options,
-                SelectedIds: []string{selected},
-                AccessibilityName: ui.Strings.Get(label),
-                Disabled: disabled || ui.Working(),
-                OnChange: ids -> {
-                    if ids.Length > 0 {
-                        chosen(ids[0])
+        let core = List[Blob]{ui.Label("v" + CoreRelease.Version, 14, ui.Ink, "")}
+        if status.Owned && automatic {
+            core.Add(
+                ui.Button(
+                    "Restart",
+                    () -> ui.Run(input.Session.RestartNodeAsync()),
+                    input.Busy || input.Snapshot.State != "Unloaded"
+                )
+            )
+        }
+        let upgrade = List[Blob]{ui.Label(ui.Count(CoreRelease.UpgradeHeight), 14, ui.Orange, "")}
+        if status.UpgradeDate.Length > 0 {
+            upgrade.Add(ui.Label(status.UpgradeDate, 14, ui.Dim, ""))
+        }
+        if status.UpgradeNotice.Length > 0 {
+            upgrade.Add(Info(input, "upgrade", "Network upgrade", status.UpgradeNotice))
+        }
+        let folder = if status.DataDirectory.Length > 0 {
+            status.DataDirectory
+        } else {
+            settings.DataDirectory
+        }
+        let list = Rows(
+            ui,
+            []Container{
+                Line(
+                    ui,
+                    "mode",
+                    []Blob{
+                        Segment(
+                            input,
+                            "mode",
+                            []string{"automatic", "manual"},
+                            []string{"automatic", "existing node"},
+                            settings.NodeMode,
+                            Pinned("NODE_MODE"),
+                            id -> ui.Run(input.Session.SaveNodeModeAsync(id))
+                        ),
+                        Info(input, "mode", "About node mode", "Automatic runs the verified core. Existing node uses a node you run")
                     }
-                }
+                ),
+                Line(ui, "height", height.ToArray()),
+                Line(ui, "core", core.ToArray()),
+                Line(ui, "network upgrade", upgrade.ToArray()),
+                Line(
+                    ui,
+                    "data folder",
+                    []Blob{
+                        ui.Label(Shorten(folder), 14, ui.Dim, ""),
+                        ui.Button(
+                            "Open",
+                            () -> ui.Run(
+                                Task.Run(
+                                    () -> {
+                                        let start = ProcessStartInfo(
+                                            if OperatingSystem.IsWindows() {
+                                                "explorer.exe"
+                                            } else if OperatingSystem.IsMacOS() {
+                                                "open"
+                                            } else {
+                                                "xdg-open"
+                                            }
+                                        )
+                                        start.ArgumentList.Add(folder)
+                                        Process.Start(start)?.Dispose()
+                                    }
+                                )
+                            ),
+                            input.Busy || !Directory.Exists(folder)
+                        )
+                    }
+                )
             }
         )
-    )
-
-    private func Reading(label string, value string, color Color) Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Baseline,
-        Gap: 12,
-        FlexShrink: 0,
-        Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-        Container{Width: 88, FlexShrink: 0, ui.Label(ui.Strings.Get(label), 12, ui.Body, "")},
-        ui.Grow(ui.Label(value, 13, color, ""))
-    }
-
-    private func GeneralSettings() Blob -> Container{
-        Gap: 20,
-        FlexShrink: 0,
-        Choice(
-            "language",
-            "Language",
-            []ToggleOption{
-                ToggleOption{Id: "en", Label: ui.Strings.Get("English")},
-                ToggleOption{Id: "zh-Hans", Label: ui.Strings.Get("中文")}
-            },
-            ui.Strings.Language,
-            false,
-            id -> SetLanguage(id)
-        ),
-        Choice(
-            "auto-lock",
-            "Auto-lock",
-            []string{"0", "5", "15", "30", "60"}.Select(
-                (minutes string) -> ToggleOption{
-                    Id: minutes,
-                    Label: if minutes == "0" {
-                        ui.Strings.Get("Off")
-                    } else {
-                        minutes + " " + ui.Strings.Get("min")
-                    }
-                }
-            )
-                .ToArray(),
-            wallet.Settings.AutoLockMinutes.ToString(),
-            false,
-            id -> Run(wallet.SaveAutoLockAsync(int32.Parse(id)))
-        ),
-        Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 12,
-            FlexShrink: 0,
-            ToggleSwitch{
-                Checked: ui.Privacy,
-                AccessibilityName: ui.Strings.Get("Privacy"),
-                OnClick: () -> TogglePrivacy()
-            }.Build(),
-            ui.Label(ui.Strings.Get("Privacy"), 14, ui.Ink)
-        }
-    }
-
-    private func NodeSettings(value WalletSettings) Blob {
-        let status = wallet.Node.Status
-        let current = wallet.Settings
-        let loaded = wallet.Snapshot.State != "Unloaded"
-        let left = Container{
-            Gap: 16,
-            FlexGrow: 1,
-            FlexBasis: 0,
-            MinWidth: 0,
-            Choice(
-                "node-mode",
-                "Node mode",
-                []ToggleOption{
-                    ToggleOption{Id: "automatic", Label: ui.Strings.Get("Automatic")},
-                    ToggleOption{Id: "manual", Label: ui.Strings.Get("Manual")}
-                },
-                current.NodeMode,
-                Pinned("NODE_MODE"),
-                id -> Run(wallet.SaveNodeModeAsync(id))
-            ),
-            Container{
-                Gap: 8,
+        list.Add(
+            Goo.Button{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 10,
+                Height: 52,
                 FlexShrink: 0,
-                Reading("Source", ui.Strings.Get(status.Source), ui.Ink),
-                if Phase().Length > 0 {
-                    Reading("State", PhaseText(), ui.Lime)
-                } else if status.Running {
-                    Reading("State", ui.Strings.Get("Running"), ui.Lime)
-                } else {
-                    Reading("State", ui.Strings.Get("Stopped"), ui.Body)
+                BorderWidth: Edges{Top: 1},
+                BorderColor: Color.Parse("#141414"),
+                Focus: Theme.Read().FocusStyle,
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.Button,
+                    Name: ui.Strings.Get("startup"),
+                    Expanded: startupOpen
                 },
-                Reading(
-                    "Version",
-                    if status.Version.Length > 0 {
-                        status.Version
-                    } else {
-                        "-"
-                    },
-                    ui.Ink
-                ),
-                Reading(
-                    "Network",
-                    ui.Strings.Get(
-                        if status.Network == "testnet" {
-                            "Testnet"
-                        } else {
-                            "Mainnet"
-                        }
-                    ),
-                    ui.Ink
-                ),
-                Reading(
-                    "Height",
-                    if !status.Running {
-                        "-"
-                    } else if status.Syncing {
-                        ui.Count(status.Height) + " / " + ui.Count(status.ChainHeight)
-                    } else {
-                        ui.Count(status.Height)
-                    },
-                    ui.Ink
-                ),
-                Reading(
-                    "Peers",
-                    if status.Running {
-                        ui.Count(status.Peers)
-                    } else {
-                        "-"
-                    },
-                    ui.Ink
-                ),
-                Reading("Node URL", status.Endpoint, ui.Ink),
-                Reading("Data", status.DataDirectory, ui.Ink)
+                OnClick: () -> {
+                    startupOpen = !startupOpen
+                    Rebuild()
+                },
+                ui.Grow(ui.Label(ui.Strings.Get("startup"), 14, ui.Body, "")),
+                MaterialIcons.Create(startupOpen ? "expand_less": "expand_more", 18, ui.Dim)
+            }
+        )
+        if startupOpen {
+            if let value = draft {
+                list.Add(Startup(input, settings, value))
             }
         }
-        let actions = Container{FlexDirection: FlexDirection.Row, Gap: 8, FlexShrink: 0}
-        if !status.Running && current.NodeMode == "automatic" && wallet.Node.Status.Progress.Length == 0 {
-            actions.Add(ui.Button("Start", () -> Run(wallet.StartNodeAsync()), ui.Working()))
-        }
-        if status.Owned {
-            actions.Add(ui.Button("Stop", () -> Run(wallet.StopNodeAsync()), ui.Working() || loaded))
-            if current.NodeMode == "automatic" {
-                actions.Add(ui.Button("Restart", () -> Run(wallet.RestartNodeAsync()), ui.Working() || loaded))
-            }
-        }
-        left.Add(actions)
+        return list
+    }
+
+    private func Startup(input SettingsPageInput, settings WalletSettings, value WalletSettings) Blob {
+        let ui = input.Ui
         let fields = Container{
-            Gap: 16,
-            FlexGrow: 1,
-            FlexBasis: 0,
-            MinWidth: 0,
-            Choice(
-                "network",
+            Gap: 14,
+            FlexShrink: 0,
+            Padding: Edges{Bottom: 14},
+            Segment(
+                input,
                 "Network",
-                []ToggleOption{
-                    ToggleOption{Id: "mainnet", Label: ui.Strings.Get("Mainnet")},
-                    ToggleOption{Id: "testnet", Label: ui.Strings.Get("Testnet")}
-                },
+                []string{"mainnet", "testnet"},
+                []string{"Mainnet", "Testnet"},
                 value.Network,
                 Pinned("NETWORK"),
                 id -> {
@@ -292,15 +494,23 @@ partial class App {
                 disabled: Pinned("ENDPOINT")
             ),
             PathField(
+                input,
                 "Data",
                 value.DataDirectory,
                 FileDialogKind.Folder,
-                text -> {
-                    value.DataDirectory = text
-                },
+                text -> value.DataDirectory = text,
                 Pinned("DATA_DIR")
             ),
             PathField(
+                input,
+                "Wallets",
+                value.WalletDirectory,
+                FileDialogKind.Folder,
+                text -> value.WalletDirectory = text,
+                Pinned("WALLET_DIR")
+            ),
+            PathField(
+                input,
                 "Node program",
                 value.BinaryPath,
                 FileDialogKind.OpenFile,
@@ -312,7 +522,7 @@ partial class App {
                 programIssue
             )
         }
-        if status.Source != "External" && current.DataDirectory != current.DiscoveredDataDirectory {
+        if input.Node.Source != "External" && settings.DataDirectory != settings.DiscoveredDataDirectory {
             fields.Add(
                 ui.Field(
                     "P2P address",
@@ -327,344 +537,753 @@ partial class App {
                 )
             )
         }
-        return Container{FlexDirection: FlexDirection.Row, Gap: 24, MinHeight: 0, FlexShrink: 1, left, fields}
+        fields.Add(
+            ui.ActionRow(
+                []Blob{
+                    ui.Button(
+                        "Save",
+                        () -> SaveSettings(input),
+                        input.Busy || !value.StartupDiffers(settings) && settings.LoadError.Length == 0,
+                        true
+                    )
+                }
+            )
+        )
+        return fields
     }
 
-    private func WalletTab(value WalletSettings) Blob {
-        let tab = Container{
-            Gap: 16,
-            FlexShrink: 0,
-            PathField(
-                "Wallets",
-                value.WalletDirectory,
-                FileDialogKind.Folder,
-                text -> {
-                    value.WalletDirectory = text
-                },
-                Pinned("WALLET_DIR")
+    private func WalletSection(input SettingsPageInput, settings WalletSettings, pane Container) {
+        let ui = input.Ui
+        let scan = List[Blob]()
+        if let balance = input.Snapshot.Balance {
+            scan.Add(Value(input, "scan", "scan height", ui.Count(balance.ScanHeight), 14, ui.Ink))
+        }
+        if rescan?.IsCompleted == false {
+            scan.Add(
+                Cell.Mount[SpinnerInput, Spinner](
+                    "rescan",
+                    SpinnerInput{Size: 16, Color: ui.Lime, Label: ui.Strings.Get("Scanning")}
+                )
             )
         }
-        if wallet.Snapshot.State == "Unlocked" && !wallet.Snapshot.ViewOnly {
-            tab.Add(
+        scan.Add(
+            ui.Button(
+                "Rescan",
+                () -> {
+                    let task = input.Session.SyncAsync()
+                    rescan = task
+                    ui.Run(task)
+                },
+                input.Busy
+            )
+        )
+        scan.Add(Info(input, "rescan", "About rescan", "Scan blocks the wallet has not checked yet"))
+        let rows = List[Container]{
+            Line(ui, "scan height", scan.ToArray()),
+            Line(
+                ui,
+                "output health",
+                []Blob{
+                    ui.Button("Check", () -> input.OnNavigate("Tools"), input.Busy),
+                    Info(
+                        input,
+                        "health",
+                        "About output health",
+                        "Checks every wallet output against the main chain. Repair removes outputs whose block or transaction is no longer on it"
+                    )
+                }
+            )
+        }
+        if !input.Snapshot.ViewOnly {
+            rows.Add(
+                Line(
+                    ui,
+                    "view key",
+                    []Blob{ui.Label("••••••••", 14, ui.Dim, ""), ui.Button("Show", () -> Open("view-key"), input.Busy)}
+                )
+            )
+            rows.Add(Line(ui, "keys file", []Blob{ui.Button("Export…", () -> Open("view-key"), input.Busy)}))
+            rows.Add(
+                Line(
+                    ui,
+                    "view-only wallet",
+                    []Blob{
+                        ui.Button(
+                            "Create…",
+                            () -> {
+                                viewOnlyName = settings.ActiveWallet.Replace(".wallet.dat", "") + ".view.wallet.dat"
+                                viewOnlyCreated = ""
+                                Open("view-only")
+                            },
+                            input.Busy
+                        ),
+                        Info(
+                            input,
+                            "view-only-info",
+                            "About view-only wallets",
+                            "A view-only wallet sees incoming payments but cannot send"
+                        )
+                    }
+                )
+            )
+        }
+        rows.Add(
+            Line(
+                ui,
+                "wallet file",
+                []Blob{
+                    ui.Label(Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)), 14, ui.Dim, ""),
+                    ui.Button("Switch wallet", () -> ui.Run(input.Session.UnloadAsync()), input.Busy)
+                }
+            )
+        )
+        pane.Add(Rows(ui, rows.ToArray()))
+        if input.Snapshot.ViewOnly {
+            let note = Card(ui)
+            note.FlexDirection = FlexDirection.Row
+            note.AlignItems = AlignItems.Center
+            note.Gap = 10
+            note.FlexShrink = 0
+            note.Add(MaterialIcons.Create("warning", 16, ui.Body))
+            note.Add(ui.Label(ui.Strings.Get("Balance counts received coins. Spends need the spend key"), 13, ui.Ink, ""))
+            pane.Add(note)
+        }
+    }
+
+    private func Advanced(input SettingsPageInput, pane Container) {
+        let ui = input.Ui
+        let status = input.Node
+        let figure = Math.Clamp(input.Height * 0.065, 26.0, 64.0)
+        let used = if dataSize > 0 {
+            Math.Max(1, int32(Math.Round(40.0 * float64(dataSize) / float64(dataSize + freeSpace))))
+        } else {
+            0
+        }
+        let data = Instrument(input, "chain data", "data", "About chain data", "Block data the node keeps on this disk")
+        data.Add(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Baseline,
+                Gap: 12,
+                FlexShrink: 0,
+                Value(input, "size", "chain data", sizeText, figure, ui.Ink),
+                ui.Label(sizeUnit, 15, ui.Body, ""),
+                ui.Label(ui.Strings.Get("{0} GB free").Replace("{0}", (freeSpace / 1000000000).ToString()), 12.5, ui.Dim, "")
+            }
+        )
+        data.Add(
+            Grid(
+                input,
+                ui.Strings.Get("chain data") + " " + sizeText + " " + sizeUnit,
+                4,
+                nil,
+                index -> Slot(ui, index < used ? ui.Blue: ui.Rule, 1)
+            )
+        )
+        let purgeRow = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexShrink: 0}
+        if dataWallets > 0 {
+            purgeRow.Add(
+                ui.Status(
+                    ui.Strings.Get("{0} wallets inside").Replace("{0}", dataWallets.ToString()),
+                    ui.Orange,
+                    "warning"
+                )
+            )
+        }
+        purgeRow.Add(Container{FlexGrow: 1})
+        purgeRow.Add(
+            (
+                Theme.Read().Button with{
+                    Content = ui.Strings.Get("Purge…"),
+                    OnClick = () -> {
+                        purgeText = ""
+                        Open("purge")
+                    },
+                    Disabled = input.Busy || !status.Owned || dataSize < 0,
+                    BorderColor = ui.Pink,
+                    FontFamily = ui.Font
+                }
+            ).Build()
+        )
+        data.Add(purgeRow)
+        let tip = Math.Max(status.Height, certificate?.Height ?? uint64(0))
+        var step uint64 = 100
+        for candidate in[]uint64{250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000} {
+            if step * 30 < tip {
+                step = candidate
+            }
+        }
+        let checks = Instrument(
+            input,
+            "certify",
+            "certify",
+            "About certify",
+            "Checks block links, difficulty and timestamps. Does not re-check proof of work or transactions"
+        )
+        let verdict = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Baseline, Gap: 12, FlexShrink: 0}
+        let wide = Math.Clamp(input.Height * 0.05, 22.0, 48.0)
+        if let result = certificate {
+            let clean = result.Violations.Length == 0
+            verdict.Add(
+                ui.Label(
+                    clean ? ui.Strings.Get("clean"): ui.Strings.Get("{0} violations").Replace(
+                        "{0}",
+                        result.Violations.Length.ToString()
+                    ),
+                    wide,
+                    clean ? ui.Mint: ui.Pink,
+                    ""
+                )
+            )
+            verdict.Add(
+                ui.Label(
+                    ui.Count(result.Height) + " · " + result.Time.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    12.5,
+                    ui.Dim,
+                    ""
+                )
+            )
+        } else {
+            verdict.Add(ui.Label(ui.Strings.Get("not checked"), wide, ui.Dim, ""))
+        }
+        checks.Add(verdict)
+        let checked = certificate?.Height ?? uint64(0)
+        checks.Add(
+            Grid(
+                input,
+                ui.Strings.Get("certify") + " " + ui.Count(checked),
+                3,
+                []string{Short(0), Short(step * 10), Short(step * 20)},
+                index -> {
+                    let first = uint64(index) * step
+                    let bad = certificate?.Violations.Any((height uint64) -> height >= first && height < first + step) ==
+                        true
+                    return if bad {
+                        Slot(ui, ui.Pink, 1)
+                    } else if checked > first {
+                        Slot(ui, Color.Parse("#048f5f"), Math.Min(1.0, float64(checked - first) / float64(step)))
+                    } else {
+                        Slot(ui, ui.Rule, 0)
+                    }
+                }
+            )
+        )
+        checks.Add(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 8,
+                FlexShrink: 0,
+                ui.Label(
+                    if let result = certificate {
+                        ui.Strings.Get("{0} violations").Replace("{0}", result.Violations.Length.ToString())
+                    } else {
+                        ""
+                    },
+                    12.5,
+                    ui.Dim,
+                    ""
+                ),
+                Container{FlexGrow: 1},
+                ui.Button(
+                    "Certify",
+                    () -> {
+                        let task = input.Session.CertifyAsync()
+                        ui.Run(
+                            task,
+                            () -> {
+                                certificate = task.Result
+                            }
+                        )
+                    },
+                    input.Busy
+                )
+            }
+        )
+        pane.Add(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                Gap: 12,
+                FlexGrow: 1,
+                FlexBasis: 0,
+                MinHeight: 0,
+                data,
+                checks
+            }
+        )
+        pane.Add(Checkpoint(input, figure))
+    }
+
+    private func Checkpoint(input SettingsPageInput, figure float64) Blob {
+        let ui = input.Ui
+        let tip = input.Node.Height
+        let start = localCheckpoint - localCheckpoint % 1000
+        let card = Card(ui)
+        card.FlexShrink = 0
+        card.Add(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 8,
+                FlexShrink: 0,
+                ui.Label(ui.Strings.Get("checkpoint"), 12, ui.Body, ""),
+                Container{FlexGrow: 1},
+                Info(
+                    input,
+                    "checkpoint-info",
+                    "About checkpoints",
+                    "Save writes a checkpoint every 100 blocks. Load lets sync skip proof-of-work checks up to the last checkpoint"
+                )
+            }
+        )
+        card.Add(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.FlexEnd,
+                Gap: 8,
+                FlexShrink: 0,
+                Value(input, "checkpoint", "checkpoint", ui.Count(localCheckpoint), figure, ui.Ink),
+                Container{FlexGrow: 1},
                 Container{
                     FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.FlexEnd,
+                    AlignItems: AlignItems.Center,
                     Gap: 8,
-                    FlexShrink: 0,
-                    ui.Grow(
-                        Container{
-                            MinWidth: 0,
-                            ui.Field(
-                                "Password",
-                                revealPassword,
-                                text -> {
-                                    revealPassword = text
-                                    Rebuild()
-                                },
-                                () -> RevealSeed(),
-                                true
-                            )
-                        }
-                    ),
-                    ui.Button("Show phrase", () -> RevealSeed(), ui.Working() || revealPassword.Length == 0, true),
-                    ui.Button("View keys", () -> ExportViewKeys(), ui.Working() || revealPassword.Length == 0)
+                    ui.Label(ui.Strings.Get("auto save"), 12, ui.Body, ""),
+                    ToggleSwitch{
+                        Checked: autoSave == true,
+                        Disabled: autoSave == nil || input.Busy,
+                        AccessibilityName: ui.Strings.Get("auto save"),
+                        OnClick: () -> Checkpoints(input, input.Session.CheckpointAutoSaveAsync(autoSave != true))
+                    }.Build(),
+                    ui.Button("Save", () -> Checkpoints(input, input.Session.CheckpointsAsync("save")), input.Busy),
+                    ui.Button("Load", () -> Checkpoints(input, input.Session.CheckpointsAsync("load")), input.Busy)
+                }
+            }
+        )
+        let bar = Container{
+            Position: PositionType.Relative,
+            FlexShrink: 0,
+            Height: 42,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Image,
+                Name: ui.Strings.Get("checkpoint") + " " + ui.Count(localCheckpoint) + " / " + ui.Count(tip)
+            }
+        }
+        let slots = Container{
+            Position: PositionType.Absolute,
+            Top: 6,
+            Left: 0,
+            Right: 0,
+            Height: 10,
+            FlexDirection: FlexDirection.Row,
+            Gap: 4
+        }
+        for index in 0 ... 10 {
+            let first = start + uint64(index) * 100
+            slots.Add(
+                if localCheckpoint >= first + 100 {
+                    Slot(ui, Color.Parse("#598304"), 1)
+                } else if tip > first {
+                    Slot(ui, ui.Orange, Math.Min(1.0, float64(tip - first) / 100))
+                } else {
+                    Slot(ui, ui.Rule, 0)
                 }
             )
         }
-        let actions = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexShrink: 0}
-        if wallet.Snapshot.State == "Unlocked" {
-            tab.Add(
-                Explainer(
-                    "About view-only wallets",
-                    "A view-only wallet sees incoming payments but cannot send",
-                    []string{
-                        "View keys show incoming payments only",
-                        "A view-only wallet cannot send or sign",
-                        "It cannot see spends, so balance may be high",
-                        "Share view keys only with people you trust"
-                    }
-                )
+        bar.Add(slots)
+        if tip > start {
+            bar.Add(
+                Container{
+                    Position: PositionType.Absolute,
+                    Top: 1,
+                    Left: Percent(Math.Min(1.0, float64(tip - start) / 1000) * 100),
+                    Width: 2,
+                    Height: 20,
+                    BackgroundColor: ui.Ink
+                }
             )
-            tab.Add(
-                Explainer(
-                    "About rescan",
-                    "Scan blocks the wallet has not checked yet",
-                    []string{
-                        "Finds new payments and spends",
-                        "Then updates the balance",
-                        "If the wallet is up to date, nothing changes",
-                        "Nothing is sent and no coins move"
-                    }
-                )
+        }
+        if trustedCheckpoint > 0 {
+            bar.Add(
+                Container{
+                    Position: PositionType.Absolute,
+                    Bottom: 0,
+                    Left: 0,
+                    ui.Label(ui.Strings.Get("trusted") + " " + ui.Count(trustedCheckpoint), 12, ui.Blue, "")
+                }
             )
-            actions.Add(ui.Button("Sync", () -> Rescan(), ui.Working()))
-            if rescan?.IsCompleted == false {
-                actions.Add(
-                    Cell.Mount[SpinnerInput, Spinner](
-                        if PlaybackActive() {
-                            "rescan"
-                        } else {
-                            "rescan-idle"
-                        },
-                        SpinnerInput{Size: 16, Color: ui.Lime, Label: ui.Strings.Get("Scanning")}
-                    )
-                )
-                actions.Add(ui.Label(ui.Strings.Get("Scanning"), 13, ui.Body, ""))
+        }
+        bar.Add(
+            Container{
+                Position: PositionType.Absolute,
+                Bottom: 0,
+                Right: 0,
+                ui.Label(ui.Strings.Get("next") + " " + ui.Count(localCheckpoint + 100), 12, ui.Dim, "")
             }
-        }
-        actions.Add(Container{FlexGrow: 1})
-        if wallet.Snapshot.State == "Unlocked" && !wallet.Snapshot.ViewOnly {
-            actions.Add(
-                ui.Button(
-                    "Create view-only",
-                    () -> {
-                        ClearSecrets()
-                        name = ""
-                        error = ""
-                        viewOnlyOpen = true
-                        Rebuild()
-                    },
-                    ui.Working()
-                )
-            )
-        }
-        if wallet.Snapshot.Page != "Welcome" {
-            actions.Add(ui.Button("Switch wallet", () -> Run(wallet.UnloadAsync()), ui.Working()))
-        }
-        tab.Add(actions)
-        return tab
+        )
+        card.Add(bar)
+        return card
     }
 
-    private func SaveSettings(value WalletSettings) {
-        listenIssue = WalletSettings.ListenError(value.ListenAddress)
-        programIssue = if value.BinaryPath != wallet.Settings.BinaryPath && value.BinaryPath.Length > 0 {
-            NodeDiscovery.ProgramError(value.BinaryPath)
-        } else {
-            ""
-        }
-        if listenIssue.Length > 0 || programIssue.Length > 0 {
-            settingsTab = "node"
-            Rebuild()
-            return
-        }
-        if wallet.Snapshot.State != "Unloaded" && !applyPending {
-            applyPending = true
-            Rebuild()
-            return
-        }
-        applyPending = false
-        Run(
-            wallet.ApplySettingsAsync(value.Copy()),
+    private func Checkpoints(input SettingsPageInput, task Task) {
+        input.Ui.Run(
+            task,
             () -> {
-                draft = nil
-                screen = ""
+                chainLoaded = false
             }
         )
     }
 
-    private func ConfirmApply(value WalletSettings) Blob {
-        let close Action = () -> {
-            applyPending = false
-            Rebuild()
-        }
-        return ModalDialog{
-            Open: true,
-            CreateRoot: ui.DialogRoot,
-            AccessibilityName: ui.Strings.Get("Apply settings"),
-            Width: Math.Min(width - 48, 420),
-            Content: ui.Label(ui.Strings.Get("Apply settings"), 18, ui.Ink, ""),
-            ConfirmText: ui.Strings.Get(
-                if wallet.Snapshot.State == "Unlocked" {
-                    "Lock and apply"
-                } else {
-                    "Apply"
-                }
-            ),
-            CancelText: ui.Strings.Get("Cancel"),
-            ConfirmDisabled: ui.Working(),
-            OnConfirm: () -> SaveSettings(value),
-            OnCancel: close,
-            OnClose: close
-        }.Build()
+    private func Instrument(input SettingsPageInput, title string, key string, topic string, line string) Container {
+        let ui = input.Ui
+        let card = Card(ui)
+        card.FlexGrow = 1
+        card.FlexBasis = 0
+        card.Add(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 8,
+                FlexShrink: 0,
+                ui.Label(ui.Strings.Get(title), 12, ui.Body, ""),
+                Container{FlexGrow: 1},
+                Info(input, key, topic, line)
+            }
+        )
+        return card
     }
 
-    private async func SetLanguage(language string) {
-        ui.Strings.Language = language
-        if let value = draft {
-            value.Language = language
-        }
-        ui.Decoding.Clear()
-        tray?.Update(TraySettings())
-        Rebuild()
-        try {
-            await wallet.SaveLanguageAsync(language)
-        } catch (failure Exception) {
-            window?.TryPost(
-                () -> {
-                    error = "Language setting could not be saved"
-                    Rebuild()
-                }
-            )
-        }
-    }
-
-    private func PathField(
-        label string,
-        current string,
-        kind FileDialogKind,
-        changed Action[string],
-        disabled bool,
-        issue string = ""
+    private func Grid(
+        input SettingsPageInput,
+        name string,
+        rows int32,
+        labels[]?string,
+        slot Func[int32, Blob]
     ) Blob {
-        let input = Container{}
-        input.Add(
+        let grid = Container{
+            FlexGrow: 1,
+            MinHeight: 0,
+            JustifyContent: JustifyContent.Center,
+            Gap: Math.Clamp(input.Height * 0.01, 4.0, 8.0),
+            Accessibility: Accessibility{Role: AccessibilityRole.Image, Name: name}
+        }
+        for row in 0 ... rows {
+            let line = Container{
+                FlexDirection: FlexDirection.Row,
+                Gap: 10,
+                FlexGrow: 1,
+                FlexBasis: 0,
+                MinHeight: 8,
+                MaxHeight: 44
+            }
+            if let names = labels {
+                line.Add(
+                    Container{
+                        Width: 34,
+                        AlignItems: AlignItems.FlexEnd,
+                        JustifyContent: JustifyContent.Center,
+                        input.Ui.Label(names[row], 11, input.Ui.Dim, "")
+                    }
+                )
+            }
+            let cells = Container{FlexDirection: FlexDirection.Row, Gap: 4, FlexGrow: 1}
+            for column in 0 ... 10 {
+                cells.Add(slot(row * 10 + column))
+            }
+            line.Add(cells)
+            grid.Add(line)
+        }
+        return grid
+    }
+
+    private func Slot(ui Presentation, color Color, share float64) Blob -> Container{
+        FlexGrow: 1,
+        FlexBasis: 0,
+        BorderRadius: 1,
+        Overflow: Overflow.Hidden,
+        BackgroundColor: ui.Rule,
+        Container{Width: Percent(share * 100), Height: Percent(100), BackgroundColor: color}
+    }
+
+    private func Short(height uint64) string -> if height >= 1000 && height % 1000 == 0 {
+        (height / 1000).ToString() + "k"
+    } else {
+        height.ToString()
+    }
+
+    private async func LoadChain(session WalletSession) {
+        let settings = session.Settings
+        await Task.Run(
+            () -> {
+                let data = DirectoryInfo(settings.DataDirectory)
+                var size int64 = 0
+                var wallets int32 = 0
+                var local uint64 = 0
+                if data.Exists {
+                    for file in data.EnumerateFiles(
+                        "*",
+                        EnumerationOptions{
+                            RecurseSubdirectories: true,
+                            IgnoreInaccessible: true,
+                            AttributesToSkip: FileAttributes.ReparsePoint
+                        }
+                    ) {
+                        size += file.Length
+                    }
+                    try {
+                        wallets = session.Library.DataWallets().Count
+                    } catch (failure Exception) {
+                        wallets = -1
+                    }
+                    let saved = FileInfo(Path.Combine(data.FullName, "checkpoints.dat"))
+                    if saved.Exists && saved.Length <= 1048576 {
+                        local = Checkpoints.Height(Checkpoints.Parse(File.ReadAllBytes(saved.FullName)))
+                    }
+                }
+                freeSpace = DriveInfo(
+                    if OperatingSystem.IsWindows() {
+                        Path.GetPathRoot(data.FullName) ?? data.FullName
+                    } else if data.Exists {
+                        data.FullName
+                    } else {
+                        data.Parent?.FullName ?? "/"
+                    }
+                ).AvailableFreeSpace
+                trustedCheckpoint = if settings.Network == "mainnet" {
+                    Checkpoints.Height(Checkpoints.Parse(Resources.Resource("Gyroid.Checkpoints.Mainnet")))
+                } else {
+                    0
+                }
+                dataSize = size
+                sizeUnit = size >= 1000000000 ? "GB": "MB"
+                sizeText = (float64(size) / (size >= 1000000000 ? 1e9: 1e6)).ToString(
+                    "0.0",
+                    CultureInfo.InvariantCulture
+                )
+                dataWallets = wallets
+                localCheckpoint = local
+            }
+        )
+        try {
+            autoSave = await session.CheckpointAutoSaveAsync(nil)
+        } catch (failure Exception) {
+            autoSave = nil
+        }
+    }
+
+    private func Open(kind string) {
+        dialog = kind
+        password = ""
+        passwordIssue = ""
+        Rebuild()
+    }
+
+    private func Close() {
+        viewKeys?.Dispose()
+        viewKeys = nil
+        viewPrivateShown = false
+        dialog = ""
+        password = ""
+        passwordIssue = ""
+        viewOnlyPassword = ""
+        Rebuild()
+    }
+
+    private func Dialog(input SettingsPageInput, settings WalletSettings) Blob {
+        let ui = input.Ui
+        let close Action = () -> Close()
+        if dialog == "purge" {
+            return Purge(input, settings)
+        }
+        if dialog == "view-only" {
+            return ViewOnly(input, settings)
+        }
+        if let keys = viewKeys {
+            return Keys(input, keys)
+        }
+        let submit Action = () -> Reveal(input)
+        let title = dialog == "phrase" ? "recovery phrase": "view keys"
+        return Modal(
+            input,
+            "password",
+            title,
+            420,
+            ui.Label(ui.Strings.Get(title), 17, ui.Ink, ""),
             ui.Field(
-                label,
-                current,
-                text -> {
-                    changed(text)
+                "Password",
+                password,
+                value -> {
+                    password = value
+                    passwordIssue = ""
                     Rebuild()
                 },
-                issue: issue,
-                disabled: disabled,
-                labelled: false
-            )
+                submit,
+                true,
+                passwordIssue
+            ),
+            ui.ActionRow(
+                []Blob{
+                    ui.Button("Cancel", close),
+                    ui.Button("Show", submit, input.Busy || password.Length == 0, true)
+                }
+            ),
+            close
         )
-        let row = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.FlexStart,
-            AlignSelf: AlignSelf.Stretch,
-            Gap: 8,
-            FlexShrink: 0
-        }
-        row.Add(ui.Grow(input))
-        row.Add(
-            ui.Button(
-                "Browse",
-                () -> ChooseFile(
-                    kind,
-                    label,
-                    if Path.IsPathFullyQualified(current) {
-                        current
-                    } else {
-                        Home()
-                    },
-                    path -> {
-                        changed(path)
-                        Rebuild()
-                    }
-                ),
-                disabled || ui.Working()
-            )
-        )
-        return Setting(label, row)
     }
 
-    private var revealPassword string = ""
-
-    private func RevealSeed() {
-        if ui.Working() || revealPassword.Length == 0 {
+    private func Reveal(input SettingsPageInput) {
+        if input.Busy || password.Length == 0 {
             return
         }
-        let buffer = revealPassword.ToCharArray()
-        revealPassword = ""
-        seedFromWallet = true
-        Run(wallet.Keys.RevealSeedAsync(buffer), nil, buffer)
-    }
-
-    private var rescan Task?
-
-    private var filePassword string = ""
-
-    private var name string = ""
-
-    private var password string = ""
-
-    private var confirmation string = ""
-
-    private var passwordIssue string = ""
-
-    private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-
-    private var viewKeys WalletViewKeys?
-
-    private var viewKeysVisible bool
-
-    private var viewOnlyOpen bool
-
-    private var viewOnlyCreated string = ""
-
-    private func Rescan() {
-        let task = wallet.SyncAsync()
-        rescan = task
-        Run(task)
-    }
-
-    private func ExportViewKeys() {
-        if ui.Working() || revealPassword.Length == 0 {
+        let buffer = password.ToCharArray()
+        password = ""
+        if dialog == "phrase" {
+            dialog = ""
+            input.OnRevealSeed(buffer)
             return
         }
-        let buffer = revealPassword.ToCharArray()
-        revealPassword = ""
-        let task = wallet.Keys.ExportViewKeysAsync(buffer)
-        Run(
+        let task = LoadKeys(input.Session, buffer)
+        input.Ui.Run(
             task,
             () -> {
                 viewKeys = task.Result
-            },
-            buffer
-        )
-    }
-
-    private func ViewKeysDialog(keys WalletViewKeys) Blob {
-        let close Action = () -> {
-            ClearSecrets()
-            Rebuild()
-        }
-        return Cell.Mount[ModalDialog, ModalDialogHost](
-            "view-keys",
-            ModalDialog{
-                Open: true,
-                CreateRoot: ui.DialogRoot,
-                AccessibilityName: ui.Strings.Get("View keys"),
-                Width: Math.Min(width - 48, 600),
-                Header: ui.Label(ui.Strings.Get("View keys"), 18, ui.Ink, ""),
-                Content: Container{
-                    Gap: 14,
-                    ViewKey("Spend public key", keys.SpendPublic),
-                    ViewKey("View private key", keys.ViewPrivate)
-                },
-                Footer: ui.ActionRow(
-                    []Blob{
-                        ui.Button(
-                            viewKeysVisible ? "Hide": "Reveal",
-                            () -> {
-                                viewKeysVisible = !viewKeysVisible
-                                Rebuild()
-                            }
-                        ),
-                        ui.Button("Close", close)
-                    }
-                ),
-                OnCancel: close,
-                OnClose: close
             }
         )
     }
 
-    private func ViewKey(label string, key[]char) Blob -> ui.Accent(
-        viewKeysVisible ? ui.Lime: ui.Edge,
-        ui.Copyable(label, String(key), ui.Grouped(viewKeysVisible ? String(key): String('•', key.Length)), 30000)
-    )
-
-    private func ViewOnlyDialog() Blob {
-        let close Action = () -> {
-            ClearSecrets()
-            name = ""
-            Rebuild()
+    private async func LoadKeys(session WalletSession, buffer[]char) WalletViewKeys? {
+        try {
+            return await session.Keys.ExportViewKeysAsync(buffer)
+        } catch (failure WalletException) {
+            passwordIssue = failure.Message
+            return nil
+        } finally {
+            Array.Clear(buffer)
         }
+    }
+
+    private func Keys(input SettingsPageInput, keys WalletViewKeys) Blob {
+        let ui = input.Ui
+        let content = Container{
+            Gap: 10,
+            Key(input, "spend public", "", keys.SpendPublic, false),
+            Key(input, "view private", "private", keys.ViewPrivate, true),
+            Key(input, "view public", "", keys.ViewPublic, false),
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 8,
+                Padding: Edges{Top: 4},
+                MaterialIcons.Create("warning", 14, ui.Dim),
+                ui.Label(
+                    ui.Strings.Get("Anyone with these keys sees every payment to this wallet. They cannot spend"),
+                    12,
+                    ui.Dim,
+                    ""
+                )
+            }
+        }
+        return Modal(
+            input,
+            "keys",
+            "view keys",
+            640,
+            ui.Label(ui.Strings.Get("view keys"), 17, ui.Ink, ""),
+            content,
+            ui.ActionRow(
+                []Blob{
+                    ui.Button(
+                        "Copy all",
+                        () -> ui.Copy(
+                            "spend_public " + String(keys.SpendPublic) + "\nview_private " + String(keys.ViewPrivate) +
+                                "\nview_public " + String(keys.ViewPublic),
+                            30000
+                        )
+                    ),
+                    ui.Button(
+                        "Save…",
+                        () -> input.ChooseFile(
+                            FileDialogKind.SaveFile,
+                            "keys file",
+                            Path.Combine(Home(), input.Session.Settings.ActiveWallet.Replace(".wallet.dat", "") + ".keys.txt"),
+                            path -> ui.Run(input.Session.Keys.SaveViewKeysAsync(path, keys))
+                        ),
+                        input.Busy
+                    ),
+                    ui.Button("Done", () -> Close(), false, true)
+                }
+            ),
+            () -> Close()
+        )
+    }
+
+    private func Key(input SettingsPageInput, label string, note string, key[]char, secret bool) Blob {
+        let ui = input.Ui
+        let masked = secret && !viewPrivateShown || input.Privacy
+        let text = String(key)
+        let name = Container{Width: 130, FlexShrink: 0, Gap: 2, ui.Label(ui.Strings.Get(label), 12.5, ui.Body, "")}
+        if note.Length > 0 {
+            name.Add(ui.Label(ui.Strings.Get(note), 11, ui.Orange, ""))
+        }
+        let row = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            FlexShrink: 0,
+            name,
+            ui.Grow(
+                Container{
+                    Height: 34,
+                    JustifyContent: JustifyContent.Center,
+                    Padding: Edges{Left: 12, Right: 12},
+                    BorderRadius: 8,
+                    BorderWidth: 1,
+                    BorderColor: Color.Parse("#2a2a2a"),
+                    BackgroundColor: Color.Parse("#080808"),
+                    ui.Label(
+                        if masked {
+                            "••••••••"
+                        } else if text.Length > 30 {
+                            text.Substring(0, 20) + "…" + text.Substring(text.Length - 8)
+                        } else {
+                            text
+                        },
+                        12.5,
+                        masked ? ui.Dim: ui.Body,
+                        ""
+                    )
+                }
+            )
+        }
+        if secret {
+            row.Add(
+                IconButton{
+                    Icon: MaterialIcons.Create(viewPrivateShown ? "visibility": "visibility_off", 14, viewPrivateShown ? ui.Body: ui.Lime),
+                    AccessibilityName: ui.Strings.Get(viewPrivateShown ? "Hide": "Reveal"),
+                    OnClick: () -> {
+                        viewPrivateShown = !viewPrivateShown
+                        Rebuild()
+                    }
+                }.Build()
+            )
+        }
+        let copied = ReadOnlySpan[char](input.Clipboard).SequenceEqual(ReadOnlySpan[char](key))
+        row.Add(
+            IconButton{
+                Icon: MaterialIcons.Create(copied ? "check": "content_copy", 14, copied ? ui.Lime: ui.Body),
+                AccessibilityName: ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
+                OnClick: () -> ui.Copy(text, 30000)
+            }.Build()
+        )
+        return row
+    }
+
+    private func ViewOnly(input SettingsPageInput, settings WalletSettings) Blob {
+        let ui = input.Ui
+        let close Action = () -> Close()
+        let submit Action = () -> CreateViewOnly(input)
         let content = Container{Gap: 14}
-        let actions = List[Blob]{ui.Button(viewOnlyCreated.Length > 0 ? "Close": "Cancel", close)}
+        let actions = List[Blob]()
         if viewOnlyCreated.Length > 0 {
             content.Add(
                 Container{
@@ -672,118 +1291,622 @@ partial class App {
                     AlignItems: AlignItems.Center,
                     Gap: 8,
                     MaterialIcons.Create("check_circle", 18, ui.Lime),
-                    ui.Label(ui.WalletName(viewOnlyCreated), 16, ui.Lime, "")
+                    ui.Label(viewOnlyCreated, 15, ui.Ink, "")
                 }
             )
+            actions.Add(ui.Button("Done", close, false, true))
         } else {
-            if error.Length > 0 {
-                content.Add(ui.Label(ui.Strings.Explain(error), 13, ui.Pink, ""))
-            }
-            let submit Action = () -> CreateViewOnly()
             content.Add(
-                ui.Field(
-                    "Name",
-                    name,
-                    value -> {
-                        name = value
-                        Rebuild()
-                    },
-                    submit
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    Gap: 12,
+                    FlexShrink: 0,
+                    Ability(ui, "can", []string{"see incoming payments", "read amounts and memos", "prove a payment"}, true),
+                    Ability(ui, "cannot", []string{"send or sign", "show the phrase", "see spends"}, false)
+                }
+            )
+            content.Add(
+                Labelled(
+                    ui,
+                    "file name",
+                    ui.Field(
+                        "file name",
+                        viewOnlyName,
+                        value -> {
+                            viewOnlyName = value
+                            Rebuild()
+                        },
+                        submit,
+                        labelled: false
+                    )
                 )
             )
             content.Add(
-                ui.Field(
-                    "Password",
-                    password,
-                    value -> {
-                        password = value
-                        passwordIssue = ""
-                        Rebuild()
-                    },
-                    submit,
-                    true
+                Labelled(
+                    ui,
+                    "new password",
+                    ui.Field(
+                        "new password",
+                        viewOnlyPassword,
+                        value -> {
+                            viewOnlyPassword = value
+                            passwordIssue = ""
+                            Rebuild()
+                        },
+                        submit,
+                        true,
+                        passwordIssue,
+                        labelled: false
+                    )
                 )
             )
             content.Add(
-                ui.Field(
-                    "File password",
-                    filePassword,
-                    value -> {
-                        filePassword = value
-                        passwordIssue = ""
-                        Rebuild()
-                    },
-                    submit,
-                    true
+                Labelled(
+                    ui,
+                    "",
+                    ui.Label(ui.Strings.Get("Must differ from this wallet's password"), 12, ui.Dim, "")
                 )
             )
             content.Add(
-                ui.Field(
-                    "Confirm",
-                    confirmation,
-                    value -> {
-                        confirmation = value
-                        passwordIssue = ""
-                        Rebuild()
-                    },
-                    submit,
-                    true,
-                    passwordIssue
+                Labelled(
+                    ui,
+                    "this wallet",
+                    ui.Field(
+                        "this wallet",
+                        password,
+                        value -> {
+                            password = value
+                            passwordIssue = ""
+                            Rebuild()
+                        },
+                        submit,
+                        true,
+                        labelled: false
+                    )
                 )
             )
+            actions.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 6,
+                    FlexGrow: 1,
+                    MinWidth: 0,
+                    MaterialIcons.Create("folder", 14, ui.Dim),
+                    ui.Label(Tail(settings.WalletDirectory), 12, ui.Dim, "")
+                }
+            )
+            actions.Add(ui.Button("Cancel", close))
             actions.Add(
                 ui.Button(
                     "Create",
                     submit,
-                    ui.Working() || name.Trim().Length == 0 || password.Length == 0 || filePassword.Length == 0,
+                    input.Busy || viewOnlyName.Trim().Length == 0 || password.Length == 0 || viewOnlyPassword.Length == 0,
                     true
                 )
             )
         }
-        return Cell.Mount[ModalDialog, ModalDialogHost](
+        return Modal(
+            input,
             "view-only",
+            "create view-only wallet",
+            620,
+            ui.Label(ui.Strings.Get("create view-only wallet"), 17, ui.Ink, ""),
+            content,
+            ui.ActionRow(actions.ToArray()),
+            close
+        )
+    }
+
+    private func Ability(ui Presentation, title string, items[]string, allowed bool) Blob {
+        let box = Container{
+            FlexGrow: 1,
+            FlexBasis: 0,
+            MinWidth: 0,
+            Gap: 8,
+            Padding: Edges{Top: 12, Bottom: 12, Left: 14, Right: 14},
+            BorderRadius: 10,
+            BorderWidth: 1,
+            BorderColor: ui.Rule,
+            ui.Label(ui.Strings.Get(title), 12, ui.Dim, "")
+        }
+        for item in items {
+            box.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 8,
+                    MaterialIcons.Create(allowed ? "check": "close", 14, allowed ? ui.Mint: ui.Pink),
+                    ui.Label(ui.Strings.Get(item), 12.5, ui.Ink, "")
+                }
+            )
+        }
+        return box
+    }
+
+    private func Labelled(ui Presentation, label string, field Blob) Blob -> Container{
+        FlexDirection: FlexDirection.Row,
+        AlignItems: AlignItems.Center,
+        Gap: 10,
+        FlexShrink: 0,
+        Container{Width: 130, FlexShrink: 0, ui.Label(label.Length > 0 ? ui.Strings.Get(label): "", 12.5, ui.Body, "")},
+        ui.Grow(Container{field})
+    }
+
+    private func CreateViewOnly(input SettingsPageInput) {
+        let filename = viewOnlyName.Trim()
+        if input.Busy || filename.Length == 0 || password.Length == 0 || viewOnlyPassword.Length == 0 {
+            return
+        }
+        let candidate = viewOnlyPassword.ToCharArray()
+        passwordIssue = if password == viewOnlyPassword {
+            "View-only file password must differ from the wallet password"
+        } else {
+            WalletValidation.PasswordError(candidate, candidate)
+        }
+        Array.Clear(candidate)
+        if passwordIssue.Length > 0 {
+            Rebuild()
+            return
+        }
+        let current = password.ToCharArray()
+        let secret = viewOnlyPassword.ToCharArray()
+        let task = CreateFile(input.Session, filename, current, secret)
+        input.Ui.Run(
+            task,
+            () -> {
+                if task.Result {
+                    password = ""
+                    viewOnlyPassword = ""
+                    viewOnlyCreated = filename
+                }
+            }
+        )
+    }
+
+    private async func CreateFile(session WalletSession, filename string, current[]char, secret[]char) bool {
+        try {
+            await session.Keys.CreateViewOnlyAsync(filename, current, secret)
+            return true
+        } catch (failure WalletException) {
+            passwordIssue = failure.Message
+            return false
+        } finally {
+            Array.Clear(current)
+            Array.Clear(secret)
+        }
+    }
+
+    private func Purge(input SettingsPageInput, settings WalletSettings) Blob {
+        let ui = input.Ui
+        let close Action = () -> Close()
+        if purging {
+            return Modal(
+                input,
+                "purging",
+                "purging",
+                620,
+                ui.Label(ui.Strings.Get("purging"), 17, ui.Ink, ""),
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 12,
+                    Cell.Mount[SpinnerInput, Spinner](
+                        "purging",
+                        SpinnerInput{Size: 20, Color: ui.Lime, Label: ui.Strings.Get("purging")}
+                    ),
+                    ui.Label(ui.Strings.Get("delete data folder"), 14, ui.Ink, "")
+                },
+                Container{},
+                () -> { }
+            )
+        }
+        let size = sizeText + " " + sizeUnit
+        let deleted = Column(ui, "deleted", ui.Pink)
+        deleted.Add(Item(ui, false, "chain database", size))
+        deleted.Add(Item(ui, false, "checkpoints.dat", "restored on start"))
+        deleted.Add(Item(ui, false, "send retry record", ""))
+        deleted.Add(Item(ui, false, "api.cookie", "new on start"))
+        deleted.Add(Item(ui, false, "identity.key", "new peer key"))
+        let kept = Column(ui, "kept", ui.Mint)
+        if dataWallets > 0 {
+            kept.Add(
+                Item(ui, true, ui.Strings.Get("{0} wallets").Replace("{0}", dataWallets.ToString()), "moved out first")
+            )
+        }
+        kept.Add(Item(ui, true, "settings.json", ""))
+        let content = Container{
+            Gap: 14,
+            Container{FlexDirection: FlexDirection.Row, Gap: 12, FlexShrink: 0, deleted, kept}
+        }
+        if dataWallets > 0 {
+            content.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 8,
+                    MaterialIcons.Create("folder", 14, ui.Dim),
+                    ui.Label(
+                        ui.Strings.Get("wallets move to") + " " + Tail(AppSettings.DefaultWallets(settings.Network)),
+                        12,
+                        ui.Dim,
+                        ""
+                    )
+                }
+            )
+        }
+        let typed = purgeText == "purge"
+        let confirm Action = () -> {
+            if typed && !input.Busy {
+                purging = true
+                ui.Run(PurgeData(input.Session))
+            }
+        }
+        let footer = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            ui.Label(ui.Strings.Get("type purge"), 12.5, ui.Body, ""),
+            Container{
+                Width: 220,
+                FlexShrink: 1,
+                MinWidth: 80,
+                ui.Field(
+                    "type purge",
+                    purgeText,
+                    value -> {
+                        purgeText = value
+                        Rebuild()
+                    },
+                    confirm,
+                    labelled: false
+                )
+            }
+        }
+        if typed {
+            footer.Add(MaterialIcons.Create("check", 16, ui.Mint))
+        }
+        footer.Add(Container{FlexGrow: 1})
+        footer.Add(ui.Button("Cancel", close))
+        footer.Add(
+            (
+                Theme.Read().DangerButton with{
+                    Content = ui.Strings.Get("Purge {0}").Replace("{0}", size),
+                    OnClick = confirm,
+                    Disabled = !typed || input.Busy,
+                    FontFamily = ui.Font
+                }
+            ).Build()
+        )
+        return Modal(
+            input,
+            "purge",
+            "purge chain data",
+            640,
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 10,
+                MaterialIcons.Create("warning", 20, ui.Pink),
+                ui.Label(ui.Strings.Get("purge chain data"), 17, ui.Ink, "")
+            },
+            content,
+            footer,
+            close
+        )
+    }
+
+    private async func PurgeData(session WalletSession) {
+        try {
+            await session.PurgeDataAsync()
+        } finally {
+            purging = false
+            dialog = ""
+        }
+    }
+
+    private func Column(ui Presentation, title string, color Color) Container -> Container{
+        FlexGrow: 1,
+        FlexBasis: 0,
+        MinWidth: 0,
+        Gap: 8,
+        Padding: Edges{Top: 12, Bottom: 12, Left: 14, Right: 14},
+        BorderRadius: 10,
+        BorderWidth: 1,
+        BorderColor: ui.Rule,
+        ui.Label(ui.Strings.Get(title), 12, color, "")
+    }
+
+    private func Item(ui Presentation, kept bool, label string, note string) Blob -> Container{
+        FlexDirection: FlexDirection.Row,
+        AlignItems: AlignItems.Center,
+        Gap: 8,
+        MaterialIcons.Create(kept ? "check": "close", 14, kept ? ui.Mint: ui.Pink),
+        ui.Grow(ui.Label(ui.Strings.Get(label), 13, ui.Ink, "")),
+        ui.Label(note.Length > 0 ? ui.Strings.Get(note): "", 12, ui.Dim, "")
+    }
+
+    private func SaveSettings(input SettingsPageInput) {
+        guard let value = draft else {
+            return
+        }
+        let settings = input.Session.Settings
+        listenIssue = WalletSettings.ListenError(value.ListenAddress)
+        programIssue = if value.BinaryPath != settings.BinaryPath && value.BinaryPath.Length > 0 {
+            NodeDiscovery.ProgramError(value.BinaryPath)
+        } else {
+            ""
+        }
+        if listenIssue.Length > 0 || programIssue.Length > 0 {
+            startupOpen = true
+            Rebuild()
+            return
+        }
+        if input.Snapshot.State != "Unloaded" && !applyPending {
+            applyPending = true
+            Rebuild()
+            return
+        }
+        applyPending = false
+        input.Ui.Run(input.Session.ApplySettingsAsync(value.Copy()), input.OnClose)
+    }
+
+    private func ConfirmApply(input SettingsPageInput) Blob {
+        let ui = input.Ui
+        let close Action = () -> {
+            applyPending = false
+            Rebuild()
+        }
+        return Cell.Mount[ModalDialog, ModalDialogHost](
+            "apply",
             ModalDialog{
                 Open: true,
                 CreateRoot: ui.DialogRoot,
-                AccessibilityName: ui.Strings.Get("Create view-only"),
-                Width: Math.Min(width - 48, 520),
-                Header: ui.Label(ui.Strings.Get("Create view-only"), 18, ui.Ink, ""),
-                Content: content,
-                Footer: ui.ActionRow(actions.ToArray()),
+                Preset: ModalDialogPreset.Confirm,
+                AccessibilityName: ui.Strings.Get("Apply settings"),
+                Width: Math.Min(input.Width - 48, 440),
+                Padding: 22,
+                BackgroundColor: ui.Raised,
+                BorderRadius: 14,
+                Content: Container{
+                    Gap: 10,
+                    ui.Label(ui.Strings.Get("Apply settings"), 17, ui.Ink, ""),
+                    ui.Label(ui.Strings.Get("The wallet locks and the node reconnects"), 13, ui.Body, "")
+                },
+                ConfirmText: ui.Strings.Get(
+                    if input.Snapshot.State == "Unlocked" {
+                        "Lock and apply"
+                    } else {
+                        "Apply"
+                    }
+                ),
+                CancelText: ui.Strings.Get("Cancel"),
+                ConfirmDisabled: input.Busy,
+                OnConfirm: () -> SaveSettings(input),
                 OnCancel: close,
                 OnClose: close
             }
         )
     }
 
-    private func CreateViewOnly() {
-        if ui.Working() || name.Trim().Length == 0 || password.Length == 0 || filePassword.Length == 0 {
-            return
+    private func Modal(
+        input SettingsPageInput,
+        key string,
+        name string,
+        width float64,
+        header Blob,
+        content Blob,
+        footer Blob,
+        close Action
+    ) Blob -> Cell.Mount[ModalDialog, ModalDialogHost](
+        key,
+        ModalDialog{
+            Open: true,
+            CreateRoot: input.Ui.DialogRoot,
+            AccessibilityName: input.Ui.Strings.Get(name),
+            Width: Math.Min(input.Width - 40, width),
+            MaxHeight: Percent(100),
+            Padding: 22,
+            Gap: 14,
+            BackgroundColor: input.Ui.Raised,
+            BorderRadius: 14,
+            Header: header,
+            Content: content,
+            Footer: footer,
+            OnCancel: close,
+            OnClose: close
         }
-        passwordIssue = if password == filePassword {
-            "View-only file password must differ from the wallet password"
-        } else {
-            WalletValidation.PasswordError(filePassword.ToCharArray(), confirmation.ToCharArray())
-        }
-        if passwordIssue.Length > 0 {
-            Rebuild()
-            return
-        }
-        let filename = ui.WalletFile(name)
-        let current = password.ToCharArray()
-        let secret = filePassword.ToCharArray()
-        Run(
-            wallet.Keys.CreateViewOnlyAsync(filename, current, secret),
-            () -> {
-                ClearSecrets()
-                name = ""
-                viewOnlyOpen = true
-                viewOnlyCreated = filename
-            },
-            current,
-            secret
-        )
+    )
+
+    private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
+        input.Ui.Run(input.Session.SavePreferenceAsync(change), input.OnPreference)
     }
 
-    private var draft WalletSettings?
+    private func Rows(ui Presentation, rows[]Container) Container {
+        let list = Card(ui)
+        list.Padding = Edges{Top: 4, Bottom: 4, Left: 16, Right: 16}
+        list.Gap = 0
+        list.FlexShrink = 1
+        list.OverflowY = Overflow.Scroll
+        for index in 0 ... rows.Length {
+            if index < rows.Length - 1 {
+                rows[index].BorderWidth = Edges{Bottom: 1}
+            }
+            list.Add(rows[index])
+        }
+        return list
+    }
+
+    private func Line(ui Presentation, label string, parts[]Blob) Container {
+        let row = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            Height: 52,
+            FlexShrink: 0,
+            BorderColor: Color.Parse("#141414"),
+            ui.Grow(ui.Label(ui.Strings.Get(label), 14, ui.Body, ""))
+        }
+        for part in parts {
+            row.Add(part)
+        }
+        return row
+    }
+
+    private func Card(ui Presentation) Container {
+        let card = ui.Glass()
+        card.BorderRadius = 14
+        card.Padding = 16
+        card.Gap = 12
+        return card
+    }
+
+    private func Segment(
+        input SettingsPageInput,
+        label string,
+        ids[]string,
+        names[]string,
+        selected string,
+        disabled bool,
+        chosen Action[string]
+    ) Blob {
+        let ui = input.Ui
+        let group = Container{
+            FlexDirection: FlexDirection.Row,
+            Padding: 3,
+            BorderRadius: 10,
+            BackgroundColor: ui.Black,
+            BorderWidth: 1,
+            BorderColor: ui.Rule,
+            FlexShrink: 0,
+            Accessibility: Accessibility{Role: AccessibilityRole.Group, Name: ui.Strings.Get(label)}
+        }
+        for index in 0 ... ids.Length {
+            let id = ids[index]
+            let on = id == selected
+            group.Add(
+                Goo.Button{
+                    Height: 28,
+                    Padding: Edges{Left: 12, Right: 12},
+                    AlignItems: AlignItems.Center,
+                    JustifyContent: JustifyContent.Center,
+                    BorderRadius: 7,
+                    BackgroundColor: on ? Color.Parse("#1a1a1a"): Color.Transparent,
+                    Hover: Style{BackgroundColor: ui.Rule},
+                    Focus: Theme.Read().FocusStyle,
+                    Disabled: disabled || input.Busy,
+                    Accessibility: Accessibility{
+                        Role: AccessibilityRole.Radio,
+                        Name: ui.Strings.Get(names[index]),
+                        Checked: on ? AccessibilityChecked.True: AccessibilityChecked.False
+                    },
+                    OnClick: () -> {
+                        if !on {
+                            chosen(id)
+                        }
+                    },
+                    ui.Label(ui.Strings.Get(names[index]), 14, on ? ui.Ink: ui.Body, "")
+                }
+            )
+        }
+        return group
+    }
+
+    private func Toggle(input SettingsPageInput, label string, on bool, changed Action) Blob -> ToggleSwitch{
+        Checked: on,
+        Disabled: input.Busy,
+        AccessibilityName: input.Ui.Strings.Get(label),
+        OnClick: changed
+    }.Build()
+
+    private func Info(input SettingsPageInput, key string, topic string, line string) Blob ->
+    Cell.Mount[InfoTipInput, InfoTip](
+        key,
+        InfoTipInput{Ui: input.Ui, Topic: topic, Lines: []string{line}, Language: input.Language, Width: 300}
+    )
+
+    private func Value(input SettingsPageInput, key string, name string, value string, size float64, color Color) Blob ->
+    Cell.Mount[DecodeValueInput, DecodeValue](
+        key,
+        DecodeValueInput{
+            Value: value,
+            Name: input.Ui.Strings.Get(name) + " " + value,
+            Size: size,
+            Color: color,
+            FractionColor: if size > 20 {
+                input.Ui.Dim
+            } else {
+                color
+            },
+            Live: AccessibilityLive.Off,
+            Ui: input.Ui
+        }
+    )
+
+    private func PathField(
+        input SettingsPageInput,
+        label string,
+        current string,
+        kind FileDialogKind,
+        changed Action[string],
+        disabled bool,
+        issue string = ""
+    ) Blob {
+        let ui = input.Ui
+        return Container{
+            Gap: Theme.Read().ControlGap,
+            FlexShrink: 0,
+            ui.Label(ui.Strings.Get(label), Theme.Read().LabelFontSize, ui.Body, ""),
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.FlexStart,
+                Gap: 8,
+                FlexShrink: 0,
+                ui.Grow(
+                    Container{
+                        ui.Field(
+                            label,
+                            current,
+                            text -> {
+                                changed(text)
+                                Rebuild()
+                            },
+                            issue: issue,
+                            disabled: disabled,
+                            labelled: false
+                        )
+                    }
+                ),
+                ui.Button(
+                    "Browse",
+                    () -> input.ChooseFile(
+                        kind,
+                        label,
+                        Path.IsPathFullyQualified(current) ? current: Home(),
+                        path -> {
+                            changed(path)
+                            Rebuild()
+                        }
+                    ),
+                    disabled || input.Busy
+                )
+            }
+        }
+    }
+
+    private func Pinned(variable string) bool -> Environment.GetEnvironmentVariable("GYROID_" + variable) != nil
+
+    private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+
+    private func Shorten(path string) string -> if path.StartsWith(Home(), StringComparison.Ordinal) && Home().Length > 1 {
+        "~" + path.Substring(Home().Length)
+    } else {
+        path
+    }
+
+    private func Tail(path string) string {
+        let file = Path.GetFileName(path)
+        let parent = Path.GetFileName(Path.GetDirectoryName(path) ?? "")
+        return "…" + Path.DirectorySeparatorChar + parent + Path.DirectorySeparatorChar + file
+    }
 }

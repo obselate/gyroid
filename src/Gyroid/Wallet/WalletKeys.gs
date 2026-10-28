@@ -79,6 +79,32 @@ class WalletKeys {
         }
     }
 
+    async func SaveViewKeysAsync(path string, keys WalletViewKeys, ct CancellationToken = default(CancellationToken)) {
+        let parts = [][]char{
+            "spend_public ".ToCharArray(),
+            keys.SpendPublic,
+            "\nview_private ".ToCharArray(),
+            keys.ViewPrivate,
+            "\nview_public ".ToCharArray(),
+            keys.ViewPublic,
+            "\n".ToCharArray()
+        }
+        var length = 0
+        for part in parts {
+            length += part.Length
+        }
+        let bytes = [length]uint8
+        try {
+            var offset = 0
+            for part in parts {
+                offset += Encoding.ASCII.GetBytes(part, 0, part.Length, bytes, offset)
+            }
+            await PrivateFiles.WriteAtomic(path, destination -> destination.WriteAsync(bytes, 0, length, ct), true, false)
+        } finally {
+            Array.Clear(bytes)
+        }
+    }
+
     async func CreateViewOnlyAsync(
         filename string,
         password[]char,

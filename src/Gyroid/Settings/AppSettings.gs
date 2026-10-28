@@ -22,6 +22,10 @@ open class AppSettings {
     var Language string = ""
     var Privacy bool
     var AutoLockMinutes int32
+    var Background string = "glyphs"
+    var ReduceMotion bool
+    var StartInTray bool
+    var LockOnMinimize bool
     var LoadError string = ""
 
     open func Validate() {
@@ -36,6 +40,9 @@ open class AppSettings {
         }
         if AutoLockMinutes < 0 {
             throw WalletException("Auto-lock minutes must be zero or greater")
+        }
+        if Background != "gyroid" && Background != "glyphs" && Background != "off" {
+            throw WalletException("Background must be gyroid, glyphs or off")
         }
         if !ValidEndpoint(Endpoint) {
             throw WalletException("API endpoint must be a loopback HTTP origin")
@@ -155,8 +162,7 @@ open class AppSettings {
                     settings.ListenAddress = Text(root, "listen_address", settings.ListenAddress)
                     settings.NodeMode = Text(root, "node_mode", "automatic")
                     settings.Language = Text(root, "language")
-                    settings.Privacy = root.TryGetProperty("privacy", out let privacy) &&
-                        privacy.ValueKind == JsonValueKind.True
+                    settings.Privacy = Flag(root, "privacy")
                     if root.TryGetProperty("auto_lock_minutes", out let minutes) {
                         settings.AutoLockMinutes = if minutes.ValueKind == JsonValueKind.Number && minutes.TryGetInt32(
                             out let value
@@ -166,6 +172,10 @@ open class AppSettings {
                             0
                         }
                     }
+                    settings.Background = Text(root, "background", "glyphs")
+                    settings.ReduceMotion = Flag(root, "reduce_motion")
+                    settings.StartInTray = Flag(root, "start_in_tray")
+                    settings.LockOnMinimize = Flag(root, "lock_on_minimize")
                     if settings.Network != "mainnet" && settings.Network != "testnet" {
                         settings.Network = "mainnet"
                     }
@@ -174,6 +184,9 @@ open class AppSettings {
                     }
                     if settings.Language != "" && settings.Language != "en" && settings.Language != "zh-Hans" {
                         settings.Language = ""
+                    }
+                    if settings.Background != "gyroid" && settings.Background != "off" {
+                        settings.Background = "glyphs"
                     }
                     if settings.AutoLockMinutes < 0 {
                         settings.AutoLockMinutes = 0
@@ -213,6 +226,9 @@ open class AppSettings {
         } else {
             fallback
         }
+
+        private func Flag(root JsonElement, key string) bool ->
+        root.TryGetProperty(key, out let value) && value.ValueKind == JsonValueKind.True
 
         private func WriteSetting(
             writer Utf8JsonWriter,
@@ -265,6 +281,10 @@ open class AppSettings {
                     writer.WriteString("language", settings.Language)
                     writer.WriteBoolean("privacy", settings.Privacy)
                     writer.WriteNumber("auto_lock_minutes", settings.AutoLockMinutes)
+                    writer.WriteString("background", settings.Background)
+                    writer.WriteBoolean("reduce_motion", settings.ReduceMotion)
+                    writer.WriteBoolean("start_in_tray", settings.StartInTray)
+                    writer.WriteBoolean("lock_on_minimize", settings.LockOnMinimize)
                     writer.WriteEndObject()
                     await writer.FlushAsync(ct)
                 },

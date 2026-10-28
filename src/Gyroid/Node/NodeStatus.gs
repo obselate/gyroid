@@ -1,5 +1,7 @@
 package Gyroid.Node
 
+import System
+
 class NodeStatus {
     var Source string = "Gyroid"
     var Owned bool
@@ -24,4 +26,10 @@ class NodeStatus {
     var UpgradeDeadline string = ""
     var UpgradeNotice string = ""
     var UpgradeBlocksLeft uint64
+}
+
+class ChainCertificate {
+    var Height uint64
+    var Violations[]uint64 = []uint64{}
+    var Time DateTimeOffset
 }

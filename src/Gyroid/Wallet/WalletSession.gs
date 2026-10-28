@@ -8,7 +8,9 @@ import Gyroid.Send
 import Gyroid.Settings
 import Gyroid.Tools
 import System
+import System.Collections.Generic
 import System.IO
+import System.Net.Http
 import System.Text
 import System.Text.Json
 import System.Threading
@@ -490,6 +492,77 @@ class WalletSession : IDisposable {
             StopNode()
             await Task.Delay(2000, ct)
             await ConnectCoreAsync(ct)
+        } finally {
+            End()
+        }
+    }
+
+    async func SavePreferenceAsync(change Action[WalletSettings], ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            let next = settings.Copy()
+            change(next)
+            await WalletSettings.SaveAsync(next, ct, settings)
+            change(settings)
+        } finally {
+            End()
+        }
+    }
+
+    async func CertifyAsync(ct CancellationToken = default(CancellationToken)) ChainCertificate {
+        await BeginAsync(ct)
+        try {
+            await ConnectCoreAsync(ct)
+            using let result = await Node.Api.JsonAsync("certify", ct: ct)
+            let violations = List[uint64]()
+            if result.RootElement.TryGetProperty("violations", out let list) && list.ValueKind == JsonValueKind.Array {
+                for item in list.EnumerateArray() {
+                    violations.Add(NodeJson.Number(item, "height"))
+                }
+            }
+            return ChainCertificate{
+                Height: NodeJson.Number(result.RootElement, "height"),
+                Violations: violations.ToArray(),
+                Time: DateTimeOffset.Now
+            }
+        } finally {
+            End()
+        }
+    }
+
+    async func CheckpointsAsync(action string, ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            await ConnectCoreAsync(ct)
+            using let result = await Node.Api.JsonAsync("checkpoints/" + action, WriteEmpty, ct)
+        } finally {
+            End()
+        }
+    }
+
+    async func CheckpointAutoSaveAsync(enabled bool?, ct CancellationToken = default(CancellationToken)) bool {
+        await BeginAsync(ct)
+        try {
+            await ConnectCoreAsync(ct)
+            let body Action[Utf8JsonWriter]? = if let value = enabled {
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteBoolean("save_checkpoints", value)
+                    writer.WriteEndObject()
+                }
+            } else {
+                nil
+            }
+            using let result = await Node.Api.JsonAsync(
+                "settings",
+                body,
+                ct,
+                method: enabled != nil ? HttpMethod.Patch: nil
+            )
+            return result.RootElement.TryGetProperty("settings", out let current) && NodeJson.Flag(
+                current,
+                "save_checkpoints"
+            )
         } finally {
             End()
         }

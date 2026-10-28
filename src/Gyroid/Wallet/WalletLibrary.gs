@@ -108,6 +108,34 @@ class WalletLibrary {
         }
     }
 
+    func DataWallets() List[string] {
+        let found = List[string]()
+        let magic = Encoding.ASCII.GetBytes("BLKNTWLT")
+        let header = [magic.Length]byte
+        let data = Path.GetFullPath(session.settings.DataDirectory)
+        let checkpoint = Path.Combine(data, "checkpoints.dat")
+        let comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase: StringComparison.Ordinal
+        for path in Directory.EnumerateFiles(
+            data,
+            "*",
+            EnumerationOptions{
+                RecurseSubdirectories: true,
+                IgnoreInaccessible: false,
+                AttributesToSkip: FileAttributes.ReparsePoint
+            }
+        ) {
+            if path.Equals(checkpoint, comparison) {
+                continue
+            }
+            using let input = PrivateFiles.OpenRead(path)
+            if path.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) ||
+                input.Read(header, 0, header.Length) == header.Length && header.SequenceEqual(magic) {
+                found.Add(path)
+            }
+        }
+        return found
+    }
+
     async func PreserveBeforePurgeAsync(ct CancellationToken) {
         let settings = session.settings
         if settings.LoadError.Length > 0 || Environment.GetEnvironmentVariable("GYROID_WALLET_DIR") != nil {
@@ -139,25 +167,7 @@ class WalletLibrary {
                 StringComparer.Ordinal
             }
         )
-        let magic = Encoding.ASCII.GetBytes("BLKNTWLT")
-        let header = [magic.Length]byte
-        for path in Directory.EnumerateFiles(
-            data,
-            "*",
-            EnumerationOptions{
-                RecurseSubdirectories: true,
-                IgnoreInaccessible: false,
-                AttributesToSkip: FileAttributes.ReparsePoint
-            }
-        ) {
-            if names.Comparer.Equals(path, Path.Combine(data, "checkpoints.dat")) {
-                continue
-            }
-            using let input = PrivateFiles.OpenRead(path)
-            if !path.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) &&
-                (input.Read(header, 0, header.Length) != header.Length || !header.SequenceEqual(magic)) {
-                continue
-            }
+        for path in DataWallets() {
             let name = Path.GetFileName(path)
             if !names.Add(name) || File.Exists(Path.Combine(destination, name)) || Directory.Exists(
                 Path.Combine(destination, name)
