@@ -14,6 +14,9 @@ class HistoryService {
     var historyTotal uint64
     var received List[WalletOutput] = List[WalletOutput]()
     var loaded int32
+    var receivedPositions Dictionary[string, int32] = Dictionary[string, int32](StringComparer.Ordinal)
+    var cachedTotal uint64
+    var knownSendCount int32 = -1
 
     prop Total uint64 -> uint64(received.Count)
     prop More bool -> loaded < received.Count
@@ -27,28 +30,46 @@ class HistoryService {
         historyTotal = 0
         received.Clear()
         loaded = 0
+        receivedPositions.Clear()
+        cachedTotal = 0
+        knownSendCount = -1
     }
 
     async func ReloadAsync(sends[]WalletSend, ct CancellationToken)[]WalletOutput {
         let outputs = List[WalletOutput]()
         let sentTransactions = HashSet[string](StringComparer.Ordinal)
-        let keys = HashSet[string](StringComparer.Ordinal)
+        let keys = Dictionary[string, int32](StringComparer.Ordinal)
         for send in sends {
             sentTransactions.Add(send.TxId)
         }
         historyOffset = 0
-        var more = true
-        while more {
-            more = await ReadHistoryAsync(outputs, keys, sentTransactions, ct)
+        var more = await ReadHistoryAsync(outputs, keys, sentTransactions, ct)
+        if historyTotal == cachedTotal && sends.Length == knownSendCount {
+            for output in outputs {
+                let key = output.TxId + ":" + output.OutputIndex.ToString()
+                if receivedPositions.TryGetValue(key, out let index) {
+                    received[index] = output
+                } else {
+                    receivedPositions.Add(key, received.Count)
+                    received.Add(output)
+                }
+            }
+        } else {
+            while more {
+                more = await ReadHistoryAsync(outputs, keys, sentTransactions, ct)
+            }
+            received = outputs
+            receivedPositions = keys
+            cachedTotal = historyTotal
+            knownSendCount = sends.Length
         }
-        received = outputs
         loaded = Math.Min(Math.Max(historyPage, loaded), received.Count)
         return received.Take(loaded).ToArray()
     }
 
     private async func ReadHistoryAsync(
         outputs List[WalletOutput],
-        keys HashSet[string],
+        keys Dictionary[string, int32],
         sentTransactions HashSet[string],
         ct CancellationToken
     ) bool {
@@ -68,7 +89,10 @@ class HistoryService {
                 Spent: NodeJson.Flag(row, "spent"),
                 Memo: NodeJson.Memo(hex)
             }
-            if !sentTransactions.Contains(output.TxId) && keys.Add(output.TxId + ":" + output.OutputIndex.ToString()) {
+            if !sentTransactions.Contains(output.TxId) && keys.TryAdd(
+                output.TxId + ":" + output.OutputIndex.ToString(),
+                outputs.Count
+            ) {
                 outputs.Add(output)
             }
         }
