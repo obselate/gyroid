@@ -310,7 +310,6 @@ class WalletSession : IDisposable {
             next.Privacy = settings.Privacy
             next.Language = settings.Language
             next.NodeMode = settings.NodeMode
-            next.LoadError = ""
             if next.Network != settings.Network {
                 if next.DataDirectory == settings.DataDirectory &&
                     (
@@ -348,7 +347,7 @@ class WalletSession : IDisposable {
             }
             StopEvents()
             await UnloadCoreAsync(ct)
-            await WalletSettings.SaveAsync(next, ct)
+            await WalletSettings.SaveAsync(next, ct, settings)
             if Node.Supervisor.Owned && next.StartupDiffers(settings) {
                 Node.Supervisor.Stop()
                 next.OwnedProcessId = 0
@@ -377,11 +376,9 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.AutoLockMinutes = minutes
-            next.LoadError = ""
             next.Validate()
-            await WalletSettings.SaveAsync(next, ct)
+            await WalletSettings.SaveAsync(next, ct, settings)
             settings.AutoLockMinutes = minutes
-            settings.LoadError = ""
             if minutes == 0 {
                 WalletLockScheduler.Cancel(settings)
             }
@@ -399,10 +396,8 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.Privacy = value
-            next.LoadError = ""
-            await WalletSettings.SaveAsync(next, ct)
+            await WalletSettings.SaveAsync(next, ct, settings)
             settings.Privacy = value
-            settings.LoadError = ""
         } finally {
             End()
         }
@@ -413,10 +408,8 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.Language = value
-            next.LoadError = ""
-            await WalletSettings.SaveAsync(next, ct)
+            await WalletSettings.SaveAsync(next, ct, settings)
             settings.Language = value
-            settings.LoadError = ""
         } finally {
             End()
         }
@@ -427,10 +420,8 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.NodeMode = value
-            next.LoadError = ""
-            await WalletSettings.SaveAsync(next, ct)
+            await WalletSettings.SaveAsync(next, ct, settings)
             settings.NodeMode = value
-            settings.LoadError = ""
         } finally {
             End()
         }

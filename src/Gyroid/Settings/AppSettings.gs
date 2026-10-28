@@ -229,9 +229,9 @@ open class AppSettings {
             }
         }
 
-        async func SaveAsync(settings AppSettings, ct CancellationToken) {
+        async func SaveAsync(settings AppSettings, ct CancellationToken, replaced AppSettings? = nil) {
             settings.Validate()
-            if settings.LoadError.Length > 0 {
+            if settings.LoadError.Length > 0 && replaced == nil {
                 return
             }
             let path = ConfigurationPath()
@@ -271,6 +271,10 @@ open class AppSettings {
                 true,
                 false
             )
+            settings.LoadError = ""
+            if let previous = replaced {
+                previous.LoadError = ""
+            }
         }
     }
 }
