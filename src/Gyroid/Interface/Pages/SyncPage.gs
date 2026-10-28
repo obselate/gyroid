@@ -407,7 +407,7 @@ class SyncPage : Cell[SyncInput] {
                 AlignItems: AlignItems.Baseline,
                 Gap: 22,
                 Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-                ui.Grow(ui.Label(ui.Strings.Get(label), 13, ui.Body, ""))
+                Container{Width: 100, FlexShrink: 0, ui.Label(ui.Strings.Get(label), 13, ui.Body, "")}
             }
             if label == "Height" {
                 let split = value.IndexOf(" / ")
