@@ -22,6 +22,7 @@ import System.Threading.Tasks
 data struct SettingsPageInput {
     var Session WalletSession
     var Ui Presentation
+    var Window Window?
     var Snapshot WalletSnapshot
     var Node NodeStatus
     var Section string
@@ -131,6 +132,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     .Button{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
+                    JustifyContent: JustifyContent.FlexStart,
                     Gap: 10,
                     Height: 38,
                     FlexShrink: 0,
@@ -360,7 +362,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             if status.Syncing {
                 height.Add(ui.Label("/ " + ui.Count(status.ChainHeight), 14, ui.Dim, ""))
             }
-            height.Add(ui.Label(ui.Strings.Get("{0} peers").Replace("{0}", ui.Count(status.Peers)), 14, ui.Dim, ""))
+            height.Add(
+                ui.Label(
+                    ui.Count(status.Peers) + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers"),
+                    14,
+                    ui.Dim,
+                    ""
+                )
+            )
         } else {
             height.Add(ui.Label(ui.Strings.Get("Stopped"), 14, ui.Dim, ""))
             if automatic && status.Progress.Length == 0 {
@@ -623,7 +632,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         ui.Button(
                             "Create…",
                             () -> {
-                                viewOnlyName = settings.ActiveWallet.Replace(".wallet.dat", "") + ".view.wallet.dat"
+                                viewOnlyName = settings
+                                    .ActiveWallet
+                                    .Replace(".wallet.dat", "")
+                                    .Replace(".dat", "") +
+                                    ".view.wallet.dat"
                                 viewOnlyCreated = ""
                                 Open("view-only")
                             },
@@ -703,7 +716,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         if dataWallets > 0 {
             purgeRow.Add(
                 ui.Status(
-                    ui.Strings.Get("{0} wallets inside").Replace("{0}", dataWallets.ToString()),
+                    ui
+                        .Strings
+                        .Get(dataWallets == 1 ? "{0} wallet inside": "{0} wallets inside")
+                        .Replace("{0}", dataWallets.ToString()),
                     ui.Orange,
                     "warning"
                 )
@@ -751,10 +767,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             let clean = result.Violations.Length == 0
             verdict.Add(
                 ui.Label(
-                    clean ? ui.Strings.Get("clean"): ui
-                        .Strings
-                        .Get("{0} violations")
-                        .Replace("{0}", result.Violations.Length.ToString()),
+                    clean ? ui.Strings.Get("clean"): Violations(ui, result.Violations.Length),
                     wide,
                     clean ? ui.Mint: ui.Pink,
                     ""
@@ -803,7 +816,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 FlexShrink: 0,
                 ui.Label(
                     if let result = certificate {
-                        ui.Strings.Get("{0} violations").Replace("{0}", result.Violations.Length.ToString())
+                        Violations(ui, result.Violations.Length)
                     } else {
                         ""
                     },
@@ -868,12 +881,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     AlignItems: AlignItems.Center,
                     Gap: 8,
                     ui.Label(ui.Strings.Get("auto save"), 12, ui.Body, ""),
-                    ToggleSwitch{
-                        Checked: autoSave == true,
-                        Disabled: autoSave == nil || input.Busy,
-                        AccessibilityName: ui.Strings.Get("auto save"),
-                        OnClick: () -> Checkpoints(input, input.Session.CheckpointAutoSaveAsync(autoSave != true))
-                    }.Build(),
+                    Toggle(
+                        input,
+                        "auto save",
+                        autoSave == true,
+                        () -> Checkpoints(input, input.Session.CheckpointAutoSaveAsync(autoSave != true)),
+                        autoSave == nil
+                    ),
                     ui.Button("Save", () -> Checkpoints(input, input.Session.CheckpointsAsync("save")), input.Busy),
                     ui.Button("Load", () -> Checkpoints(input, input.Session.CheckpointsAsync("load")), input.Busy)
                 }
@@ -1536,7 +1550,15 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let kept = Column(ui, "kept", ui.Mint)
         if dataWallets > 0 {
             kept.Add(
-                Item(ui, true, ui.Strings.Get("{0} wallets").Replace("{0}", dataWallets.ToString()), "moved out first")
+                Item(
+                    ui,
+                    true,
+                    ui
+                        .Strings
+                        .Get(dataWallets == 1 ? "{0} wallet": "{0} wallets")
+                        .Replace("{0}", dataWallets.ToString()),
+                    "moved out first"
+                )
             )
         }
         kept.Add(Item(ui, true, "settings.json", ""))
@@ -1688,6 +1710,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             ModalDialog{
                 Open: true,
                 CreateRoot: ui.DialogRoot,
+                KeyBindings: WidgetKeyBindings.Editing(input.Window?.PlatformInput),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Apply settings"),
                 Width: Math.Min(input.Width - 48, 440),
@@ -1730,6 +1753,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         ModalDialog{
             Open: true,
             CreateRoot: input.Ui.DialogRoot,
+            KeyBindings: WidgetKeyBindings.Editing(input.Window?.PlatformInput),
             AccessibilityName: input.Ui.Strings.Get(name),
             Width: Math.Min(input.Width - 40, width),
             MaxHeight: Percent(100),
@@ -1840,11 +1864,22 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         return group
     }
 
-    private func Toggle(input SettingsPageInput, label string, on bool, changed Action) Blob -> ToggleSwitch{
+    private func Violations(ui Presentation, count int) string ->
+    ui.Strings.Get(count == 1 ? "{0} violation": "{0} violations").Replace("{0}", count.ToString())
+
+    private func Toggle(input SettingsPageInput, label string, on bool, changed Action, disabled bool = false) Blob ->
+    ToggleSwitch{
         Checked: on,
-        Disabled: input.Busy,
+        Disabled: disabled || input.Busy,
         AccessibilityName: input.Ui.Strings.Get(label),
-        OnClick: changed
+        OnClick: changed,
+        Width: 36,
+        Height: 20,
+        ThumbSize: 14,
+        OffTrackColor: input.Ui.Edge,
+        OnTrackColor: input.Ui.Lime,
+        ThumbColor: Color.Parse("#8c8c8c"),
+        OnThumbColor: Color.Parse("#050505")
     }.Build()
 
     private func Info(input SettingsPageInput, key string, topic string, line string) Blob ->
