@@ -127,7 +127,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             let selected = id == section
             let fill = selected ? Color.Parse("#121906"): Color.Transparent
             nav.Add(
-                Goo.Button{
+                Goo
+                    .Button{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 10,
@@ -143,7 +144,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         Name: ui.Strings.Get(id),
                         Selected: selected
                     },
-                    OnClick: () -> input.OnSection(id),
+                    OnClick: () -> input.OnSection.Invoke(id),
                     MaterialIcons.Create(
                         switch id {
                             case "security": "lock"
@@ -336,7 +337,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     []Blob{
                         ui.Label(ui.Strings.Get("12 words"), 14, ui.Dim, ""),
                         ui.Button("Show", () -> Open("phrase"), input.Busy),
-                        Info(input, "phrase", "About recovery phrase", "The 12 words restore this wallet and can spend it")
+                        Info(
+                            input,
+                            "phrase",
+                            "About recovery phrase",
+                            "The 12 words restore this wallet and can spend it"
+                        )
                     }
                 )
             )
@@ -399,7 +405,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                             Pinned("NODE_MODE"),
                             id -> ui.Run(input.Session.SaveNodeModeAsync(id))
                         ),
-                        Info(input, "mode", "About node mode", "Automatic runs the verified core. Existing node uses a node you run")
+                        Info(
+                            input,
+                            "mode",
+                            "About node mode",
+                            "Automatic runs the verified core. Existing node uses a node you run"
+                        )
                     }
                 ),
                 Line(ui, "height", height.ToArray()),
@@ -436,7 +447,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             }
         )
         list.Add(
-            Goo.Button{
+            Goo
+                .Button{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 Gap: 10,
@@ -584,7 +596,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 ui,
                 "output health",
                 []Blob{
-                    ui.Button("Check", () -> input.OnNavigate("Tools"), input.Busy),
+                    ui.Button("Check", () -> input.OnNavigate.Invoke("Tools"), input.Busy),
                     Info(
                         input,
                         "health",
@@ -645,7 +657,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             note.Gap = 10
             note.FlexShrink = 0
             note.Add(MaterialIcons.Create("warning", 16, ui.Body))
-            note.Add(ui.Label(ui.Strings.Get("Balance counts received coins. Spends need the spend key"), 13, ui.Ink, ""))
+            note.Add(
+                ui.Label(ui.Strings.Get("Balance counts received coins. Spends need the spend key"), 13, ui.Ink, "")
+            )
             pane.Add(note)
         }
     }
@@ -668,7 +682,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 FlexShrink: 0,
                 Value(input, "size", "chain data", sizeText, figure, ui.Ink),
                 ui.Label(sizeUnit, 15, ui.Body, ""),
-                ui.Label(ui.Strings.Get("{0} GB free").Replace("{0}", (freeSpace / 1000000000).ToString()), 12.5, ui.Dim, "")
+                ui.Label(
+                    ui.Strings.Get("{0} GB free").Replace("{0}", (freeSpace / 1000000000).ToString()),
+                    12.5,
+                    ui.Dim,
+                    ""
+                )
             }
         )
         data.Add(
@@ -693,7 +712,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         purgeRow.Add(Container{FlexGrow: 1})
         purgeRow.Add(
             (
-                Theme.Read().Button with{
+                Theme.Read()
+                    .Button with{
                     Content = ui.Strings.Get("Purge…"),
                     OnClick = () -> {
                         purgeText = ""
@@ -720,16 +740,21 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "About certify",
             "Checks block links, difficulty and timestamps. Does not re-check proof of work or transactions"
         )
-        let verdict = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Baseline, Gap: 12, FlexShrink: 0}
+        let verdict = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Baseline,
+            Gap: 12,
+            FlexShrink: 0
+        }
         let wide = Math.Clamp(input.Height * 0.05, 22.0, 48.0)
         if let result = certificate {
             let clean = result.Violations.Length == 0
             verdict.Add(
                 ui.Label(
-                    clean ? ui.Strings.Get("clean"): ui.Strings.Get("{0} violations").Replace(
-                        "{0}",
-                        result.Violations.Length.ToString()
-                    ),
+                    clean ? ui.Strings.Get("clean"): ui
+                        .Strings
+                        .Get("{0} violations")
+                        .Replace("{0}", result.Violations.Length.ToString()),
                     wide,
                     clean ? ui.Mint: ui.Pink,
                     ""
@@ -756,8 +781,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 []string{Short(0), Short(step * 10), Short(step * 20)},
                 index -> {
                     let first = uint64(index) * step
-                    let bad = certificate?.Violations.Any((height uint64) -> height >= first && height < first + step) ==
-                        true
+                    let bad = certificate?.Violations.Any(
+                        (height uint64) -> height >= first && height < first + step
+                    ) ==
+                    true
                     return if bad {
                         Slot(ui, ui.Pink, 1)
                     } else if checked > first {
@@ -801,15 +828,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             }
         )
         pane.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                Gap: 12,
-                FlexGrow: 1,
-                FlexBasis: 0,
-                MinHeight: 0,
-                data,
-                checks
-            }
+            Container{FlexDirection: FlexDirection.Row, Gap: 12, FlexGrow: 1, FlexBasis: 0, MinHeight: 0, data, checks}
         )
         pane.Add(Checkpoint(input, figure))
     }
@@ -953,13 +972,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         return card
     }
 
-    private func Grid(
-        input SettingsPageInput,
-        name string,
-        rows int32,
-        labels[]?string,
-        slot Func[int32, Blob]
-    ) Blob {
+    private func Grid(input SettingsPageInput, name string, rows int32, labels[]?string, slot Func[int32, Blob]) Blob {
         let grid = Container{
             FlexGrow: 1,
             MinHeight: 0,
@@ -1122,10 +1135,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 passwordIssue
             ),
             ui.ActionRow(
-                []Blob{
-                    ui.Button("Cancel", close),
-                    ui.Button("Show", submit, input.Busy || password.Length == 0, true)
-                }
+                []Blob{ui.Button("Cancel", close), ui.Button("Show", submit, input.Busy || password.Length == 0, true)}
             ),
             close
         )
@@ -1139,7 +1149,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         password = ""
         if dialog == "phrase" {
             dialog = ""
-            input.OnRevealSeed(buffer)
+            input.OnRevealSeed.Invoke(buffer)
             return
         }
         let task = LoadKeys(input.Session, buffer)
@@ -1195,17 +1205,24 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     ui.Button(
                         "Copy all",
                         () -> ui.Copy(
-                            "spend_public " + String(keys.SpendPublic) + "\nview_private " + String(keys.ViewPrivate) +
-                                "\nview_public " + String(keys.ViewPublic),
+                            "spend_public " +
+                                String(keys.SpendPublic) +
+                                "\nview_private " +
+                                String(keys.ViewPrivate) +
+                                "\nview_public " +
+                                String(keys.ViewPublic),
                             30000
                         )
                     ),
                     ui.Button(
                         "Save…",
-                        () -> input.ChooseFile(
+                        () -> input.ChooseFile.Invoke(
                             FileDialogKind.SaveFile,
                             "keys file",
-                            Path.Combine(Home(), input.Session.Settings.ActiveWallet.Replace(".wallet.dat", "") + ".keys.txt"),
+                            Path.Combine(
+                                Home(),
+                                input.Session.Settings.ActiveWallet.Replace(".wallet.dat", "") + ".keys.txt"
+                            ),
                             path -> ui.Run(input.Session.Keys.SaveViewKeysAsync(path, keys))
                         ),
                         input.Busy
@@ -1258,7 +1275,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         if secret {
             row.Add(
                 IconButton{
-                    Icon: MaterialIcons.Create(viewPrivateShown ? "visibility": "visibility_off", 14, viewPrivateShown ? ui.Body: ui.Lime),
+                    Icon: MaterialIcons.Create(
+                        viewPrivateShown ? "visibility": "visibility_off",
+                        14,
+                        viewPrivateShown ? ui.Body: ui.Lime
+                    ),
                     AccessibilityName: ui.Strings.Get(viewPrivateShown ? "Hide": "Reveal"),
                     OnClick: () -> {
                         viewPrivateShown = !viewPrivateShown
@@ -1301,7 +1322,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     FlexDirection: FlexDirection.Row,
                     Gap: 12,
                     FlexShrink: 0,
-                    Ability(ui, "can", []string{"see incoming payments", "read amounts and memos", "prove a payment"}, true),
+                    Ability(
+                        ui,
+                        "can",
+                        []string{"see incoming payments", "read amounts and memos", "prove a payment"},
+                        true
+                    ),
                     Ability(ui, "cannot", []string{"send or sign", "show the phrase", "see spends"}, false)
                 }
             )
@@ -1341,11 +1367,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             )
             content.Add(
-                Labelled(
-                    ui,
-                    "",
-                    ui.Label(ui.Strings.Get("Must differ from this wallet's password"), 12, ui.Dim, "")
-                )
+                Labelled(ui, "", ui.Label(ui.Strings.Get("Must differ from this wallet's password"), 12, ui.Dim, ""))
             )
             content.Add(
                 Labelled(
@@ -1381,7 +1403,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 ui.Button(
                     "Create",
                     submit,
-                    input.Busy || viewOnlyName.Trim().Length == 0 || password.Length == 0 || viewOnlyPassword.Length == 0,
+                    input.Busy || viewOnlyName.Trim()
+                        .Length == 0 ||
+                        password.Length == 0 ||
+                        viewOnlyPassword.Length == 0,
                     true
                 )
             )
@@ -1430,7 +1455,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         Gap: 10,
         FlexShrink: 0,
         Container{Width: 130, FlexShrink: 0, ui.Label(label.Length > 0 ? ui.Strings.Get(label): "", 12.5, ui.Body, "")},
-        ui.Grow(Container{field})
+        ui.Grow(Container{MinWidth: 0, field})
     }
 
     private func CreateViewOnly(input SettingsPageInput) {
@@ -1570,7 +1595,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         footer.Add(ui.Button("Cancel", close))
         footer.Add(
             (
-                Theme.Read().DangerButton with{
+                Theme.Read()
+                    .DangerButton with{
                     Content = ui.Strings.Get("Purge {0}").Replace("{0}", size),
                     OnClick = confirm,
                     Disabled = !typed || input.Busy,
@@ -1698,7 +1724,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         content Blob,
         footer Blob,
         close Action
-    ) Blob -> Cell.Mount[ModalDialog, ModalDialogHost](
+    ) Blob -> Cell
+        .Mount[ModalDialog, ModalDialogHost](
         key,
         ModalDialog{
             Open: true,
@@ -1785,7 +1812,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             let id = ids[index]
             let on = id == selected
             group.Add(
-                Goo.Button{
+                Goo
+                    .Button{
                     Height: 28,
                     Padding: Edges{Left: 12, Right: 12},
                     AlignItems: AlignItems.Center,
@@ -1825,7 +1853,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         InfoTipInput{Ui: input.Ui, Topic: topic, Lines: []string{line}, Language: input.Language, Width: 300}
     )
 
-    private func Value(input SettingsPageInput, key string, name string, value string, size float64, color Color) Blob ->
+    private func Value(
+        input SettingsPageInput,
+        key string,
+        name string,
+        value string,
+        size float64,
+        color Color
+    ) Blob ->
     Cell.Mount[DecodeValueInput, DecodeValue](
         key,
         DecodeValueInput{
@@ -1864,6 +1899,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 FlexShrink: 0,
                 ui.Grow(
                     Container{
+                        MinWidth: 0,
                         ui.Field(
                             label,
                             current,
@@ -1879,7 +1915,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 ),
                 ui.Button(
                     "Browse",
-                    () -> input.ChooseFile(
+                    () -> input.ChooseFile.Invoke(
                         kind,
                         label,
                         Path.IsPathFullyQualified(current) ? current: Home(),
@@ -1898,7 +1934,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
 
-    private func Shorten(path string) string -> if path.StartsWith(Home(), StringComparison.Ordinal) && Home().Length > 1 {
+    private func Shorten(path string) string -> if path.StartsWith(Home(), StringComparison.Ordinal) &&
+        Home().Length > 1 {
         "~" + path.Substring(Home().Length)
     } else {
         path

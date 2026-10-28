@@ -128,8 +128,12 @@ class WalletLibrary {
                 continue
             }
             using let input = PrivateFiles.OpenRead(path)
-            if path.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) ||
-                input.Read(header, 0, header.Length) == header.Length && header.SequenceEqual(magic) {
+            if path.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) || input.Read(
+                header,
+                0,
+                header.Length
+            ) == header.Length &&
+                header.SequenceEqual(magic) {
                 found.Add(path)
             }
         }

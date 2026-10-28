@@ -35,9 +35,19 @@ partial class App {
 
     private var sceneCenter float32 = 0.62F
 
+    private var reduceMotion bool
+
+    private var backgroundMode string = "glyphs"
+
+    private func ApplyPreferences() {
+        let settings = wallet.Settings
+        reduceMotion = settings.ReduceMotion
+        backgroundMode = settings.Background
+    }
+
     private func PlaybackActive() bool ->
-    !hidden && window?.IsFocused == true && window?.IsVisible == true && window?.State != WindowState.Minimized
-    && Stopwatch.GetElapsedTime(lastActivity).TotalSeconds < 10
+    !reduceMotion && !hidden && window?.IsFocused == true && window?.IsVisible == true
+    && window?.State != WindowState.Minimized && Stopwatch.GetElapsedTime(lastActivity).TotalSeconds < 10
 
     private func UpdatePlayback() {
         let active = PlaybackActive()
@@ -74,8 +84,12 @@ partial class App {
             return
         }
         let now = clock.Elapsed.TotalSeconds
-        let step = (now - background.ElapsedSeconds) / 1.2
-        sceneShift = if WalletAvailable() {
+        Scene((now - background.ElapsedSeconds) / 1.2)
+        background.ElapsedSeconds = now
+    }
+
+    private func Scene(step float64) {
+        sceneShift = if WalletAvailable() && backgroundMode == "glyphs" {
             Math.Min(1, sceneShift + step)
         } else {
             Math.Max(0, sceneShift - step)
@@ -84,6 +98,5 @@ partial class App {
             3,
             Vector4(float32(sceneShift), float32(3 * (window?.UiScale ?? 1)), float32(ui.Pane), 0F)
         )
-        background.ElapsedSeconds = now
     }
 }

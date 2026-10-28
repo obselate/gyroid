@@ -183,8 +183,8 @@ partial class App {
                     "Node settings",
                     () -> {
                         nodeOpen = false
+                        settingsSection = "node"
                         Navigate("Settings")
-                        settingsTab = "node"
                     }
                 )
             }

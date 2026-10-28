@@ -54,11 +54,19 @@ partial class App {
                 Quit()
             }
         }
-        icon.StatusChanged += status -> {
+        var conceal = wallet.Settings.StartInTray
+        let registered Action[TrayStatus] = status -> {
             if hidden && status != TrayStatus.Registered {
                 Restore()
+            } else if conceal && status == TrayStatus.Registered {
+                conceal = false
+                hidden = true
+                host.Hide()
+                UpdatePlayback()
             }
         }
+        icon.StatusChanged += registered
+        registered(icon.Status)
     }
 
     func Closing() bool {

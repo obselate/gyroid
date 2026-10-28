@@ -91,6 +91,17 @@ partial class App : Cell {
     private let finishSeed Action
 
     private let contactsChanged Action[SortedDictionary[string, string]]
+    private var settingsSection string = "general"
+
+    private let selectSection Action[string]
+
+    private let setLanguage Action[string]
+
+    private let preferenceChanged Action
+
+    private let revealSeed Action[[]char]
+
+    private let closeSettings Action
 
     init(wallet WalletSession) {
         this.wallet = wallet
@@ -117,6 +128,27 @@ partial class App : Cell {
         contactsChanged = next -> {
             contacts = next
         }
+        selectSection = section -> {
+            settingsSection = section
+            Rebuild()
+        }
+        setLanguage = language -> SetLanguage(language)
+        preferenceChanged = () -> {
+            ApplyPreferences()
+            UpdatePlayback()
+            Rebuild()
+        }
+        revealSeed = buffer -> {
+            seedFromWallet = true
+            Run(wallet.Keys.RevealSeedAsync(buffer), nil, buffer)
+        }
+        closeSettings = () -> {
+            screen = ""
+            ui.Decode("page")
+            LoadWallets()
+            Rebuild()
+        }
+        ApplyPreferences()
         nodeAnchor.MetricsChanged += _ -> {
             if nodeOpen {
                 Rebuild()
@@ -137,6 +169,9 @@ partial class App : Cell {
             Rebuild()
         }
         owner.StateChanged += _ -> {
+            if owner.State == WindowState.Minimized && wallet.Settings.LockOnMinimize {
+                Lock()
+            }
             UpdatePlayback()
             Rebuild()
         }
@@ -258,19 +293,8 @@ partial class App : Cell {
     }
 
     private func ClearSecrets() {
-        password = ""
-        confirmation = ""
-        filePassword = ""
-        passwordIssue = ""
         clears++
-        revealPassword = ""
-
         upgradeShown = false
-        viewKeys?.Dispose()
-        viewKeys = nil
-        viewKeysVisible = false
-        viewOnlyOpen = false
-        viewOnlyCreated = ""
     }
 
     private func TakeSeed() bool {
@@ -441,12 +465,7 @@ partial class App : Cell {
         if ui.Working() {
             return
         }
-        if target == "Settings" {
-            draft = wallet.Settings
-            listenIssue = ""
-            programIssue = ""
-            applyPending = false
-        } else if !WalletAvailable() || target == "Send" && wallet.Snapshot.ViewOnly {
+        if target != "Settings" && (!WalletAvailable() || target == "Send" && wallet.Snapshot.ViewOnly) {
             return
         }
         if seedFromWallet && wallet.Snapshot.Page == "Seed" {
@@ -464,6 +483,23 @@ partial class App : Cell {
             window?.TryPost(
                 () -> {
                     error = "Privacy setting could not be saved"
+                    Rebuild()
+                }
+            )
+        }
+    }
+
+    private async func SetLanguage(language string) {
+        ui.Strings.Language = language
+        ui.Decoding.Clear()
+        tray?.Update(TraySettings())
+        Rebuild()
+        try {
+            await wallet.SaveLanguageAsync(language)
+        } catch (failure Exception) {
+            window?.TryPost(
+                () -> {
+                    error = "Language setting could not be saved"
                     Rebuild()
                 }
             )
@@ -504,7 +540,15 @@ partial class App : Cell {
             KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
             OnPointerDown: (event PointerEvent) -> Touch(),
             OnWheel: (event WheelEvent) -> Touch(),
-            Container{Position: PositionType.Absolute, Left: 0, Top: 0, Right: 0, Bottom: 0, ShaderEffect: background},
+            Container{
+                Position: PositionType.Absolute,
+                Left: 0,
+                Top: 0,
+                Right: 0,
+                Bottom: 0,
+                BackgroundColor: backgroundMode == "off" ? ui.Black: Color.Transparent,
+                ShaderEffect: backgroundMode == "off" ? nil: background
+            },
             Chrome()
         }
         let page = if screen.Length > 0 {
@@ -620,7 +664,30 @@ partial class App : Cell {
                 }
             )
         } else if page == "Settings" {
-            SettingsPage()
+            Cell.Mount[SettingsPageInput, SettingsPage](
+                "settings",
+                SettingsPageInput{
+                    Session: wallet,
+                    Ui: ui,
+                    Snapshot: snapshot,
+                    Node: wallet.Node.Status,
+                    Section: settingsSection,
+                    Available: WalletAvailable(),
+                    Privacy: ui.Privacy,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    Clipboard: ui.ClipboardText,
+                    Width: width,
+                    Height: height,
+                    ChooseFile: chooseFile,
+                    OnSection: selectSection,
+                    OnLanguage: setLanguage,
+                    OnPreference: preferenceChanged,
+                    OnRevealSeed: revealSeed,
+                    OnNavigate: navigate,
+                    OnClose: closeSettings
+                }
+            )
         } else {
             Cell.Mount[LibraryInput, LibraryPage](
                 "library",
@@ -647,7 +714,7 @@ partial class App : Cell {
         let cardWidth = switch page {
             case "Overview": span
             case "Transactions": span
-            case "Settings": 860.0
+            case "Settings": 1004.0
             case "Seed": 760.0
             case "Receive": 640.0
             case "Send": 640.0
@@ -661,7 +728,10 @@ partial class App : Cell {
         } else {
             span
         }
-        if !WalletAvailable() || sceneShift >= 1 {
+        if !PlaybackActive() {
+            Scene(1)
+        }
+        if !WalletAvailable() || sceneShift >= 1 || backgroundMode != "glyphs" {
             let radius = Math.Min(region / 2 - 24, (height - 44) / 2 - 24)
             sceneCenter = float32((left + span - region / 2) / width)
             background.SetParameter(
@@ -732,17 +802,6 @@ partial class App : Cell {
             }
             if upgradeShown {
                 root.Add(UpgradeDialog())
-            }
-            if let keys = viewKeys {
-                root.Add(ViewKeysDialog(keys))
-            }
-            if viewOnlyOpen {
-                root.Add(ViewOnlyDialog())
-            }
-        }
-        if applyPending && page == "Settings" {
-            if let value = draft {
-                root.Add(ConfirmApply(value))
             }
         }
         if !maximized {

@@ -99,7 +99,12 @@ class WalletKeys {
             for part in parts {
                 offset += Encoding.ASCII.GetBytes(part, 0, part.Length, bytes, offset)
             }
-            await PrivateFiles.WriteAtomic(path, destination -> destination.WriteAsync(bytes, 0, length, ct), true, false)
+            await PrivateFiles.WriteAtomic(
+                path,
+                destination -> destination.WriteAsync(bytes, 0, length, ct),
+                true,
+                false
+            )
         } finally {
             Array.Clear(bytes)
         }
