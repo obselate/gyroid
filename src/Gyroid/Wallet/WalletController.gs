@@ -16,12 +16,10 @@ import System.Threading.Tasks
 
 class WalletController : IDisposable {
     var settings WalletSettings
-    var rpc NodeApi
-    let daemon NodeSupervisor = NodeSupervisor()
+    let Node NodeSession
     let gate SemaphoreSlim = SemaphoreSlim(1, 1)
     let autoLockChanged SemaphoreSlim = SemaphoreSlim(0, 1)
     var snapshot WalletSnapshot = WalletSnapshot()
-    var nodeStatus NodeStatus = NodeStatus()
     var pendingSeed[]?char = nil
     var confirmation SendEstimate? = nil
     var confirmationKey string = ""
@@ -47,7 +45,6 @@ class WalletController : IDisposable {
 
     prop Settings WalletSettings -> settings.Copy()
     prop Snapshot WalletSnapshot -> snapshot
-    prop NodeStatus NodeStatus -> nodeStatus
     prop Busy bool -> isBusy
     prop Pending PendingSend? -> pendingSend
     prop PendingSendError string -> pendingSendError
@@ -56,26 +53,14 @@ class WalletController : IDisposable {
 
     init() {
         settings = WalletSettings.Load()
-        rpc = NodeApi(settings)
-        daemon.Exited = () -> Task.Run(() -> RestartOwnedAsync())
-        daemon.Progress = value -> {
-            nodeStatus = NodeStatus{
-                ... nodeStatus,
-                Progress: value,
-                Phase: if value == "Detecting" {
-                    "Detecting"
-                } else {
-                    daemon.Phase
-                },
-                DownloadPercent: daemon.DownloadPercent
-            }
-            Changed?.Invoke()
-        }
+        Node = NodeSession(settings)
+        Node.Exited = () -> Task.Run(() -> RestartOwnedAsync())
+        Node.Changed = () -> Changed?.Invoke()
         if settings.ActiveWallet.Length > 0 {
             page = "Unlock"
         }
         PublishEmpty()
-        PublishNode()
+        Node.Publish()
         Task.Run(() -> AutoLockAsync())
     }
 
@@ -176,7 +161,7 @@ class WalletController : IDisposable {
     private async func ListenEventsAsync(ct CancellationToken) {
         while !ct.IsCancellationRequested {
             try {
-                await rpc.EventsAsync(_ -> RefreshEventAsync(ct), ct)
+                await Node.Api.EventsAsync(_ -> RefreshEventAsync(ct), ct)
             } catch (error Exception) {
                 if ct.IsCancellationRequested {
                     return
@@ -194,7 +179,7 @@ class WalletController : IDisposable {
         await gate.WaitAsync(ct)
         try {
             ct.ThrowIfCancellationRequested()
-            await RefreshNodeCoreAsync(ct)
+            await Node.RefreshStatusAsync(ct)
             if state == "Unlocked" {
                 await RefreshCoreAsync(ct)
             }
@@ -215,7 +200,7 @@ class WalletController : IDisposable {
             await Task.Delay(2000, ct)
             await gate.WaitAsync(ct)
             try {
-                if disposed || settings.NodeMode == "manual" || !daemon.NeedsRestart {
+                if disposed || settings.NodeMode == "manual" || !Node.Supervisor.NeedsRestart {
                     return
                 }
                 StopEvents()
@@ -230,22 +215,21 @@ class WalletController : IDisposable {
                     "Welcome"
                 }
                 PublishEmpty()
-                PublishNode()
+                Node.Publish()
                 Changed?.Invoke()
                 let delay = nextRestart - DateTimeOffset.UtcNow
                 if delay > TimeSpan.Zero {
                     await Task.Delay(delay, ct)
                 }
                 nextRestart = DateTimeOffset.UtcNow.AddSeconds(10)
-                rpc.Dispose()
-                rpc = NodeApi(settings)
+                Node.Reconnect()
                 await ConnectCoreAsync(ct)
                 UpdateEvents()
             } finally {
                 gate.Release()
             }
         } catch (error Exception) {
-            PublishNode()
+            Node.Publish()
         }
         if !disposed {
             Changed?.Invoke()
@@ -255,34 +239,16 @@ class WalletController : IDisposable {
     private async func ConnectCoreAsync(ct CancellationToken) {
         try {
             if !connected {
-                daemon.Progress?.Invoke("Detecting")
+                Node.Supervisor.Progress?.Invoke("Detecting")
             }
-            let endpoint = settings.Endpoint
-            await daemon.ConnectAsync(settings, ct)
-            if endpoint != settings.Endpoint {
-                rpc.Dispose()
-                rpc = NodeApi(settings)
-            }
-            using let health = await rpc.JsonAsync("health", ct: ct)
-            using let configuration = await rpc.JsonAsync("settings", ct: ct)
-            let walletFile = NodeJson.Text(configuration.RootElement.GetProperty("settings"), "wallet_file")
-            if !Path.IsPathFullyQualified(walletFile) {
-                throw WalletException(
-                    "Core wallet_file must be an absolute path. Configure the external daemon explicitly"
-                )
-            }
-            let parent = Path.GetDirectoryName(walletFile) ??
-                throw WalletException("Core wallet_file must have a parent directory")
-            let directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent))
-            settings.WalletDirectory = directory
+            let walletFile = await Node.ConnectAsync(settings, ct)
             let comparison = if OperatingSystem.IsWindows() {
                 StringComparison.OrdinalIgnoreCase
             } else {
                 StringComparison.Ordinal
             }
-            await RefreshNodeCoreAsync(ct)
             try {
-                using let address = await rpc.JsonAsync("wallet/address", ct: ct)
+                using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
                 if state != "Unlocked" {
                     Touch()
                 }
@@ -323,7 +289,7 @@ class WalletController : IDisposable {
             }
             PublishCurrent()
         } catch (error Exception) {
-            PublishNode()
+            Node.Publish()
             connected = false
             managed = false
             PublishEmpty()
@@ -389,15 +355,15 @@ class WalletController : IDisposable {
             StopEvents()
             await UnloadCoreAsync(ct)
             await WalletSettings.SaveAsync(next, ct)
-            if daemon.Owned && next.StartupDiffers(settings) {
-                daemon.Stop()
+            if Node.Supervisor.Owned && next.StartupDiffers(settings) {
+                Node.Supervisor.Stop()
                 next.OwnedProcessId = 0
             } else {
                 next.OwnedProcessId = settings.OwnedProcessId
             }
-            rpc.Dispose()
             settings = next
-            rpc = NodeApi(settings)
+            Node.Settings = settings
+            Node.Reconnect()
             connected = false
             page = if settings.ActiveWallet.Length == 0 {
                 "Welcome"
@@ -405,7 +371,7 @@ class WalletController : IDisposable {
                 "Unlock"
             }
             PublishEmpty()
-            PublishNode()
+            Node.Publish()
             await ConnectCoreAsync(ct)
         } finally {
             End()
@@ -496,38 +462,28 @@ class WalletController : IDisposable {
     }
 
     private func StopNode() {
-        if !daemon.Owned {
+        if !Node.Supervisor.Owned {
             throw WalletException("This process does not own the node. External nodes are never stopped")
         }
         if managed || state != "Unloaded" {
             throw WalletException("Unload the wallet before stopping or restarting the node")
         }
-        daemon.Stop()
+        Node.StopOwned()
         StopEvents()
-        settings.OwnedProcessId = 0
-        rpc.Dispose()
-        rpc = NodeApi(settings)
         connected = false
         PublishEmpty()
-        PublishNode()
+        Node.Publish()
     }
 
     async func RefreshNodeAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            let endpoint = settings.Endpoint
-            if !await daemon.TryAttachAsync(settings, ct) {
-                PublishNode()
-                ThrowIfCoreExited()
+            if !await Node.TryAttachAsync(ct) {
                 return
             }
-            if endpoint != settings.Endpoint {
-                rpc.Dispose()
-                rpc = NodeApi(settings)
-            }
-            await RefreshNodeCoreAsync(ct)
+            await Node.RefreshStatusAsync(ct)
         } catch (error Exception) {
-            PublishNode()
+            Node.Publish()
             throw error
         } finally {
             End()
@@ -537,87 +493,9 @@ class WalletController : IDisposable {
     async func RefreshStatusAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            await RefreshNodeCoreAsync(ct)
+            await Node.RefreshStatusAsync(ct)
         } finally {
             End()
-        }
-    }
-
-    private async func RefreshNodeCoreAsync(ct CancellationToken) {
-        try {
-            using let status = await rpc.JsonAsync("status", ct: ct)
-            let root = status.RootElement
-            let current = NodeStatus{
-                Source: daemon.Source,
-                Owned: daemon.Owned,
-                Running: true,
-                Version: CoreRelease.Version,
-                Network: settings.Network,
-                Height: NodeJson.Number(root, "chain_height"),
-                ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),
-                Syncing: NodeJson.Flag(root, "syncing"),
-                SyncProgress: NodeJson.OptionalNumber(root, "sync_progress"),
-                Peers: NodeJson.Number(root, "peers"),
-                Endpoint: settings.Endpoint,
-                DataDirectory: settings.DataDirectory,
-                Executable: daemon.Executable,
-                Progress: nodeStatus.Progress,
-                Phase: if daemon.Phase.Length > 0 {
-                    daemon.Phase
-                } else if NodeJson.Flag(root, "syncing") {
-                    "ChainSync"
-                } else {
-                    ""
-                },
-                DownloadPercent: daemon.DownloadPercent,
-            }
-            if settings.Network == "mainnet" && root.TryGetProperty("network_upgrade", out let upgrade) &&
-                upgrade.ValueKind == JsonValueKind
-                .Object {
-                current.UpgradeDate = NodeJson.Text(upgrade, "date")
-                current.UpgradeDeadline = NodeJson.Text(upgrade, "migration_deadline")
-                current.UpgradeNotice = NodeJson.Text(upgrade, "notice")
-                current.UpgradeBlocksLeft = if current.Height < CoreRelease.UpgradeHeight {
-                    CoreRelease.UpgradeHeight - current.Height
-                } else {
-                    0
-                }
-            }
-            nodeStatus = current
-        } catch (error Exception) {
-            PublishNode()
-            ThrowIfCoreExited()
-            throw error
-        }
-    }
-
-    private func ThrowIfCoreExited() {
-        if daemon.NeedsRestart {
-            throw WalletException("Configured core exited before its API became ready")
-        }
-    }
-
-    private func PublishNode() {
-        nodeStatus = NodeStatus{
-            Source: if daemon.Executable.Length > 0 {
-                daemon.Source
-            } else if settings.BinaryPath == settings.LauncherBinaryPath && settings.BinaryPath.Length > 0 {
-                "Launcher"
-            } else {
-                "Gyroid"
-            },
-            Owned: daemon.Owned,
-            Network: settings.Network,
-            Endpoint: settings.Endpoint,
-            DataDirectory: settings.DataDirectory,
-            Executable: if daemon.Executable.Length > 0 {
-                daemon.Executable
-            } else {
-                settings.BinaryPath
-            },
-            Progress: nodeStatus.Progress,
-            Phase: daemon.Phase,
-            DownloadPercent: daemon.DownloadPercent,
         }
     }
 
@@ -705,7 +583,7 @@ class WalletController : IDisposable {
             RequireUnloaded()
             RequireNewWallet(filename, password)
             await ConnectCoreAsync(ct)
-            using let result = await rpc.JsonAsync(
+            using let result = await Node.Api.JsonAsync(
                 "wallet/create",
                 writer -> WriteCredentials(writer, password, "filename", filename),
                 ct
@@ -718,7 +596,7 @@ class WalletController : IDisposable {
             PublishEmpty()
             await WalletSettings.SaveAsync(settings, ct)
             ClearSeed()
-            pendingSeed = await rpc.SeedAsync(password, ct)
+            pendingSeed = await Node.Api.SeedAsync(password, ct)
             page = "Seed"
             PublishEmpty()
         } finally {
@@ -740,7 +618,7 @@ class WalletController : IDisposable {
             let normalizedPhrase = WalletValidation.NormalizePhrase(phrase)
             normalized = normalizedPhrase
             await ConnectCoreAsync(ct)
-            using let result = await rpc.JsonAsync(
+            using let result = await Node.Api.JsonAsync(
                 "wallet/import",
                 writer -> {
                     writer.WriteStartObject()
@@ -779,7 +657,7 @@ class WalletController : IDisposable {
                     throw WalletException("Choose a wallet first")
                 }
                 WalletPath(settings.ActiveWallet)
-                using let result = await rpc.JsonAsync(
+                using let result = await Node.Api.JsonAsync(
                     "wallet/load",
                     writer -> WriteCredentials(writer, password, "filepath", settings.ActiveWallet),
                     ct
@@ -787,7 +665,7 @@ class WalletController : IDisposable {
                 managed = true
             } else {
                 RequireManaged()
-                using let result = await rpc.JsonAsync(
+                using let result = await Node.Api.JsonAsync(
                     "wallet/unlock",
                     writer -> WriteCredentials(writer, password),
                     ct
@@ -837,7 +715,7 @@ class WalletController : IDisposable {
         PublishEmpty()
         Changed?.Invoke()
         try {
-            using let result = await rpc.JsonAsync("wallet/lock", WriteEmpty, ct)
+            using let result = await Node.Api.JsonAsync("wallet/lock", WriteEmpty, ct)
             state = "Locked"
             PublishEmpty()
         } catch (error WalletException) {
@@ -871,9 +749,9 @@ class WalletController : IDisposable {
         if managed {
             try {
                 if state == "Unlocked" {
-                    using let locked = await rpc.JsonAsync("wallet/lock", WriteEmpty, ct)
+                    using let locked = await Node.Api.JsonAsync("wallet/lock", WriteEmpty, ct)
                 }
-                using let result = await rpc.JsonAsync("wallet/unload", WriteEmpty, ct)
+                using let result = await Node.Api.JsonAsync("wallet/unload", WriteEmpty, ct)
             } catch (error WalletException) {
                 if error.StatusCode != 503 {
                     throw error
@@ -894,7 +772,7 @@ class WalletController : IDisposable {
                 throw WalletException("View-only wallets do not have a spend recovery phrase")
             }
             ClearSeed()
-            pendingSeed = await rpc.SeedAsync(password, ct)
+            pendingSeed = await Node.Api.SeedAsync(password, ct)
             page = "Seed"
             PublishCurrent()
         } finally {
@@ -944,13 +822,13 @@ class WalletController : IDisposable {
         try {
             RequireUnlocked()
             Touch()
-            using let response = await rpc.JsonAsync("wallet/sync", WriteEmpty, token)
+            using let response = await Node.Api.JsonAsync("wallet/sync", WriteEmpty, token)
         } finally {
             End()
         }
         try {
             while state == "Unlocked" && !disposed {
-                using let balance = await rpc.JsonAsync("wallet/balance", ct: token)
+                using let balance = await Node.Api.JsonAsync("wallet/balance", ct: token)
                 if state != "Unlocked" || disposed {
                     return
                 }
@@ -974,7 +852,7 @@ class WalletController : IDisposable {
         try {
             RequireUnlocked()
             Touch()
-            using let response = await rpc.JsonAsync(
+            using let response = await Node.Api.JsonAsync(
                 "wallet/sign",
                 writer -> {
                     writer.WriteStartObject()
@@ -998,7 +876,7 @@ class WalletController : IDisposable {
         WalletValidation.ValidateMessage(message)
         await BeginAsync(ct)
         try {
-            using let response = await rpc.JsonAsync(
+            using let response = await Node.Api.JsonAsync(
                 "verify",
                 writer -> {
                     writer.WriteStartObject()
@@ -1025,7 +903,7 @@ class WalletController : IDisposable {
         try {
             RequireUnlocked()
             Touch()
-            using let response = await rpc.JsonAsync(
+            using let response = await Node.Api.JsonAsync(
                 "wallet/prove",
                 writer -> {
                     writer.WriteStartObject()
@@ -1050,7 +928,7 @@ class WalletController : IDisposable {
         let expected = WalletAmount.Parse(amount)
         await BeginAsync(ct)
         try {
-            using let response = await rpc.JsonAsync(
+            using let response = await Node.Api.JsonAsync(
                 "verify-proof",
                 writer -> {
                     writer.WriteStartObject()
@@ -1080,7 +958,7 @@ class WalletController : IDisposable {
         try {
             RequireUnlocked()
             Touch()
-            return await rpc.ViewKeysAsync(password, "", []char{}, ct)
+            return await Node.Api.ViewKeysAsync(password, "", []char{}, ct)
         } finally {
             End()
         }
@@ -1103,7 +981,7 @@ class WalletController : IDisposable {
                 throw WalletException("View-only file password must differ from the wallet password")
             }
             Touch()
-            using let keys = await rpc.ViewKeysAsync(password, filename, filePassword, ct)
+            using let keys = await Node.Api.ViewKeysAsync(password, filename, filePassword, ct)
         } finally {
             End()
         }
@@ -1121,7 +999,7 @@ class WalletController : IDisposable {
             RequireUnloaded()
             RequireNewWallet(filename, password)
             await ConnectCoreAsync(ct)
-            using let response = await rpc.JsonAsync(
+            using let response = await Node.Api.JsonAsync(
                 "wallet/import",
                 writer -> {
                     writer.WriteStartObject()
@@ -1149,14 +1027,13 @@ class WalletController : IDisposable {
     async func RefreshAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            if daemon.NeedsRestart && settings.NodeMode != "manual" {
-                rpc.Dispose()
-                rpc = NodeApi(settings)
+            if Node.Supervisor.NeedsRestart && settings.NodeMode != "manual" {
+                Node.Reconnect()
                 ClearSeed()
                 InvalidateConfirmation()
                 await ConnectCoreAsync(ct)
             } else {
-                await RefreshNodeCoreAsync(ct)
+                await Node.RefreshStatusAsync(ct)
                 if state == "Unlocked" {
                     await RefreshCoreAsync(ct)
                 }
@@ -1170,8 +1047,8 @@ class WalletController : IDisposable {
         RequireUnlocked()
         await RecoverSendCoreAsync(ct)
         try {
-            using let balance = await rpc.JsonAsync("wallet/balance", ct: ct)
-            using let address = await rpc.JsonAsync("wallet/address", ct: ct)
+            using let balance = await Node.Api.JsonAsync("wallet/balance", ct: ct)
+            using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
             let sends = await ReadSendsAsync(ct)
             let root = balance.RootElement
             let change = NodeJson.OptionalNumber(root, "pending_unconfirmed") ?? 0
@@ -1230,7 +1107,7 @@ class WalletController : IDisposable {
     }
 
     private async func ReadHistoryAsync(outputs List[WalletOutput], limit int32, ct CancellationToken) bool {
-        using let response = await rpc.JsonAsync(
+        using let response = await Node.Api.JsonAsync(
             "wallet/history/page?limit=" + limit.ToString() + "&offset=" + historyOffset.ToString() + "&order=desc",
             ct: ct
         )
@@ -1284,7 +1161,7 @@ class WalletController : IDisposable {
         await BeginAsync(ct)
         try {
             RequireUnlocked()
-            using let response = await rpc.JsonAsync("tx/" + Uri.EscapeDataString(txid), ct: ct)
+            using let response = await Node.Api.JsonAsync("tx/" + Uri.EscapeDataString(txid), ct: ct)
             let root = response.RootElement
             let details = TransactionDetails{
                 Height: NodeJson.OptionalNumber(root, "block_height") ?? uint64(0),
@@ -1292,7 +1169,7 @@ class WalletController : IDisposable {
                 InMempool: NodeJson.Flag(root, "in_mempool")
             }
             if details.Height > 0 {
-                using let block = await rpc.JsonAsync("block/" + details.Height.ToString(), ct: ct)
+                using let block = await Node.Api.JsonAsync("block/" + details.Height.ToString(), ct: ct)
                 details.Timestamp = NodeJson.Signed(block.RootElement, "timestamp")
             }
             return details
@@ -1305,7 +1182,7 @@ class WalletController : IDisposable {
         let sends = List[WalletSend]()
         var offset int32 = 0
         while true {
-            using let response = await rpc.JsonAsync(
+            using let response = await Node.Api.JsonAsync(
                 "wallet/sends?limit=500&offset=" + offset.ToString() + "&order=desc",
                 ct: ct
             )
@@ -1363,7 +1240,7 @@ class WalletController : IDisposable {
                 memo,
                 snapshot.Balance?.Spendable ?? throw WalletException("Spendable balance is unavailable")
             )
-            using let walletAddress = await rpc.JsonAsync("wallet/address", ct: ct)
+            using let walletAddress = await Node.Api.JsonAsync("wallet/address", ct: ct)
             if NodeJson.Flag(walletAddress.RootElement, "view_only") {
                 throw WalletException("View-only wallets cannot send")
             }
@@ -1375,7 +1252,7 @@ class WalletController : IDisposable {
                 recipient = WalletValidation.ValidateAddress(resolved.Address)
             }
             await Task.Delay(2000, ct)
-            using let result = await rpc.JsonAsync(
+            using let result = await Node.Api.JsonAsync(
                 "wallet/send",
                 writer -> WriteSend(writer, recipient, request.Amount, request.Memo, true),
                 ct
@@ -1434,7 +1311,7 @@ class WalletController : IDisposable {
             }
             let key = confirmationKey
             InvalidateConfirmation()
-            using let walletAddress = await rpc.JsonAsync("wallet/address", ct: ct)
+            using let walletAddress = await Node.Api.JsonAsync("wallet/address", ct: ct)
             if NodeJson.Flag(walletAddress.RootElement, "view_only") {
                 throw WalletException("View-only wallets cannot send")
             }
@@ -1447,7 +1324,7 @@ class WalletController : IDisposable {
                 Body: Encoding.UTF8.GetString(body.GetBuffer(), 0, int32(body.Length)),
                 Wallet: settings.ActiveWallet,
                 Network: settings.Network,
-                CoreStarted: rpc.ListenerStarted,
+                CoreStarted: Node.Api.ListenerStarted,
                 Timestamp: DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             }
             SavePendingSend(pending)
@@ -1587,7 +1464,7 @@ class WalletController : IDisposable {
             pendingSend = PendingSend{... pending, CanRetry: false}
         }
         try {
-            using let response = await rpc.JsonAsync(
+            using let response = await Node.Api.JsonAsync(
                 "wallet/send/status?idempotency_key=" + Uri.EscapeDataString(pending.Key),
                 ct: ct
             )
@@ -1631,9 +1508,9 @@ class WalletController : IDisposable {
                     ... pending,
                     State: "No send record. Outcome unknown",
                     CanRetry: if pending.CoreStarted > 0 {
-                        Math.Abs(pending.CoreStarted - rpc.ListenerStarted) < TimeSpan.TicksPerSecond
+                        Math.Abs(pending.CoreStarted - Node.Api.ListenerStarted) < TimeSpan.TicksPerSecond
                     } else {
-                        rpc.ListenerStarted < DateTimeOffset.FromUnixTimeSeconds(pending.Timestamp)
+                        Node.Api.ListenerStarted < DateTimeOffset.FromUnixTimeSeconds(pending.Timestamp)
                             .UtcTicks +
                             TimeSpan.TicksPerSecond
                     }
@@ -1645,7 +1522,7 @@ class WalletController : IDisposable {
     private async func SubmitPendingCoreAsync(pending PendingSend, ct CancellationToken) SendResult {
         await Task.Delay(2000, ct)
         try {
-            using let response = await rpc.JsonAsync(
+            using let response = await Node.Api.JsonAsync(
                 "wallet/send",
                 writer -> writer.WriteRawValue(pending.Body, true),
                 ct,
@@ -1685,7 +1562,7 @@ class WalletController : IDisposable {
     private async func SubmittedInputCountAsync(txid string) int32 {
         using let deadline = CancellationTokenSource(TimeSpan.FromSeconds(5))
         try {
-            using let response = await rpc.JsonAsync("tx/" + txid, ct: deadline.Token)
+            using let response = await Node.Api.JsonAsync("tx/" + txid, ct: deadline.Token)
             if response.RootElement.TryGetProperty("tx", out let tx) && tx.TryGetProperty("inputs", out let inputs) &&
                 inputs.ValueKind == JsonValueKind.Array {
                 return inputs.GetArrayLength()
@@ -1821,8 +1698,7 @@ class WalletController : IDisposable {
         StopEvents()
         ClearSeed()
         InvalidateConfirmation()
-        rpc.Dispose()
-        daemon.Dispose()
+        Node.Dispose()
         managed = false
         connected = false
         state = "Unloaded"
@@ -1865,16 +1741,6 @@ class WalletController : IDisposable {
             writer.WriteEndObject()
             writer.WriteEndArray()
             writer.WriteEndObject()
-        }
-    }
-
-    async func OpenCliAsync(ct CancellationToken = default(CancellationToken)) JsonDocument {
-        await BeginAsync(ct)
-        try {
-            await ConnectCoreAsync(ct)
-            return await rpc.JsonAsync("status", ct: ct)
-        } finally {
-            End()
         }
     }
 }

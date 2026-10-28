@@ -257,9 +257,9 @@ partial class WalletView : Cell {
     }
 
     private func Fingerprint(snapshot WalletSnapshot) string {
-        let node = wallet.NodeStatus
+        let node = wallet.Node.Status
         let text = StringBuilder(
-            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${snapshot.HistoryTotal} ${wallet.Pending?.Retryable} ${wallet.Pending?.State} ${wallet.LockQueued} ${wallet.NodeStatus.Progress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.SyncProgress} ${node.Phase} ${node.Peers} ${node.Endpoint} ${node.DataDirectory}"
+            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${snapshot.HistoryTotal} ${wallet.Pending?.Retryable} ${wallet.Pending?.State} ${wallet.LockQueued} ${wallet.Node.Status.Progress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.SyncProgress} ${node.Phase} ${node.Peers} ${node.Endpoint} ${node.DataDirectory}"
         )
         if let value = snapshot.Balance {
             text.Append(
@@ -291,7 +291,7 @@ partial class WalletView : Cell {
         }
         shownState = state
         ResumePlayback()
-        let node = wallet.NodeStatus
+        let node = wallet.Node.Status
         if node.Syncing || node.Running && node.Peers == 0 {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
         } else {

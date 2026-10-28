@@ -82,8 +82,8 @@ partial class WalletView {
             content.Add(PendingSendBanner())
         }
         content.Add(Balance(snapshot))
-        if wallet.NodeStatus.UpgradeDate.Length > 0 {
-            content.Add(Upgrade(wallet.NodeStatus))
+        if wallet.Node.Status.UpgradeDate.Length > 0 {
+            content.Add(Upgrade(wallet.Node.Status))
         }
         content.Add(History(snapshot))
         return content
@@ -950,7 +950,7 @@ partial class WalletView {
     }
 
     private func UpgradeDialog() Blob {
-        let node = wallet.NodeStatus
+        let node = wallet.Node.Status
         let close Action = () -> {
             upgradeShown = false
             Rebuild()

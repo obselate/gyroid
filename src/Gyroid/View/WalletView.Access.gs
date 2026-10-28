@@ -20,7 +20,7 @@ partial class WalletView {
     private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
 
     private func Phase() string {
-        let status = wallet.NodeStatus
+        let status = wallet.Node.Status
         return if status.Phase.Length == 0 && status.Running && status.Peers == 0 {
             "Connecting"
         } else {
@@ -28,7 +28,7 @@ partial class WalletView {
         }
     }
 
-    private func Preparing() bool -> wallet.NodeStatus.Phase.Length > 0 && wallet.NodeStatus.Phase != "ChainSync"
+    private func Preparing() bool -> wallet.Node.Status.Phase.Length > 0 && wallet.Node.Status.Phase != "ChainSync"
 
     private func PhaseName() string -> strings.Get(
         switch Phase() {
@@ -39,7 +39,7 @@ partial class WalletView {
     )
 
     private func PhasePercent() int32? {
-        let status = wallet.NodeStatus
+        let status = wallet.Node.Status
         if status.Phase != "ChainSync" {
             return status.DownloadPercent
         }
@@ -113,7 +113,7 @@ partial class WalletView {
                     StrokeEnd: percent / 100.0
                 },
                 MaterialIcons.Create(
-                    switch wallet.NodeStatus.Phase {
+                    switch wallet.Node.Status.Phase {
                         case "Checkpoints": "verified"
                         case "ChainSync": "sync"
                         default: "download"
@@ -565,7 +565,7 @@ partial class WalletView {
     }
 
     private func NodeSettings(value WalletSettings) Blob {
-        let status = wallet.NodeStatus
+        let status = wallet.Node.Status
         let current = wallet.Settings
         let loaded = wallet.Snapshot.State != "Unloaded"
         let left = Container{
@@ -640,7 +640,7 @@ partial class WalletView {
             }
         }
         let actions = Container{FlexDirection: FlexDirection.Row, Gap: 8, FlexShrink: 0}
-        if !status.Running && current.NodeMode == "automatic" && wallet.NodeStatus.Progress.Length == 0 {
+        if !status.Running && current.NodeMode == "automatic" && wallet.Node.Status.Progress.Length == 0 {
             actions.Add(Button("Start", () -> Run(wallet.StartNodeAsync()), Working()))
         }
         if status.Owned {

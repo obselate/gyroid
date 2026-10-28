@@ -118,15 +118,13 @@ class Cli {
                 if command == "node" {
                     return RunNode(wallet, arguments[2])
                 }
-                using let status = wallet.OpenCliAsync().GetAwaiter().GetResult()
+                wallet.StartNodeAsync().GetAwaiter().GetResult()
                 if command == "status" {
-                    let root = status.RootElement
+                    let status = wallet.Node.Status
                     Console.WriteLine("Node: reachable")
-                    Console.WriteLine(
-                        "Chain height: " + NodeJson.Number(root, "chain_height").ToString(CultureInfo.InvariantCulture)
-                    )
-                    Console.WriteLine("Syncing: " + NodeJson.Flag(root, "syncing").ToString())
-                    if let height = NodeJson.OptionalNumber(root, "sync_progress") {
+                    Console.WriteLine("Chain height: " + status.Height.ToString(CultureInfo.InvariantCulture))
+                    Console.WriteLine("Syncing: " + status.Syncing.ToString())
+                    if let height = status.SyncProgress {
                         Console.WriteLine("Sync height: " + height.ToString(CultureInfo.InvariantCulture))
                     }
                     Console.WriteLine("Wallet: " + wallet.Snapshot.State)
@@ -373,7 +371,7 @@ class Cli {
                     wallet.StopNodeAsync().GetAwaiter().GetResult()
                 }
             }
-            let status = wallet.NodeStatus
+            let status = wallet.Node.Status
             Console.WriteLine("Source: " + status.Source)
             Console.WriteLine("Owned: " + status.Owned.ToString())
             Console.WriteLine("Running: " + status.Running.ToString())
