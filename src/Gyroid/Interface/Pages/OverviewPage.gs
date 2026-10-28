@@ -268,7 +268,7 @@ class OverviewPage : Cell[OverviewInput] {
         bar.AlignItems = AlignItems.Center
         bar.Gap = 14
         bar.Height = 40
-        bar.Padding = Edges{Left: 16, Right: 10}
+        bar.Padding = Edges{Top: 0, Bottom: 0, Left: 16, Right: 10}
         bar.Add(ui.Label(ui.Strings.Get("Network upgrade") + " " + node.UpgradeDate, 12, ui.Body, ""))
         bar.Add(
             Container{
