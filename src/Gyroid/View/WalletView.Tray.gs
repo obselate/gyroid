@@ -3,9 +3,11 @@ package Gyroid.View
 import Goo
 import System
 import System.Reflection
+import System.Runtime.InteropServices
 
 partial class WalletView {
     private var tray TrayIcon?
+    private var termination PosixSignalRegistration?
     private var trayLockable bool
     private var hidden bool
     private var quitting bool
@@ -25,6 +27,15 @@ partial class WalletView {
     func Start() {
         guard let host = window else {
             return
+        }
+        if !OperatingSystem.IsWindows() {
+            termination = PosixSignalRegistration.Create(
+                PosixSignal.SIGTERM,
+                signal -> {
+                    signal.Cancel = true
+                    host.Post(() -> Quit())
+                }
+            )
         }
         wallet.EnableEvents()
         Run(wallet.ConnectAsync())
