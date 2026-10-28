@@ -5,6 +5,7 @@ import Gyroid.Platform
 import System
 import System.Diagnostics
 import System.IO
+import System.Security.Cryptography
 import System.Text
 import System.Text.Json
 import System.Threading
@@ -12,11 +13,21 @@ import System.Threading.Tasks
 
 class WalletLockScheduler {
     shared {
-        func Cancel(settings WalletSettings) -> File.Delete(Path.Combine(settings.DataDirectory, "gyroid-autolock"))
+        private func CoreIdentity(settings WalletSettings) string {
+            let cookie = PrivateFiles.Cookie(Path.Combine(settings.DataDirectory, "api.cookie"))
+            return Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes(cookie)))
+        }
+
+        func Cancel(settings WalletSettings) {
+            let path = Path.Combine(settings.DataDirectory, "gyroid-autolock")
+            if File.Exists(path) {
+                File.Delete(path)
+            }
+        }
 
         async func ScheduleAsync(node NodeSession, minutes int32) {
             let settings = node.Settings
-            let started = node.Api.ListenerStarted
+            let identity = CoreIdentity(settings)
             let pid = CoreProcess.Listener(Uri(settings.Endpoint))
             let token = Guid.NewGuid().ToString("N")
             let path = Path.Combine(settings.DataDirectory, "gyroid-autolock")
@@ -48,7 +59,7 @@ class WalletLockScheduler {
             writer.WriteString("data_directory", settings.DataDirectory)
             writer.WriteString("wallet_directory", settings.WalletDirectory)
             writer.WriteNumber("pid", pid)
-            writer.WriteNumber("started", started)
+            writer.WriteString("core_identity", identity)
             writer.WriteNumber("deadline", Environment.TickCount64 + int64(minutes) * 60000)
             writer.WriteString("token", token)
             writer.WriteEndObject()
@@ -78,11 +89,11 @@ class WalletLockScheduler {
                     WalletDirectory: NodeJson.Text(root, "wallet_directory"),
                     OwnedProcessId: root.GetProperty("pid").GetInt32()
                 }
-                let started = root.GetProperty("started").GetInt64()
+                let identity = NodeJson.Text(root, "core_identity")
                 let deadline = root.GetProperty("deadline").GetInt64()
                 let token = NodeJson.Text(root, "token")
                 using let node = NodeSession(settings)
-                if node.Api.ListenerStarted != started {
+                if CoreIdentity(settings) != identity {
                     return 1
                 }
                 Console.WriteLine("ready")
@@ -92,9 +103,7 @@ class WalletLockScheduler {
                 }
                 let path = Path.Combine(settings.DataDirectory, "gyroid-autolock")
                 if !File.Exists(path) || PrivateFiles.ReadText(path, 64, true) != token ||
-                    node
-                    .Api
-                    .ListenerStarted != started {
+                    CoreIdentity(settings) != identity {
                     return 0
                 }
                 using let response = node
