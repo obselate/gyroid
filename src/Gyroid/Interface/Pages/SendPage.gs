@@ -210,9 +210,9 @@ class SendPage : Cell[SendPageInput] {
                 Container{
                     FlexDirection: FlexDirection.Row,
                     Gap: 8,
-                    Share(input, "25%", spendable / 4),
-                    Share(input, "50%", spendable / 2),
-                    Share(input, "max", spendable)
+                    Share(input, "25%", spendable, () -> Fill(spendable / 4)),
+                    Share(input, "50%", spendable, () -> Fill(spendable / 2)),
+                    Share(input, "max", spendable, () -> Maximum(input))
                 }
             )
         } else {
@@ -253,7 +253,24 @@ class SendPage : Cell[SendPageInput] {
         ).Build()
     }
 
-    private func Share(input SendPageInput, label string, atoms uint64) Blob {
+    private func Fill(atoms uint64) {
+        rows[0].Amount = WalletAmount.Format(atoms)
+        Rebuild()
+    }
+
+    private func Maximum(input SendPageInput) {
+        let row = rows[0]
+        let text = row.Address.Trim()
+        let address = if Kind(input, text).Length > 0 {
+            input.Contacts.TryGetValue(text, out let destination) ? destination: text
+        } else {
+            input.Snapshot.Address
+        }
+        let task = Task.Run(() -> input.Session.Send.MaximumAsync([]WalletRecipient{}, address, row.Memo))
+        input.Ui.Run(task, () -> Fill(task.Result))
+    }
+
+    private func Share(input SendPageInput, label string, atoms uint64, click Action) Blob {
         let ui = input.Ui
         return Goo
             .Button{
@@ -268,10 +285,7 @@ class SendPage : Cell[SendPageInput] {
             Hover: Style{BackgroundColor: ui.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
-            OnClick: () -> {
-                rows[0].Amount = WalletAmount.Format(atoms)
-                Rebuild()
-            },
+            OnClick: click,
             ui.Label(ui.Strings.Get(label), 12, ui.Body, "")
         }
     }

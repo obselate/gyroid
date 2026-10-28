@@ -6,6 +6,7 @@ import Gyroid.Platform
 import Gyroid.Wallet
 import System
 import System.IO
+import System.Linq
 import System.Text
 import System.Text.Json
 import System.Threading
@@ -112,6 +113,71 @@ class SendService {
             total += recipients[index].Amount
         }
         return recipients
+    }
+
+    async func MaximumAsync(
+        others[]WalletRecipient,
+        address string,
+        memo string,
+        ct CancellationToken = default(CancellationToken)
+    ) uint64 {
+        await session.BeginAsync(ct)
+        try {
+            session.RequireUnlocked()
+            using let owned = await session.Node.Api.JsonAsync("wallet/outputs", ct: ct)
+            let inputs = owned
+                .RootElement
+                .GetProperty("outputs")
+                .EnumerateArray()
+                .Where((output JsonElement) -> NodeJson.Text(output, "status") == "unspent")
+                .ToArray()
+            var available uint64 = 0
+            for output in inputs {
+                available += NodeJson.Number(output, "amount")
+            }
+            var reserved uint64 = 0
+            for other in others {
+                reserved += other.Amount
+            }
+            let probe = others.Append(WalletRecipient{Address: address, Amount: 1, Memo: memo}).ToArray()
+            using let estimate = await session
+                .Node
+                .Api
+                .JsonAsync(
+                "wallet/send/advanced",
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteBoolean("dry_run", true)
+                    writer.WriteStartArray("inputs")
+                    for output in inputs {
+                        writer.WriteStartObject()
+                        writer.WriteString("txid", NodeJson.Text(output, "txid"))
+                        writer.WriteNumber("output_index", NodeJson.Number(output, "output_index"))
+                        writer.WriteEndObject()
+                    }
+                    writer.WriteEndArray()
+                    WriteRecipients(writer, probe)
+                    writer.WriteEndObject()
+                },
+                ct
+            )
+            let fee = NodeJson.Number(estimate.RootElement, "fee")
+            if available <= reserved + fee {
+                throw WalletException("Amount and fee exceed spendable balance")
+            }
+            let maximum = available - reserved - fee
+            probe[probe.Length - 1] = WalletRecipient{Address: address, Amount: maximum, Memo: memo}
+            using let check = await session
+                .Node
+                .Api
+                .JsonAsync("wallet/send", writer -> WriteSend(writer, probe, true), ct)
+            if NodeJson.Number(check.RootElement, "fee") + maximum + reserved > available {
+                throw WalletException("Amount and fee exceed spendable balance")
+            }
+            return maximum
+        } finally {
+            session.End()
+        }
     }
 
     async func SubmitAsync(estimate SendEstimate, ct CancellationToken = default(CancellationToken)) SendResult {
@@ -330,6 +396,11 @@ class SendService {
         private func WriteSend(writer Utf8JsonWriter, recipients[]WalletRecipient, dryRun bool) {
             writer.WriteStartObject()
             writer.WriteBoolean("dry_run", dryRun)
+            WriteRecipients(writer, recipients)
+            writer.WriteEndObject()
+        }
+
+        private func WriteRecipients(writer Utf8JsonWriter, recipients[]WalletRecipient) {
             writer.WriteStartArray("recipients")
             for recipient in recipients {
                 writer.WriteStartObject()
@@ -341,7 +412,6 @@ class SendService {
                 writer.WriteEndObject()
             }
             writer.WriteEndArray()
-            writer.WriteEndObject()
         }
     }
 }

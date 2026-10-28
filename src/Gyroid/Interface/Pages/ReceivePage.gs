@@ -14,8 +14,17 @@ import System.IO
 import System.Text
 import System.Threading.Tasks
 
+class ReceiveRequest {
+    var Amount string = ""
+    var Memo string = ""
+    var Reference string = ""
+    var Since uint64
+    var Format string = "link"
+}
+
 data struct ReceivePageInput {
     var Ui Presentation
+    var Request ReceiveRequest
     var Address string
     var History[]WalletOutput
     var ChainHeight uint64
@@ -28,16 +37,6 @@ data struct ReceivePageInput {
 }
 
 class ReceivePage : Cell[ReceivePageInput] {
-    private var amount string = ""
-
-    private var memo string = ""
-
-    private var reference string = ""
-
-    private var since uint64
-
-    private var format string = "link"
-
     private var qrText string = ""
 
     private var qrCode QrCode?
@@ -46,28 +45,29 @@ class ReceivePage : Cell[ReceivePageInput] {
 
     protected override func Build(input ReceivePageInput) Blob {
         let ui = input.Ui
-        let empty = amount.Length == 0 && memo.Length == 0
+        let request = input.Request
+        let empty = request.Amount.Length == 0 && request.Memo.Length == 0
         if empty {
-            reference = ""
-        } else if reference.Length == 0 {
-            reference = "#" + Random.Shared.Next(0x1000000).ToString("x6")
-            since = input.ChainHeight
+            request.Reference = ""
+        } else if request.Reference.Length == 0 {
+            request.Reference = "#" + Random.Shared.Next(0x1000000).ToString("x6")
+            request.Since = input.ChainHeight
         }
-        let full = if memo.Length > 0 {
-            memo + " " + reference
+        let full = if request.Memo.Length > 0 {
+            request.Memo + " " + request.Reference
         } else {
-            reference
+            request.Reference
         }
-        let amountIssue = ui.AmountIssue(amount)
+        let amountIssue = ui.AmountIssue(request.Amount)
         let memoIssue = ui.MemoIssue(full)
-        let shown = if empty && format == "link" {
+        let shown = if empty && request.Format == "link" {
             "address"
         } else {
-            format
+            request.Format
         }
         let query = List[string]()
-        if amount.Length > 0 && amountIssue.Length == 0 {
-            query.Add("amount=" + amount)
+        if request.Amount.Length > 0 && amountIssue.Length == 0 {
+            query.Add("amount=" + request.Amount)
         }
         if full.Length > 0 && memoIssue.Length == 0 {
             query.Add("memo=" + Uri.EscapeDataString(full))
@@ -95,8 +95,8 @@ class ReceivePage : Cell[ReceivePageInput] {
             qrPath = QrPath(encoded)
         }
         let paid = Payment(input, full)
-        let possible = if paid == nil && amount.Length > 0 {
-            Payment(input, memo)
+        let possible = if paid == nil && request.Amount.Length > 0 {
+            Payment(input, request.Memo)
         } else {
             nil
         }
@@ -121,7 +121,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                             ui
                                 .Strings
                                 .Get("Amount and memo match, but the reference {0} is missing. Check with the sender")
-                                .Replace("{0}", reference)
+                                .Replace("{0}", request.Reference)
                         },
                         Language: input.Language,
                         Width: 300
@@ -207,7 +207,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                         Selected: shown == id
                     },
                     OnClick: () -> {
-                        format = id
+                        request.Format = id
                         Rebuild()
                     },
                     ui.Label(ui.Strings.Get(label), 13, shown == id ? ui.Ink: ui.Body, "")
@@ -250,9 +250,9 @@ class ReceivePage : Cell[ReceivePageInput] {
                 Color.Parse("#0b0b0b"),
                 "",
                 () -> {
-                    amount = ""
-                    memo = ""
-                    reference = ""
+                    request.Amount = ""
+                    request.Memo = ""
+                    request.Reference = ""
                     Rebuild()
                 }
             )
@@ -330,7 +330,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                     TextField{
                                         AccessibilityName: ui.Strings.Get("Amount"),
                                         Placeholder: ui.Strings.Get("amount"),
-                                        Value: amount,
+                                        Value: request.Amount,
                                         Controlled: true,
                                         Password: input.Privacy,
                                         Disabled: input.Busy || paid != nil,
@@ -342,7 +342,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                         },
                                         Trailing: ui.Label("BNT", 12, ui.Dim, ""),
                                         OnChange: value -> {
-                                            amount = value.Trim()
+                                            request.Amount = value.Trim()
                                             Rebuild()
                                         }
                                     }
@@ -355,7 +355,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                         TextField{
                                             AccessibilityName: ui.Strings.Get("Memo"),
                                             Placeholder: ui.Strings.Get("memo"),
-                                            Value: memo,
+                                            Value: request.Memo,
                                             Controlled: true,
                                             Password: input.Privacy,
                                             Disabled: input.Busy || paid != nil,
@@ -370,7 +370,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                                 FlexDirection: FlexDirection.Row,
                                                 AlignItems: AlignItems.Center,
                                                 Gap: 8,
-                                                ui.Label(ui.Hidden(reference), 14, ui.Dim, ""),
+                                                ui.Label(ui.Hidden(request.Reference), 14, ui.Dim, ""),
                                                 ui.Meter(
                                                     Encoding.UTF8.GetByteCount(full),
                                                     WalletValidation.MemoLimit,
@@ -378,7 +378,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                                 )
                                             },
                                             OnChange: value -> {
-                                                memo = value
+                                                request.Memo = value
                                                 Rebuild()
                                             }
                                         }
@@ -447,16 +447,17 @@ class ReceivePage : Cell[ReceivePageInput] {
     }
 
     private func Payment(input ReceivePageInput, expected string) WalletOutput? {
-        let atoms = if amount.Length > 0 && input.Ui.AmountIssue(amount).Length == 0 {
-            WalletAmount.Parse(amount)
+        let request = input.Request
+        let atoms = if request.Amount.Length > 0 && input.Ui.AmountIssue(request.Amount).Length == 0 {
+            WalletAmount.Parse(request.Amount)
         } else {
             uint64(0)
         }
-        if reference.Length == 0 || amount.Length > 0 && atoms == 0 {
+        if request.Reference.Length == 0 || request.Amount.Length > 0 && atoms == 0 {
             return nil
         }
         for output in input.History {
-            if (output.BlockHeight == 0 || output.BlockHeight >= since) &&
+            if (output.BlockHeight == 0 || output.BlockHeight >= request.Since) &&
                 output.Memo == expected &&
                 (atoms == 0 || output.Amount == atoms) {
                 return output

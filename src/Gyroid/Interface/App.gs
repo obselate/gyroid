@@ -32,6 +32,8 @@ partial class App : Cell {
 
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
 
+    private let receiveRequest ReceiveRequest = ReceiveRequest()
+
     private func Prove(send WalletSend) {
         let task = wallet.Proofs.ProveAsync(send.TxId)
         Run(
@@ -507,7 +509,8 @@ partial class App : Cell {
                     Language: ui.Strings.Language,
                     Clipboard: ui.ClipboardText,
                     Height: height,
-                    ChooseFile: chooseFile
+                    ChooseFile: chooseFile,
+                    Request: receiveRequest
                 }
             )
         } else if page == "Transactions" {
