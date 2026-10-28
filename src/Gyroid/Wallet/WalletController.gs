@@ -59,13 +59,16 @@ class WalletController : IDisposable {
         rpc = NodeApi(settings)
         daemon.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         daemon.Progress = value -> {
-            nodeStatus.Progress = value
-            nodeStatus.Phase = if value == "Detecting" {
-                "Detecting"
-            } else {
-                daemon.Phase
+            nodeStatus = NodeStatus{
+                ... nodeStatus,
+                Progress: value,
+                Phase: if value == "Detecting" {
+                    "Detecting"
+                } else {
+                    daemon.Phase
+                },
+                DownloadPercent: daemon.DownloadPercent
             }
-            nodeStatus.DownloadPercent = daemon.DownloadPercent
             Changed?.Invoke()
         }
         if settings.ActiveWallet.Length > 0 {
@@ -1262,8 +1265,15 @@ class WalletController : IDisposable {
             if uint64(historyOffset) < historyTotal {
                 let outputs = List[WalletOutput](snapshot.History)
                 await ReadHistoryAsync(outputs, historyPage, ct)
-                snapshot.History = outputs.ToArray()
-                PublishCurrent()
+                snapshot = WalletSnapshot{
+                    ... snapshot,
+                    Page: page,
+                    State: state,
+                    Connected: connected,
+                    History: outputs.ToArray(),
+                    HistoryTotal: historyTotal,
+                    HistoryMore: uint64(historyOffset) < historyTotal
+                }
             }
         } finally {
             End()
@@ -1573,7 +1583,9 @@ class WalletController : IDisposable {
         guard let pending = pendingSend else {
             return
         }
-        pending.CanRetry = false
+        if pending.CanRetry {
+            pendingSend = PendingSend{... pending, CanRetry: false}
+        }
         try {
             using let response = await rpc.JsonAsync(
                 "wallet/send/status?idempotency_key=" + Uri.EscapeDataString(pending.Key),
@@ -1583,7 +1595,7 @@ class WalletController : IDisposable {
             let status = NodeJson.Text(root, "state")
             if state == "Unlocked" {
                 let sends = await ReadSendsAsync(ct)
-                snapshot.Sends = sends
+                snapshot = WalletSnapshot{... snapshot, Sends: sends}
             }
             if status == "not_found" && state == "Unlocked" {
                 using let body = JsonDocument.Parse(pending.Body)
@@ -1615,18 +1627,19 @@ class WalletController : IDisposable {
                 sendOutcome = "Send failed: " + NodeJson.Text(root, "error")
                 ClearPendingSend()
             } else if status == "not_found" && state == "Unlocked" {
-                pending.State = "No send record. Outcome unknown"
-                pending.CanRetry = if pending.CoreStarted > 0 {
-                    Math.Abs(pending.CoreStarted - rpc.ListenerStarted) < TimeSpan.TicksPerSecond
-                } else {
-                    rpc.ListenerStarted < DateTimeOffset.FromUnixTimeSeconds(pending.Timestamp)
-                        .UtcTicks +
-                        TimeSpan.TicksPerSecond
+                pendingSend = PendingSend{
+                    ... pending,
+                    State: "No send record. Outcome unknown",
+                    CanRetry: if pending.CoreStarted > 0 {
+                        Math.Abs(pending.CoreStarted - rpc.ListenerStarted) < TimeSpan.TicksPerSecond
+                    } else {
+                        rpc.ListenerStarted < DateTimeOffset.FromUnixTimeSeconds(pending.Timestamp)
+                            .UtcTicks +
+                            TimeSpan.TicksPerSecond
+                    }
                 }
             }
-        } catch (error WalletException) {
-            pending.CanRetry = false
-        }
+        } catch (error WalletException) { }
     }
 
     private async func SubmitPendingCoreAsync(pending PendingSend, ct CancellationToken) SendResult {
@@ -1704,7 +1717,7 @@ class WalletController : IDisposable {
             if !pending.Retryable {
                 throw WalletException("Send outcome unknown. Resubmission is not available")
             }
-            pending.CanRetry = false
+            pendingSend = PendingSend{... pending, CanRetry: false}
             return await SubmitPendingCoreAsync(pending, ct)
         } finally {
             End()
