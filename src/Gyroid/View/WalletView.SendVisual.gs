@@ -171,7 +171,7 @@ partial class WalletView {
             lime,
             ""
         )
-        let ring = Container{Gap: 2}
+        let ring = Container{Gap: 2, MinWidth: 0, Overflow: Overflow.Hidden}
         let neon = []Color{lime, orange, pink, blue, mint, violet}
         for row in 0 ... Math.Min(estimate.InputCount, 3) {
             let digits = Random(result.TxId.GetHashCode() + row)
@@ -218,17 +218,18 @@ partial class WalletView {
                 Label(strings.Get("Fee"), 11, dim, "")
             }
         )
+        let ringStage = TraceStage("ring ×16", 1, ring)
+        ringStage.FlexShrink = 1
+        ringStage.MinWidth = 0
         let stages = Container{
             FlexDirection: FlexDirection.Row,
-            FlexWrap: FlexWrap.Wrap,
-            ColumnGap: 16,
-            RowGap: 8,
+            Gap: 12,
             TraceStage(
                 "inputs",
                 0,
                 Container{Gap: 2, coins, Label(Amount(estimate.Amount + result.Fee + result.Change), 12, body, "")}
             ),
-            TraceStage("ring ×16", 1, ring),
+            ringStage,
             TraceStage("outputs", 2, outputs),
             TraceStage(
                 "sealed",
@@ -248,8 +249,9 @@ partial class WalletView {
         return strip
     }
 
-    private func TraceStage(label string, stage int32, content Blob) Blob -> Container{
+    private func TraceStage(label string, stage int32, content Blob) Container -> Container{
         Gap: 4,
+        FlexShrink: 0,
         OpacityAnim: traceFades[stage],
         TranslateAnim: traceShifts[stage],
         Label(
