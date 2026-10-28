@@ -218,7 +218,7 @@ partial class App : Cell {
             ClearSeed()
         }
         shownState = state
-        ResumePlayback()
+        Motion.TimeScale = 1.0
         let node = wallet.Node.Status
         if node.Syncing || node.Running && node.Peers == 0 {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
@@ -228,6 +228,7 @@ partial class App : Cell {
         }
         let page = snapshot.Page
         if page != lastPage {
+            ResumePlayback()
             ClearSecrets()
             ClearTools()
             CloseTrace()
