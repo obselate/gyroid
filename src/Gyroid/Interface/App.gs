@@ -218,7 +218,6 @@ partial class App : Cell {
             ClearSeed()
         }
         shownState = state
-        Motion.TimeScale = 1.0
         let node = wallet.Node.Status
         if node.Syncing || node.Running && node.Peers == 0 {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)

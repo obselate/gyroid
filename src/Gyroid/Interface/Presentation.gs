@@ -239,6 +239,10 @@ class Presentation {
 
     let Violet Color = Color.Parse("#aa00ff")
 
+    func SettleMotion() {
+        Motion.TimeScale = playbackActive() ? 1.0: 0.0
+    }
+
     func Decode(channel string) {
         if !playbackActive() {
             return
