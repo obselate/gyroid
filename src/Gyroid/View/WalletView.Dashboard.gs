@@ -5,6 +5,7 @@ import Goo.Widgets
 import Goo.Widgets.Actions
 import Goo.Widgets.Data
 import Goo.Widgets.Icons
+import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
 import Gyroid.Model
@@ -21,6 +22,8 @@ partial class WalletView {
     private var address string = ""
     private var amount string = ""
     private var memo string = ""
+    private var requestAmount string = ""
+    private var requestMemo string = ""
     private var estimate SendEstimate?
     private var historyTab string = "received"
     private var confirmPendingSend bool
@@ -175,26 +178,24 @@ partial class WalletView {
         return Figure("Height", Count(value.ChainHeight), ink, 14, "sync")
     }
 
-    private func AmountIssue() string {
-        if amount.Length == 0 {
+    private func AmountIssue(value string, available uint64? = nil) string {
+        if value.Length == 0 {
             return ""
         }
         try {
-            let atoms = WalletAmount.Parse(amount)
-            if let available = wallet.Snapshot.Balance?.Spendable {
-                if atoms > available {
-                    return "Exceeds spendable balance"
-                }
+            return if WalletAmount.Parse(value) > (available ?? uint64.MaxValue) {
+                "Exceeds spendable balance"
+            } else {
+                ""
             }
-            return ""
         } catch (error WalletException) {
             return error.Message
         }
     }
 
-    private func MemoIssue() string {
+    private func MemoIssue(value string) string {
         try {
-            WalletController.MemoBytes(memo)
+            WalletController.MemoBytes(value)
             return ""
         } catch (error WalletException) {
             return error.Message
@@ -293,8 +294,8 @@ partial class WalletView {
             return card
         }
         let blank = address.Trim().Length == 0 || amount.Trim().Length == 0
-        let amountIssue = AmountIssue()
-        let memoIssue = MemoIssue()
+        let amountIssue = AmountIssue(amount, wallet.Snapshot.Balance?.Spendable)
+        let memoIssue = MemoIssue(memo)
         let remaining = WalletController.MemoLimit - Encoding.UTF8.GetByteCount(memo)
         let card = PageContent(
             strings.Get("send"),
@@ -329,16 +330,56 @@ partial class WalletView {
         if remaining >= 0 && remaining < 25 {
             memoField.Add(Label(remaining.ToString(CultureInfo.InvariantCulture), 12, body))
         }
+        var chosen string? = nil
+        for (label, destination) in contacts {
+            if destination == address {
+                chosen = label
+            }
+        }
         card.Add(
-            Field(
-                "Address",
-                address,
-                value -> {
-                    address = value.Trim()
-                    Rebuild()
-                },
-                () -> Review()
-            )
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.FlexEnd,
+                Gap: 8,
+                FlexShrink: 0,
+                Grow(
+                    Container{
+                        MinWidth: 0,
+                        Field(
+                            "Address",
+                            address,
+                            value -> {
+                                address = value.Trim()
+                                Rebuild()
+                            },
+                            () -> Review()
+                        )
+                    }
+                ),
+                if contacts.Count > 0 {
+                    Cell.Mount[ComboBoxInput, ComboBox](
+                        "contact",
+                        ComboBoxInput{
+                            Items: contacts
+                                .Keys
+                                .Select((label string) -> ComboBoxOption{Id: label, Label: label})
+                                .ToArray(),
+                            SelectedId: chosen,
+                            Placeholder: strings.Get("contacts"),
+                            AccessibilityName: strings.Get("contacts"),
+                            Searchable: contacts.Count > 8,
+                            Width: 180,
+                            Disabled: Working(),
+                            OnSelect: id -> {
+                                address = contacts[id]
+                                Rebuild()
+                            }
+                        }
+                    )
+                } else {
+                    Container{}
+                }
+            }
         )
         card.Add(
             Container{
@@ -471,9 +512,23 @@ partial class WalletView {
         if receiving.Length == 0 {
             return panel
         }
-        if receiving != qrText {
-            qrText = receiving
-            qrPath = QrPath(receiving)
+        let amountIssue = AmountIssue(requestAmount)
+        let memoIssue = MemoIssue(requestMemo)
+        let query = List[string]()
+        if requestAmount.Length > 0 && amountIssue.Length == 0 {
+            query.Add("amount=" + requestAmount)
+        }
+        if requestMemo.Length > 0 && memoIssue.Length == 0 {
+            query.Add("memo=" + Uri.EscapeDataString(requestMemo))
+        }
+        let request = if query.Count > 0 {
+            "blocknet://" + receiving + "?" + String.Join("&", query)
+        } else {
+            receiving
+        }
+        if request != qrText {
+            qrText = request
+            qrPath = QrPath(request)
         }
         let size = Math.Clamp(height - 230 - bannerHeight, 160.0, 300.0)
         let copied = clipboardText == receiving
@@ -515,53 +570,79 @@ partial class WalletView {
                 },
                 Grow(
                     Container{
-                        Gap: 6,
+                        Gap: 16,
                         JustifyContent: JustifyContent.Center,
-                        Label(strings.Get("Address"), 12, body),
                         Container{
-                            FlexDirection: FlexDirection.Row,
-                            AlignItems: AlignItems.FlexStart,
-                            Gap: 8,
-                            Grow(
-                                Text{
-                                    Content: if privacy {
-                                        "•••••••• •••••••• •••••••• ••••••••"
-                                    } else {
-                                        Grouped(receiving)
-                                    },
-                                    FontFamily: font,
-                                    FontSize: 14,
-                                    Color: ink,
-                                    TextWrap: TextWrap.Wrap,
-                                    Accessibility: Accessibility{
-                                        Name: if privacy {
-                                            strings.Get("Address hidden")
+                            Gap: 6,
+                            Label(strings.Get("Address"), 12, body),
+                            Container{
+                                FlexDirection: FlexDirection.Row,
+                                AlignItems: AlignItems.FlexStart,
+                                Gap: 8,
+                                Grow(
+                                    Text{
+                                        Content: if privacy {
+                                            "•••••••• •••••••• •••••••• ••••••••"
                                         } else {
-                                            strings.Get("Address") + " " + receiving
+                                            Grouped(receiving)
+                                        },
+                                        FontFamily: font,
+                                        FontSize: 14,
+                                        Color: ink,
+                                        TextWrap: TextWrap.Wrap,
+                                        Accessibility: Accessibility{
+                                            Name: if privacy {
+                                                strings.Get("Address hidden")
+                                            } else {
+                                                strings.Get("Address") + " " + receiving
+                                            }
                                         }
                                     }
-                                }
-                            ),
-                            IconButton{
-                                Icon: MaterialIcons.Create(
-                                    if copied {
-                                        "check"
-                                    } else {
-                                        "content_copy"
-                                    },
-                                    16,
-                                    if copied {
-                                        lime
-                                    } else {
-                                        body
-                                    }
                                 ),
-                                AccessibilityName: strings.Get("Copy address"),
-                                OnClick: () -> {
-                                    Copy(receiving, 120000)
-                                    Rebuild()
-                                }
-                            }.Build()
+                                IconButton{
+                                    Icon: MaterialIcons.Create(
+                                        if copied {
+                                            "check"
+                                        } else {
+                                            "content_copy"
+                                        },
+                                        16,
+                                        if copied {
+                                            lime
+                                        } else {
+                                            body
+                                        }
+                                    ),
+                                    AccessibilityName: strings.Get("Copy address"),
+                                    OnClick: () -> {
+                                        Copy(receiving, 120000)
+                                        Rebuild()
+                                    }
+                                }.Build()
+                            }
+                        },
+                        Field(
+                            "Amount",
+                            requestAmount,
+                            value -> {
+                                requestAmount = value.Trim()
+                                Rebuild()
+                            },
+                            issue: amountIssue
+                        ),
+                        Field(
+                            "Memo",
+                            requestMemo,
+                            value -> {
+                                requestMemo = value
+                                Rebuild()
+                            },
+                            issue: memoIssue
+                        ),
+                        if request != receiving {
+                            Copyable("Request", request, Hidden(request))
+                        } else {
+                            Container{}
                         }
                     }
                 )
@@ -648,30 +729,20 @@ partial class WalletView {
                 Grow(
                     Container{
                         MinWidth: 0,
-                        Cell.Mount[TabBarInput, TabBar](
+                        Tabs(
                             "history-tabs",
-                            TabBarInput{
-                                Items: []NavigationItem{
-                                    NavigationItem{
-                                        Id: "received",
-                                        Label: strings.Get("received") + " " + snapshot.HistoryTotal.ToString()
-                                    },
-                                    NavigationItem{
-                                        Id: "sent",
-                                        Label: strings.Get("sent") + " " + sends.Length.ToString()
-                                    }
+                            "Transactions",
+                            []NavigationItem{
+                                NavigationItem{
+                                    Id: "received",
+                                    Label: strings.Get("received") + " " + snapshot.HistoryTotal.ToString()
                                 },
-                                SelectedId: historyTab,
-                                AccessibilityName: strings.Get("Transactions"),
-                                CreateItem: (bar TabBarInput, item NavigationItem, button Button) -> {
-                                    button.BorderRadius = 4
-                                    button.Overflow = Overflow.Hidden
-                                    return button
-                                },
-                                OnSelect: id -> {
-                                    historyTab = id
-                                    Rebuild()
-                                }
+                                NavigationItem{Id: "sent", Label: strings.Get("sent") + " " + sends.Length.ToString()}
+                            },
+                            historyTab,
+                            id -> {
+                                historyTab = id
+                                Rebuild()
                             }
                         )
                     }
@@ -1001,47 +1072,10 @@ partial class WalletView {
                 content.Add(Figure("Memo", Hidden(value.Memo), ink))
             }
         }
-        let copied = clipboardText == txid
-        content.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.FlexStart,
-                Gap: 8,
-                Grow(
-                    Container{
-                        Gap: 6,
-                        Label(strings.Get("Transaction"), 12, body),
-                        Text{
-                            Content: Hidden(Grouped(txid)),
-                            FontFamily: font,
-                            FontSize: 13,
-                            Color: ink,
-                            TextWrap: TextWrap.Wrap
-                        }
-                    }
-                ),
-                IconButton{
-                    Icon: MaterialIcons.Create(
-                        if copied {
-                            "check"
-                        } else {
-                            "content_copy"
-                        },
-                        16,
-                        if copied {
-                            lime
-                        } else {
-                            body
-                        }
-                    ),
-                    AccessibilityName: strings.Get("Copy transaction ID"),
-                    OnClick: () -> {
-                        Copy(txid, 120000)
-                        Rebuild()
-                    }
-                }.Build()
-            }
-        )
+        content.Add(Copyable("Transaction", txid, Hidden(Grouped(txid))))
+        if proofTx == txid && proofKey.Length > 0 {
+            content.Add(Copyable("Proof key", proofKey, Hidden(Grouped(proofKey))))
+        }
         for recipient in send?.Recipients ?? Array.Empty[WalletRecipient]() {
             let entry = Container{
                 Gap: 6,
@@ -1065,6 +1099,13 @@ partial class WalletView {
         } else {
             "received"
         }
+        let actions = List[Blob]()
+        if let value = send {
+            if state == "confirmed" && proofTx != txid {
+                actions.Add(Button("Prove", () -> Prove(value), Working()))
+            }
+        }
+        actions.Add(Button("Close", close))
         return Cell.Mount[ModalDialog, ModalDialogHost](
             "transaction",
             ModalDialog{
@@ -1073,9 +1114,23 @@ partial class WalletView {
                 Width: Math.Min(width - 48, 600),
                 Header: Label(strings.Get(title), 18, ink, ""),
                 Content: content,
-                Footer: ActionRow([]Blob{Button("Close", close)}),
+                Footer: ActionRow(actions.ToArray()),
                 OnCancel: close,
                 OnClose: close
+            }
+        )
+    }
+
+    private func Prove(send WalletSend) {
+        let task = wallet.ProveAsync(send.TxId)
+        Run(
+            task,
+            () -> {
+                proofTx = send.TxId
+                proofKey = task.Result
+                proofAddress = send.Recipients.Length > 0 ? send.Recipients[0].Address: ""
+                proofAmount = send.Recipients.Length > 0 ? Money(send.Recipients[0].Amount): ""
+                verdict = nil
             }
         )
     }

@@ -86,6 +86,7 @@ partial class WalletView : Cell {
         appIcon = ImageSource.Decode(Resource("Gyroid.Icon.png"))
         privacy = wallet.Settings.Privacy
         LoadWallets()
+        LoadContacts()
     }
 
     func Attach(owner Window) {
@@ -152,6 +153,10 @@ partial class WalletView : Cell {
             Rebuild()
         }
         owner.FocusChanged += _ -> Rebuild()
+        owner.PreviewKeyPressed += (key Key, modifiers KeyModifiers) -> {
+            wallet.Touch()
+            return false
+        }
         wallet.Changed = () -> owner.Post(() -> Sync())
         lastPage = wallet.Snapshot.Page
         Tick()
@@ -242,6 +247,7 @@ partial class WalletView : Cell {
         let page = snapshot.Page
         if page != lastPage {
             ClearSecrets()
+            ClearTools()
             if lastPage == "Seed" {
                 ClearSeed()
             }
@@ -336,13 +342,22 @@ partial class WalletView : Cell {
     private func ClearSecrets() {
         password = ""
         confirmation = ""
+        filePassword = ""
         passwordIssue = ""
         phrase = ""
+        spendKey = ""
+        viewKey = ""
         revealPassword = ""
         estimate = nil
         shownOutput = nil
         shownSend = nil
         upgradeShown = false
+        viewKeys?.Dispose()
+        viewKeys = nil
+        viewKeysVisible = false
+        viewOnlyOpen = false
+        viewOnlyCreated = ""
+        deletingContact = ""
     }
 
     private func LoadWallets() {
@@ -567,6 +582,31 @@ partial class WalletView : Cell {
         Accessibility: Accessibility{Name: strings.Get(label) + " " + value},
         Label(strings.Get(label), 12, body),
         Label(value, size, color, channel)
+    }
+
+    private func Copyable(label string, value string, shown string, clearAfterMs float64 = 120000) Blob {
+        let copied = clipboardText == value
+        return Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.FlexStart,
+            Gap: 8,
+            FlexShrink: 0,
+            Grow(
+                Container{
+                    Gap: 6,
+                    Label(strings.Get(label), 12, body),
+                    Text{Content: shown, FontFamily: font, FontSize: 13, Color: ink, TextWrap: TextWrap.Wrap}
+                }
+            ),
+            IconButton{
+                Icon: MaterialIcons.Create(copied ? "check": "content_copy", 16, copied ? lime: body),
+                AccessibilityName: strings.Get("Copy") + " " + strings.Get(label),
+                OnClick: () -> {
+                    Copy(value, clearAfterMs)
+                    Rebuild()
+                }
+            }.Build()
+        }
     }
 
     private func Glass() Container -> Container{
@@ -891,9 +931,15 @@ partial class WalletView : Cell {
                 FlexGrow: 1,
                 Gap: 4,
                 SideItem("overview", page == "Overview", blocked, () -> Navigate("Overview")),
-                SideItem("send", page == "Send", blocked || wallet.Snapshot.ViewOnly, () -> Navigate("Send")),
+                if wallet.Snapshot.ViewOnly {
+                    Container{}
+                } else {
+                    SideItem("send", page == "Send", blocked, () -> Navigate("Send"))
+                },
                 SideItem("receive", page == "Receive", blocked, () -> Navigate("Receive")),
                 SideItem("history", page == "Transactions", blocked, () -> Navigate("Transactions")),
+                SideItem("tools", page == "Tools", blocked, () -> Navigate("Tools")),
+                SideItem("contacts", page == "Contacts", blocked, () -> Navigate("Contacts")),
                 Container{FlexGrow: 1},
                 if let indicator = SyncIndicator(16, 12) {
                     Container{Padding: Edges{Left: 10}, FlexShrink: 0, indicator}
@@ -954,7 +1000,8 @@ partial class WalletView : Cell {
             Gap: 10,
             Padding: Edges{Left: 14},
             Image{Width: 18, Height: 18, Source: appIcon},
-            Label("gyroid", 14, ink, "")
+            Label("gyroid", 14, ink, ""),
+            Label(wallet.Snapshot.ViewOnly ? strings.Get("view only"): "", 12, orange, "")
         }
     }.Build()
 
@@ -974,6 +1021,7 @@ partial class WalletView : Cell {
             FontFamily: font,
             Color: ink,
             KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
+            OnPointerDown: (event PointerEvent) -> wallet.Touch(),
             Container{Position: PositionType.Absolute, Left: 0, Top: 0, Right: 0, Bottom: 0, ShaderEffect: background},
             Chrome()
         }
@@ -1002,8 +1050,12 @@ partial class WalletView : Cell {
             SeedPage()
         } else if page == "Unlock" {
             UnlockPage()
-        } else if page == "Create" || page == "Phrase" {
-            CreatePage(page == "Phrase")
+        } else if page == "Create" || page == "Phrase" || page == "ViewOnly" {
+            CreatePage(page)
+        } else if page == "Tools" {
+            ToolsPage()
+        } else if page == "Contacts" {
+            ContactsPage()
         } else if page == "Settings" {
             SettingsPage()
         } else {
@@ -1022,6 +1074,9 @@ partial class WalletView : Cell {
             case "Seed": 760.0
             case "Receive": 640.0
             case "Send": 640.0
+            case "Tools": 640.0
+            case "Contacts": 640.0
+            case "Welcome": 600.0
             default: 520.0
         }
         let side = Math.Min(span * 0.45, span - cardWidth - 48)
@@ -1099,6 +1154,15 @@ partial class WalletView : Cell {
             }
             if upgradeShown {
                 root.Add(UpgradeDialog())
+            }
+            if let keys = viewKeys {
+                root.Add(ViewKeysDialog(keys))
+            }
+            if viewOnlyOpen {
+                root.Add(ViewOnlyDialog())
+            }
+            if deletingContact.Length > 0 {
+                root.Add(DeleteContactDialog())
             }
         }
         if applyPending && page == "Settings" {

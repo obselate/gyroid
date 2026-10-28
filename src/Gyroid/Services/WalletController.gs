@@ -979,6 +979,11 @@ class WalletController : IDisposable {
                 ct
             )
             return WalletJson.Flag(response.RootElement, "valid")
+        } catch (error WalletException) {
+            if error.StatusCode == 400 {
+                return false
+            }
+            throw error
         } finally {
             End()
         }
@@ -1029,6 +1034,11 @@ class WalletController : IDisposable {
                 response.RootElement,
                 "total_matched"
             ) == expected
+        } catch (error WalletException) {
+            if error.StatusCode == 400 {
+                return false
+            }
+            throw error
         } finally {
             End()
         }
@@ -1788,13 +1798,17 @@ class WalletController : IDisposable {
             }
         }
 
-        func ValidateSend(address string, amount string, memo string, spendable uint64? = nil) WalletRecipient {
+        func ValidateDestination(address string) string {
             let recipient = address.Trim()
-            let destination = if recipient.StartsWith("$", StringComparison.Ordinal) {
+            return if recipient.StartsWith("$", StringComparison.Ordinal) {
                 "$" + BlocknetId.Normalize(recipient)
             } else {
                 ValidateAddress(recipient)
             }
+        }
+
+        func ValidateSend(address string, amount string, memo string, spendable uint64? = nil) WalletRecipient {
+            let destination = ValidateDestination(address)
             let atoms = WalletAmount.Parse(amount)
             MemoBytes(memo)
             if let available = spendable {
@@ -1837,6 +1851,53 @@ class WalletController : IDisposable {
             writer.WriteEndObject()
             writer.WriteEndArray()
             writer.WriteEndObject()
+        }
+
+        private func ContactsPath() string {
+            let directory = Path.GetDirectoryName(WalletSettings.ConfigurationPath()) ??
+                throw WalletException("Settings file must have a parent directory")
+            return Path.Combine(directory, "contacts.json")
+        }
+
+        func ReadContacts() SortedDictionary[string, string] {
+            let contacts = SortedDictionary[string, string](StringComparer.Ordinal)
+            let path = ContactsPath()
+            if !File.Exists(path) {
+                return contacts
+            }
+            try {
+                using let json = JsonDocument.Parse(WalletFiles.ReadText(path, 1048576))
+                for entry in json.RootElement.EnumerateObject() {
+                    contacts[entry.Name] = ValidateDestination(entry.Value.GetString() ?? "")
+                }
+            } catch (error Exception) {
+                throw WalletException("Address book file is invalid")
+            }
+            return contacts
+        }
+
+        func WriteContacts(contacts SortedDictionary[string, string]) {
+            let path = ContactsPath()
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "")
+            let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+            try {
+                using let stream = WalletFiles.CreatePrivate(temporary)
+                using let writer = Utf8JsonWriter(stream)
+                writer.WriteStartObject()
+                for (name, address) in contacts {
+                    writer.WriteString(name, address)
+                }
+                writer.WriteEndObject()
+                writer.Flush()
+                writer.Dispose()
+                stream.Flush(true)
+                stream.Dispose()
+                File.Move(temporary, path, true)
+            } finally {
+                if File.Exists(temporary) {
+                    File.Delete(temporary)
+                }
+            }
         }
     }
 
