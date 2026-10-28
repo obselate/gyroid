@@ -13,7 +13,7 @@ partial class WalletView {
     private var holdSeed int32
 
     private func TakeSeed() bool {
-        guard let words = wallet.TakePendingSeed() else {
+        guard let words = wallet.Keys.TakePendingSeed() else {
             return false
         }
         ClearSeed()
@@ -33,7 +33,7 @@ partial class WalletView {
 
     private func FinishSeed() {
         ClearSeed()
-        wallet.ContinueFromSeed()
+        wallet.Keys.ContinueFromSeed()
     }
 
     private func SeedPage() Blob {
@@ -179,7 +179,7 @@ partial class WalletView {
             suggested,
             path -> {
                 if let words = seed {
-                    Run(wallet.ExportSeedAsync(path, words))
+                    Run(wallet.Keys.ExportSeedAsync(path, words))
                 }
             }
         )

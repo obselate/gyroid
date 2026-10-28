@@ -11,7 +11,7 @@ import System.Threading
 import System.Threading.Tasks
 
 class SendService {
-    let session WalletController
+    let session WalletSession
     let store PendingSendStore
     var confirmation SendEstimate? = nil
     var confirmationKey string = ""
@@ -20,7 +20,7 @@ class SendService {
     prop Pending PendingSend? -> store.Pending
     prop Error string -> store.Error
 
-    init(session WalletController) {
+    init(session WalletSession) {
         this.session = session
         store = PendingSendStore(session)
     }

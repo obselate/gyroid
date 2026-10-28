@@ -9,11 +9,11 @@ import System.Text.Json
 import System.Threading.Tasks
 
 class PendingSendStore {
-    let session WalletController
+    let session WalletSession
     var Pending PendingSend? = nil
     var Error string = ""
 
-    init(session WalletController) {
+    init(session WalletSession) {
         this.session = session
     }
 

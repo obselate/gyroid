@@ -67,7 +67,7 @@ func Main() {
     if lease == nil {
         throw InvalidOperationException("Application instance unavailable")
     }
-    using let wallet = WalletController()
+    using let wallet = WalletSession()
     let view = WalletView(wallet)
     activationTarget = view
     let window = Window{

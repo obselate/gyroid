@@ -9,14 +9,14 @@ import System.Linq
 import System.Threading
 
 class HistoryService {
-    let session WalletController
+    let session WalletSession
     var historyOffset int32
     var historyTotal uint64
 
     prop Total uint64 -> historyTotal
     prop More bool -> uint64(historyOffset) < historyTotal
 
-    init(session WalletController) {
+    init(session WalletSession) {
         this.session = session
     }
 

@@ -536,7 +536,7 @@ partial class WalletView {
         let buffer = revealPassword.ToCharArray()
         revealPassword = ""
         seedFromWallet = true
-        Run(wallet.RevealSeedAsync(buffer), nil, buffer)
+        Run(wallet.Keys.RevealSeedAsync(buffer), nil, buffer)
     }
 
     private func ReceivePanel(receiving string) Blob {
@@ -1159,7 +1159,7 @@ partial class WalletView {
     }
 
     private func Prove(send WalletSend) {
-        let task = wallet.ProveAsync(send.TxId)
+        let task = wallet.Proofs.ProveAsync(send.TxId)
         Run(
             task,
             () -> {

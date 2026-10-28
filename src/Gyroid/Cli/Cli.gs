@@ -106,7 +106,7 @@ class Cli {
                 if command == "send" && !resume {
                     WalletValidation.ValidateSend(arguments[2], arguments[3], memo)
                 }
-                using let wallet = WalletController()
+                using let wallet = WalletSession()
                 let problem = wallet.Settings.LoadError
                 if problem.Length > 0 {
                     Console.Error.WriteLine("Settings file not loaded: " + problem)
@@ -136,7 +136,7 @@ class Cli {
                     }
                 } else if command == "unlock" || command == "load" {
                     if command == "load" {
-                        wallet.ChooseWalletAsync(arguments[2]).GetAwaiter().GetResult()
+                        wallet.Library.ChooseWalletAsync(arguments[2]).GetAwaiter().GetResult()
                     }
                     let password = ReadPassword()
                     try {
@@ -155,9 +155,13 @@ class Cli {
                     wallet.RescanAsync().GetAwaiter().GetResult()
                     Console.WriteLine("Wallet rescan complete")
                 } else if command == "sign" {
-                    Console.WriteLine(wallet.SignAsync(arguments[2]).GetAwaiter().GetResult())
+                    Console.WriteLine(wallet.Proofs.SignAsync(arguments[2]).GetAwaiter().GetResult())
                 } else if command == "verify" {
-                    let valid = wallet.VerifyAsync(arguments[2], arguments[3], arguments[4]).GetAwaiter().GetResult()
+                    let valid = wallet
+                        .Proofs
+                        .VerifyAsync(arguments[2], arguments[3], arguments[4])
+                        .GetAwaiter()
+                        .GetResult()
                     Console.WriteLine(
                         if valid {
                             "Signature valid"
@@ -171,9 +175,10 @@ class Cli {
                         1
                     }
                 } else if command == "prove" {
-                    Console.WriteLine(wallet.ProveAsync(arguments[2]).GetAwaiter().GetResult())
+                    Console.WriteLine(wallet.Proofs.ProveAsync(arguments[2]).GetAwaiter().GetResult())
                 } else if command == "verify-proof" {
                     let valid = wallet
+                        .Proofs
                         .VerifyProofAsync(arguments[2], arguments[3], arguments[4], arguments[5])
                         .GetAwaiter()
                         .GetResult()
@@ -291,7 +296,7 @@ class Cli {
             }
         }
 
-        private func RunViewOnly(wallet WalletController, arguments[]string) int32 {
+        private func RunViewOnly(wallet WalletSession, arguments[]string) int32 {
             if arguments[1] == "viewkeys" {
                 RequireTerminal()
                 if Console.IsOutputRedirected {
@@ -299,7 +304,7 @@ class Cli {
                 }
                 let password = ReadPassword()
                 try {
-                    using let keys = wallet.ExportViewKeysAsync(password).GetAwaiter().GetResult()
+                    using let keys = wallet.Keys.ExportViewKeysAsync(password).GetAwaiter().GetResult()
                     Console.Write("Spend public key: ")
                     Console.WriteLine(keys.SpendPublic)
                     Console.Write("View private key: ")
@@ -314,7 +319,7 @@ class Cli {
                 try {
                     let filePassword = ReadPassword("View-only file password: ")
                     try {
-                        wallet.CreateViewOnlyAsync(arguments[3], password, filePassword).GetAwaiter().GetResult()
+                        wallet.Keys.CreateViewOnlyAsync(arguments[3], password, filePassword).GetAwaiter().GetResult()
                     } finally {
                         Array.Clear(filePassword)
                     }
@@ -362,7 +367,7 @@ class Cli {
             return 0
         }
 
-        private func RunNode(wallet WalletController, action string) int32 {
+        private func RunNode(wallet WalletSession, action string) int32 {
             if action == "start" {
                 wallet.StartNodeAsync().GetAwaiter().GetResult()
             } else {

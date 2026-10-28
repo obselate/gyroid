@@ -5,22 +5,22 @@ import Gyroid.Node
 import Gyroid.Platform
 import Gyroid.Send
 import Gyroid.Settings
+import Gyroid.Tools
 import System
-import System.Collections.Generic
 import System.IO
-import System.Linq
-import System.Text
 import System.Text.Json
 import System.Threading
 import System.Threading.Tasks
 
-class WalletController : IDisposable {
+class WalletSession : IDisposable {
     var settings WalletSettings
     let Node NodeSession
+    let Library WalletLibrary
+    let Keys WalletKeys
+    let Proofs MessageProofs
     let gate SemaphoreSlim = SemaphoreSlim(1, 1)
     let autoLockChanged SemaphoreSlim = SemaphoreSlim(0, 1)
     var snapshot WalletSnapshot = WalletSnapshot()
-    var pendingSeed[]?char = nil
     let Send SendService
     let History HistoryService
     var state string = "Unloaded"
@@ -48,6 +48,9 @@ class WalletController : IDisposable {
         Node = NodeSession(settings)
         History = HistoryService(this)
         Send = SendService(this)
+        Library = WalletLibrary(this)
+        Keys = WalletKeys(this)
+        Proofs = MessageProofs(this)
         Node.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         Node.Changed = () -> Changed?.Invoke()
         if settings.ActiveWallet.Length > 0 {
@@ -73,7 +76,7 @@ class WalletController : IDisposable {
 
     func End() {
         if disposed {
-            ClearSeed()
+            Keys.ClearSeed()
             Send.InvalidateConfirmation()
             managed = false
             connected = false
@@ -196,7 +199,7 @@ class WalletController : IDisposable {
                 StopEvents()
                 connected = false
                 managed = false
-                ClearSeed()
+                Keys.ClearSeed()
                 Send.InvalidateConfirmation()
                 state = "Unloaded"
                 page = if settings.ActiveWallet.Length > 0 {
@@ -262,7 +265,7 @@ class WalletController : IDisposable {
             } else {
                 let filename = Path.GetFileName(walletFile)
                 if !managed && !string.Equals(settings.ActiveWallet, filename, comparison) {
-                    WalletPath(filename)
+                    Library.WalletPath(filename)
                     settings.ActiveWallet = filename
                     await WalletSettings.SaveAsync(settings, ct)
                 }
@@ -489,89 +492,11 @@ class WalletController : IDisposable {
         }
     }
 
-    func ListWallets()[]string {
-        if !Directory.Exists(settings.WalletDirectory) {
-            return []string{}
-        }
-        let files = List[string]()
-        for path in Directory.EnumerateFiles(settings.WalletDirectory, "*.dat") {
-            if FileInfo(path).LinkTarget != nil {
-                continue
-            }
-            let filename = Path.GetFileName(path)
-            try {
-                WalletValidation.ValidateFilename(filename)
-            } catch (error WalletException) {
-                continue
-            }
-            files.Add(filename)
-        }
-        files.Sort(StringComparer.Ordinal)
-        return files.ToArray()
-    }
-
-    async func ChooseWalletAsync(filename string, ct CancellationToken = default(CancellationToken)) {
-        await BeginAsync(ct)
-        try {
-            RequireUnloaded()
-            let path = WalletPath(filename)
-            if !File.Exists(path) {
-                throw WalletException("Selected wallet file does not exist")
-            }
-            settings.ActiveWallet = filename
-            await WalletSettings.SaveAsync(settings, ct)
-            page = "Unlock"
-            PublishEmpty()
-        } finally {
-            End()
-        }
-    }
-
-    async func ImportFileAsync(absolutePath string, ct CancellationToken = default(CancellationToken)) {
-        await BeginAsync(ct)
-        try {
-            try {
-                RequireUnloaded()
-                if !Path.IsPathFullyQualified(absolutePath) || !File.Exists(absolutePath) {
-                    throw WalletException("Choose an existing wallet file with an absolute path")
-                }
-                using let input = PrivateFiles.OpenRead(absolutePath)
-                let filename = Path.GetFileName(absolutePath)
-                let destination = WalletPath(filename)
-                if Path.GetFullPath(absolutePath) != Path.GetFullPath(destination) {
-                    Directory.CreateDirectory(settings.WalletDirectory)
-                    let temporary = Path.Combine(settings.WalletDirectory, ".import-" + Guid.NewGuid().ToString("N"))
-                    try {
-                        using let output = PrivateFiles.CreatePrivate(temporary)
-                        await input.CopyToAsync(output, ct)
-                        await output.FlushAsync(ct)
-                        output.Dispose()
-                        File.Move(temporary, destination, false)
-                    } finally {
-                        if File.Exists(temporary) {
-                            File.Delete(temporary)
-                        }
-                    }
-                }
-                settings.ActiveWallet = filename
-                await WalletSettings.SaveAsync(settings, ct)
-                page = "Unlock"
-                PublishEmpty()
-            } catch (error IOException) {
-                throw WalletException("Wallet file could not be imported. Existing files are never replaced")
-            } catch (error UnauthorizedAccessException) {
-                throw WalletException("Access to the selected wallet file was denied")
-            }
-        } finally {
-            End()
-        }
-    }
-
     async func CreateAsync(filename string, password[]char, ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
             RequireUnloaded()
-            RequireNewWallet(filename, password)
+            Library.RequireNewWallet(filename, password)
             await ConnectCoreAsync(ct)
             using let result = await Node.Api.JsonAsync(
                 "wallet/create",
@@ -585,8 +510,7 @@ class WalletController : IDisposable {
             settings.ActiveWallet = filename
             PublishEmpty()
             await WalletSettings.SaveAsync(settings, ct)
-            ClearSeed()
-            pendingSeed = await Node.Api.SeedAsync(password, ct)
+            await Keys.ReadSeedAsync(password, ct)
             page = "Seed"
             PublishEmpty()
         } finally {
@@ -604,7 +528,7 @@ class WalletController : IDisposable {
         var normalized[]?char = nil
         try {
             RequireUnloaded()
-            RequireNewWallet(filename, password)
+            Library.RequireNewWallet(filename, password)
             let normalizedPhrase = WalletValidation.NormalizePhrase(phrase)
             normalized = normalizedPhrase
             await ConnectCoreAsync(ct)
@@ -646,7 +570,7 @@ class WalletController : IDisposable {
                 if settings.ActiveWallet.Length == 0 {
                     throw WalletException("Choose a wallet first")
                 }
-                WalletPath(settings.ActiveWallet)
+                Library.WalletPath(settings.ActiveWallet)
                 using let result = await Node.Api.JsonAsync(
                     "wallet/load",
                     writer -> WriteCredentials(writer, password, "filepath", settings.ActiveWallet),
@@ -698,7 +622,7 @@ class WalletController : IDisposable {
         StopEvents()
         lockQueued = false
         RequireManaged()
-        ClearSeed()
+        Keys.ClearSeed()
         Send.InvalidateConfirmation()
         state = "Unknown"
         page = "Unlock"
@@ -734,7 +658,7 @@ class WalletController : IDisposable {
 
     private async func UnloadCoreAsync(ct CancellationToken) {
         StopEvents()
-        ClearSeed()
+        Keys.ClearSeed()
         Send.InvalidateConfirmation()
         if managed {
             try {
@@ -751,57 +675,6 @@ class WalletController : IDisposable {
         managed = false
         state = "Unloaded"
         Send.Reset()
-    }
-
-    async func RevealSeedAsync(password[]char, ct CancellationToken = default(CancellationToken)) {
-        await BeginAsync(ct)
-        try {
-            RequireUnlocked()
-            if snapshot.ViewOnly {
-                throw WalletException("View-only wallets do not have a spend recovery phrase")
-            }
-            ClearSeed()
-            pendingSeed = await Node.Api.SeedAsync(password, ct)
-            page = "Seed"
-            PublishCurrent()
-        } finally {
-            End()
-        }
-    }
-
-    func TakePendingSeed()[]?char {
-        let seed = pendingSeed
-        pendingSeed = nil
-        return seed
-    }
-
-    func ContinueFromSeed() {
-        ClearSeed()
-        if state == "Unlocked" {
-            page = "Wallet"
-            PublishCurrent()
-        }
-        Changed?.Invoke()
-    }
-
-    async func ExportSeedAsync(path string, seed[]char, ct CancellationToken = default(CancellationToken)) {
-        let bytes = [Encoding.UTF8.GetMaxByteCount(seed.Length)]uint8
-        try {
-            let count = Encoding.UTF8.GetBytes(seed, 0, seed.Length, bytes, 0)
-            for index in 0 ... count {
-                if bytes[index] == 32 {
-                    bytes[index] = 10
-                }
-            }
-            await PrivateFiles.WriteAtomic(
-                path,
-                destination -> destination.WriteAsync(bytes, 0, count, ct),
-                true,
-                false
-            )
-        } finally {
-            Array.Clear(bytes)
-        }
     }
 
     async func RescanAsync(ct CancellationToken = default(CancellationToken)) {
@@ -835,147 +708,6 @@ class WalletController : IDisposable {
             disposed { }
     }
 
-    async func SignAsync(message string, ct CancellationToken = default(CancellationToken)) string {
-        WalletValidation.ValidateMessage(message)
-        await BeginAsync(ct)
-        try {
-            RequireUnlocked()
-            Touch()
-            using let response = await Node.Api.JsonAsync(
-                "wallet/sign",
-                writer -> {
-                    writer.WriteStartObject()
-                    writer.WriteString("message", message)
-                    writer.WriteEndObject()
-                },
-                ct
-            )
-            return NodeJson.Text(response.RootElement, "signature")
-        } finally {
-            End()
-        }
-    }
-
-    async func VerifyAsync(
-        address string,
-        message string,
-        signature string,
-        ct CancellationToken = default(CancellationToken)
-    ) bool {
-        WalletValidation.ValidateMessage(message)
-        await BeginAsync(ct)
-        try {
-            using let response = await Node.Api.JsonAsync(
-                "verify",
-                writer -> {
-                    writer.WriteStartObject()
-                    writer.WriteString("address", WalletValidation.ValidateAddress(address))
-                    writer.WriteString("message", message)
-                    writer.WriteString("signature", signature)
-                    writer.WriteEndObject()
-                },
-                ct
-            )
-            return NodeJson.Flag(response.RootElement, "valid")
-        } catch (error WalletException) {
-            if error.StatusCode == 400 {
-                return false
-            }
-            throw error
-        } finally {
-            End()
-        }
-    }
-
-    async func ProveAsync(txid string, ct CancellationToken = default(CancellationToken)) string {
-        await BeginAsync(ct)
-        try {
-            RequireUnlocked()
-            Touch()
-            using let response = await Node.Api.JsonAsync(
-                "wallet/prove",
-                writer -> {
-                    writer.WriteStartObject()
-                    writer.WriteString("txid", txid)
-                    writer.WriteEndObject()
-                },
-                ct
-            )
-            return NodeJson.Text(response.RootElement, "tx_key")
-        } finally {
-            End()
-        }
-    }
-
-    async func VerifyProofAsync(
-        txid string,
-        txKey string,
-        address string,
-        amount string,
-        ct CancellationToken = default(CancellationToken)
-    ) bool {
-        let expected = WalletAmount.Parse(amount)
-        await BeginAsync(ct)
-        try {
-            using let response = await Node.Api.JsonAsync(
-                "verify-proof",
-                writer -> {
-                    writer.WriteStartObject()
-                    writer.WriteString("txid", txid)
-                    writer.WriteString("tx_key", txKey)
-                    writer.WriteString("address", WalletValidation.ValidateAddress(address))
-                    writer.WriteEndObject()
-                },
-                ct
-            )
-            return NodeJson.Flag(response.RootElement, "valid") && NodeJson.Number(
-                response.RootElement,
-                "total_matched"
-            ) == expected
-        } catch (error WalletException) {
-            if error.StatusCode == 400 {
-                return false
-            }
-            throw error
-        } finally {
-            End()
-        }
-    }
-
-    async func ExportViewKeysAsync(password[]char, ct CancellationToken = default(CancellationToken)) WalletViewKeys {
-        await BeginAsync(ct)
-        try {
-            RequireUnlocked()
-            Touch()
-            return await Node.Api.ViewKeysAsync(password, "", []char{}, ct)
-        } finally {
-            End()
-        }
-    }
-
-    async func CreateViewOnlyAsync(
-        filename string,
-        password[]char,
-        filePassword[]char,
-        ct CancellationToken = default(CancellationToken)
-    ) {
-        await BeginAsync(ct)
-        try {
-            RequireUnlocked()
-            if !filename.EndsWith(".wallet.dat", StringComparison.Ordinal) {
-                throw WalletException("View-only file name must end in .wallet.dat")
-            }
-            RequireNewWallet(filename, filePassword)
-            if ReadOnlySpan[char](password).SequenceEqual(ReadOnlySpan[char](filePassword)) {
-                throw WalletException("View-only file password must differ from the wallet password")
-            }
-            Touch()
-            using let keys = await Node.Api.ViewKeysAsync(password, filename, filePassword, ct)
-        } finally {
-            End()
-        }
-    }
-
     async func ImportViewOnlyAsync(
         filename string,
         spendPublic[]char,
@@ -986,7 +718,7 @@ class WalletController : IDisposable {
         await BeginAsync(ct)
         try {
             RequireUnloaded()
-            RequireNewWallet(filename, password)
+            Library.RequireNewWallet(filename, password)
             await ConnectCoreAsync(ct)
             using let response = await Node.Api.JsonAsync(
                 "wallet/import",
@@ -1018,7 +750,7 @@ class WalletController : IDisposable {
         try {
             if Node.Supervisor.NeedsRestart && settings.NodeMode != "manual" {
                 Node.Reconnect()
-                ClearSeed()
+                Keys.ClearSeed()
                 Send.InvalidateConfirmation()
                 await ConnectCoreAsync(ct)
             } else {
@@ -1066,14 +798,14 @@ class WalletController : IDisposable {
             if error.StatusCode == 403 {
                 state = "Locked"
                 page = "Unlock"
-                ClearSeed()
+                Keys.ClearSeed()
                 Send.InvalidateConfirmation()
                 PublishEmpty()
             } else if error.StatusCode == 503 {
                 state = "Unloaded"
                 managed = false
                 page = "Welcome"
-                ClearSeed()
+                Keys.ClearSeed()
                 Send.InvalidateConfirmation()
                 PublishEmpty()
             } else {
@@ -1105,13 +837,13 @@ class WalletController : IDisposable {
         snapshot = WalletSnapshot{... snapshot, Sends: sends}
     }
 
-    private func RequireUnloaded() {
+    func RequireUnloaded() {
         if managed || state != "Unloaded" {
             throw WalletException("Unload the current wallet explicitly before choosing or creating another")
         }
     }
 
-    private func RequireManaged() {
+    func RequireManaged() {
         if !managed {
             throw WalletException("This application has not loaded a wallet. An external wallet will not be changed")
         }
@@ -1124,32 +856,12 @@ class WalletController : IDisposable {
         }
     }
 
-    private func WalletPath(filename string) string {
-        WalletValidation.ValidateFilename(filename)
-        let path = Path.Combine(settings.WalletDirectory, filename)
-        if FileInfo(path).LinkTarget != nil {
-            throw WalletException("Wallet files must not be symbolic links")
-        }
-        return path
-    }
-
-    private func RequireNewWallet(filename string, password[]char) {
-        let error = WalletValidation.PasswordError(password, password)
-        if error.Length > 0 {
-            throw WalletException(error)
-        }
-        let path = WalletPath(filename)
-        if File.Exists(path) || Directory.Exists(path) {
-            throw WalletException("Wallet file already exists. Choose a different name")
-        }
-    }
-
-    private func PublishEmpty() {
+    func PublishEmpty() {
         History.Reset()
         snapshot = WalletSnapshot{Page: page, State: state, Connected: connected}
     }
 
-    private func PublishCurrent() {
+    func PublishCurrent() {
         snapshot = WalletSnapshot{
             Page: page,
             State: state,
@@ -1164,13 +876,6 @@ class WalletController : IDisposable {
         }
     }
 
-    private func ClearSeed() {
-        if let seed = pendingSeed {
-            Array.Clear(seed)
-        }
-        pendingSeed = nil
-    }
-
     func Dispose() {
         if disposed {
             return
@@ -1178,7 +883,7 @@ class WalletController : IDisposable {
         disposed = true
         shutdown.Cancel()
         StopEvents()
-        ClearSeed()
+        Keys.ClearSeed()
         Send.InvalidateConfirmation()
         Node.Dispose()
         managed = false

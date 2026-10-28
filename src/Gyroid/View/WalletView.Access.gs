@@ -179,7 +179,7 @@ partial class WalletView {
                         Hover: Style{BackgroundColor: rule, BorderColor: edge, BorderStartColor: limeHover},
                         Focus: theme.FocusStyle,
                         Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label},
-                        OnClick: () -> Run(wallet.ChooseWalletAsync(filename)),
+                        OnClick: () -> Run(wallet.Library.ChooseWalletAsync(filename)),
                         Label(label, 14, ink)
                     }
                 )
@@ -221,7 +221,7 @@ partial class WalletView {
     }
 
     private func ImportFile() {
-        ChooseFile(FileDialogKind.OpenFile, "Import wallet", Home(), path -> Run(wallet.ImportFileAsync(path)))
+        ChooseFile(FileDialogKind.OpenFile, "Import wallet", Home(), path -> Run(wallet.Library.ImportFileAsync(path)))
     }
 
     private func CreatePage(kind string) Blob {

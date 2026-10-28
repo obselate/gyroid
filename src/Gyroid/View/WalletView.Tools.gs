@@ -241,7 +241,7 @@ partial class WalletView {
         if Working() || message.Length == 0 {
             return
         }
-        let task = wallet.SignAsync(message)
+        let task = wallet.Proofs.SignAsync(message)
         Run(
             task,
             () -> {
@@ -257,9 +257,9 @@ partial class WalletView {
         ResetVerdict()
         let run = verdictRun
         let task = if tab == "proof" {
-            wallet.VerifyProofAsync(proofTx, proofKey, proofAddress, proofAmount)
+            wallet.Proofs.VerifyProofAsync(proofTx, proofKey, proofAddress, proofAmount)
         } else {
-            wallet.VerifyAsync(signer, message, signature)
+            wallet.Proofs.VerifyAsync(signer, message, signature)
         }
         Run(
             task,
@@ -474,7 +474,7 @@ partial class WalletView {
         }
         let buffer = revealPassword.ToCharArray()
         revealPassword = ""
-        let task = wallet.ExportViewKeysAsync(buffer)
+        let task = wallet.Keys.ExportViewKeysAsync(buffer)
         Run(
             task,
             () -> {
@@ -641,7 +641,7 @@ partial class WalletView {
         let current = password.ToCharArray()
         let secret = filePassword.ToCharArray()
         Run(
-            wallet.CreateViewOnlyAsync(filename, current, secret),
+            wallet.Keys.CreateViewOnlyAsync(filename, current, secret),
             () -> {
                 ClearSecrets()
                 name = ""

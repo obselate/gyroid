@@ -23,7 +23,7 @@ import System.Text
 import System.Threading.Tasks
 
 partial class WalletView : Cell {
-    private let wallet WalletController
+    private let wallet WalletSession
     private let strings Strings
     private var window Window?
     private var width float64 = 1280
@@ -81,7 +81,7 @@ partial class WalletView : Cell {
     private let mint Color = Color.Parse("#00ffaa")
     private let violet Color = Color.Parse("#aa00ff")
 
-    init(wallet WalletController) {
+    init(wallet WalletSession) {
         this.wallet = wallet
         strings = Strings(wallet.Settings.Language)
         receivedRow = (output WalletOutput) -> ReceivedRow(output)
@@ -415,7 +415,7 @@ partial class WalletView : Cell {
 
     private func LoadWallets() {
         try {
-            wallets = wallet.ListWallets()
+            wallets = wallet.Library.ListWallets()
         } catch (failure WalletException) {
             wallets = Array.Empty[string]()
             error = failure.Message
