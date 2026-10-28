@@ -27,8 +27,7 @@ class WalletController : IDisposable {
     var pendingSendError string = ""
     var sendOutcome string = ""
     var sendLease FileStream? = nil
-    var historyOffset int32
-    var historyTotal uint64
+    let History HistoryService
     var state string = "Unloaded"
     var page string = "Welcome"
     var connected bool
@@ -54,6 +53,7 @@ class WalletController : IDisposable {
     init() {
         settings = WalletSettings.Load()
         Node = NodeSession(settings)
+        History = HistoryService(this)
         Node.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         Node.Changed = () -> Changed?.Invoke()
         if settings.ActiveWallet.Length > 0 {
@@ -64,7 +64,7 @@ class WalletController : IDisposable {
         Task.Run(() -> AutoLockAsync())
     }
 
-    private async func BeginAsync(ct CancellationToken) {
+    async func BeginAsync(ct CancellationToken) {
         if disposed {
             throw WalletException("Wallet controller is closed")
         }
@@ -77,7 +77,7 @@ class WalletController : IDisposable {
         Changed?.Invoke()
     }
 
-    private func End() {
+    func End() {
         if disposed {
             ClearSeed()
             InvalidateConfirmation()
@@ -1049,7 +1049,7 @@ class WalletController : IDisposable {
         try {
             using let balance = await Node.Api.JsonAsync("wallet/balance", ct: ct)
             using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
-            let sends = await ReadSendsAsync(ct)
+            let sends = await History.ReadSendsAsync(ct)
             let root = balance.RootElement
             let change = NodeJson.OptionalNumber(root, "pending_unconfirmed") ?? 0
             let amounts = WalletBalance{
@@ -1060,13 +1060,7 @@ class WalletController : IDisposable {
                 Spendable: NodeJson.OptionalNumber(root, "spendable"),
                 Pending: NodeJson.OptionalNumber(root, "pending") + change,
             }
-            let outputs = List[WalletOutput]()
-            let wanted = Math.Max(historyPage, historyOffset)
-            historyOffset = 0
-            var more = true
-            while more && historyOffset < wanted {
-                more = await ReadHistoryAsync(outputs, Math.Min(500, wanted - historyOffset), ct)
-            }
+            let outputs = await History.ReloadAsync(ct)
             snapshot = WalletSnapshot{
                 Page: page,
                 State: state,
@@ -1074,9 +1068,9 @@ class WalletController : IDisposable {
                 Address: NodeJson.Text(address.RootElement, "address"),
                 ViewOnly: NodeJson.Flag(address.RootElement, "view_only"),
                 Balance: amounts,
-                History: outputs.ToArray(),
-                HistoryTotal: historyTotal,
-                HistoryMore: uint64(historyOffset) < historyTotal,
+                History: outputs,
+                HistoryTotal: History.Total,
+                HistoryMore: History.More,
                 Sends: sends
             }
         } catch (error WalletException) {
@@ -1106,120 +1100,15 @@ class WalletController : IDisposable {
         }
     }
 
-    private async func ReadHistoryAsync(outputs List[WalletOutput], limit int32, ct CancellationToken) bool {
-        using let response = await Node.Api.JsonAsync(
-            "wallet/history/page?limit=" + limit.ToString() + "&offset=" + historyOffset.ToString() + "&order=desc",
-            ct: ct
-        )
-        let root = response.RootElement
-        let rows = root.GetProperty("outputs")
-        let keys = HashSet[string](
-            outputs.Select((output WalletOutput) -> output.TxId + ":" + output.OutputIndex.ToString())
-        )
-        for row in rows.EnumerateArray() {
-            let hex = NodeJson.Text(row, "memo_hex")
-            let output = WalletOutput{
-                TxId: NodeJson.Text(row, "txid"),
-                OutputIndex: int32(NodeJson.Number(row, "output_index")),
-                Amount: NodeJson.Number(row, "amount"),
-                BlockHeight: NodeJson.Number(row, "block_height"),
-                Spent: NodeJson.Flag(row, "spent"),
-                Memo: NodeJson.Memo(hex)
-            }
-            if keys.Add(output.TxId + ":" + output.OutputIndex.ToString()) {
-                outputs.Add(output)
-            }
-        }
-        historyOffset += rows.GetArrayLength()
-        historyTotal = NodeJson.Number(root, "total")
-        return rows.GetArrayLength() > 0 && uint64(historyOffset) < historyTotal
-    }
-
-    async func LoadHistoryAsync(ct CancellationToken = default(CancellationToken)) {
-        await BeginAsync(ct)
-        try {
-            RequireUnlocked()
-            if uint64(historyOffset) < historyTotal {
-                let outputs = List[WalletOutput](snapshot.History)
-                await ReadHistoryAsync(outputs, historyPage, ct)
-                snapshot = WalletSnapshot{
-                    ... snapshot,
-                    Page: page,
-                    State: state,
-                    Connected: connected,
-                    History: outputs.ToArray(),
-                    HistoryTotal: historyTotal,
-                    HistoryMore: uint64(historyOffset) < historyTotal
-                }
-            }
-        } finally {
-            End()
-        }
-    }
-
-    async func TransactionAsync(txid string, ct CancellationToken = default(CancellationToken)) TransactionDetails {
-        await BeginAsync(ct)
-        try {
-            RequireUnlocked()
-            using let response = await Node.Api.JsonAsync("tx/" + Uri.EscapeDataString(txid), ct: ct)
-            let root = response.RootElement
-            let details = TransactionDetails{
-                Height: NodeJson.OptionalNumber(root, "block_height") ?? uint64(0),
-                Confirmations: NodeJson.Number(root, "confirmations"),
-                InMempool: NodeJson.Flag(root, "in_mempool")
-            }
-            if details.Height > 0 {
-                using let block = await Node.Api.JsonAsync("block/" + details.Height.ToString(), ct: ct)
-                details.Timestamp = NodeJson.Signed(block.RootElement, "timestamp")
-            }
-            return details
-        } finally {
-            End()
-        }
-    }
-
-    private async func ReadSendsAsync(ct CancellationToken)[]WalletSend {
-        let sends = List[WalletSend]()
-        var offset int32 = 0
-        while true {
-            using let response = await Node.Api.JsonAsync(
-                "wallet/sends?limit=500&offset=" + offset.ToString() + "&order=desc",
-                ct: ct
-            )
-            let root = response.RootElement
-            let rows = root.GetProperty("sends")
-            for row in rows.EnumerateArray() {
-                let recipients = List[WalletRecipient]()
-                for recipient in row.GetProperty("recipients").EnumerateArray() {
-                    let hex = NodeJson.Text(recipient, "memo_hex")
-                    recipients.Add(
-                        WalletRecipient{
-                            Address: NodeJson.Text(recipient, "address"),
-                            Amount: NodeJson.Number(recipient, "amount"),
-                            Memo: NodeJson.Memo(hex)
-                        }
-                    )
-                }
-                sends.Add(
-                    WalletSend{
-                        TxId: NodeJson.Text(row, "txid"),
-                        Timestamp: NodeJson.Signed(row, "timestamp"),
-                        RecordedHeight: NodeJson.Number(row, "recorded_height"),
-                        Status: NodeJson.Text(row, "chain_state"),
-                        Confirmations: NodeJson.Number(row, "confirmations"),
-                        Fee: NodeJson.Number(row, "fee"),
-                        Amount: NodeJson.Number(row, "total_amount"),
-                        Recipients: recipients.ToArray()
-                    }
-                )
-            }
-            offset = offset + rows.GetArrayLength()
-            if uint64(offset) >= NodeJson.Number(root, "total") {
-                return sends.ToArray()
-            }
-            if rows.GetArrayLength() == 0 {
-                throw WalletException("Daemon returned an incomplete outgoing history page")
-            }
+    func PublishHistory(outputs[]WalletOutput) {
+        snapshot = WalletSnapshot{
+            ... snapshot,
+            Page: page,
+            State: state,
+            Connected: connected,
+            History: outputs,
+            HistoryTotal: History.Total,
+            HistoryMore: History.More
         }
     }
 
@@ -1471,7 +1360,7 @@ class WalletController : IDisposable {
             let root = response.RootElement
             let status = NodeJson.Text(root, "state")
             if state == "Unlocked" {
-                let sends = await ReadSendsAsync(ct)
+                let sends = await History.ReadSendsAsync(ct)
                 snapshot = WalletSnapshot{... snapshot, Sends: sends}
             }
             if status == "not_found" && state == "Unlocked" {
@@ -1629,7 +1518,7 @@ class WalletController : IDisposable {
         }
     }
 
-    private func RequireUnlocked() {
+    func RequireUnlocked() {
         RequireManaged()
         if state != "Unlocked" {
             throw WalletException("Unlock the wallet first")
@@ -1657,8 +1546,7 @@ class WalletController : IDisposable {
     }
 
     private func PublishEmpty() {
-        historyOffset = 0
-        historyTotal = 0
+        History.Reset()
         snapshot = WalletSnapshot{Page: page, State: state, Connected: connected}
     }
 
@@ -1671,8 +1559,8 @@ class WalletController : IDisposable {
             ViewOnly: snapshot.ViewOnly,
             Balance: snapshot.Balance,
             History: snapshot.History,
-            HistoryTotal: historyTotal,
-            HistoryMore: uint64(historyOffset) < historyTotal,
+            HistoryTotal: History.Total,
+            HistoryMore: History.More,
             Sends: snapshot.Sends
         }
     }
@@ -1707,8 +1595,6 @@ class WalletController : IDisposable {
     }
 
     shared {
-        private let historyPage int32 = 50
-
         private func WriteCredentials(
             writer Utf8JsonWriter,
             password[]char,

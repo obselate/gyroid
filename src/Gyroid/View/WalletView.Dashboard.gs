@@ -996,7 +996,7 @@ partial class WalletView {
         loadingHistory = true
         var message = ""
         try {
-            await Task.Run(() -> wallet.LoadHistoryAsync())
+            await Task.Run(() -> wallet.History.LoadMoreAsync())
         } catch (failure WalletException) {
             message = failure.Message
         } catch (failure Exception) {
@@ -1023,7 +1023,7 @@ partial class WalletView {
         let txid = output?.TxId ?? send?.TxId ?? ""
         var details TransactionDetails? = nil
         try {
-            details = await Task.Run(() -> wallet.TransactionAsync(txid))
+            details = await Task.Run(() -> wallet.History.TransactionAsync(txid))
         } catch (failure Exception) {
             details = nil
         }

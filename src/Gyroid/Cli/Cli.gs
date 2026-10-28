@@ -243,7 +243,7 @@ class Cli {
                     wallet.RefreshAsync().GetAwaiter().GetResult()
                     var snapshot = wallet.Snapshot
                     while command == "history" && snapshot.HistoryMore && snapshot.History.Length < limit {
-                        wallet.LoadHistoryAsync().GetAwaiter().GetResult()
+                        wallet.History.LoadMoreAsync().GetAwaiter().GetResult()
                         snapshot = wallet.Snapshot
                     }
                     if command == "address" {
