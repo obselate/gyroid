@@ -9,6 +9,7 @@ import Gyroid.View
 import Gyroid.Wallet
 import System
 import System.Globalization
+import System.Reflection
 import System.Runtime.InteropServices
 
 @DllImport("kernel32.dll")
@@ -43,7 +44,12 @@ func Main() {
     if OperatingSystem.IsWindows() && GetConsoleProcessList([2]uint32, 2) == 1 {
         FreeConsole()
     }
-    Window.ConfigureApplication("Gyroid", "0.1.0", "dev.gyroid.wallet")
+    let version = Assembly.GetExecutingAssembly().GetCustomAttribute[AssemblyInformationalVersionAttribute]()
+    Window.ConfigureApplication(
+        "Gyroid",
+        (version?.InformationalVersion ?? "unknown").Split('+')[0],
+        "dev.gyroid.wallet"
+    )
     var activationTarget WalletView? = nil
     Window.ApplicationActivated += request -> {
         if !request.IsInitial {

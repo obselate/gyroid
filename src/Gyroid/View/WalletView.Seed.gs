@@ -5,7 +5,6 @@ import Goo.Widgets.Inputs
 import System
 import System.Collections.Generic
 import System.IO
-import System.Threading.Tasks
 
 partial class WalletView {
     private var seed[]?char
@@ -180,22 +179,9 @@ partial class WalletView {
             suggested,
             path -> {
                 if let words = seed {
-                    Run(WriteSeed(path, words))
+                    Run(wallet.ExportSeedAsync(path, words))
                 }
             }
         )
-    }
-
-    private async func WriteSeed(path string, words[]char) {
-        let ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite
-        let options = FileStreamOptions{Mode: FileMode.Create, Access: FileAccess.Write, Share: FileShare.None}
-        if !OperatingSystem.IsWindows() {
-            options.UnixCreateMode = ownerOnly
-        }
-        using let stream = FileStream(path, options)
-        if !OperatingSystem.IsWindows() {
-            File.SetUnixFileMode(stream.SafeFileHandle, ownerOnly)
-        }
-        await wallet.ExportSeedAsync(stream, words)
     }
 }

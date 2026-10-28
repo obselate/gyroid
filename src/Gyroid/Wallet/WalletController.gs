@@ -914,7 +914,7 @@ class WalletController : IDisposable {
         Changed?.Invoke()
     }
 
-    async func ExportSeedAsync(destination Stream, seed[]char, ct CancellationToken = default(CancellationToken)) {
+    async func ExportSeedAsync(path string, seed[]char, ct CancellationToken = default(CancellationToken)) {
         let bytes = [Encoding.UTF8.GetMaxByteCount(seed.Length)]uint8
         try {
             let count = Encoding.UTF8.GetBytes(seed, 0, seed.Length, bytes, 0)
@@ -923,8 +923,12 @@ class WalletController : IDisposable {
                     bytes[index] = 10
                 }
             }
-            await destination.WriteAsync(bytes, 0, count, ct)
-            await destination.FlushAsync(ct)
+            await PrivateFiles.WriteAtomic(
+                path,
+                destination -> destination.WriteAsync(bytes, 0, count, ct),
+                true,
+                false
+            )
         } finally {
             Array.Clear(bytes)
         }
