@@ -145,7 +145,6 @@ partial class App : Cell {
         closeSettings = () -> {
             screen = ""
             ui.Decode("page")
-            LoadWallets()
             Rebuild()
         }
         ApplyPreferences()
@@ -341,7 +340,6 @@ partial class App : Cell {
     private func Back() {
         ClearSecrets()
         error = ""
-        draft = nil
         screen = ""
         ui.Decode("page")
         Rebuild()
