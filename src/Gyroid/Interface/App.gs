@@ -82,6 +82,16 @@ partial class App : Cell {
 
     private var shownState string = ""
 
+    private var clears int32
+
+    private var seed[]?char
+
+    private var contacts SortedDictionary[string, string] = SortedDictionary[string, string](StringComparer.Ordinal)
+
+    private let finishSeed Action
+
+    private let contactsChanged Action[SortedDictionary[string, string]]
+
     init(wallet WalletSession) {
         this.wallet = wallet
         ui = Presentation(
@@ -93,7 +103,7 @@ partial class App : Cell {
             message -> {
                 error = message
             },
-            (task, done) -> Run(task, done)
+            (task, done, secret, extra) -> Run(task, done, secret, extra)
         )
         navigate = target -> Navigate(target)
         showUpgrade = () -> {
@@ -103,6 +113,10 @@ partial class App : Cell {
         sendDone = () -> Refresh()
         chooseFile = (kind, title, path, chosen) -> ChooseFile(kind, title, path, chosen)
         openReceive = () -> Navigate("Receive")
+        finishSeed = () -> FinishSeed()
+        contactsChanged = next -> {
+            contacts = next
+        }
         nodeAnchor.MetricsChanged += _ -> {
             if nodeOpen {
                 Rebuild()
@@ -110,7 +124,6 @@ partial class App : Cell {
         }
         background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
         appIcon = ImageSource.Decode(Resources.Resource("Gyroid.Icon.png"))
-        LoadWallets()
         LoadContacts()
     }
 
@@ -224,9 +237,6 @@ partial class App : Cell {
             if lastPage == "Seed" {
                 ClearSeed()
             }
-            if page == "Welcome" {
-                LoadWallets()
-            }
             if !seedFromWallet || page != "Seed" && page != "Wallet" {
                 screen = ""
                 ui.Decode("page")
@@ -252,9 +262,7 @@ partial class App : Cell {
         confirmation = ""
         filePassword = ""
         passwordIssue = ""
-        phrase = ""
-        spendKey = ""
-        viewKey = ""
+        clears++
         revealPassword = ""
 
         upgradeShown = false
@@ -263,7 +271,56 @@ partial class App : Cell {
         viewKeysVisible = false
         viewOnlyOpen = false
         viewOnlyCreated = ""
-        deletingContact = ""
+    }
+
+    private func TakeSeed() bool {
+        guard let words = wallet.Keys.TakePendingSeed() else {
+            return false
+        }
+        ClearSeed()
+        seed = words
+        return true
+    }
+
+    private func ClearSeed() {
+        ui.ReleaseClipboard()
+        if let words = seed {
+            Array.Clear(words)
+        }
+        seed = nil
+    }
+
+    private func FinishSeed() {
+        ClearSeed()
+        wallet.Keys.ContinueFromSeed()
+    }
+
+    private func LoadContacts() {
+        try {
+            contacts = AddressBook.ReadContacts(message -> error = message)
+        } catch (failure WalletException) {
+            error = failure.Message
+        }
+    }
+
+    private func Open(target string) {
+        ClearSecrets()
+        error = ""
+        screen = target
+        if target == "Contacts" {
+            LoadContacts()
+        }
+        ui.Decode("page")
+        Rebuild()
+    }
+
+    private func Back() {
+        ClearSecrets()
+        error = ""
+        draft = nil
+        screen = ""
+        ui.Decode("page")
+        Rebuild()
     }
 
     private func Run(task Task, done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
@@ -532,20 +589,52 @@ partial class App : Cell {
             )
         } else if page == "Transactions" {
             HistoryView(snapshot)
-        } else if page == "Seed" {
-            SeedPage()
-        } else if page == "Unlock" {
-            UnlockPage()
-        } else if page == "Create" || page == "Phrase" || page == "ViewOnly" {
-            CreatePage(page)
+        } else if page == "Seed" || seedFromWallet && seed != nil {
+            Cell.Mount[SeedPageInput, SeedPage](
+                "seed",
+                SeedPageInput{
+                    Session: wallet,
+                    Ui: ui,
+                    Words: seed,
+                    FromWallet: seedFromWallet,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    ChooseFile: chooseFile,
+                    OnDone: finishSeed
+                }
+            )
         } else if page == "Tools" {
             ToolsPage()
         } else if page == "Contacts" {
-            ContactsPage()
+            Cell.Mount[ContactsInput, ContactsPage](
+                "contacts",
+                ContactsInput{
+                    Ui: ui,
+                    Contacts: contacts,
+                    Privacy: ui.Privacy,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    OnChange: contactsChanged
+                }
+            )
         } else if page == "Settings" {
             SettingsPage()
         } else {
-            WelcomePage()
+            Cell.Mount[LibraryInput, LibraryPage](
+                "library",
+                LibraryInput{
+                    Session: wallet,
+                    Ui: ui,
+                    Page: snapshot.Page,
+                    State: snapshot.State,
+                    ActiveWallet: wallet.Settings.ActiveWallet,
+                    Clears: clears,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    ChooseFile: chooseFile,
+                    OnNavigate: navigate
+                }
+            )
         }
         let left = if WalletAvailable() {
             102.0
@@ -562,7 +651,7 @@ partial class App : Cell {
             case "Send": 640.0
             case "Tools": 640.0
             case "Contacts": 640.0
-            default: 520.0
+            default: 560.0
         }
         let side = Math.Min(span * 0.45, span - cardWidth - 48)
         let region = if side >= 240 {
@@ -647,9 +736,6 @@ partial class App : Cell {
             }
             if viewOnlyOpen {
                 root.Add(ViewOnlyDialog())
-            }
-            if deletingContact.Length > 0 {
-                root.Add(DeleteContactDialog())
             }
         }
         if applyPending && page == "Settings" {

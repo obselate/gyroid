@@ -39,7 +39,7 @@ partial class App {
             Padding: Edges{Left: 18},
             Image{Width: 18, Height: 18, Source: appIcon},
             ui.Label("gyroid", 14, ui.Ink, ""),
-            ui.Label(WalletAvailable() ? WalletName(wallet.Settings.ActiveWallet): "", 14, ui.Ink, ""),
+            ui.Label(WalletAvailable() ? ui.WalletName(wallet.Settings.ActiveWallet): "", 14, ui.Ink, ""),
             ui.Label(wallet.Snapshot.ViewOnly ? ui.Strings.Get("view only"): "", 12, ui.Orange, "")
         }
     }.Build()

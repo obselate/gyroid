@@ -34,7 +34,7 @@ class Presentation {
     private let playbackActive Func[bool]
     private let touch Action
     private let report Action[string]
-    private let run Action[Task, Action?]
+    private let run Action[Task, Action?, []?char, []?char]
 
     init(
         language string,
@@ -43,7 +43,7 @@ class Presentation {
         playbackActive Func[bool],
         touch Action,
         report Action[string],
-        run Action[Task, Action?]
+        run Action[Task, Action?, []?char, []?char]
     ) {
         Strings = Gyroid.Interface.Strings(language)
         Privacy = privacy
@@ -128,8 +128,23 @@ class Presentation {
         address
     }
 
-    func Run(task Task, done Action? = nil) {
-        run(task, done)
+    func WalletName(filename string) string -> if filename.EndsWith(".wallet.dat", StringComparison.Ordinal) {
+        filename.Substring(0, filename.Length - 11)
+    } else {
+        filename
+    }
+
+    func WalletFile(label string) string {
+        let trimmed = label.Trim()
+        return if trimmed.EndsWith(".wallet.dat", StringComparison.Ordinal) {
+            trimmed
+        } else {
+            trimmed + ".wallet.dat"
+        }
+    }
+
+    func Run(task Task, done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
+        run(task, done, secret, extra)
     }
 
     func Delay(ms float64, action Action) WindowTimer? -> window?.SetTimeout(action, ms)

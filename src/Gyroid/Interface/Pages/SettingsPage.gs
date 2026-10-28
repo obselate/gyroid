@@ -39,13 +39,6 @@ partial class App {
     private func Pinned(variable string) bool -> Environment.GetEnvironmentVariable("GYROID_" + variable) != nil
 
     private func SettingsPage() Blob {
-        if seedFromWallet {
-            if let words = seed {
-                let phrase = ui.PageContent(ui.Strings.Get("recovery phrase"), 860)
-                phrase.Add(Phrase(words, Math.Min(width - 256, 860) - 42))
-                return phrase
-            }
-        }
         let panel = ui.PageContent(
             ui.Strings.Get("settings"),
             860,
@@ -465,7 +458,6 @@ partial class App {
             () -> {
                 draft = nil
                 screen = ""
-                LoadWallets()
             }
         )
     }
@@ -584,6 +576,16 @@ partial class App {
 
     private var filePassword string = ""
 
+    private var name string = ""
+
+    private var password string = ""
+
+    private var confirmation string = ""
+
+    private var passwordIssue string = ""
+
+    private func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+
     private var viewKeys WalletViewKeys?
 
     private var viewKeysVisible bool
@@ -670,7 +672,7 @@ partial class App {
                     AlignItems: AlignItems.Center,
                     Gap: 8,
                     MaterialIcons.Create("check_circle", 18, ui.Lime),
-                    ui.Label(WalletName(viewOnlyCreated), 16, ui.Lime, "")
+                    ui.Label(ui.WalletName(viewOnlyCreated), 16, ui.Lime, "")
                 }
             )
         } else {
@@ -767,7 +769,7 @@ partial class App {
             Rebuild()
             return
         }
-        let filename = WalletFile(name)
+        let filename = ui.WalletFile(name)
         let current = password.ToCharArray()
         let secret = filePassword.ToCharArray()
         Run(
