@@ -1631,12 +1631,11 @@ class WalletController : IDisposable {
             if txid.Length == 0 || WalletJson.Flag(root, "dry_run") {
                 throw WalletException("Invalid send response", 0, true)
             }
-            let result = SendResult(
-                txid,
-                WalletJson.Number(root, "fee"),
-                WalletJson.Number(root, "change"),
-                int32(WalletJson.OptionalNumber(root, "input_count") ?? 0)
-            )
+            var inputCount int32
+            if let count = WalletJson.OptionalNumber(root, "input_count") {
+                inputCount = int32(count)
+            }
+            let result = SendResult(txid, WalletJson.Number(root, "fee"), WalletJson.Number(root, "change"), inputCount)
             ClearPendingSend()
             if result.InputCount > 0 {
                 return result
