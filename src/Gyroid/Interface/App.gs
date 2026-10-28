@@ -34,20 +34,6 @@ partial class App : Cell {
 
     private let receiveRequest ReceiveRequest = ReceiveRequest()
 
-    private func Prove(send WalletSend) {
-        let task = wallet.Proofs.ProveAsync(send.TxId)
-        Run(
-            task,
-            () -> {
-                proofTx = send.TxId
-                proofKey = task.Result
-                proofAddress = send.Recipients.Length > 0 ? send.Recipients[0].Address: ""
-                proofAmount = send.Recipients.Length > 0 ? ui.Money(send.Recipients[0].Amount): ""
-                ResetVerdict()
-            }
-        )
-    }
-
     private var proofTx string = ""
 
     private var proofKey string = ""
@@ -59,6 +45,8 @@ partial class App : Cell {
     private let wallet WalletSession
 
     private let ui Presentation
+
+    private let openReceive Action
 
     private var window Window?
 
@@ -105,7 +93,6 @@ partial class App : Cell {
             },
             (task, done) -> Run(task, done)
         )
-        receivedRow = (output WalletOutput) -> ReceivedRow(output)
         navigate = target -> Navigate(target)
         showUpgrade = () -> {
             upgradeShown = true
@@ -113,8 +100,7 @@ partial class App : Cell {
         }
         sendDone = () -> Refresh()
         chooseFile = (kind, title, path, chosen) -> ChooseFile(kind, title, path, chosen)
-        sentRow = (send WalletSend) -> SentRow(send)
-        historyHandle.MetricsChanged += MoreHistory
+        openReceive = () -> Navigate("Receive")
         nodeAnchor.MetricsChanged += _ -> {
             if nodeOpen {
                 Rebuild()
@@ -268,8 +254,7 @@ partial class App : Cell {
         spendKey = ""
         viewKey = ""
         revealPassword = ""
-        shownOutput = nil
-        shownSend = nil
+
         upgradeShown = false
         viewKeys?.Dispose()
         viewKeys = nil
@@ -312,6 +297,7 @@ partial class App : Cell {
             () -> {
                 ui.Operations--
                 if unknown {
+
                     screen = "Send"
                     Refresh()
                 } else {
@@ -426,6 +412,22 @@ partial class App : Cell {
         }
     }
 
+    private func HistoryView(snapshot WalletSnapshot) Blob -> Cell.Mount[HistoryInput, HistoryPage](
+        "history",
+        HistoryInput{
+            Session: wallet,
+            Ui: ui,
+            Snapshot: snapshot,
+            Window: window,
+            Tip: wallet.Node.Status.Height,
+            Privacy: ui.Privacy,
+            Language: ui.Strings.Language,
+            Decode: ui.Progress("page"),
+            Width: width,
+            OnReceive: openReceive
+        }
+    )
+
     override func Build() Blob {
         let theme = Theme.Read()
         let snapshot = wallet.Snapshot
@@ -514,7 +516,7 @@ partial class App : Cell {
                 }
             )
         } else if page == "Transactions" {
-            History(snapshot)
+            HistoryView(snapshot)
         } else if page == "Seed" {
             SeedPage()
         } else if page == "Unlock" {
@@ -607,7 +609,9 @@ partial class App : Cell {
         if WalletAvailable() {
             main.Padding = 0
             main.Width = Percent(100)
-            main.MaxWidth = 1400
+            if page != "Transactions" {
+                main.MaxWidth = 1400
+            }
             frame.Padding = Edges{Left: 14, Right: 20, Bottom: 20}
             frame.Gap = 16
             frame.Add(Sidebar(page))
@@ -619,9 +623,6 @@ partial class App : Cell {
         if WalletAvailable() {
             if confirmPendingSend {
                 root.Add(ConfirmPendingSend())
-            }
-            if shownOutput != nil || shownSend != nil {
-                root.Add(TransactionDialog())
             }
             if upgradeShown {
                 root.Add(UpgradeDialog())

@@ -115,22 +115,19 @@ class HistoryService {
         }
     }
 
-    async func TransactionAsync(txid string, ct CancellationToken = default(CancellationToken)) TransactionDetails {
+    async func BlockTimesAsync(heights[]uint64, ct CancellationToken = default(CancellationToken)) Dictionary[
+        uint64,
+        int64
+    ] {
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()
-            using let response = await session.Node.Api.JsonAsync("tx/" + Uri.EscapeDataString(txid), ct: ct)
-            let root = response.RootElement
-            let details = TransactionDetails{
-                Height: NodeJson.OptionalNumber(root, "block_height") ?? uint64(0),
-                Confirmations: NodeJson.Number(root, "confirmations"),
-                InMempool: NodeJson.Flag(root, "in_mempool")
+            let times = Dictionary[uint64, int64]()
+            for height in heights {
+                using let block = await session.Node.Api.JsonAsync("block/" + height.ToString(), ct: ct)
+                times[height] = NodeJson.Signed(block.RootElement, "timestamp")
             }
-            if details.Height > 0 {
-                using let block = await session.Node.Api.JsonAsync("block/" + details.Height.ToString(), ct: ct)
-                details.Timestamp = NodeJson.Signed(block.RootElement, "timestamp")
-            }
-            return details
+            return times
         } finally {
             session.End()
         }

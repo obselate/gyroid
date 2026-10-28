@@ -26,10 +26,3 @@ class WalletSend {
     var Fee uint64
     var Recipients[]WalletRecipient = []WalletRecipient{}
 }
-
-class TransactionDetails {
-    var Height uint64
-    var Confirmations uint64
-    var InMempool bool
-    var Timestamp int64? = nil
-}

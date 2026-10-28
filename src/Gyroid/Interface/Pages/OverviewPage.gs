@@ -64,6 +64,7 @@ class OverviewPage : Cell[OverviewInput] {
         strip.MetricsChanged += _ -> if strip.BorderBox.Width != stripWidth {
             Rebuild()
         }
+
     }
 
     protected override func Build(input OverviewInput) Blob {

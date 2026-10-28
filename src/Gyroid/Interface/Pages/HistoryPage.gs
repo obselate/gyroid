@@ -7,283 +7,1277 @@ import Goo.Widgets.Data
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
 import Gyroid.History
-import Gyroid.Node
 import Gyroid.Platform
-import Gyroid.Send
 import Gyroid.Wallet
-import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic
 import System.Globalization
+import System.IO
 import System.Linq
 import System.Text
+import System.Text.Json
 import System.Threading.Tasks
 
-partial class App {
-    private var historyTab string = "received"
+data struct HistoryInput {
+    var Session WalletSession
+    var Ui Presentation
+    var Snapshot WalletSnapshot
+    var Window Window?
+    var Tip uint64
+    var Privacy bool
+    var Language string
+    var Decode float64
+    var Width float64
+    var OnReceive Action
+}
 
-    private var historySource WalletSnapshot?
+data struct HistoryRow {
+    var Key string
+    var Kind string
+    var TxId string
+    var Index int32
+    var Amount uint64
+    var Fee uint64
+    var Memo string
+    var Height uint64
+    var Depth uint64
+    var Need uint64
+    var Time int64
+    var State string
+    var Recipient string
+    var Paid uint64
+    var Open bool
+    var Revision int32
+    var Privacy bool
+    var Language string
+    var Width float64
+}
 
-    private var outputs[]WalletOutput
+class HistoryPage : Cell[HistoryInput] {
+    private var current HistoryInput
+    private var period string = "30d"
+    private var from uint64
+    private var to uint64
+    private var anchor uint64
+    private var dragging bool
+    private var hover int32 = -1
+    private var marked uint64
+    private var expanded string = ""
+    private var tab string = "details"
+    private var revision int32
+    private var proofFor string = ""
+    private var proofKey string = ""
+    private var proofValid bool
+    private var exporting bool
+    private var format string = "csv"
+    private var memos bool = true
+    private var plotWidth float64
+    private var low uint64
+    private var span uint64 = 1
+    private var shown[]HistoryRow = []HistoryRow{}
+    private var fetching bool
+    private var loading bool
+    private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
+    private let requested HashSet[uint64] = HashSet[uint64]()
+    private let plot ElementHandle = ElementHandle()
+    private let list ElementHandle = ElementHandle()
+    private let exportAnchor ElementHandle = ElementHandle()
+    private let rowKey Func[HistoryRow, string]
+    private let rowBuilder Func[HistoryRow, Blob]
 
-    private var sends[]WalletSend
-
-    private let receivedRow Func[WalletOutput, Blob]
-
-    private let sentRow Func[WalletSend, Blob]
-
-    private let historyHandle ElementHandle = ElementHandle()
-
-    private var loadingHistory bool
-
-    private func History(snapshot WalletSnapshot) Blob {
-        if !Object.ReferenceEquals(historySource, snapshot) {
-            historySource = snapshot
-            outputs = snapshot.History
-            sends = snapshot.Sends.OrderByDescending((send WalletSend) -> send.Timestamp).ToArray()
+    init() {
+        rowKey = (row HistoryRow) -> row.Key
+        rowBuilder = (row HistoryRow) -> Row(row)
+        plot.MetricsChanged += metrics -> {
+            if metrics.BorderBox.Width != plotWidth {
+                plotWidth = metrics.BorderBox.Width
+                Rebuild()
+            }
         }
-        let list = if historyTab == "sent" {
-            VirtualRows(
-                sends,
-                56,
-                (send WalletSend) -> send.TxId + ui.Privacy.ToString() + ui.Strings.Language,
-                sentRow,
-                false
-            )
-        } else {
-            VirtualRows(
-                outputs,
-                44,
-                (output WalletOutput) -> output.TxId + ":" + output.OutputIndex.ToString() + ui.Privacy.ToString() +
-                    ui
-                    .Strings
-                    .Language,
-                receivedRow,
-                false
-            )
+        list.MetricsChanged += metrics -> {
+            let first = int32(metrics.ScrollOffset.Y / 38)
+            RequestTimes(shown.Skip(Math.Max(0, first - 10)).Take(50).Select((row HistoryRow) -> row.Height))
+            if period == "all" && metrics.ScrollRange.Y - metrics.ScrollOffset.Y < 440 {
+                LoadMore()
+            }
         }
-        if historyTab == "received" {
-            list.Handle = historyHandle
+    }
+
+    protected override func Build(input HistoryInput) Blob {
+        current = input
+        let ui = input.Ui
+        let compact = input.Width < 1000
+        let all = Collect(input)
+        let tip = input.Tip
+        let oldest = all.Count > 0 && all[all.Count - 1].Height > 0 ? all[all.Count - 1].Height: tip
+        span = switch period {
+            case "1d": 288UL
+            case "7d": 2016UL
+            case "30d": 8640UL
+            default: Math.Max(288UL, tip + 1 - Math.Min(tip, oldest))
         }
-        list.FlexGrow = 1
-        list.FlexBasis = 0
-        list.MinHeight = 0
-        list.ScrollbarY = Theme.Read().Scrollbar
-        let rows = if historyTab == "sent" {
-            sends.Length
-        } else {
-            outputs.Length
+        low = tip > span ? tip - span: 0
+        if input.Snapshot.HistoryMore && period != "all" && all.Count > 0 && all[all.Count - 1].Height > low {
+            LoadMore()
         }
+        let first = to > 0 ? from: low + 1
+        let last = to > 0 ? to: tip
+        shown = all.Where((row HistoryRow) -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last)
+            .ToArray()
+        RequestTimes(shown.Take(50).Select((row HistoryRow) -> row.Height))
         let panel = ui.Glass()
         panel.FlexGrow = 1
         panel.AlignSelf = AlignSelf.Stretch
-        panel.Padding = Edges{Top: 12, Left: 20, Right: 20, Bottom: 8}
-        panel.Gap = 12
-        panel.Add(
+        panel.Padding = Edges{Top: 12, Bottom: 12, Left: 20, Right: 20}
+        panel.Gap = compact ? 8.0: 10.0
+        let bar = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            Height: 30,
+            FlexShrink: 0,
+            Segments(
+                "period",
+                "range",
+                []string{"1d", "7d", "30d", "all"},
+                period,
+                id -> {
+                    period = id
+                    to = 0
+                    Rebuild()
+                }
+            )
+        }
+        if to > 0 {
+            bar.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 8,
+                    Height: 28,
+                    Padding: Edges{Left: 10, Right: 4},
+                    BorderWidth: 1,
+                    BorderColor: ui.Edge,
+                    BorderRadius: 4,
+                    ui.Label(ui.Count(from) + " – " + ui.Count(to), 12, ui.Ink, ""),
+                    IconButton{
+                        Icon: MaterialIcons.Create("close", 12, ui.Dim),
+                        AccessibilityName: ui.Strings.Get("clear range"),
+                        OnClick: () -> {
+                            to = 0
+                            Rebuild()
+                        }
+                    }.Build()
+                }
+            )
+        }
+        bar.Add(
+            Info(
+                "range",
+                "Drag across blocks to pick a range. Bars above the line are received or mined. Bars below are sent.",
+                input
+            )
+        )
+        bar.Add(Container{FlexGrow: 1})
+        bar.Add(Export(input))
+        panel.Add(bar)
+        panel.Add(Ribbon(input, all, compact))
+        if all.Count == 0 && !input.Snapshot.HistoryMore {
+            panel.Add(
+                Container{
+                    FlexGrow: 1,
+                    AlignItems: AlignItems.Center,
+                    JustifyContent: JustifyContent.Center,
+                    Gap: 14,
+                    ui.Label(ui.Strings.Get("No transactions yet"), 15, ui.Ink),
+                    ui.Button("receive", input.OnReceive, false, true)
+                }
+            )
+            return panel
+        }
+        panel.Add(Summary(input))
+        let rows = VirtualRows(shown, 38, rowKey, rowBuilder, false)
+        rows.Handle = list
+        rows.FlexGrow = 1
+        rows.FlexBasis = 0
+        rows.MinHeight = 0
+        rows.BorderWidth = Edges{Top: 1}
+        rows.BorderColor = ui.Rule
+        panel.Add(rows)
+        return panel
+    }
+
+    private func Collect(input HistoryInput) List[HistoryRow] {
+        let snapshot = input.Snapshot
+        let tip = input.Tip
+        let rows = List[HistoryRow]()
+        for output in snapshot.History {
+            rows.Add(
+                Item(input, "r:" + output.TxId + ":" + output.OutputIndex.ToString()) with{
+                    Kind = output.Coinbase ? "mined": "in",
+                    TxId = output.TxId,
+                    Index = output.OutputIndex,
+                    Amount = output.Amount,
+                    Memo = output.Memo,
+                    Height = output.BlockHeight,
+                    Depth = output.BlockHeight > 0 && tip >= output.BlockHeight ? tip - output.BlockHeight: 0,
+                    Need = output.Coinbase ? 60UL: 10UL,
+                    Time = times.GetValueOrDefault(output.BlockHeight)
+                }
+            )
+        }
+        let lowest = if snapshot.HistoryMore && rows.Count > 0 {
+            rows[rows.Count - 1].Height
+        } else {
+            0UL
+        }
+        for send in snapshot.Sends {
+            let confirmed = send.Status == "confirmed" && send.Confirmations > 0 && tip + 1 >= send.Confirmations
+            let height = confirmed ? tip + 1 - send.Confirmations: 0
+            if confirmed && height < lowest {
+                continue
+            }
+            let recipient = send.Recipients.FirstOrDefault()
+            rows.Add(
+                Item(input, "s:" + send.TxId) with{
+                    Kind = confirmed ? "out": "pending",
+                    TxId = send.TxId,
+                    Amount = send.Amount,
+                    Fee = send.Fee,
+                    Memo = String.Join(
+                        " ",
+                        send
+                            .Recipients
+                            .Select((entry WalletRecipient) -> entry.Memo)
+                            .Where((memo string) -> memo.Length > 0)
+                    ),
+                    Height = height,
+                    Depth = confirmed ? send.Confirmations - 1: 0,
+                    Need = 10,
+                    Time = send.Timestamp,
+                    State = send.Status,
+                    Recipient = recipient?.Address ?? "",
+                    Paid = recipient?.Amount ?? 0UL
+                }
+            )
+        }
+        rows.Sort(
+            (left HistoryRow, right HistoryRow) -> if (left.Height == 0) != (right.Height == 0) {
+                left.Height == 0 ? -1: 1
+            } else if left.Height != right.Height {
+                right.Height.CompareTo(left.Height)
+            } else {
+                right.Time.CompareTo(left.Time)
+            }
+        )
+        return rows
+    }
+
+    private func Item(input HistoryInput, key string) HistoryRow -> HistoryRow{
+        Key: key,
+        Kind: "",
+        TxId: "",
+        Memo: "",
+        State: "",
+        Recipient: "",
+        Open: key == expanded,
+        Revision: key == expanded ? revision: 0,
+        Privacy: input.Privacy,
+        Language: input.Language,
+        Width: input.Width
+    }
+
+    private func Ribbon(input HistoryInput, all List[HistoryRow], compact bool) Blob {
+        let ui = input.Ui
+        let tip = input.Tip
+        let width = plotWidth
+        let height = compact ? 60.0: input.Width >= 1700 ? 110.0: 84.0
+        let columns = int32(Math.Max(40.0, Math.Min(float64(span), Math.Floor(width / 3))))
+        let size = float64(span) / columns
+        let received = [columns]float64
+        let mined = [columns]float64
+        let sent = [columns]float64
+        for row in all {
+            if row.Height <= low || row.Height > tip {
+                continue
+            }
+            let column = Math.Min(columns - 1, int32((row.Height - low) / size))
+            let value = float64(row.Amount)
+            if row.Kind == "in" {
+                received[column] += value
+            } else if row.Kind == "mined" {
+                mined[column] += value
+            } else {
+                sent[column] += value
+            }
+        }
+        var top = 1.0
+        for column in 0 ... columns {
+            top = Math.Max(top, Math.Max(received[column] + mined[column], sent[column]))
+        }
+        let scale Func[float64, float64] = value -> input.Privacy ? 1.0: Math.Sqrt(value / top)
+        let up = PathBuilder(0, 0, Math.Max(1.0, width), height)
+        let coin = PathBuilder(0, 0, Math.Max(1.0, width), height)
+        let down = PathBuilder(0, 0, Math.Max(1.0, width), height)
+        let step = width / columns
+        for column in 0 ... columns {
+            let x = (column + 0.15) * step
+            let w = 0.7 * step
+            let total = received[column] + mined[column]
+            if total > 0 {
+                let bar = scale(total) * 0.44 * height
+                let split = bar * received[column] / total
+                Rectangle(up, x, 0.56 * height - bar, w, split)
+                Rectangle(coin, x, 0.56 * height - bar + split, w, bar - split)
+            }
+            if sent[column] > 0 {
+                Rectangle(down, x, 0.58 * height, w, Math.Max(0.03, scale(sent[column]) * 0.4) * height)
+            }
+        }
+        let area = Container{
+            Handle: plot,
+            Height: height,
+            FlexShrink: 0,
+            Focusable: true,
+            Accessibility: Accessibility{Name: ui.Strings.Get("block range")},
+            Focus: Theme.Read().FocusStyle,
+            OnPointerDown: (event PointerEvent) -> {
+                event.Capture()
+                dragging = true
+                anchor = HeightAt(event.Position.X)
+                Select(anchor, anchor)
+            },
+            OnPointerMove: (event PointerEvent) -> {
+                let at = HeightAt(event.Position.X)
+                if dragging {
+                    Select(Math.Min(anchor, at), Math.Max(anchor, at))
+                } else {
+                    let column = Math.Min(columns - 1, int32(Math.Max(0.0, event.Position.X) / step))
+                    if column != hover {
+                        hover = column
+                        Rebuild()
+                    }
+                }
+            },
+            OnPointerUp: (event PointerEvent) -> {
+                dragging = false
+                if to - from < 2 {
+                    let column = Math.Min(columns - 1, int32(Math.Max(0.0, event.Position.X) / step))
+                    Select(low + 1 + uint64(column * size), Math.Min(tip, low + uint64((column + 1) * size)))
+                }
+            },
+            OnPointerLeave: (event PointerEvent) -> {
+                if hover >= 0 {
+                    hover = -1
+                    Rebuild()
+                }
+            },
+            OnKeyDown: (event KeyEvent) -> {
+                let block = uint64(Math.Max(1.0, size))
+                if event.Key == Key.Escape && to > 0 {
+                    to = 0
+                    Rebuild()
+                } else if event.Key == Key.Left || event.Key == Key.Right {
+                    let start = to > 0 ? from: tip - block + 1
+                    let end = to > 0 ? to: tip
+                    let shift = event.Key == Key.Left ? -int64(block): int64(block)
+                    let next = uint64(Math.Clamp(int64(start) + shift, int64(low + 1), int64(tip)))
+                    if event.Modifiers.Shift {
+                        Select(Math.Min(next, end), end)
+                    } else {
+                        Select(next, Math.Min(tip, next + block - 1))
+                    }
+                    event.PreventDefault()
+                }
+            },
+            Container{
+                Position: PositionType.Absolute,
+                Left: 0,
+                Right: 0,
+                Top: 0.57 * height,
+                Height: 1,
+                BackgroundColor: ui.Edge
+            },
+            Shape{
+                Position: PositionType.Absolute,
+                Width: width,
+                Height: height,
+                Path: up.Build(),
+                Fit: ShapeFit.Fill,
+                BackgroundColor: ui.Mint
+            },
+            Shape{
+                Position: PositionType.Absolute,
+                Width: width,
+                Height: height,
+                Path: coin.Build(),
+                Fit: ShapeFit.Fill,
+                BackgroundColor: ui.Lime
+            },
+            Shape{
+                Position: PositionType.Absolute,
+                Width: width,
+                Height: height,
+                Path: down.Build(),
+                Fit: ShapeFit.Fill,
+                BackgroundColor: ui.Pink
+            }
+        }
+        if to > 0 {
+            let left = Offset(from - 1)
+            let right = Offset(to)
+            area.Add(Shade(0, left))
+            area.Add(Shade(right, width))
+            area.Add(Handle(left, height))
+            area.Add(Handle(right, height))
+        }
+        let cursor = if hover >= 0 && !dragging {
+            (hover + 0.5) * step
+        } else if marked > low {
+            Offset(marked)
+        } else {
+            -1.0
+        }
+        if cursor >= 0 {
+            area.Add(
+                Container{
+                    Position: PositionType.Absolute,
+                    Left: cursor,
+                    Width: 1,
+                    Top: 0,
+                    Bottom: 0,
+                    BackgroundColor: Color.Parse("#858585"),
+                    HitTestSelf: false
+                }
+            )
+        }
+        if hover >= 0 && !dragging {
+            area.Add(Tip(input, all, hover, size, step, width))
+        }
+        let days = float64(span) / 288
+        let mark = if days <= 1 {
+            48UL
+        } else if days <= 7 {
+            288UL
+        } else {
+            288UL * uint64(Math.Ceiling(days / 6))
+        }
+        let axis = Container{Height: 18, FlexShrink: 0, BorderWidth: Edges{Top: 1}, BorderColor: ui.Edge}
+        let marks = List[uint64]()
+        var at = tip - Math.Min(tip, mark)
+        while at > low + mark * 3 / 10 {
+            marks.Add(at)
+            at -= Math.Min(at, mark)
+        }
+        RequestTimes(marks)
+        for value in marks {
+            let seconds = times.GetValueOrDefault(value)
+            if seconds > 0 {
+                let time = DateTimeOffset.FromUnixTimeSeconds(seconds).ToLocalTime()
+                axis.Add(
+                    Container{
+                        Position: PositionType.Absolute,
+                        Left: Offset(value) - 40,
+                        Width: 80,
+                        Top: 3,
+                        AlignItems: AlignItems.Center,
+                        ui.Label(
+                            time.ToString(days <= 1 ? "HH:mm": "MM-dd", CultureInfo.InvariantCulture),
+                            11,
+                            ui.Dim,
+                            ""
+                        )
+                    }
+                )
+            }
+        }
+        axis.Add(Container{Position: PositionType.Absolute, Right: 0, Top: 3, ui.Label(ui.Count(tip), 11, ui.Body, "")})
+        return Container{
+            FlexShrink: 0,
+            Padding: Edges{Top: 8, Left: 12, Right: 12},
+            BorderWidth: 1,
+            BorderColor: ui.Rule,
+            BorderRadius: 4,
+            BackgroundColor: Color.Parse("#080808"),
+            area,
+            axis
+        }
+    }
+
+    private func Rectangle(path PathBuilder, x float64, y float64, w float64, h float64) {
+        path.MoveTo(x, y).LineTo(x + w, y).LineTo(x + w, y + h).LineTo(x, y + h).Close()
+    }
+
+    private func Offset(height uint64) float64 -> plotWidth * Math.Clamp(
+        (float64(height) - float64(low)) / span,
+        0.0,
+        1.0
+    )
+
+    private func HeightAt(x float64) uint64 -> Math.Max(
+        low + 1,
+        low + uint64(Math.Round(Math.Clamp(x / Math.Max(1.0, plotWidth), 0.0, 1.0) * span))
+    )
+
+    private func Select(start uint64, end uint64) {
+        from = start
+        to = end
+        hover = -1
+        Rebuild()
+    }
+
+    private func Shade(left float64, right float64) Blob -> Container{
+        Position: PositionType.Absolute,
+        Left: left,
+        Width: Math.Max(0.0, right - left),
+        Top: 0,
+        Bottom: 0,
+        BackgroundColor: Color.Parse("#000000").WithAlpha(0.88),
+        HitTestSelf: false
+    }
+
+    private func Handle(x float64, height float64) Blob -> Container{
+        Position: PositionType.Absolute,
+        Left: x - 4,
+        Width: 8,
+        Top: 0,
+        Bottom: 0,
+        AlignItems: AlignItems.Center,
+        HitTestSelf: false,
+        Container{Width: 2, Height: height, BackgroundColor: current.Ui.Lime},
+        Container{
+            Position: PositionType.Absolute,
+            Top: height / 2 - 11,
+            Width: 8,
+            Height: 22,
+            BorderRadius: 2,
+            BackgroundColor: current.Ui.Lime
+        }
+    }
+
+    private func Tip(
+        input HistoryInput,
+        all List[HistoryRow],
+        column int32,
+        size float64,
+        step float64,
+        width float64
+    ) Blob {
+        let ui = input.Ui
+        let start = low + 1 + uint64(column * size)
+        let end = Math.Max(start, low + uint64((column + 1) * size))
+        let inside = all.Where((row HistoryRow) -> row.Height >= start && row.Height <= end).ToArray()
+        let tip = Container{
+            Position: PositionType.Absolute,
+            Top: 4,
+            Gap: 3,
+            Padding: Edges{Top: 8, Bottom: 8, Left: 10, Right: 10},
+            BackgroundColor: ui.Raised,
+            BorderWidth: 1,
+            BorderColor: ui.Edge,
+            BorderRadius: 4,
+            ZIndex: 3,
+            HitTestSelf: false,
+            ui.Label(start == end ? ui.Count(start): ui.Count(start) + " – " + ui.Count(end), 12, ui.Ink, "")
+        }
+        if inside.Length > 0 && inside[0].Time > 0 {
+            tip.Add(ui.Label(Moment(inside[0].Time), 12, ui.Dim, ""))
+        }
+        for category in[]string{"in", "mined", "out"} {
+            let rows = inside.Where((row HistoryRow) -> row.Kind == category).ToArray()
+            if rows.Length > 0 {
+                let total = rows.Aggregate(0UL, (sum uint64, row HistoryRow) -> sum + row.Amount)
+                tip.Add(ui.Label((category == "out" ? "−": "+") + ui.Amount(total), 12, Tint(category), ""))
+            }
+        }
+        let x = (column + 0.5) * step
+        if x > width / 2 {
+            tip.Right = width - x + 12
+        } else {
+            tip.Left = x + 12
+        }
+        return tip
+    }
+
+    private func Summary(input HistoryInput) Blob {
+        let ui = input.Ui
+        var received = 0UL
+        var sent = 0UL
+        var fees = 0UL
+        var mined = 0UL
+        for row in shown {
+            if row.Kind == "in" {
+                received += row.Amount
+            } else if row.Kind == "mined" {
+                mined += row.Amount
+            } else {
+                sent += row.Amount
+                fees += row.Fee
+            }
+        }
+        let gain = received + mined
+        let loss = sent + fees
+        let net = (gain >= loss ? "+": "−") + ui.Amount(gain >= loss ? gain - loss: loss - gain)
+        return Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Baseline,
+            Gap: input.Width < 1000 ? 14.0: 22.0,
+            FlexShrink: 0,
+            Padding: Edges{Top: 2, Left: 2, Right: 2},
+            Figure("in", received > 0 ? "+" + ui.Amount(received): "0", ui.Mint, 14),
+            Figure("out", sent > 0 ? "−" + ui.Amount(sent): "0", ui.Pink, 14),
+            Figure("fees", fees > 0 ? ui.Amount(fees): "0", ui.Body, 14),
+            Figure("mined", mined > 0 ? "+" + ui.Amount(mined): "0", ui.Lime, 14),
+            Figure("net", net, ui.Ink, input.Width < 1000 ? 16.0: 18.0)
+        }
+    }
+
+    private func Figure(label string, value string, color Color, size float64) Blob {
+        let ui = current.Ui
+        return Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Baseline,
+            Gap: 7,
+            FlexShrink: 0,
+            Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
+            ui.Label(ui.Strings.Get(label), 12, ui.Dim, ""),
+            ui.Label(value, size, color)
+        }
+    }
+
+    private func Tint(category string) Color -> switch category {
+        case "in": current.Ui.Mint
+        case "mined": current.Ui.Lime
+        case "pending": current.Ui.Orange
+        default: current.Ui.Pink
+    }
+
+    private func Moment(seconds int64) string -> DateTimeOffset
+        .FromUnixTimeSeconds(seconds)
+        .ToLocalTime()
+        .ToString("MM-dd HH:mm", CultureInfo.InvariantCulture)
+
+    private func Short(value string) string -> value.Length > 16 ? value.Substring(0, 8) + "…" + value.Substring(
+        value.Length - 8
+    ): value
+
+    private func Row(row HistoryRow) Blob {
+        let ui = current.Ui
+        let compact = row.Width < 1000
+        let pending = row.Height == 0
+        let mature = !pending && row.Depth >= row.Need
+        let lit = pending ? 0: int32(Math.Min(10UL, row.Depth * 10 / row.Need))
+        let segments = Container{FlexDirection: FlexDirection.Row, Gap: compact ? 2.0: 3.0}
+        for index in 0 ... 10 {
+            segments.Add(
+                Container{
+                    Width: compact ? 9.0: 12.0,
+                    Height: compact ? 5.0: 6.0,
+                    BorderRadius: 1,
+                    BackgroundColor: index >= lit ? ui.Rule: mature ? Color.Parse("#558000"): ui.Orange
+                }
+            )
+        }
+        let depth = if pending {
+            ui.Strings.Get(row.State == "not_found" ? "not found": "pending")
+        } else if mature {
+            row.Depth >= 10000 ? (row.Depth / 1000).ToString() + "k": ui.Count(row.Depth)
+        } else {
+            row.Depth.ToString() + "/" + row.Need.ToString()
+        }
+        let note = row.Memo.Length > 0 ? row.Memo: Short(row.TxId)
+        let sign = row.Kind == "in" || row.Kind == "mined" ? "+": "−"
+        let line = Goo
+            .Button{
+            Height: row.Width >= 1700 ? 42.0: 38.0,
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 12,
+            Padding: Edges{Left: 10, Right: 10},
+            BorderWidth: Edges{Bottom: 1},
+            BorderColor: row.Open ? Color.Transparent: ui.Rule,
+            BackgroundColor: row.Open ? Color.Parse("#0f0f0f"): Color.Transparent,
+            Hover: Style{BackgroundColor: Color.Parse("#0c0c0c")},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Button,
+                Name: ui.Strings.Get(row.Kind == "in" ? "received": row.Kind == "out" ? "sent": row.Kind) +
+                    " " +
+                    sign +
+                    ui.Amount(row.Amount) + " " + ui.Hidden(note) + " " + depth,
+                Expanded: row.Open
+            },
+            OnClick: () -> {
+                expanded = row.Open ? "": row.Key
+                tab = "details"
+                revision++
+                Rebuild()
+            },
+            OnPointerEnter: (event PointerEvent) -> {
+                marked = row.Height
+                Rebuild()
+            },
+            OnPointerLeave: (event PointerEvent) -> {
+                if marked == row.Height {
+                    marked = 0
+                    Rebuild()
+                }
+            },
+            MaterialIcons.Create(
+                switch row.Kind {
+                    case "in": "south_west"
+                    case "mined": "diamond"
+                    case "pending": "schedule"
+                    default: "north_east"
+                },
+                16,
+                Tint(row.Kind)
+            ),
+            Container{
+                Width: compact ? 112.0: 128.0,
+                FlexShrink: 0,
+                AlignItems: AlignItems.FlexEnd,
+                ui.Label(sign + ui.Amount(row.Amount), 14, row.Kind == "pending" ? ui.Pink: Tint(row.Kind), "")
+            },
+            ui.Grow(
+                Container{
+                    Padding: Edges{Left: 6},
+                    ui.Label(ui.Hidden(note), 12, row.Memo.Length > 0 ? ui.Ink: ui.Dim, "")
+                }
+            ),
+            Container{
+                Width: compact ? 170.0: 212.0,
+                FlexShrink: 0,
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 8,
+                segments,
+                Container{Width: 52, ui.Label(depth, 12, mature ? ui.Body: ui.Orange, "")}
+            }
+        }
+        if row.Width >= 1100 {
+            line.Children.Add(
+                Container{
+                    Width: 64,
+                    FlexShrink: 0,
+                    AlignItems: AlignItems.FlexEnd,
+                    ui.Label(pending ? "": ui.Count(row.Height), 12, ui.Body, "")
+                }
+            )
+        }
+        line.Children.Add(
+            Container{
+                Width: compact ? 84.0: 88.0,
+                FlexShrink: 0,
+                AlignItems: AlignItems.FlexEnd,
+                ui.Label(row.Time > 0 ? Moment(row.Time): "", 12, ui.Body, "")
+            }
+        )
+        line.Children.Add(
+            MaterialIcons.Create(row.Open ? "expand_more": "chevron_right", 14, row.Open ? ui.Ink: ui.Dim)
+        )
+        if !row.Open {
+            return line
+        }
+        return Container{FlexShrink: 0, line, Details(row)}
+    }
+
+    private func Details(row HistoryRow) Blob {
+        let ui = current.Ui
+        let panel = Container{
+            Gap: 12,
+            Padding: Edges{Top: 4, Bottom: 14, Left: row.Width < 1000 ? 16.0: 38.0, Right: 16},
+            BackgroundColor: Color.Parse("#0f0f0f"),
+            BorderWidth: Edges{Bottom: 1},
+            BorderColor: ui.Rule
+        }
+        if row.Kind == "out" {
+            let tabs = Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 10,
+                Segments(
+                    "tabs",
+                    "Transaction",
+                    []string{"details", "proof"},
+                    tab,
+                    id -> {
+                        tab = id
+                        revision++
+                        if id == "proof" && proofFor != row.TxId {
+                            Prove(row)
+                        }
+                        Rebuild()
+                    }
+                ),
+                Container{FlexGrow: 1}
+            }
+            if tab == "proof" {
+                tabs.Add(
+                    Info(
+                        "proof",
+                        "A proof shows that this address got this amount from you. Anyone can check it in Tools. Your keys stay private.",
+                        current
+                    )
+                )
+            }
+            panel.Add(tabs)
+            if tab == "proof" {
+                panel.Add(
+                    Block(
+                        "proof key",
+                        proofFor == row.TxId ? proofKey: "",
+                        ui.Grouped(proofFor == row.TxId ? proofKey: ""),
+                        ui.Ink
+                    )
+                )
+                panel.Add(Block("transaction", row.TxId, ui.Grouped(row.TxId), ui.Body))
+                panel.Add(Block("recipient", row.Recipient, Spaced(row.Recipient, 10), ui.Body))
+                let ready = proofFor == row.TxId && proofKey.Length > 0
+                let actions = Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 10,
+                    if ready {
+                        ui.Status(
+                            ui.Strings.Get(proofValid ? "valid": "invalid"),
+                            proofValid ? ui.Lime: ui.Pink,
+                            proofValid ? "check": "close"
+                        )
+                    } else {
+                        Container{}
+                    },
+                    Figure("amount", ui.Amount(row.Paid) + " BNT", ui.Ink, 14),
+                    Container{FlexGrow: 1},
+                    ui.Button("save", () -> SaveProof(row), !ready),
+                    ui.Button("copy proof", () -> ui.Copy(ProofText(row), 120000), !ready, true)
+                }
+                panel.Add(actions)
+                return panel
+            }
+        }
+        let values = Container{FlexDirection: FlexDirection.Row, FlexWrap: FlexWrap.Wrap, RowGap: 8, ColumnGap: 26}
+        values.Add(
+            Figure(
+                "height",
+                row.Height > 0 ? ui.Count(row.Height): ui.Strings.Get("pending"),
+                row.Height > 0 ? ui.Ink: ui.Orange,
+                13
+            )
+        )
+        if row.Time > 0 {
+            values.Add(Figure("time", ui.Time(row.Time), ui.Ink, 13))
+        }
+        if row.Kind == "out" || row.Kind == "pending" {
+            values.Add(Figure("fee", ui.Amount(row.Fee), ui.Ink, 13))
+            values.Add(
+                Figure(
+                    "recipient",
+                    ui.Hidden(
+                        row.Recipient.Length > 14 ? row.Recipient.Substring(0, 8) + "…" + row.Recipient.Substring(
+                            row.Recipient.Length - 6
+                        ): row.Recipient
+                    ),
+                    ui.Ink,
+                    13
+                )
+            )
+        }
+        if row.Kind == "mined" && row.Depth < 60 {
+            values.Add(Figure("spendable at", ui.Count(row.Height + 60), ui.Orange, 13))
+        }
+        if row.Kind == "in" {
+            values.Add(Figure("output", "#" + row.Index.ToString(), ui.Ink, 13))
+        }
+        if row.Memo.Length > 0 {
+            values.Add(Figure("memo", ui.Hidden(row.Memo), ui.Ink, 13))
+        }
+        panel.Add(values)
+        panel.Add(Block("transaction", row.TxId, ui.Grouped(row.TxId), ui.Body))
+        return panel
+    }
+
+    private func Block(label string, value string, text string, color Color) Blob {
+        let ui = current.Ui
+        return Container{
+            Gap: 3,
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 6,
+                ui.Label(ui.Strings.Get(label), 12, ui.Dim, ""),
+                IconButton{
+                    Icon: MaterialIcons.Create("content_copy", 14, ui.Dim),
+                    AccessibilityName: ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
+                    Disabled: value.Length == 0,
+                    OnClick: () -> ui.Copy(value, 120000)
+                }.Build()
+            },
+            Text{
+                Content: ui.Hidden(text),
+                FontFamily: ui.Font,
+                FontSize: 13,
+                LineHeight: 1.5,
+                Color: color,
+                TextWrap: TextWrap.Wrap
+            }
+        }
+    }
+
+    private func Spaced(value string, size int32) string {
+        let parts = List[string]()
+        var start = 0
+        while start < value.Length {
+            parts.Add(value.Substring(start, Math.Min(size, value.Length - start)))
+            start += size
+        }
+        return String.Join(" ", parts)
+    }
+
+    private func Segments(key string, label string, ids[]string, selected string, chosen Action[string]) Blob {
+        let ui = current.Ui
+        return Cell.Mount[ToggleGroupInput, ToggleGroup](
+            key,
+            ToggleGroupInput{
+                Items: ids.Select((id string) -> ToggleOption{Id: id, Label: ui.Strings.Get(id)}).ToArray(),
+                SelectedIds: []string{selected},
+                AccessibilityName: ui.Strings.Get(label),
+                CreateRoot: (group ToggleGroupInput, root Container) -> Container{
+                    BorderWidth: 1,
+                    BorderColor: ui.Edge,
+                    BorderRadius: 4,
+                    Overflow: Overflow.Hidden,
+                    FlexShrink: 0
+                },
+                CreateItem: (group ToggleGroupInput, item ToggleOption, button Button) -> {
+                    let active = item.Id == selected
+                    button.MinHeight = 28
+                    button.Height = 28
+                    button.Padding = Edges{Left: 10, Right: 10}
+                    button.BorderWidth = 0
+                    button.BorderRadius = 0
+                    button.BoxShadow = BoxShadow{}
+                    button.BackgroundColor = active ? ui.Lime: Color.Transparent
+                    button.Color = active ? ui.Black: ui.Body
+                    button.Hover = Style{BackgroundColor: active ? ui.Lime: ui.Rule}
+                    button.Children.Clear()
+                    button.Children.Add(ui.Label(ui.Strings.Get(item.Id), 12, active ? ui.Black: ui.Body, ""))
+                    return button
+                },
+                OnChange: ids -> {
+                    if ids.Length > 0 {
+                        chosen(ids[0])
+                    }
+                }
+            }
+        )
+    }
+
+    private func Info(topic string, text string, input HistoryInput) Blob -> Cell.Mount[InfoTipInput, InfoTip](
+        "info-" + topic,
+        InfoTipInput{Ui: input.Ui, Topic: topic, Lines: []string{text}, Language: input.Language, Width: 280}
+    )
+
+    private func Export(input HistoryInput) Blob {
+        let ui = input.Ui
+        let button = Goo
+            .Button{
+            Handle: exportAnchor,
+            Height: 30,
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 8,
+            Padding: Edges{Left: 12, Right: 12},
+            BorderWidth: 1,
+            BorderColor: exporting ? Color.Parse("#4a4a4a"): ui.Edge,
+            BorderRadius: 4,
+            BackgroundColor: exporting ? Color.Parse("#141414"): ui.Raised,
+            Hover: Style{BorderColor: Color.Parse("#4a4a4a")},
+            Focus: Theme.Read().FocusStyle,
+            Disabled: shown.Length == 0,
+            Opacity: shown.Length == 0 ? 0.4: 1.0,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Button,
+                Name: ui.Strings.Get("export"),
+                HasPopup: true,
+                Expanded: exporting
+            },
+            OnClick: () -> {
+                exporting = !exporting
+                Rebuild()
+            },
+            MaterialIcons.Create("download", 16, ui.Ink),
+            ui.Label(ui.Strings.Get("export"), 12, ui.Ink, "")
+        }
+        let shownRange = to > 0 ? ui.Count(from) + " – " + ui.Count(to): ui.Strings.Get(period)
+        let content = Container{
+            Gap: 12,
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 8,
+                ui.Label(ui.Strings.Get("export"), 14, ui.Ink, ""),
+                ui.Label(shownRange, 12, ui.Dim, ""),
+                Container{FlexGrow: 1},
+                Info(
+                    "export",
+                    "The file is not encrypted. It holds amounts, heights, times and transaction IDs.",
+                    input
+                )
+            },
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                Gap: 16,
-                FlexShrink: 0,
-                ui.Grow(
-                    Container{
-                        MinWidth: 0,
-                        ui.Tabs(
-                            "history-tabs",
-                            "Transactions",
-                            []NavigationItem{
-                                NavigationItem{
-                                    Id: "received",
-                                    Label: ui.Strings.Get("received") + " " + snapshot.HistoryTotal.ToString()
-                                },
-                                NavigationItem{
-                                    Id: "sent",
-                                    Label: ui.Strings.Get("sent") + " " + sends.Length.ToString()
-                                }
-                            },
-                            historyTab,
-                            id -> {
-                                historyTab = id
-                                Rebuild()
-                            }
-                        )
+                ui.Label(ui.Strings.Get("format"), 12, ui.Dim, ""),
+                Segments(
+                    "format",
+                    "format",
+                    []string{"csv", "json"},
+                    format,
+                    id -> {
+                        format = id
+                        Rebuild()
                     }
-                ),
-                Chain(snapshot)
-            }
-        )
-        if rows > 0 {
-            panel.Add(Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Overflow: Overflow.Hidden, list})
-        }
-        return panel
-    }
-
-    private func ReceivedRow(output WalletOutput) Blob -> Goo
-        .Button{
-        Height: 44,
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        JustifyContent: JustifyContent.FlexStart,
-        Gap: 16,
-        Padding: Edges{Left: 13, Right: 16},
-        BorderWidth: Edges{Left: 3, Bottom: 1},
-        BorderColor: ui.Rule,
-        BorderStartColor: if output.Spent {
-            ui.Edge
-        } else {
-            ui.Mint
-        },
-        BackgroundColor: Color.Transparent,
-        Hover: Style{BackgroundColor: ui.Rule},
-        Focus: Theme.Read().FocusStyle,
-        Accessibility: Accessibility{
-            Role: AccessibilityRole.Button,
-            Name: ui.Strings.Get("received") + " " + ui.Amount(output.Amount) + " " + ui.Count(output.BlockHeight)
-        },
-        OnClick: () -> ShowTransaction(output, nil),
-        Container{
-            Width: 200,
-            FlexShrink: 0,
-            ui.Label(
-                "+" + ui.Amount(output.Amount),
-                14,
-                if output.Spent {
-                    ui.Body
-                } else {
-                    ui.Mint
-                },
-                ""
-            )
-        },
-        ui.Grow(
-            ui.Label(
-                ui.Hidden(
-                    if output.Memo.Length > 0 {
-                        output.Memo
-                    } else {
-                        output.TxId
-                    }
-                ),
-                12,
-                ui.Body
-            )
-        ),
-        ui.Label(ui.Count(output.BlockHeight), 12, ui.Body)
-    }
-
-    private func SentRow(send WalletSend) Blob {
-        let confirmed = send.Status == "confirmed"
-        let status = ui.ChainState(send.Status, send.Confirmations)
-        let notes = Container{
-            Gap: 4,
-            ui.Label(
-                ui.Hidden(String.Join(" ", send.Recipients.Select((recipient WalletRecipient) -> recipient.Address))),
-                12,
-                ui.Body
-            )
-        }
-        let memos = String.Join(
-            " ",
-            send
-                .Recipients
-                .Select((recipient WalletRecipient) -> recipient.Memo)
-                .Where((memo string) -> memo.Length > 0)
-        )
-        if memos.Length > 0 {
-            notes.Add(ui.Label(ui.Hidden(memos), 12, ui.Ink))
-        }
-        return Goo
-            .Button{
-            Height: 56,
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.FlexStart,
-            Gap: 16,
-            Padding: Edges{Left: 13, Right: 16},
-            BorderWidth: Edges{Left: 3, Bottom: 1},
-            BorderColor: ui.Rule,
-            BorderStartColor: ui.Pink,
-            BackgroundColor: Color.Transparent,
-            Hover: Style{BackgroundColor: ui.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{
-                Role: AccessibilityRole.Button,
-                Name: ui.Strings.Get("sent") + " " + ui.Amount(send.Amount) + " " + status
+                )
             },
-            OnClick: () -> ShowTransaction(nil, send),
-            Container{
-                Width: 200,
-                FlexShrink: 0,
-                Gap: 4,
-                ui.Label("-" + ui.Amount(send.Amount), 14, ui.Pink, ""),
-                ui.Figure("Fee", ui.Amount(send.Fee), ui.Body, 12)
-            },
-            ui.Grow(notes),
-            Container{
-                AlignItems: AlignItems.FlexEnd,
-                FlexShrink: 0,
-                Gap: 4,
-                ui.Label(
-                    status,
-                    12,
-                    if confirmed {
-                        ui.Lime
-                    } else {
-                        ui.Orange
-                    }
-                ),
-                ui.Label(ui.Time(send.Timestamp), 12, ui.Body)
-            }
-        }
-    }
-
-    private func MoreHistory(metrics ElementMetrics) {
-        let remaining = metrics.ScrollRange.Y - metrics.ScrollOffset.Y
-        let more = wallet.Snapshot.HistoryMore
-        if loadingHistory || !more || remaining > 440 || historyTab != "received" || !metrics.IsMounted {
-            return
-        }
-        LoadHistory()
-    }
-
-    private async func LoadHistory() {
-        loadingHistory = true
-        var message = ""
-        try {
-            await Task.Run(() -> wallet.History.LoadMoreAsync())
-        } catch (failure WalletException) {
-            message = failure.Message
-        } catch (failure Exception) {
-            message = "Refresh failed"
-        }
-        window?.TryPost(
-            () -> {
-                loadingHistory = false
-                if message.Length > 0 {
-                    refreshError = message
+            Checkbox{
+                State: memos ? AccessibilityChecked.True: AccessibilityChecked.False,
+                Label: ui.Strings.Get("memos"),
+                LabelFontSize: 12,
+                Size: 14,
+                BorderRadius: 2,
+                OnChange: state -> {
+                    memos = state == AccessibilityChecked.True
                     Rebuild()
                 }
-                Sync()
+            }.Build(),
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.SpaceBetween,
+                Figure("rows", shown.Length.ToString(), ui.Ink, 14),
+                ui.Button("save", () -> SaveExport(input), shown.Length == 0, true)
+            }
+        }
+        return Container{
+            FlexShrink: 0,
+            button,
+            Cell.Mount[PopoverInput, Popover](
+                "export",
+                PopoverInput{
+                    Open: exporting,
+                    Anchor: exportAnchor,
+                    Placement: PopoverPlacement.BottomEnd,
+                    Gap: 8,
+                    Width: 300,
+                    Padding: 14,
+                    BackgroundColor: ui.Raised,
+                    BorderColor: ui.Edge,
+                    Content: content,
+                    Role: AccessibilityRole.Dialog,
+                    AccessibilityName: ui.Strings.Get("export"),
+                    OnDismiss: reason -> {
+                        exporting = false
+                        Rebuild()
+                    }
+                }
+            )
+        }
+    }
+
+    private func RequestTimes(heights IEnumerable[uint64]) {
+        let missing = heights
+            .Where((height uint64) -> height > 0 && !requested.Contains(height))
+            .Distinct()
+            .Take(60)
+            .ToArray()
+        guard let window = current.Window else {
+            return
+        }
+        if fetching || missing.Length == 0 {
+            return
+        }
+        for height in missing {
+            requested.Add(height)
+        }
+        fetching = true
+        FetchTimes(window, current.Session.History, missing)
+    }
+
+    private async func FetchTimes(window Window, history HistoryService, heights[]uint64) {
+        var fetched = Dictionary[uint64, int64]()
+        try {
+            fetched = await Task.Run(() -> history.BlockTimesAsync(heights))
+        } finally {
+            window.TryPost(
+                () -> {
+                    for entry in fetched {
+                        times[entry.Key] = entry.Value
+                    }
+                    fetching = false
+                    Rebuild()
+                }
+            )
+        }
+    }
+
+    private async func LoadMore() {
+        guard let window = current.Window else {
+            return
+        }
+        if loading {
+            return
+        }
+        loading = true
+        let history = current.Session.History
+        try {
+            await Task.Run(() -> history.LoadMoreAsync())
+        } finally {
+            window.TryPost(
+                () -> {
+                    loading = false
+                    Rebuild()
+                }
+            )
+        }
+    }
+
+    private func Prove(row HistoryRow) {
+        let proofs = current.Session.Proofs
+        let amount = WalletAmount.Format(row.Paid)
+        let prove = Task.Run(() -> proofs.ProveAsync(row.TxId))
+        proofFor = row.TxId
+        proofKey = ""
+        current.Ui.Run(
+            prove,
+            () -> {
+                proofKey = prove.Result
+                let verify = Task.Run(() -> proofs.VerifyProofAsync(row.TxId, prove.Result, row.Recipient, amount))
+                current.Ui.Run(
+                    verify,
+                    () -> {
+                        proofValid = verify.Result
+                        revision++
+                        Rebuild()
+                    }
+                )
+                revision++
+                Rebuild()
             }
         )
     }
 
-    private func Chain(snapshot WalletSnapshot) Blob {
-        guard let value = snapshot.Balance else {
-            return ui.Figure("Height", ui.Strings.Get("Unavailable"), ui.Body)
+    private func ProofText(row HistoryRow) string {
+        let strings = current.Ui.Strings
+        return strings.Get("transaction") + " " + row.TxId + "\n" + strings.Get("proof key") +
+            " " +
+            proofKey +
+            "\n" +
+            strings.Get("recipient") + " " + row.Recipient + "\n" + strings.Get("amount") + " " + WalletAmount.Format(
+            row.Paid
+        ) +
+            "\n"
+    }
+
+    private func SaveProof(row HistoryRow) {
+        if let window = current.Window {
+            current.Ui.Run(WriteText(window, "proof-" + row.TxId.Substring(0, 8) + ".txt", ProofText(row)))
         }
-        if value.Scanning {
-            return ui.Figure(
-                "Height",
-                ui.Count(value.ScanHeight) + " / " + ui.Count(value.ChainHeight),
-                ui.Orange,
-                14,
-                "sync"
-            )
+    }
+
+    private func SaveExport(input HistoryInput) {
+        exporting = false
+        Rebuild()
+        if let window = input.Window {
+            input.Ui.Run(WriteExport(window, input.Session, shown, Dictionary[uint64, int64](times), memos, format))
         }
-        return ui.Figure("Height", ui.Count(value.ChainHeight), ui.Ink, 14, "sync")
+    }
+
+    private async func WriteExport(
+        window Window,
+        session WalletSession,
+        rows[]HistoryRow,
+        known Dictionary[uint64, int64],
+        withMemos bool,
+        suffix string
+    ) {
+        let path = await Choose(window, "history." + suffix)
+        if path.Length == 0 {
+            return
+        }
+        let missing = rows
+            .Select((row HistoryRow) -> row.Height)
+            .Where((height uint64) -> height > 0 && !known.ContainsKey(height))
+            .Distinct()
+            .ToArray()
+        let fetched = await session.History.BlockTimesAsync(missing)
+        for entry in fetched {
+            known[entry.Key] = entry.Value
+        }
+        await Write(path, Table(rows, known, withMemos, suffix == "json"))
+    }
+
+    private func Table(rows[]HistoryRow, known Dictionary[uint64, int64], withMemos bool, json bool) string {
+        let output = MemoryStream()
+        using let writer = Utf8JsonWriter(output, JsonWriterOptions{Indented: true})
+        let text = StringBuilder(
+            withMemos ? "type,amount,fee,height,time,txid,memo\n": "type,amount,fee,height,time,txid\n"
+        )
+        writer.WriteStartArray()
+        for row in rows {
+            let seconds = row.Time > 0 ? row.Time: known.GetValueOrDefault(row.Height)
+            let time = seconds > 0 ? DateTimeOffset.FromUnixTimeSeconds(seconds).ToString(
+                "yyyy-MM-ddTHH:mm:ssZ",
+                CultureInfo.InvariantCulture
+            ): ""
+            let amount = (row.Kind == "in" || row.Kind == "mined" ? "": "-") + WalletAmount.Format(row.Amount)
+            let fee = WalletAmount.Format(row.Fee)
+            writer.WriteStartObject()
+            writer.WriteString("type", row.Kind)
+            writer.WriteString("amount", amount)
+            writer.WriteString("fee", fee)
+            writer.WriteNumber("height", row.Height)
+            writer.WriteString("time", time)
+            writer.WriteString("txid", row.TxId)
+            text.Append(row.Kind + "," + amount + "," + fee + "," + row.Height.ToString() + "," + time + "," + row.TxId)
+            if withMemos {
+                writer.WriteString("memo", row.Memo)
+                let memo = "=+-@".Contains(row.Memo.FirstOrDefault()) ? "'" + row.Memo: row.Memo
+                text.Append(",\"" + memo.Replace("\"", "\"\"") + "\"")
+            }
+            writer.WriteEndObject()
+            text.Append("\n")
+        }
+        writer.WriteEndArray()
+        writer.Flush()
+        return json ? Encoding.UTF8.GetString(output.ToArray()): text.ToString()
+    }
+
+    private async func WriteText(window Window, name string, text string) {
+        let path = await Choose(window, name)
+        if path.Length > 0 {
+            await Write(path, text)
+        }
+    }
+
+    private async func Choose(window Window, name string) string {
+        let result = await window.ShowFileDialogAsync(
+            FileDialogKind.SaveFile,
+            FileDialogOptions{Title: current.Ui.Strings.Get("save"), InitialPath: name}
+        )
+        if result.Status == FileDialogStatus.Success && result.Paths.Count > 0 {
+            return result.Paths[0]
+        }
+        if result.Status != FileDialogStatus.Cancelled {
+            throw WalletException("File dialog unavailable")
+        }
+        return ""
+    }
+
+    private func Write(path string, text string) Task {
+        let bytes = Encoding.UTF8.GetBytes(text)
+        return PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(bytes).AsTask(), true, false)
     }
 }
