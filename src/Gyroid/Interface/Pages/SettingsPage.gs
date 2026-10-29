@@ -179,7 +179,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         if section == "wallet" && input.Snapshot.ViewOnly {
             header.Add(ui.Badge(ui.Strings.Get("view-only"), ui.Blue, "key"))
         }
-        let pane = Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MinHeight: 0, Gap: 12, header}
+        let pane = Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MaxWidth: 820, MinHeight: 0, Gap: 12, header}
         if section == "security" {
             pane.Add(Security(input, settings))
         } else if section == "node" {
@@ -195,6 +195,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             Gap: 16,
             Width: Percent(100),
+            MaxWidth: navWidth + 836,
             Height: Percent(100),
             MinHeight: 0,
             nav,
@@ -1791,7 +1792,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let list = Card(ui)
         list.Padding = Edges{Top: 4, Bottom: 4, Left: 16, Right: 16}
         list.Gap = 0
-        list.FlexGrow = 1
         list.FlexShrink = 1
         list.OverflowY = Overflow.Scroll
         for index in 0 ... rows.Length {
@@ -1808,8 +1808,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: 10,
-            MinHeight: 52,
-            FlexGrow: 1,
+            Height: 52,
             FlexShrink: 0,
             BorderColor: Color.Parse("#141414"),
             ui.Grow(ui.Label(ui.Strings.Get(label), 14, ui.Body, ""))

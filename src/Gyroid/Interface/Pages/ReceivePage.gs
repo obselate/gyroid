@@ -134,7 +134,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 )
             )
         }
-        let side = Math.Clamp(input.Height - 340, 180.0, 520.0)
+        let side = Math.Clamp(input.Height - 340, 180.0, 320.0)
         let code = Container{
             Width: side,
             Height: side,
@@ -288,7 +288,7 @@ class ReceivePage : Cell[ReceivePageInput] {
         }
         let card = ui.Glass()
         card.Width = Percent(100)
-        card.Height = Percent(100)
+        card.MaxWidth = 900
         card.MaxHeight = Percent(100)
         card.BorderRadius = 14
         card.Padding = input.Height < 700 ? 18.0: 22.0
@@ -307,13 +307,11 @@ class ReceivePage : Cell[ReceivePageInput] {
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Stretch,
+                AlignItems: AlignItems.Center,
                 Gap: 28,
                 MinHeight: 0,
-                FlexGrow: 1,
                 Container{
                     FlexShrink: 0,
-                    JustifyContent: JustifyContent.Center,
                     Padding: 4,
                     BorderWidth: 2,
                     BorderRadius: 14,
@@ -396,11 +394,9 @@ class ReceivePage : Cell[ReceivePageInput] {
                         Container{
                             Gap: 12,
                             FlexShrink: 0,
-                            FlexGrow: 1,
                             tabs,
                             Container{
                                 MinHeight: 72,
-                                FlexGrow: 1,
                                 Padding: Edges{Left: 14, Right: 14, Top: 12, Bottom: 12},
                                 BorderWidth: 1,
                                 BorderRadius: 8,

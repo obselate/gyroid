@@ -97,10 +97,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
     }
 
-    private func Card(input ToolsInput) Container {
+    private func Card(input ToolsInput, minimum float64, share float64) Container {
         let card = input.Ui.Glass()
-        card.Width = Percent(100)
-        card.Height = Percent(100)
+        card.Width = Math.Max(minimum, share * input.Width)
         card.MaxWidth = Percent(100)
         card.MaxHeight = Percent(100)
         card.BorderRadius = 14
@@ -462,7 +461,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             score.Add(Container{Width: 12, Height: 6, BorderRadius: 2, BackgroundColor: warning ? ui.Orange: ui.Lime})
         }
         let passed = warnings.Count((warning bool) -> !warning)
-        let card = Card(input)
+        let card = Card(input, 1040, 0.64)
         card.Add(
             Header(
                 input,
@@ -483,9 +482,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             )
         )
         let gap = compact ? 8.0: 12.0
-        let grid = Container{Gap: gap, FlexShrink: 0, FlexGrow: 1}
+        let grid = Container{Gap: gap, FlexShrink: 0}
         for row in 0 ... 2 {
-            let line = Container{FlexDirection: FlexDirection.Row, Gap: gap, FlexGrow: 1}
+            let line = Container{FlexDirection: FlexDirection.Row, Gap: gap}
             for column in 0 ... 4 {
                 line.Add(tiles[row * 4 + column])
             }
@@ -745,7 +744,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     private func Phrase(input ToolsInput) Blob {
         let ui = input.Ui
         let compact = input.Width < 1100
-        let card = Card(input)
+        let card = Card(input, 900, 0.56)
         let stepper = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8}
         let labels = []string{"show", "check", "done"}
         for index in 0 ... 3 {
@@ -1009,7 +1008,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             WidgetKeyBindings.BindActivation(button)
             tabs.Add(button)
         }
-        let card = Card(input)
+        let card = Card(input, 940, 0.6)
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -1039,21 +1038,15 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             Health(input, card)
         } else if tab == "sign" {
             card.Add(
-                Cell.Mount[TextAreaInput, TextArea](
-                    "sign-message",
-                    TextAreaInput{
-                        Label: ui.Strings.Get("Message"),
-                        Value: message,
-                        Width: Percent(100),
-                        RootStyle: Style{FlexGrow: 1, MinHeight: 0},
-                        EditorStyle: Style{FlexGrow: 1, MinHeight: 80},
-                        Disabled: input.Busy,
-                        OnChange: value -> {
-                            message = value
-                            signature = ""
-                            Rebuild()
-                        }
-                    }
+                ui.Field(
+                    "Message",
+                    message,
+                    value -> {
+                        message = value
+                        signature = ""
+                        Rebuild()
+                    },
+                    () -> Sign(input)
                 )
             )
             if signature.Length > 0 {
@@ -1278,26 +1271,17 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     }
 
     private func Field(input ToolsInput, label string, value string, changed Action[string], submit Action) Blob ->
-    TextField{
-        Label: input.Ui.Strings.Get(label),
-        AccessibilityName: input.Ui.Strings.Get(label),
-        Value: value,
-        Controlled: true,
-        Width: Percent(100),
-        FontFamily: input.Ui.Font,
-        ContentDirection: Direction.LeftToRight,
-        EntryHeight: Math.Max(38, (input.Height - 380) / (input.State.Tab == "proof" ? 4: 3)),
-        Password: input.Privacy && input.State.Tab == "proof",
-        Disabled: input.Busy,
-        OnChange: text -> {
+    input.Ui.Field(
+        label,
+        value,
+        text -> {
             changed(text)
             ResetVerdict()
             Rebuild()
         },
-        OnSubmit: _ -> if !input.Busy {
-            submit()
-        }
-    }.Build()
+        submit,
+        hidden: input.Privacy && input.State.Tab == "proof"
+    )
 
     private func Sign(input ToolsInput) {
         if input.Busy || message.Length == 0 {
