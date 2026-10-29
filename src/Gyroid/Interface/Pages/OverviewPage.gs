@@ -12,9 +12,12 @@ import System
 import System.Collections.Generic
 import System.Globalization
 import System.Linq
+import System.Threading.Tasks
 
 data struct OverviewInput {
     var Ui Presentation
+    var Session WalletSession
+    var Window Window?
     var Snapshot WalletSnapshot
     var Node NodeStatus
     var Contacts SortedDictionary[string, string]
@@ -41,7 +44,7 @@ data struct Activity {
     var Label string
     var Status string
     var Order uint64
-    var Seconds int64
+    var Timestamp int64
 }
 
 class OverviewPage : Cell[OverviewInput] {
@@ -56,6 +59,9 @@ class OverviewPage : Cell[OverviewInput] {
     private var expanded string = ""
     private let fraction Color = Color.Parse("#588203")
     private let track Color = Color.Parse("#1a1a1a")
+    private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
+    private let requested HashSet[uint64] = HashSet[uint64]()
+    private var fetching bool
 
     init() {
         hero.MetricsChanged += _ -> if hero.BorderBox.Width != heroWidth {
@@ -72,6 +78,7 @@ class OverviewPage : Cell[OverviewInput] {
         let ui = input.Ui
         let snapshot = input.Snapshot
         let chain = snapshot.Balance?.ChainHeight ?? input.Node.Height
+        RequestTimes(input)
         let arrivals = Arrivals(input, chain)
         let left = Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MinHeight: 0, Gap: 12, Hero(input, arrivals)}
         if arrivals.Count > 0 {
@@ -93,6 +100,51 @@ class OverviewPage : Cell[OverviewInput] {
             }
         )
         return page
+    }
+
+    private func RequestTimes(input OverviewInput) {
+        guard let window = input.Window else {
+            return
+        }
+        let missing = input
+            .Snapshot
+            .History
+            .Take(50)
+            .Select((output WalletOutput) -> output.BlockHeight)
+            .Where((height uint64) -> height > 0 && !requested.Contains(height))
+            .Distinct()
+            .ToArray()
+        if fetching || missing.Length == 0 {
+            return
+        }
+        for height in missing {
+            requested.Add(height)
+        }
+        fetching = true
+        FetchTimes(window, input.Session.History, input.Ui, missing)
+    }
+
+    private async func FetchTimes(window Window, history HistoryService, ui Presentation, heights[]uint64) {
+        var fetched = Dictionary[uint64, int64]()
+        var failure Exception? = nil
+        try {
+            fetched = await Task.Run(() -> history.BlockTimesAsync(heights))
+        } catch (error Exception) {
+            failure = error
+        } finally {
+            window.TryPost(
+                () -> {
+                    for entry in fetched {
+                        times[entry.Key] = entry.Value
+                    }
+                    fetching = false
+                    if let error = failure {
+                        ui.Run(Task.FromException(error))
+                    }
+                    Rebuild()
+                }
+            )
+        }
     }
 
     private func Fixed(units uint64) string ->
@@ -759,8 +811,6 @@ class OverviewPage : Cell[OverviewInput] {
     private func Activities(input OverviewInput, chain uint64) List[Activity] {
         let ui = input.Ui
         let snapshot = input.Snapshot
-        let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-        let tip = input.Node.LastBlockTime > 0 ? now - input.Node.LastBlockTime: int64(0)
         let items = List[Activity]()
         for output in snapshot.History.Take(50) {
             let required = output.Coinbase ? uint64(60): uint64(10)
@@ -784,7 +834,7 @@ class OverviewPage : Cell[OverviewInput] {
                         ""
                     },
                     Order: output.BlockHeight == 0 ? uint64.MaxValue: output.BlockHeight,
-                    Seconds: tip + int64(confirmations) * 300
+                    Timestamp: times.GetValueOrDefault(output.BlockHeight)
                 }
             )
         }
@@ -801,22 +851,11 @@ class OverviewPage : Cell[OverviewInput] {
                     } else {
                         chain + 1 - Math.Min(chain, send.Confirmations)
                     },
-                    Seconds: now - send.Timestamp
+                    Timestamp: send.Timestamp
                 }
             )
         }
         return items.OrderByDescending((item Activity) -> item.Order).Take(50).ToList()
-    }
-
-    private func Age(seconds int64) string {
-        let minutes = Math.Max(0L, seconds / 60)
-        return if minutes < 60 {
-            minutes.ToString() + "m"
-        } else if minutes < 1440 {
-            (minutes / 60).ToString() + "h"
-        } else {
-            (minutes / 1440).ToString() + "d"
-        }
     }
 
     private func Recent(input OverviewInput, chain uint64) Blob {
@@ -883,7 +922,11 @@ class OverviewPage : Cell[OverviewInput] {
                         item.Status == "mempool" ? ui.Blue: ui.Orange,
                         ""
                     ),
-                    Container{Width: 44, AlignItems: AlignItems.FlexEnd, ui.Label(Age(item.Seconds), 12, ui.Dim, "")}
+                    Container{
+                        Width: 44,
+                        AlignItems: AlignItems.FlexEnd,
+                        ui.Label(item.Timestamp > 0 ? ui.Clock(item.Timestamp): "-", 12, ui.Dim, "")
+                    }
                 }
             )
         }

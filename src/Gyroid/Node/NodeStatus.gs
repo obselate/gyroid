@@ -33,6 +33,37 @@ class NodeStatus {
     var UpgradeDeadline string = ""
     var UpgradeNotice string = ""
     var UpgradeBlocksLeft uint64
+
+    func Matches(other NodeStatus) bool ->
+    Source == other.Source &&
+        Owned == other.Owned &&
+        Running == other.Running &&
+        Version == other.Version &&
+        Network == other.Network &&
+        Height == other.Height &&
+        ChainHeight == other.ChainHeight &&
+        Syncing == other.Syncing &&
+        SyncProgress == other.SyncProgress &&
+        Peers == other.Peers &&
+        Mempool == other.Mempool &&
+        MempoolBytes == other.MempoolBytes &&
+        PeerId == other.PeerId &&
+        BestHash == other.BestHash &&
+        Listen == other.Listen &&
+        MaxOutbound == other.MaxOutbound &&
+        CheckpointHeight == other.CheckpointHeight &&
+        LastBlockTime == other.LastBlockTime &&
+        SyncRate == other.SyncRate &&
+        Endpoint == other.Endpoint &&
+        DataDirectory == other.DataDirectory &&
+        Executable == other.Executable &&
+        Progress == other.Progress &&
+        Phase == other.Phase &&
+        DownloadPercent == other.DownloadPercent &&
+        UpgradeDate == other.UpgradeDate &&
+        UpgradeDeadline == other.UpgradeDeadline &&
+        UpgradeNotice == other.UpgradeNotice &&
+        UpgradeBlocksLeft == other.UpgradeBlocksLeft
 }
 
 class ChainCertificate {
