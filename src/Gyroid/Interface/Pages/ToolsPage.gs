@@ -606,7 +606,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 OnClick: () -> {
                     editing = false
                     if !chosen {
-                        ui.Run(input.Session.SaveAutoLockAsync(minutes))
+                        ui.Run(ct -> input.Session.SaveAutoLockAsync(minutes, ct))
                     }
                 },
                 ui.Label(Minutes(input, minutes), compact ? 13.0: 14.0, chosen ? ui.Ink: ui.Body, "")
@@ -621,10 +621,13 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         if input.State.Audit?.IsCompleted == false {
             return
         }
-        let task = input.Session.Checks.CheckOutputsAsync()
-        input.State.Audit = task
+        var task Task[OutputReport]
         input.Ui.Run(
-            task,
+            ct -> {
+                task = input.Session.Checks.CheckOutputsAsync(ct)
+                input.State.Audit = task
+                return task
+            },
             () -> {
                 input.State.Report = task.Result
             }
@@ -633,7 +636,10 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
 
     private func RestrictFile(input ToolsInput) {
         input.Ui.Run(
-            Task.Run(() -> input.Session.Checks.RestrictWalletFile()),
+            ct -> {
+                input.Session.Checks.RestrictWalletFile()
+                return Task.CompletedTask
+            },
             () -> {
                 fileMode = FileMode(input)
             }
@@ -662,10 +668,14 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         if password.Length == 0 || input.Busy {
             return
         }
-        let task = input.Session.Keys.PhraseAsync(password.ToCharArray())
+        let secret = password.ToCharArray()
+        var task Task[[]char]
         password = ""
         input.Ui.Run(
-            task,
+            ct -> {
+                task = input.Session.Keys.PhraseAsync(secret, ct)
+                return task
+            },
             () -> {
                 if input.Session.State == "Unlocked" && step == "show" {
                     Ask(task.Result)
@@ -726,7 +736,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         if found == answers.Length {
             step = "done"
             input.Ui.Run(
-                input.Session.Checks.MarkPhraseCheckedAsync(),
+                ct -> input.Session.Checks.MarkPhraseCheckedAsync(),
                 () -> {
                     checkedAt = input.Session.Checks.PhraseChecked()
                 }
@@ -1288,8 +1298,14 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         if input.Busy || message.Length == 0 {
             return
         }
-        let task = input.Session.Proofs.SignAsync(message)
-        input.Ui.Run(task, () -> signature = task.Result)
+        var task Task[string]
+        input.Ui.Run(
+            ct -> {
+                task = input.Session.Proofs.SignAsync(message, ct)
+                return task
+            },
+            () -> signature = task.Result
+        )
     }
 
     private func Verify(input ToolsInput, tab string) {
@@ -1298,13 +1314,16 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
         ResetVerdict()
         let run = verdictRun
-        let task = if tab == "proof" {
-            input.Session.Proofs.VerifyProofAsync(proofTx, proofKey, proofAddress, proofAmount)
-        } else {
-            input.Session.Proofs.VerifyAsync(signer, message, signature)
-        }
+        var task Task[bool]
         input.Ui.Run(
-            task,
+            ct -> {
+                task = if tab == "proof" {
+                    input.Session.Proofs.VerifyProofAsync(proofTx, proofKey, proofAddress, proofAmount, ct)
+                } else {
+                    input.Session.Proofs.VerifyAsync(signer, message, signature, ct)
+                }
+                return task
+            },
             () -> {
                 if run == verdictRun {
                     verdict = task.Result

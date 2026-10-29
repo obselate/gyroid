@@ -12,6 +12,7 @@ import System
 import System.Collections.Generic
 import System.Globalization
 import System.Linq
+import System.Threading
 import System.Threading.Tasks
 
 data struct OverviewInput {
@@ -129,14 +130,20 @@ class OverviewPage : Cell[OverviewInput] {
             requested.Add(height)
         }
         fetching = true
-        FetchTimes(window, input.Session.History, input.Snapshot, missing)
+        input.Ui.Background(ct -> FetchTimes(window, input.Session.History, input.Snapshot, missing, ct))
     }
 
-    private async func FetchTimes(window Window, history HistoryService, snapshot WalletSnapshot, heights[]uint64) {
+    private async func FetchTimes(
+        window Window,
+        history HistoryService,
+        snapshot WalletSnapshot,
+        heights[]uint64,
+        ct CancellationToken
+    ) {
         var fetched = Dictionary[uint64, int64]()
         var failed = false
         try {
-            fetched = await Task.Run(() -> history.BlockTimesAsync(heights))
+            fetched = await history.BlockTimesAsync(heights, ct)
         } catch (error Exception) {
             failed = true
         } finally {

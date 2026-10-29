@@ -497,7 +497,7 @@ class ReceivePage : Cell[ReceivePageInput] {
             FileDialogKind.SaveFile,
             "Save QR image",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "blocknet-request.png"),
-            (path string) -> input.Ui.Run(File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8)))
+            (path string) -> input.Ui.Run(ct -> File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8), ct))
         )
     }
 

@@ -11,6 +11,7 @@ import Gyroid.Wallet
 import System
 import System.Collections.Generic
 import System.Linq
+import System.Threading.Tasks
 
 data struct ObserverLensInput {
     var Session WalletSession
@@ -38,9 +39,12 @@ class ObserverLens : Cell[ObserverLensInput] {
         if loading != send.TxId {
             loading = send.TxId
             view = nil
-            let task = input.Session.Checks.ObserveAsync(send.TxId)
+            var task Task[ObserverView]
             ui.Run(
-                task,
+                ct -> {
+                    task = input.Session.Checks.ObserveAsync(send.TxId, ct)
+                    return task
+                },
                 () -> {
                     if loading == send.TxId {
                         view = task.Result

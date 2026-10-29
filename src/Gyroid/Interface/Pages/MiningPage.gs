@@ -10,6 +10,7 @@ import Gyroid.Wallet
 import System
 import System.Collections.Generic
 import System.Globalization
+import System.Threading
 import System.Threading.Tasks
 
 data struct MiningSample {
@@ -37,11 +38,9 @@ data struct MiningPageInput {
 class MiningPage : Cell[MiningPageInput], IDisposable {
     private let plot ElementHandle = ElementHandle()
 
-    private var timer WindowTimer?
-
-    private var loading bool
-
-    private var reload bool
+    private let shutdown CancellationTokenSource = CancellationTokenSource()
+    private let refreshRequested chan[bool] = chan[bool](1)
+    private var worker Task? = nil
 
     private var opened bool
 
@@ -52,8 +51,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
     protected override func Build(input MiningPageInput) Blob {
         if !opened {
             opened = true
-            Load(input)
-            timer = input.Window?.SetInterval(() -> Load(input), 5000)
+            worker = RunWorkerAsync(input, Context.FromToken(shutdown.Token))
         }
         let ui = input.Ui
         let status = input.History.Status
@@ -103,7 +101,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             }
         }
         head.Add(
-            Command(input, "stop", "Stop", ui.Ink, ui.Edge, () -> Act(input, () -> input.Session.Mining.StopAsync()))
+            Command(input, "stop", "Stop", ui.Ink, ui.Edge, () -> Act(input, ct -> input.Session.Mining.StopAsync(ct)))
         )
         card.MaxWidth = 1180
         card.FlexGrow = 1
@@ -157,27 +155,49 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
 
     func Dispose() {
         disposed = true
-        timer?.Dispose()
-        timer = nil
+        shutdown.Cancel()
+        worker?.GetAwaiter().GetResult()
+        shutdown.Dispose()
+        refreshRequested.Writer.TryComplete()
     }
 
-    private func Act(input MiningPageInput, action Func[Task]) {
-        input.Ui.Run(Task.Run(action), () -> Load(input))
+    private func Act(input MiningPageInput, action Func[CancellationToken, Task]) {
+        input.Ui.Run(action, () -> refreshRequested.Writer.TryWrite(true))
     }
 
-    private async func Load(input MiningPageInput) {
-        if loading {
-            reload = true
-            return
+    private async func RunWorkerAsync(input MiningPageInput, parentContext Context) {
+        try {
+            scope {
+                go Poll(input, ctx)
+            }
+        } catch (failure OperationCanceledException) when disposed { } catch (failure Exception) {
+            Console.Error.WriteLine("Mining background task failed: " + failure.GetType().Name)
+            input.Window?.TryPost(() -> input.Ui.Report("Mining background task failed"))
         }
-        loading = true
+    }
+
+    private func Poll(input MiningPageInput, pageContext Context) {
+        while !pageContext.IsCancelled {
+            await Load(input, pageContext)
+            select {
+                case <- refreshRequested { }
+                case <- after(TimeSpan.FromSeconds(5)) { }
+            }
+        }
+    }
+
+    private async func Load(input MiningPageInput, pageContext Context) {
         var status MiningStatus? = nil
         try {
-            status = await Task.Run(() -> input.Session.Mining.StatusAsync())
+            status = await input.Session.Mining.StatusAsync(pageContext.Token)
+        } catch (failure OperationCanceledException) when pageContext.IsCancelled {
+            return
         } catch (failure Exception) { }
         input.Window?.TryPost(
             () -> {
-                loading = false
+                if disposed {
+                    return
+                }
                 guard let value = status else {
                     return
                 }
@@ -191,15 +211,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     .Status
                     .Threads
                 Record(input.History, value)
-                if disposed {
-                    return
-                }
                 if changed {
                     Rebuild()
-                }
-                if reload {
-                    reload = false
-                    Load(input)
                 }
             }
         )
@@ -311,7 +324,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     "Start mining",
                     ui.Lime,
                     ui.Lime,
-                    () -> Act(input, () -> input.Session.Mining.StartAsync())
+                    () -> Act(input, ct -> input.Session.Mining.StartAsync(ct))
                 )
             }
         }
@@ -341,7 +354,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             Hover: Style{BackgroundColor: input.Ui.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: input.Ui.Strings.Get(label)},
-            OnClick: () -> Act(input, () -> input.Session.Mining.SetThreadsAsync(threads)),
+            OnClick: () -> Act(input, ct -> input.Session.Mining.SetThreadsAsync(threads, ct)),
             MaterialIcons.Create(icon, 14, enabled ? input.Ui.Ink: input.Ui.Dim)
         }
         WidgetKeyBindings.BindActivation(button)

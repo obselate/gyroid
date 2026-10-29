@@ -24,10 +24,14 @@ data struct NetworkInput {
     var Height float64
 }
 
-class NetworkPage : Cell[NetworkInput] {
+class NetworkPage : Cell[NetworkInput], IDisposable {
     private var report NetworkReport = NetworkReport()
     private var loaded NodeStatus? = nil
     private var loading bool
+    private let shutdown CancellationTokenSource = CancellationTokenSource()
+    private let requested chan[NetworkInput] = chan[NetworkInput](1)
+    private var worker Task? = nil
+    private var disposed bool
     private var tab string = "peers"
     private var selected uint64
     private var hovered string = ""
@@ -43,6 +47,7 @@ class NetworkPage : Cell[NetworkInput] {
     }
 
     protected override func Build(input NetworkInput) Blob {
+        worker ??= RunWorkerAsync(input.Ui, input.Window, Context.FromToken(shutdown.Token))
         let ui = input.Ui
         let node = input.Node
         if node.Running && (node.Peers == 0 || node.Syncing && node.ChainHeight > node.Height + 2) {
@@ -64,7 +69,9 @@ class NetworkPage : Cell[NetworkInput] {
             }
         }
         if node.Running && loaded != node && !loading {
-            Load(input)
+            loading = true
+            loaded = node
+            requested.Writer.TryWrite(input)
         }
         let blocks = report.Blocks
         let tip = blocks.Length > 0 ? blocks[blocks.Length - 1]: NetworkBlock()
@@ -159,16 +166,44 @@ class NetworkPage : Cell[NetworkInput] {
         }
     }
 
-    private async func Load(input NetworkInput) {
-        loading = true
-        loaded = input.Node
+    func Dispose() {
+        disposed = true
+        shutdown.Cancel()
+        worker?.GetAwaiter().GetResult()
+        shutdown.Dispose()
+        requested.Writer.TryComplete()
+    }
+
+    private async func RunWorkerAsync(ui Presentation, window Window?, parentContext Context) {
+        try {
+            scope {
+                go ReadUpdates(ctx)
+            }
+        } catch (failure OperationCanceledException) when disposed { } catch (failure Exception) {
+            Console.Error.WriteLine("Network background task failed: " + failure.GetType().Name)
+            window?.TryPost(() -> ui.Report("Network background task failed"))
+        }
+    }
+
+    private func ReadUpdates(pageContext Context) {
+        for input in requested {
+            await Load(input, pageContext)
+        }
+    }
+
+    private async func Load(input NetworkInput, pageContext Context) {
         let previous = report
         var result NetworkReport? = nil
         try {
-            result = await Task.Run(() -> input.Session.Node.ReadNetworkAsync(previous, CancellationToken.None))
+            result = await input.Session.Node.ReadNetworkAsync(previous, pageContext.Token)
+        } catch (failure OperationCanceledException) when pageContext.IsCancelled {
+            return
         } catch (failure Exception) { }
         input.Window?.TryPost(
             () -> {
+                if disposed {
+                    return
+                }
                 loading = false
                 guard let value = result else {
                     return

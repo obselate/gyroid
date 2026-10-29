@@ -17,6 +17,7 @@ import System.IO
 import System.Linq
 import System.Text
 import System.Text.Json
+import System.Threading
 import System.Threading.Tasks
 
 data struct HistoryInput {
@@ -1210,14 +1211,20 @@ class HistoryPage : Cell[HistoryInput] {
             requested.Add(height)
         }
         fetching = true
-        FetchTimes(window, current.Session.History, current.Snapshot, missing)
+        current.Ui.Background(ct -> FetchTimes(window, current.Session.History, current.Snapshot, missing, ct))
     }
 
-    private async func FetchTimes(window Window, history HistoryService, snapshot WalletSnapshot, heights[]uint64) {
+    private async func FetchTimes(
+        window Window,
+        history HistoryService,
+        snapshot WalletSnapshot,
+        heights[]uint64,
+        ct CancellationToken
+    ) {
         var fetched = Dictionary[uint64, int64]()
         var failed = false
         try {
-            fetched = await Task.Run(() -> history.BlockTimesAsync(heights))
+            fetched = await history.BlockTimesAsync(heights, ct)
         } catch (error Exception) {
             failed = true
         } finally {
@@ -1238,7 +1245,7 @@ class HistoryPage : Cell[HistoryInput] {
         }
     }
 
-    private async func LoadMore() {
+    private func LoadMore() {
         guard let window = current.Window else {
             return
         }
@@ -1247,8 +1254,12 @@ class HistoryPage : Cell[HistoryInput] {
         }
         loading = true
         let history = current.Session.History
+        current.Ui.Background(ct -> LoadMoreAsync(window, history, ct))
+    }
+
+    private async func LoadMoreAsync(window Window, history HistoryService, ct CancellationToken) {
         try {
-            await Task.Run(() -> history.LoadMoreAsync())
+            await history.LoadMoreAsync(ct)
         } finally {
             window.TryPost(
                 () -> {
@@ -1280,19 +1291,25 @@ class HistoryPage : Cell[HistoryInput] {
         }
         let recipient = recipients[selected]
         let amount = WalletAmount.Format(recipient.Amount)
-        let prove = Task.Run(() -> proofs.ProveAsync(row.TxId))
+        var prove Task[string]
         proofFor = row.TxId
         proofKey = ""
         proofValid = false
         current.Ui.Run(
-            prove,
+            ct -> {
+                prove = proofs.ProveAsync(row.TxId, ct)
+                return prove
+            },
             () -> {
                 if proofFor != row.TxId || proofRecipient != selected {
                     return
                 }
-                let verify = Task.Run(() -> proofs.VerifyProofAsync(row.TxId, prove.Result, recipient.Address, amount))
+                var verify Task[bool]
                 current.Ui.Run(
-                    verify,
+                    ct -> {
+                        verify = proofs.VerifyProofAsync(row.TxId, prove.Result, recipient.Address, amount, ct)
+                        return verify
+                    },
                     () -> {
                         if proofFor != row.TxId || proofRecipient != selected {
                             return
@@ -1323,7 +1340,9 @@ class HistoryPage : Cell[HistoryInput] {
 
     private func SaveProof(row HistoryRow) {
         if let window = current.Window {
-            current.Ui.Run(WriteText(window, "proof-" + row.TxId.Substring(0, 8) + ".txt", ProofText(row)))
+            let choice = Choose(window, "proof-" + row.TxId.Substring(0, 8) + ".txt")
+            let text = ProofText(row)
+            current.Ui.Run(ct -> WriteText(choice, text, ct))
         }
     }
 
@@ -1331,19 +1350,23 @@ class HistoryPage : Cell[HistoryInput] {
         exporting = false
         Rebuild()
         if let window = input.Window {
-            input.Ui.Run(WriteExport(window, input.Session, shown, Dictionary[uint64, int64](times), memos, format))
+            let choice = Choose(window, "history." + format)
+            input.Ui.Run(
+                ct -> WriteExport(choice, input.Session, shown, Dictionary[uint64, int64](times), memos, format, ct)
+            )
         }
     }
 
     private async func WriteExport(
-        window Window,
+        choice Task[string],
         session WalletSession,
         rows[]HistoryRow,
         known Dictionary[uint64, int64],
         withMemos bool,
-        suffix string
+        suffix string,
+        ct CancellationToken
     ) {
-        let path = await Choose(window, "history." + suffix)
+        let path = await choice.WaitAsync(ct)
         if path.Length == 0 {
             return
         }
@@ -1352,11 +1375,11 @@ class HistoryPage : Cell[HistoryInput] {
             .Where((height uint64) -> height > 0 && !known.ContainsKey(height))
             .Distinct()
             .ToArray()
-        let fetched = await session.History.BlockTimesAsync(missing)
+        let fetched = await session.History.BlockTimesAsync(missing, ct)
         for entry in fetched {
             known[entry.Key] = entry.Value
         }
-        await Write(path, Table(rows, known, withMemos, suffix == "json"))
+        await Write(path, Table(rows, known, withMemos, suffix == "json"), ct)
     }
 
     private func Table(rows[]HistoryRow, known Dictionary[uint64, int64], withMemos bool, json bool) string {
@@ -1395,10 +1418,10 @@ class HistoryPage : Cell[HistoryInput] {
         return json ? Encoding.UTF8.GetString(output.ToArray()): text.ToString()
     }
 
-    private async func WriteText(window Window, name string, text string) {
-        let path = await Choose(window, name)
+    private async func WriteText(choice Task[string], text string, ct CancellationToken) {
+        let path = await choice.WaitAsync(ct)
         if path.Length > 0 {
-            await Write(path, text)
+            await Write(path, text, ct)
         }
     }
 
@@ -1419,8 +1442,8 @@ class HistoryPage : Cell[HistoryInput] {
         return ""
     }
 
-    private func Write(path string, text string) Task {
+    private func Write(path string, text string, ct CancellationToken) Task {
         let bytes = Encoding.UTF8.GetBytes(text)
-        return PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(bytes).AsTask(), true, false)
+        return PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(bytes, ct).AsTask(), true, false)
     }
 }

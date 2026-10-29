@@ -271,8 +271,13 @@ class SendPage : Cell[SendPageInput] {
         } else {
             input.Snapshot.Address
         }
-        let task = Task.Run(() -> input.Session.Send.MaximumAsync([]WalletRecipient{}, address, row.Memo))
-        input.Ui.Run(task, () -> Fill(task.Result))
+        var amount uint64
+        input.Ui.Run(
+            async (ct) -> {
+                amount = await input.Session.Send.MaximumAsync([]WalletRecipient{}, address, row.Memo, ct)
+            },
+            () -> Fill(amount)
+        )
     }
 
     private func Share(input SendPageInput, label string, atoms uint64, click Action) Blob {
@@ -883,9 +888,12 @@ class SendPage : Cell[SendPageInput] {
             }
         )
             .ToArray()
-        let task = Task.Run(() -> input.Session.Send.EstimateAsync(requests))
+        var task Task[SendEstimate]
         input.Ui.Run(
-            task,
+            ct -> {
+                task = input.Session.Send.EstimateAsync(requests, ct)
+                return task
+            },
             () -> {
                 estimate = task.Result
                 Rebuild()
@@ -902,9 +910,12 @@ class SendPage : Cell[SendPageInput] {
         }
         estimate = nil
         openRow = -1
-        let task = Task.Run(() -> input.Session.Send.SubmitAsync(pending))
+        var task Task[SendResult]
         input.Ui.Run(
-            task,
+            ct -> {
+                task = input.Session.Send.SubmitAsync(pending, ct)
+                return task
+            },
             () -> {
                 rows.Clear()
                 rows.Add(SendRow())

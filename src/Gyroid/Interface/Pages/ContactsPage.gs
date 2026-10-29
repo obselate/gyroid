@@ -255,7 +255,10 @@ class ContactsPage : Cell[ContactsInput] {
 
     private func Store(input ContactsInput, next SortedDictionary[string, string], done Action) {
         input.Ui.Run(
-            Task.Run(() -> AddressBook.WriteContacts(next)),
+            ct -> {
+                AddressBook.WriteContacts(next)
+                return Task.CompletedTask
+            },
             () -> {
                 input.OnChange(next)
                 done()

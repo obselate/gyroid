@@ -107,9 +107,9 @@ partial class App {
                 OnConfirm: () -> {
                     confirmPendingSend = false
                     if resume {
-                        Run(wallet.Send.ResumeAsync(), () -> Refresh())
+                        Run(ct -> wallet.Send.ResumeAsync(ct), () -> Refresh())
                     } else {
-                        Run(wallet.Send.DismissAsync())
+                        Run(ct -> wallet.Send.DismissAsync(ct))
                     }
                 },
                 OnCancel: close,

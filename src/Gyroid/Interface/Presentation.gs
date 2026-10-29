@@ -25,6 +25,7 @@ import System.IO
 import System.Linq
 import System.Numerics
 import System.Text
+import System.Threading
 import System.Threading.Tasks
 
 class Presentation {
@@ -34,7 +35,8 @@ class Presentation {
     private let playbackActive Func[bool]
     private let touch Action
     private let report Action[string]
-    private let run Action[Task, Action?, []?char, []?char]
+    private let run Action[Func[CancellationToken, Task], Action?, []?char, []?char]
+    private let background Action[Func[CancellationToken, Task]]
 
     init(
         language string,
@@ -43,7 +45,8 @@ class Presentation {
         playbackActive Func[bool],
         touch Action,
         report Action[string],
-        run Action[Task, Action?, []?char, []?char]
+        run Action[Func[CancellationToken, Task], Action?, []?char, []?char],
+        background Action[Func[CancellationToken, Task]]
     ) {
         Strings = Gyroid.Interface.Strings(language)
         Privacy = privacy
@@ -52,6 +55,7 @@ class Presentation {
         this.touch = touch
         this.report = report
         this.run = run
+        this.background = background
     }
 
     func Attach(owner Window) {
@@ -143,7 +147,16 @@ class Presentation {
         }
     }
 
-    func Run(task Task, done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
+    func Report(message string) {
+        report(message)
+        rebuild()
+    }
+
+    func Background(action Func[CancellationToken, Task]) {
+        background(action)
+    }
+
+    func Run(task Func[CancellationToken, Task], done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
         run(task, done, secret, extra)
     }
 

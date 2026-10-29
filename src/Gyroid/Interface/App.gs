@@ -24,7 +24,10 @@ import System.Globalization
 import System.IO
 import System.Linq
 import System.Numerics
+import System.Threading
 import System.Threading.Tasks
+
+data class WindowWork(Run Func[CancellationToken, Task])
 
 partial class App : Cell {
     private let sendDone Action
@@ -48,6 +51,9 @@ partial class App : Cell {
     private let openReceive Action
 
     private var window Window?
+    private let workers chan[WindowWork] = chan[WindowWork](16)
+    private var workerTask Task? = nil
+    private var closed bool
 
     private var width float64 = 1280
 
@@ -115,7 +121,8 @@ partial class App : Cell {
             message -> {
                 error = message
             },
-            (task, done, secret, extra) -> Run(task, done, secret, extra)
+            (task, done, secret, extra) -> Run(task, done, secret, extra),
+            action -> workers.Writer.TryWrite(WindowWork(action))
         )
         navigate = target -> Navigate(target)
         togglePrivacy = () -> TogglePrivacy()
@@ -145,14 +152,14 @@ partial class App : Cell {
             Rebuild()
         }
         revealSeed = buffer -> {
-            Run(ShowSeed(wallet.Keys.RevealSeedAsync(buffer), true), nil, buffer)
+            Run(ct -> ShowSeed(wallet.Keys.RevealSeedAsync(buffer, ct), true), nil, buffer)
         }
         retrySeed = () -> {
             if let buffer = seedPassword {
-                Run(ShowSeed(wallet.Keys.RevealSeedAsync(buffer), false))
+                Run(ct -> ShowSeed(wallet.Keys.RevealSeedAsync(buffer, ct), false))
             }
         }
-        createWallet = (filename, buffer) -> Run(CreateWallet(filename, buffer))
+        createWallet = (filename, buffer) -> Run(ct -> CreateWallet(filename, buffer, ct))
         closeSettings = () -> Back()
         ApplyPreferences()
         nodeAnchor.MetricsChanged += _ -> {
@@ -168,6 +175,7 @@ partial class App : Cell {
     func Attach(owner Window) {
         window = owner
         ui.Attach(owner)
+        workerTask = RunWorkersAsync()
         Resize(owner)
         owner.MetricsChanged += metrics -> {
             pixelScale = metrics.DisplayScaleX * metrics.UiScale
@@ -202,6 +210,10 @@ partial class App : Cell {
     }
 
     private func Close() {
+        closed = true
+        workers.Writer.TryComplete()
+        workerTask?.GetAwaiter().GetResult()
+        ui.Operations = 0
         tray?.Dispose()
         tray = nil
         refreshTimer?.Dispose()
@@ -261,9 +273,9 @@ partial class App : Cell {
         Rebuild()
     }
 
-    private async func CreateWallet(filename string, buffer[]char) {
+    private async func CreateWallet(filename string, buffer[]char, ct CancellationToken) {
         try {
-            await wallet.CreateAsync(filename, buffer)
+            await wallet.CreateAsync(filename, buffer, ct)
         } catch (failure Exception) {
             Array.Clear(buffer)
             throw failure
@@ -371,19 +383,44 @@ partial class App : Cell {
         Rebuild()
     }
 
-    private func Run(task Task, done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
+    private async func RunWorkersAsync() {
+        try {
+            scope {
+                for work in workers {
+                    go work.Run(ctx.Token)
+                }
+                ctx.TryCancel()
+            }
+        } catch (failure OperationCanceledException) when closed { } catch (failure Exception) {
+            Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
+            window?.TryPost(
+                () -> {
+                    error = "Window background task failed"
+                    Rebuild()
+                }
+            )
+        }
+    }
+
+    private func Run(task Func[CancellationToken, Task], done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
         ui.Operations++
         UpdatePlayback()
         error = ""
         Rebuild()
-        Complete(task, done, secret, extra)
+        workers.Writer.TryWrite(WindowWork((ct CancellationToken) -> Complete(task, done, secret, extra, ct)))
     }
 
-    private async func Complete(task Task, done Action?, secret[]?char, extra[]?char) {
+    private async func Complete(
+        task Func[CancellationToken, Task],
+        done Action?,
+        secret[]?char,
+        extra[]?char,
+        ct CancellationToken
+    ) {
         var message = ""
         var unknown = false
         try {
-            await task
+            await task(ct)
         } catch (failure WalletException) {
             message = failure.Message
             unknown = failure.OutcomeUnknown
@@ -424,22 +461,24 @@ partial class App : Cell {
         )
     }
 
-    private async func Refresh(statusOnly bool = false) {
+    private func Refresh(statusOnly bool = false) {
         if refreshing || ui.Working() || wallet.Busy {
             return
         }
         refreshing = true
+        workers.Writer.TryWrite(WindowWork((ct CancellationToken) -> RefreshAsync(statusOnly, ct)))
+    }
+
+    private async func RefreshAsync(statusOnly bool, ct CancellationToken) {
         var message = ""
         try {
-            await Task.Run(
-                () -> if statusOnly {
-                    wallet.RefreshStatusAsync()
-                } else if wallet.Snapshot.State == "Unlocked" {
-                    wallet.RefreshAsync()
-                } else {
-                    wallet.RefreshNodeAsync()
-                }
-            )
+            if statusOnly {
+                await wallet.RefreshStatusAsync(ct)
+            } else if wallet.Snapshot.State == "Unlocked" {
+                await wallet.RefreshAsync(ct)
+            } else {
+                await wallet.RefreshNodeAsync(ct)
+            }
         } catch (failure WalletException) {
             message = failure.Message
         } catch (failure Exception) {

@@ -36,7 +36,7 @@ partial class App {
             return
         }
         wallet.EnableEvents()
-        Run(wallet.ConnectAsync())
+        Run(ct -> wallet.ConnectAsync(ct))
         refreshTimer = host.SetInterval(() -> Refresh(), 60000)
         UpdatePlayback()
         trayLockable = Lockable()
@@ -132,7 +132,7 @@ partial class App {
         upgradeShown = false
         ClearSeed()
         ui.ReleaseClipboard()
-        Run(wallet.LockAsync())
+        Run(ct -> wallet.LockAsync(ct))
     }
 
     func Quit() {

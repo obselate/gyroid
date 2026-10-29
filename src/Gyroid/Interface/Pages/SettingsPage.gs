@@ -17,6 +17,7 @@ import System.Diagnostics
 import System.Globalization
 import System.IO
 import System.Linq
+import System.Threading
 import System.Threading.Tasks
 
 data struct SettingsPageInput {
@@ -122,7 +123,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let section = sections.Contains(input.Section) ? input.Section: "general"
         if section == "advanced" && !chainLoaded {
             chainLoaded = true
-            ui.Delay(0, () -> ui.Run(LoadChain(input.Session)))
+            ui.Delay(0, () -> ui.Run(ct -> LoadChain(input.Session, ct)))
         }
         let navWidth = input.Width < 1100 ? 132.0: 168.0
         let nav = ui.Glass()
@@ -307,7 +308,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         []string{"5m", "15m", "1h", "never"},
                         settings.AutoLockMinutes.ToString(),
                         false,
-                        id -> ui.Run(input.Session.SaveAutoLockAsync(int32.Parse(id)))
+                        id -> ui.Run(ct -> input.Session.SaveAutoLockAsync(int32.Parse(id), ct))
                     )
                 }
             ),
@@ -337,7 +338,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         input,
                         "hide values on start",
                         settings.Privacy,
-                        () -> ui.Run(input.Session.SavePrivacyAsync(!settings.Privacy))
+                        () -> ui.Run(ct -> input.Session.SavePrivacyAsync(!settings.Privacy, ct))
                     )
                 }
             )
@@ -384,7 +385,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         } else {
             height.Add(ui.Label(ui.Strings.Get("Stopped"), 14, ui.Dim, ""))
             if automatic && status.Phase == NodePhase.None {
-                height.Add(ui.Button("Start", () -> ui.Run(input.Session.StartNodeAsync()), input.Busy))
+                height.Add(ui.Button("Start", () -> ui.Run(ct -> input.Session.StartNodeAsync(ct)), input.Busy))
             }
         }
         let core = List[Blob]{ui.Label("blocknet-core", 14, ui.Ink, "")}
@@ -392,7 +393,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             core.Add(
                 ui.Button(
                     "Restart",
-                    () -> ui.Run(input.Session.RestartNodeAsync()),
+                    () -> ui.Run(ct -> input.Session.RestartNodeAsync(ct)),
                     input.Busy || input.Snapshot.State != "Unloaded"
                 )
             )
@@ -423,7 +424,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                             []string{"automatic", "existing node"},
                             settings.NodeMode,
                             Pinned("NODE_MODE"),
-                            id -> ui.Run(input.Session.SaveNodeModeAsync(id))
+                            id -> ui.Run(ct -> input.Session.SaveNodeModeAsync(id, ct))
                         ),
                         Info(
                             input,
@@ -444,21 +445,20 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         ui.Button(
                             "Open",
                             () -> ui.Run(
-                                Task.Run(
-                                    () -> {
-                                        let start = ProcessStartInfo(
-                                            if OperatingSystem.IsWindows() {
-                                                "explorer.exe"
-                                            } else if OperatingSystem.IsMacOS() {
-                                                "open"
-                                            } else {
-                                                "xdg-open"
-                                            }
-                                        )
-                                        start.ArgumentList.Add(folder)
-                                        Process.Start(start)?.Dispose()
-                                    }
-                                )
+                                ct -> {
+                                    let start = ProcessStartInfo(
+                                        if OperatingSystem.IsWindows() {
+                                            "explorer.exe"
+                                        } else if OperatingSystem.IsMacOS() {
+                                            "open"
+                                        } else {
+                                            "xdg-open"
+                                        }
+                                    )
+                                    start.ArgumentList.Add(folder)
+                                    Process.Start(start)?.Dispose()
+                                    return Task.CompletedTask
+                                }
                             ),
                             input.Busy || !Directory.Exists(folder)
                         )
@@ -602,9 +602,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             ui.Button(
                 "Sync",
                 () -> {
-                    let task = input.Session.SyncAsync()
-                    rescan = task
-                    ui.Run(task)
+                    ui.Run(
+                        ct -> {
+                            let task = input.Session.SyncAsync(ct)
+                            rescan = task
+                            return task
+                        }
+                    )
                 },
                 input.Busy
             )
@@ -676,7 +680,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 "wallet file",
                 []Blob{
                     ui.Label(Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)), 14, ui.Dim, ""),
-                    ui.Button("Switch wallet", () -> ui.Run(input.Session.UnloadAsync()), input.Busy)
+                    ui.Button("Switch wallet", () -> ui.Run(ct -> input.Session.UnloadAsync(ct)), input.Busy)
                 }
             )
         )
@@ -839,9 +843,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 ui.Button(
                     "Certify",
                     () -> {
-                        let task = input.Session.CertifyAsync()
+                        var task Task[ChainCertificate]
                         ui.Run(
-                            task,
+                            ct -> {
+                                task = input.Session.CertifyAsync(ct)
+                                return task
+                            },
                             () -> {
                                 certificate = task.Result
                             }
@@ -896,11 +903,19 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         input,
                         "auto save",
                         autoSave == true,
-                        () -> Checkpoints(input, input.Session.CheckpointAutoSaveAsync(autoSave != true)),
+                        () -> Checkpoints(input, ct -> input.Session.CheckpointAutoSaveAsync(autoSave != true, ct)),
                         autoSave == nil
                     ),
-                    ui.Button("Save", () -> Checkpoints(input, input.Session.CheckpointsAsync("save")), input.Busy),
-                    ui.Button("Load", () -> Checkpoints(input, input.Session.CheckpointsAsync("load")), input.Busy)
+                    ui.Button(
+                        "Save",
+                        () -> Checkpoints(input, ct -> input.Session.CheckpointsAsync("save", ct)),
+                        input.Busy
+                    ),
+                    ui.Button(
+                        "Load",
+                        () -> Checkpoints(input, ct -> input.Session.CheckpointsAsync("load", ct)),
+                        input.Busy
+                    )
                 }
             }
         )
@@ -969,7 +984,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         return card
     }
 
-    private func Checkpoints(input SettingsPageInput, task Task) {
+    private func Checkpoints(input SettingsPageInput, task Func[CancellationToken, Task]) {
         input.Ui.Run(
             task,
             () -> {
@@ -1049,61 +1064,54 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         height.ToString()
     }
 
-    private async func LoadChain(session WalletSession) {
+    private async func LoadChain(session WalletSession, ct CancellationToken) {
         let settings = session.Settings
-        await Task.Run(
-            () -> {
-                let data = DirectoryInfo(settings.DataDirectory)
-                var size int64 = 0
-                var wallets int32 = 0
-                var local uint64 = 0
-                if data.Exists {
-                    for file in data.EnumerateFiles(
-                        "*",
-                        EnumerationOptions{
-                            RecurseSubdirectories: true,
-                            IgnoreInaccessible: true,
-                            AttributesToSkip: FileAttributes.ReparsePoint
-                        }
-                    ) {
-                        size += file.Length
-                    }
-                    try {
-                        wallets = session.Library.DataWallets().Count
-                    } catch (failure Exception) {
-                        wallets = -1
-                    }
-                    let saved = FileInfo(Path.Combine(data.FullName, "checkpoints.dat"))
-                    if saved.Exists && saved.Length <= 1048576 {
-                        local = Checkpoints.Height(Checkpoints.Parse(File.ReadAllBytes(saved.FullName)))
-                    }
+        let data = DirectoryInfo(settings.DataDirectory)
+        var size int64 = 0
+        var wallets int32 = 0
+        var local uint64 = 0
+        if data.Exists {
+            for file in data.EnumerateFiles(
+                "*",
+                EnumerationOptions{
+                    RecurseSubdirectories: true,
+                    IgnoreInaccessible: true,
+                    AttributesToSkip: FileAttributes.ReparsePoint
                 }
-                freeSpace = DriveInfo(
-                    if OperatingSystem.IsWindows() {
-                        Path.GetPathRoot(data.FullName) ?? data.FullName
-                    } else if data.Exists {
-                        data.FullName
-                    } else {
-                        data.Parent?.FullName ?? "/"
-                    }
-                ).AvailableFreeSpace
-                trustedCheckpoint = if settings.Network == "mainnet" {
-                    Checkpoints.Height(Checkpoints.Parse(Resources.Resource("Gyroid.Checkpoints.Mainnet")))
-                } else {
-                    0
-                }
-                dataSize = size
-                sizeUnit = size >= 1000000000 ? "GB": "MB"
-                sizeText = (float64(size) / (size >= 1000000000 ? 1e9: 1e6)).ToString(
-                    "0.0",
-                    CultureInfo.InvariantCulture
-                )
-                dataWallets = wallets
-                localCheckpoint = local
+            ) {
+                size += file.Length
             }
-        )
+            try {
+                wallets = session.Library.DataWallets().Count
+            } catch (failure Exception) {
+                wallets = -1
+            }
+            let saved = FileInfo(Path.Combine(data.FullName, "checkpoints.dat"))
+            if saved.Exists && saved.Length <= 1048576 {
+                local = Checkpoints.Height(Checkpoints.Parse(File.ReadAllBytes(saved.FullName)))
+            }
+        }
+        freeSpace = DriveInfo(
+            if OperatingSystem.IsWindows() {
+                Path.GetPathRoot(data.FullName) ?? data.FullName
+            } else if data.Exists {
+                data.FullName
+            } else {
+                data.Parent?.FullName ?? "/"
+            }
+        ).AvailableFreeSpace
+        trustedCheckpoint = if settings.Network == "mainnet" {
+            Checkpoints.Height(Checkpoints.Parse(Resources.Resource("Gyroid.Checkpoints.Mainnet")))
+        } else {
+            0
+        }
+        dataSize = size
+        sizeUnit = size >= 1000000000 ? "GB": "MB"
+        sizeText = (float64(size) / (size >= 1000000000 ? 1e9: 1e6)).ToString("0.0", CultureInfo.InvariantCulture)
+        dataWallets = wallets
+        localCheckpoint = local
         try {
-            autoSave = await session.CheckpointAutoSaveAsync(nil)
+            autoSave = await session.CheckpointAutoSaveAsync(nil, ct)
         } catch (failure Exception) {
             autoSave = nil
         }
@@ -1177,9 +1185,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             input.OnRevealSeed.Invoke(buffer)
             return
         }
-        let task = LoadKeys(input.Session, buffer)
+        var task Task[WalletViewKeys?]
         input.Ui.Run(
-            task,
+            ct -> {
+                task = LoadKeys(input.Session, buffer, ct)
+                return task
+            },
             () -> {
                 if dialog == "view-key" && input.Session.State == "Unlocked" {
                     viewKeys = task.Result
@@ -1190,9 +1201,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         )
     }
 
-    private async func LoadKeys(session WalletSession, buffer[]char) WalletViewKeys? {
+    private async func LoadKeys(session WalletSession, buffer[]char, ct CancellationToken) WalletViewKeys? {
         try {
-            return await session.Keys.ExportViewKeysAsync(buffer)
+            return await session.Keys.ExportViewKeysAsync(buffer, ct)
         } catch (failure WalletException) {
             passwordIssue = failure.Message
             return nil
@@ -1254,7 +1265,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                             ),
                             path -> {
                                 if Object.ReferenceEquals(viewKeys, keys) && input.Session.State == "Unlocked" {
-                                    ui.Run(input.Session.Keys.SaveViewKeysAsync(path, keys))
+                                    ui.Run(ct -> input.Session.Keys.SaveViewKeysAsync(path, keys, ct))
                                 }
                             }
                         ),
@@ -1509,9 +1520,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         }
         let current = password.ToCharArray()
         let secret = viewOnlyPassword.ToCharArray()
-        let task = CreateFile(input.Session, filename, current, secret)
+        var task Task[bool]
         input.Ui.Run(
-            task,
+            ct -> {
+                task = CreateFile(input.Session, filename, current, secret, ct)
+                return task
+            },
             () -> {
                 if task.Result {
                     password = ""
@@ -1522,9 +1536,15 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         )
     }
 
-    private async func CreateFile(session WalletSession, filename string, current[]char, secret[]char) bool {
+    private async func CreateFile(
+        session WalletSession,
+        filename string,
+        current[]char,
+        secret[]char,
+        ct CancellationToken
+    ) bool {
         try {
-            await session.Keys.CreateViewOnlyAsync(filename, current, secret)
+            await session.Keys.CreateViewOnlyAsync(filename, current, secret, ct)
             return true
         } catch (failure WalletException) {
             passwordIssue = failure.Message
@@ -1605,7 +1625,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let confirm Action = () -> {
             if typed && !input.Busy {
                 purging = true
-                ui.Run(PurgeData(input.Session))
+                ui.Run(ct -> PurgeData(input.Session, ct))
             }
         }
         let footer = Container{
@@ -1663,10 +1683,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         )
     }
 
-    private async func PurgeData(session WalletSession) {
+    private async func PurgeData(session WalletSession, ct CancellationToken) {
         try {
-            await session.PurgeDataAsync()
-            await LoadChain(session)
+            await session.PurgeDataAsync(ct)
+            await LoadChain(session, ct)
         } finally {
             purging = false
             dialog = ""
@@ -1716,7 +1736,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             return
         }
         applyPending = false
-        input.Ui.Run(input.Session.ApplySettingsAsync(value.Copy()), input.OnClose)
+        input.Ui.Run(ct -> input.Session.ApplySettingsAsync(value.Copy(), ct), input.OnClose)
     }
 
     private func ConfirmApply(input SettingsPageInput) Blob {
@@ -1790,7 +1810,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     )
 
     private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
-        input.Ui.Run(input.Session.SavePreferenceAsync(change), input.OnPreference)
+        input.Ui.Run(ct -> input.Session.SavePreferenceAsync(change, ct), input.OnPreference)
     }
 
     private func Rows(ui Presentation, rows[]Container) Container {

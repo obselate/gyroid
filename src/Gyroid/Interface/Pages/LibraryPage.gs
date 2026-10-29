@@ -181,7 +181,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             FileDialogKind.OpenFile,
             "Import wallet",
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            (path string) -> input.Ui.Run(input.Session.Library.ImportFileAsync(path))
+            (path string) -> input.Ui.Run(ct -> input.Session.Library.ImportFileAsync(path, ct))
         )
     }
 
@@ -370,7 +370,9 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             ui.Grow(button)
         }
         if active {
-            head.Add(Square(input, "download", "Unload", false, false, () -> ui.Run(input.Session.UnloadAsync())))
+            head.Add(
+                Square(input, "download", "Unload", false, false, () -> ui.Run(ct -> input.Session.UnloadAsync(ct)))
+            )
         }
         let row = Container{
             Padding: Edges{Left: 12, Right: 12},
@@ -454,15 +456,20 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let secret = password.ToCharArray()
         password = ""
         issue = ""
-        input.Ui.Run(OpenWallet(input, filename, secret), nil, secret)
+        input.Ui.Run(ct -> OpenWallet(input, filename, secret, ct), nil, secret)
     }
 
-    private async func OpenWallet(input LibraryInput, filename string, secret[]char) {
+    private async func OpenWallet(
+        input LibraryInput,
+        filename string,
+        secret[]char,
+        ct System.Threading.CancellationToken
+    ) {
         try {
             if filename != input.ActiveWallet {
-                await input.Session.Library.ChooseWalletAsync(filename)
+                await input.Session.Library.ChooseWalletAsync(filename, ct)
             }
-            await input.Session.UnlockAsync(secret)
+            await input.Session.UnlockAsync(secret, ct)
         } catch (failure WalletException) {
             if failure.Message != "Wrong wallet password" {
                 throw failure
@@ -631,10 +638,15 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         if form == "Phrase" {
             let words = phrase.ToCharArray()
             phrase = ""
-            input.Ui.Run(session.ImportPhraseAsync(filename, words, secret), nil, secret, words)
+            input.Ui.Run(ct -> session.ImportPhraseAsync(filename, words, secret, ct), nil, secret, words)
         } else if form == "ViewOnly" {
             let key = viewKey.ToCharArray()
-            input.Ui.Run(session.ImportViewOnlyAsync(filename, spendKey.ToCharArray(), key, secret), nil, secret, key)
+            input.Ui.Run(
+                ct -> session.ImportViewOnlyAsync(filename, spendKey.ToCharArray(), key, secret, ct),
+                nil,
+                secret,
+                key
+            )
         } else {
             input.OnCreate(filename, secret)
         }

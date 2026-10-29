@@ -171,7 +171,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt"),
             (path string) -> {
                 if let words = shown {
-                    input.Ui.Run(input.Session.Keys.ExportSeedAsync(path, words))
+                    input.Ui.Run(ct -> input.Session.Keys.ExportSeedAsync(path, words, ct))
                 }
             }
         )
