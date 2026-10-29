@@ -393,7 +393,7 @@ class Cli {
                 if !Int32.TryParse(arguments[3], NumberStyles.None, CultureInfo.InvariantCulture, out let minutes) {
                     throw WalletException("Auto-lock minutes must be zero or greater")
                 }
-                wallet.SaveAutoLockAsync(minutes).GetAwaiter().GetResult()
+                wallet.SaveAutoLockAsync(minutes, scheduleLock: true).GetAwaiter().GetResult()
             }
             Console.WriteLine(
                 "Auto-lock minutes: " + wallet.Settings.AutoLockMinutes.ToString(CultureInfo.InvariantCulture)

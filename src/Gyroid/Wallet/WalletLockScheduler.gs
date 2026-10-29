@@ -98,10 +98,13 @@ class WalletLockScheduler {
                 }
                 Console.WriteLine("ready")
                 Console.Out.Flush()
-                while Environment.TickCount64 < deadline {
-                    Thread.Sleep(int32(Math.Max(0, Math.Min(deadline - Environment.TickCount64, int32.MaxValue))))
-                }
                 let path = Path.Combine(settings.DataDirectory, "gyroid-autolock")
+                while Environment.TickCount64 < deadline {
+                    if !File.Exists(path) || PrivateFiles.ReadText(path, 64, true) != token {
+                        return 0
+                    }
+                    Thread.Sleep(int32(Math.Max(0, Math.Min(deadline - Environment.TickCount64, 250))))
+                }
                 if !File.Exists(path) || PrivateFiles.ReadText(path, 64, true) != token ||
                     CoreIdentity(settings) != identity {
                     return 0

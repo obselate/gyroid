@@ -351,7 +351,11 @@ class WalletSession : IDisposable {
         }
     }
 
-    async func SaveAutoLockAsync(minutes int32, ct CancellationToken = default(CancellationToken)) {
+    async func SaveAutoLockAsync(
+        minutes int32,
+        ct CancellationToken = default(CancellationToken),
+        scheduleLock bool = false
+    ) {
         await BeginAsync(ct)
         try {
             let next = settings.Copy()
@@ -359,8 +363,19 @@ class WalletSession : IDisposable {
             next.Validate()
             await WalletSettings.SaveAsync(next, ct, settings)
             settings.AutoLockMinutes = minutes
-            if minutes == 0 {
+            if minutes == 0 || scheduleLock {
                 WalletLockScheduler.Cancel(settings)
+            }
+            if scheduleLock && minutes > 0 {
+                try {
+                    using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
+                } catch (error WalletException) {
+                    if error.StatusCode == 0 || error.StatusCode == 403 || error.StatusCode == 503 {
+                        return
+                    }
+                    throw error
+                }
+                await WalletLockScheduler.ScheduleAsync(Node, minutes)
             }
             Touch()
             if autoLockChanged.CurrentCount == 0 {
