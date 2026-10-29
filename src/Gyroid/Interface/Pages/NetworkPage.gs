@@ -48,11 +48,18 @@ class NetworkPage : Cell[NetworkInput] {
         if node.Running && (node.Peers == 0 || node.Syncing && node.ChainHeight > node.Height + 2) {
             return Container{
                 FlexGrow: 1,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
+                FlexBasis: 0,
+                MinHeight: 0,
                 Cell.Mount[SyncInput, SyncPage](
                     "sync",
-                    SyncInput{Ui: ui, Node: node, Language: input.Language, Width: input.Width, Height: input.Height}
+                    SyncInput{
+                        Ui: ui,
+                        Node: node,
+                        Language: input.Language,
+                        Width: input.Width - 126,
+                        Height: input.Height,
+                        Fill: true
+                    }
                 )
             }
         }
@@ -618,8 +625,8 @@ class NetworkPage : Cell[NetworkInput] {
             }
         )
         let list = Container{
-            FlexGrow: 1,
-            FlexBasis: 0,
+            FlexShrink: 1,
+            MaxHeight: Percent(45),
             MinHeight: 0,
             OverflowY: Overflow.Scroll,
             ScrollbarY: Theme.Read().Scrollbar

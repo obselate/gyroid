@@ -860,7 +860,7 @@ partial class App : Cell {
         if WalletAvailable() {
             main.Padding = 0
             main.Width = Percent(100)
-            if page != "Transactions" {
+            if page != "Transactions" && page != "Overview" && page != "Network" {
                 main.MaxWidth = 1400
             }
             frame.Padding = Edges{Left: 14, Right: 20, Bottom: 20}
