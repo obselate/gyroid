@@ -2,6 +2,16 @@ package Gyroid.Node
 
 import System
 
+enum NodePhase {
+    None,
+    Detecting,
+    Core,
+    Checkpoints,
+    Starting,
+    Connecting,
+    ChainSync
+}
+
 class NodeStatus {
     var Source string = "Gyroid"
     var Owned bool
@@ -27,7 +37,7 @@ class NodeStatus {
     var DataDirectory string = ""
     var Executable string = ""
     var Progress string = ""
-    var Phase string = ""
+    var Phase NodePhase = NodePhase.None
     var DownloadPercent int32?
     var UpgradeDate string = ""
     var UpgradeDeadline string = ""

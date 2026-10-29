@@ -9,6 +9,13 @@ import Gyroid.Node
 import System
 import System.Globalization
 
+enum NodeConnectionState {
+    Offline,
+    Syncing,
+    NoPeers,
+    Synced
+}
+
 partial class App {
     private var nodeOpen bool
 
@@ -18,24 +25,24 @@ partial class App {
 
     private let showUpgrade Action
 
-    private func NodeState() string {
+    private func NodeState() NodeConnectionState {
         let status = wallet.Node.Status
         return if !status.Running {
-            "offline"
+            NodeConnectionState.Offline
         } else if status.Syncing {
-            "syncing"
+            NodeConnectionState.Syncing
         } else if status.Peers == 0 {
-            "no peers"
+            NodeConnectionState.NoPeers
         } else {
-            "synced"
+            NodeConnectionState.Synced
         }
     }
 
-    private func NodeColor(state string) Color -> switch state {
-        case "offline": ui.Pink
-        case "syncing": ui.Lime
-        case "no peers": ui.Orange
-        default: ui.Mint
+    private func NodeColor(state NodeConnectionState) Color -> switch state {
+        case NodeConnectionState.Offline: ui.Pink
+        case NodeConnectionState.Syncing: ui.Lime
+        case NodeConnectionState.NoPeers: ui.Orange
+        case NodeConnectionState.Synced: ui.Mint
     }
 
     private func NodeBadge() Blob {
@@ -43,9 +50,9 @@ partial class App {
         let state = NodeState()
         let percent = PhasePercent()
         let height = status.Height > 0 ? ui.Count(status.Height): "-"
-        let detail = if state == "offline" {
-            ui.Strings.Get(state)
-        } else if state == "syncing" && percent != nil {
+        let detail = if state == NodeConnectionState.Offline {
+            ui.Strings.Get("offline")
+        } else if state == NodeConnectionState.Syncing && percent != nil {
             percent!!.ToString() + "%"
         } else {
             status.Peers.ToString() + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers")
@@ -76,11 +83,11 @@ partial class App {
                 nodeOpen = !nodeOpen
                 Rebuild()
             },
-            ui.Label(height, 11, state == "offline" ? ui.Dim: ui.Ink, ""),
-            ui.Label(detail, 10.5, state == "synced" ? ui.Dim: NodeColor(state), "")
+            ui.Label(height, 11, state == NodeConnectionState.Offline ? ui.Dim: ui.Ink, ""),
+            ui.Label(detail, 10.5, state == NodeConnectionState.Synced ? ui.Dim: NodeColor(state), "")
         }
         WidgetKeyBindings.BindActivation(badge)
-        if state == "syncing" && percent != nil {
+        if state == NodeConnectionState.Syncing && percent != nil {
             badge.Add(
                 Container{
                     Position: PositionType.Absolute,
@@ -95,7 +102,7 @@ partial class App {
         return Container{FlexShrink: 0, badge, NodePopover(status, state)}
     }
 
-    private func NodePopover(status NodeStatus, state string) Blob {
+    private func NodePopover(status NodeStatus, state NodeConnectionState) Blob {
         let box = nodeAnchor.BorderBox
         let center = box.Y + box.Height / 2
         let version = status.Version.Length > 0 ? " · v" + status.Version: ""
@@ -112,13 +119,25 @@ partial class App {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                ui.Label(ui.Strings.Get(state), 14, NodeColor(state), ""),
+                ui.Label(
+                    ui.Strings.Get(
+                        switch state {
+                            case NodeConnectionState.Offline: "offline"
+                            case NodeConnectionState.Syncing: "syncing"
+                            case NodeConnectionState.NoPeers: "no peers"
+                            case NodeConnectionState.Synced: "synced"
+                        }
+                    ),
+                    14,
+                    NodeColor(state),
+                    ""
+                ),
                 ui.Label(ui.Strings.Get(status.Network) + version, 14, ui.Dim, "")
             }
         }
         if status.Running {
             let readings = Container{Gap: 10}
-            let syncing = state == "syncing"
+            let syncing = state == NodeConnectionState.Syncing
             readings.Add(
                 NodeReading("Height", ui.Count(status.Height), syncing ? " / " + ui.Count(status.ChainHeight): "")
             )

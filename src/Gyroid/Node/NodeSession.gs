@@ -29,11 +29,7 @@ class NodeSession : IDisposable {
             let current = NodeStatus{
                 ... Status,
                 Progress: value,
-                Phase: if value == "Detecting" {
-                    "Detecting"
-                } else {
-                    Supervisor.Phase
-                },
+                Phase: Supervisor.Phase,
                 DownloadPercent: Supervisor.DownloadPercent
             }
             if !Status.Matches(current) {
@@ -119,12 +115,12 @@ class NodeSession : IDisposable {
                 DataDirectory: Settings.DataDirectory,
                 Executable: Supervisor.Executable,
                 Progress: Status.Progress,
-                Phase: if Supervisor.Phase.Length > 0 {
+                Phase: if Supervisor.Phase != NodePhase.None {
                     Supervisor.Phase
                 } else if NodeJson.Flag(root, "syncing") {
-                    "ChainSync"
+                    NodePhase.ChainSync
                 } else {
-                    ""
+                    NodePhase.None
                 },
                 DownloadPercent: Supervisor.DownloadPercent,
             }

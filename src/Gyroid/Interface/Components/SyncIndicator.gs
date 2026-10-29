@@ -17,28 +17,39 @@ import System.IO
 import System.Linq
 
 partial class App {
-    private func Phase() string {
+    private func Phase() NodePhase {
         let status = wallet.Node.Status
-        return if status.Phase.Length == 0 && status.Running && status.Peers == 0 {
-            "Connecting"
+        return if status.Phase == NodePhase.None && status.Running && status.Peers == 0 {
+            NodePhase.Connecting
         } else {
             status.Phase
         }
     }
 
-    private func Preparing() bool -> wallet.Node.Status.Phase.Length > 0 && wallet.Node.Status.Phase != "ChainSync"
+    private func Preparing() bool -> wallet
+        .Node
+        .Status
+        .Phase != NodePhase.None &&
+        wallet
+        .Node
+        .Status
+        .Phase != NodePhase.ChainSync
 
     private func PhaseName() string -> ui.Strings.Get(
         switch Phase() {
-            case "Core": "Core download"
-            case "ChainSync": "Syncing"
-            default: Phase()
+            case NodePhase.None: ""
+            case NodePhase.Detecting: "Detecting"
+            case NodePhase.Core: "Core download"
+            case NodePhase.Checkpoints: "Checkpoints"
+            case NodePhase.Starting: "Starting"
+            case NodePhase.Connecting: "Connecting"
+            case NodePhase.ChainSync: "Syncing"
         }
     )
 
     private func PhasePercent() int32? {
         let status = wallet.Node.Status
-        if status.Phase != "ChainSync" {
+        if status.Phase != NodePhase.ChainSync {
             return status.DownloadPercent
         }
         if status.ChainHeight == 0 {
@@ -54,7 +65,7 @@ partial class App {
     }
 
     private func SyncIndicator(size float64, fontSize float64) Blob? {
-        if Phase().Length == 0 {
+        if Phase() == NodePhase.None {
             return nil
         }
         let row = Container{
@@ -112,9 +123,13 @@ partial class App {
                 },
                 MaterialIcons.Create(
                     switch wallet.Node.Status.Phase {
-                        case "Checkpoints": "verified"
-                        case "ChainSync": "sync"
-                        default: "download"
+                        case NodePhase.Checkpoints: "verified"
+                        case NodePhase.ChainSync: "sync"
+                        case NodePhase.None,
+                        NodePhase.Detecting,
+                        NodePhase.Core,
+                        NodePhase.Starting,
+                        NodePhase.Connecting: "download"
                     },
                     size * 0.6,
                     ui.Lime

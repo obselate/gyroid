@@ -281,7 +281,7 @@ class WalletSession : IDisposable {
     private async func ConnectCoreAsync(ct CancellationToken) {
         try {
             if !connected {
-                Node.Supervisor.Progress?.Invoke("Detecting")
+                Node.Supervisor.ReportProgress(NodePhase.Detecting, nil)
             }
             await Node.ConnectAsync(settings, ct)
             try {

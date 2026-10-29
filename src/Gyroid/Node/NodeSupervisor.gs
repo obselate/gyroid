@@ -27,7 +27,7 @@ class NodeSupervisor : IDisposable {
     var Exited Action? = nil
     var Source string = "External"
     var Executable string = ""
-    var Phase string = ""
+    var Phase NodePhase = NodePhase.None
     var DownloadPercent int32?
     var CheckpointHeight uint64
 
@@ -45,7 +45,7 @@ class NodeSupervisor : IDisposable {
         try {
             await ConnectCoreAsync(settings, cancellation)
         } finally {
-            ReportProgress("", nil)
+            ReportProgress(NodePhase.None, nil)
         }
     }
 
@@ -66,7 +66,7 @@ class NodeSupervisor : IDisposable {
             settings.BinaryPath = await CoreRelease.DownloadAsync(
                 value -> {
                     int32.TryParse(value.TrimEnd('%'), out let percent)
-                    ReportProgress("Core", percent)
+                    ReportProgress(NodePhase.Core, percent)
                 },
                 ct
             )
@@ -104,7 +104,7 @@ class NodeSupervisor : IDisposable {
             throw WalletException("Node is restarting. Try again shortly")
         }
         Stop()
-        ReportProgress("Starting", nil)
+        ReportProgress(NodePhase.Starting, nil)
         for attempt in 0 ... 120 {
             ct.ThrowIfCancellationRequested()
             try {
@@ -132,7 +132,7 @@ class NodeSupervisor : IDisposable {
         }
         let trusted = await SaveCheckpointsAsync(settings, ct)
         await SaveCoreSettingsAsync(settings, !trusted, ct)
-        ReportProgress("Starting", nil)
+        ReportProgress(NodePhase.Starting, nil)
         let endpoint = Uri(settings.Endpoint)
         let start = ProcessStartInfo{
             FileName: settings.BinaryPath,
@@ -362,14 +362,23 @@ class NodeSupervisor : IDisposable {
         stream.Flush(true)
     }
 
-    private func ReportProgress(phase string, percent int32?) {
+    func ReportProgress(phase NodePhase, percent int32?) {
         Phase = phase
         DownloadPercent = percent
+        let label = switch phase {
+            case NodePhase.None: ""
+            case NodePhase.Detecting: "Detecting"
+            case NodePhase.Core: "Core"
+            case NodePhase.Checkpoints: "Checkpoints"
+            case NodePhase.Starting: "Starting"
+            case NodePhase.Connecting: "Connecting"
+            case NodePhase.ChainSync: "ChainSync"
+        }
         Progress?.Invoke(
             if percent != nil {
-                phase + " " + percent.ToString() + "%"
+                label + " " + percent.ToString() + "%"
             } else {
-                phase
+                label
             }
         )
     }
@@ -391,12 +400,12 @@ class NodeSupervisor : IDisposable {
                 return true
             }
         }
-        ReportProgress("Checkpoints", 0)
+        ReportProgress(NodePhase.Checkpoints, 0)
         using let deadline = CancellationTokenSource.CreateLinkedTokenSource(ct)
         deadline.CancelAfter(TimeSpan.FromSeconds(5))
         let downloaded = await Checkpoints.FetchAsync(
             (count, length) -> ReportProgress(
-                "Checkpoints",
+                NodePhase.Checkpoints,
                 if length > 0 {
                     int32(Math.Min(100L, count * 100 / length))
                 } else {
@@ -409,7 +418,7 @@ class NodeSupervisor : IDisposable {
         let selected = Checkpoints.Select(baseline, downloaded)
         await PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(selected, 0, selected.Length, ct), true, false)
         CheckpointHeight = Checkpoints.Height(Checkpoints.Parse(selected))
-        ReportProgress("Checkpoints", 100)
+        ReportProgress(NodePhase.Checkpoints, 100)
         return true
     }
 

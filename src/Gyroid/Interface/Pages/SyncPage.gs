@@ -279,11 +279,11 @@ class SyncPage : Cell[SyncInput] {
     }
 
     private func Step(node NodeStatus) int32 -> switch node.Phase {
-        case "Core": 0
-        case "Checkpoints": 1
-        case "Starting": 2
-        case "Detecting": 2
-        default: node.Syncing && node.ChainHeight > node.Height + 2 ? 4: node.Peers == 0 ? 3: 4
+        case NodePhase.Core: 0
+        case NodePhase.Checkpoints: 1
+        case NodePhase.Starting, NodePhase.Detecting: 2
+        case NodePhase.None, NodePhase.Connecting, NodePhase.ChainSync:
+        node.Syncing && node.ChainHeight > node.Height + 2 ? 4: node.Peers == 0 ? 3: 4
     }
 
     private func StepName(step int32) string -> switch step {
