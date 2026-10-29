@@ -82,7 +82,6 @@ class NodeApi : IDisposable {
         using let client = NewHttp()
         client.Timeout = Timeout.InfiniteTimeSpan
         using let request = HttpRequestMessage(HttpMethod.Get, "api/events")
-        VerifyListener()
         request
             .Headers
             .Authorization = AuthenticationHeaderValue(
@@ -155,7 +154,6 @@ class NodeApi : IDisposable {
             "api/" + path
         )
         try {
-            VerifyListener()
             try {
                 if let write = body {
                     using let writer = Utf8JsonWriter(payload)

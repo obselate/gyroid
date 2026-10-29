@@ -41,6 +41,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
 
     private var loading bool
 
+    private var reload bool
+
     private var opened bool
 
     private var disposed bool
@@ -100,7 +102,9 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                 card
             }
         }
-        head.Add(Command(input, "stop", "Stop", ui.Ink, ui.Edge, () -> Act(input, input.Session.Mining.StopAsync())))
+        head.Add(
+            Command(input, "stop", "Stop", ui.Ink, ui.Edge, () -> Act(input, () -> input.Session.Mining.StopAsync()))
+        )
         card.MaxWidth = 1180
         card.FlexGrow = 1
         let samples = input.History.Samples
@@ -157,18 +161,19 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         timer = nil
     }
 
-    private func Act(input MiningPageInput, task Task) {
-        input.Ui.Run(task, () -> Load(input))
+    private func Act(input MiningPageInput, action Func[Task]) {
+        input.Ui.Run(Task.Run(action), () -> Load(input))
     }
 
     private async func Load(input MiningPageInput) {
         if loading {
+            reload = true
             return
         }
         loading = true
         var status MiningStatus? = nil
         try {
-            status = await input.Session.Mining.StatusAsync()
+            status = await Task.Run(() -> input.Session.Mining.StatusAsync())
         } catch (failure Exception) { }
         input.Window?.TryPost(
             () -> {
@@ -176,13 +181,25 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                 guard let value = status else {
                     return
                 }
-                let changed = value.Running || value.Running != input.History.Status.Running
+                let changed = value.Running ||
+                    value.Running != input
+                    .History
+                    .Status
+                    .Running ||
+                    value.Threads != input
+                    .History
+                    .Status
+                    .Threads
                 Record(input.History, value)
                 if disposed {
                     return
                 }
                 if changed {
                     Rebuild()
+                }
+                if reload {
+                    reload = false
+                    Load(input)
                 }
             }
         )
@@ -294,7 +311,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     "Start mining",
                     ui.Lime,
                     ui.Lime,
-                    () -> Act(input, input.Session.Mining.StartAsync())
+                    () -> Act(input, () -> input.Session.Mining.StartAsync())
                 )
             }
         }
@@ -324,7 +341,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             Hover: Style{BackgroundColor: input.Ui.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: input.Ui.Strings.Get(label)},
-            OnClick: () -> Act(input, input.Session.Mining.SetThreadsAsync(threads)),
+            OnClick: () -> Act(input, () -> input.Session.Mining.SetThreadsAsync(threads)),
             MaterialIcons.Create(icon, 14, enabled ? input.Ui.Ink: input.Ui.Dim)
         }
         WidgetKeyBindings.BindActivation(button)

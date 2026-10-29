@@ -27,33 +27,28 @@ class MiningService {
     }
 
     async func StatusAsync(ct CancellationToken = default(CancellationToken)) MiningStatus {
-        await session.BeginAsync(ct)
-        try {
-            using let response = await session.Node.Api.JsonAsync("mining", ct: ct)
-            let root = response.RootElement
-            return MiningStatus{
-                Running: NodeJson.Flag(root, "running"),
-                Threads: int32(NodeJson.Number(root, "threads")),
-                Hashrate: if root.TryGetProperty("hashrate", out let rate) && rate.ValueKind == JsonValueKind.Number {
-                    rate.GetDouble()
-                } else {
-                    0.0
-                },
-                Hashes: NodeJson.OptionalNumber(root, "hash_count") ?? uint64(0),
-                Blocks: NodeJson.OptionalNumber(root, "blocks_found") ?? uint64(0),
-                Started: if DateTimeOffset.TryParse(
-                    NodeJson.Text(root, "started_at"),
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out let started
-                ) {
-                    started
-                } else {
-                    DateTimeOffset.MinValue
-                }
+        using let response = await session.Node.Api.JsonAsync("mining", ct: ct)
+        let root = response.RootElement
+        return MiningStatus{
+            Running: NodeJson.Flag(root, "running"),
+            Threads: int32(NodeJson.Number(root, "threads")),
+            Hashrate: if root.TryGetProperty("hashrate", out let rate) && rate.ValueKind == JsonValueKind.Number {
+                rate.GetDouble()
+            } else {
+                0.0
+            },
+            Hashes: NodeJson.OptionalNumber(root, "hash_count") ?? uint64(0),
+            Blocks: NodeJson.OptionalNumber(root, "blocks_found") ?? uint64(0),
+            Started: if DateTimeOffset.TryParse(
+                NodeJson.Text(root, "started_at"),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out let started
+            ) {
+                started
+            } else {
+                DateTimeOffset.MinValue
             }
-        } finally {
-            session.End()
         }
     }
 
