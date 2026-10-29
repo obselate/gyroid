@@ -1,4 +1,4 @@
-# Gyroid
+<img src="assets/readme/hero.svg" alt="Gyroid: privacy wallet for Blocknet" width="100%">
 
 A Blocknet (BNT) wallet for Linux x64 and Windows x64. One binary has the graphical interface and the command-line tools.
 
