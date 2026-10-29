@@ -82,6 +82,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Square(input, "settings", "Settings", false, false, () -> input.OnNavigate("Settings"))
         }
         card.Add(header)
+        card.Add(ui.Label(input.Session.Settings.WalletDirectory, 12, ui.Dim, ""))
         if wallets.Count == 0 {
             card.Add(
                 Container{

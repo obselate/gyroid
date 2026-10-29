@@ -72,7 +72,10 @@ func Main() {
             index +
             1 >= arguments.Length ||
             !Double.TryParse(arguments[index + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out let value) ||
-            !Double.IsFinite(value) || value <= 0 || (name != "--scale" && value > int32.MaxValue) {
+            !Double.IsFinite(value) ||
+            value <= 0 ||
+            (name == "--scale" ? value > float32.MaxValue: value > int32.MaxValue) {
+            Console.Error.WriteLine("Invalid " + name + " value: number is outside the supported range")
             Environment.ExitCode = Cli.Usage(Console.Error)
             return
         }
