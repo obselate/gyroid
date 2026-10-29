@@ -262,9 +262,6 @@ class SendService {
         guard let pending = store.Pending else {
             return
         }
-        if pending.CanRetry {
-            store.Pending = PendingSend{... pending, CanRetry: false}
-        }
         try {
             using let response = await session
                 .Node
@@ -308,7 +305,11 @@ class SendService {
                     }
                 }
             }
-        } catch (error WalletException) { }
+        } catch (error WalletException) { } finally {
+            if pending.CanRetry && Object.ReferenceEquals(store.Pending, pending) {
+                store.Pending = PendingSend{... pending, CanRetry: false}
+            }
+        }
     }
 
     private async func SubmitPendingCoreAsync(pending PendingSend, ct CancellationToken) SendResult {
