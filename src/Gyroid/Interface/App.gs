@@ -675,6 +675,7 @@ partial class App : Cell {
                 SettingsPageInput{
                     Session: wallet,
                     Ui: ui,
+                    Tools: toolsState,
                     Window: window,
                     Snapshot: snapshot,
                     Node: wallet.Node.Status,

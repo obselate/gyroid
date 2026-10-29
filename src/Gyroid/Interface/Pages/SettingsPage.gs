@@ -22,6 +22,7 @@ import System.Threading.Tasks
 data struct SettingsPageInput {
     var Session WalletSession
     var Ui Presentation
+    var Tools ToolsState
     var Window Window?
     var Snapshot WalletSnapshot
     var Node NodeStatus
@@ -98,6 +99,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     func Dispose() {
         viewKeys?.Dispose()
         viewKeys = nil
+        viewPrivateShown = false
+        dialog = ""
         password = ""
         viewOnlyPassword = ""
     }
@@ -105,6 +108,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     protected override func Build(input SettingsPageInput) Blob {
         let ui = input.Ui
         let settings = input.Session.Settings
+        if input.Snapshot.State != "Unlocked" && (dialog == "view-key" || viewKeys != nil) {
+            Close()
+        }
         draft ??= settings
         let sections = List[string]{"general", "security", "node"}
         if input.Snapshot.State == "Unlocked" {
@@ -127,40 +133,36 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         for id in sections {
             let selected = id == section
             let fill = selected ? Color.Parse("#121906"): Color.Transparent
-            nav.Add(
-                Goo
-                    .Button{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    JustifyContent: JustifyContent.FlexStart,
-                    Gap: 10,
-                    Height: 38,
-                    FlexShrink: 0,
-                    Padding: Edges{Left: 12, Right: 12},
-                    BorderRadius: 8,
-                    BackgroundColor: fill,
-                    Hover: Style{BackgroundColor: selected ? fill: ui.Rule},
-                    Focus: Theme.Read().FocusStyle,
-                    Accessibility: Accessibility{
-                        Role: AccessibilityRole.Tab,
-                        Name: ui.Strings.Get(id),
-                        Selected: selected
+            let button = Goo
+                .Button{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.FlexStart,
+                Gap: 10,
+                Height: 38,
+                FlexShrink: 0,
+                Padding: Edges{Left: 12, Right: 12},
+                BorderRadius: 8,
+                BackgroundColor: fill,
+                Hover: Style{BackgroundColor: selected ? fill: ui.Rule},
+                Focus: Theme.Read().FocusStyle,
+                Accessibility: Accessibility{Role: AccessibilityRole.Tab, Name: ui.Strings.Get(id), Selected: selected},
+                OnClick: () -> input.OnSection.Invoke(id),
+                MaterialIcons.Create(
+                    switch id {
+                        case "security": "lock"
+                        case "node": "dns"
+                        case "wallet": "account_balance_wallet"
+                        case "advanced": "build"
+                        default: "notes"
                     },
-                    OnClick: () -> input.OnSection.Invoke(id),
-                    MaterialIcons.Create(
-                        switch id {
-                            case "security": "lock"
-                            case "node": "dns"
-                            case "wallet": "account_balance_wallet"
-                            case "advanced": "build"
-                            default: "notes"
-                        },
-                        18,
-                        selected ? ui.Lime: ui.Body
-                    ),
-                    ui.Label(ui.Strings.Get(id), 14, selected ? ui.Lime: ui.Body, "")
-                }
-            )
+                    18,
+                    selected ? ui.Lime: ui.Body
+                ),
+                ui.Label(ui.Strings.Get(id), 14, selected ? ui.Lime: ui.Body, "")
+            }
+            WidgetKeyBindings.BindActivation(button)
+            nav.Add(button)
         }
         if !input.Available {
             nav.Add(Container{FlexGrow: 1})
@@ -459,30 +461,30 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             }
         )
-        list.Add(
-            Goo
-                .Button{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: 10,
-                Height: 52,
-                FlexShrink: 0,
-                BorderWidth: Edges{Top: 1},
-                BorderColor: Color.Parse("#141414"),
-                Focus: Theme.Read().FocusStyle,
-                Accessibility: Accessibility{
-                    Role: AccessibilityRole.Button,
-                    Name: ui.Strings.Get("startup"),
-                    Expanded: startupOpen
-                },
-                OnClick: () -> {
-                    startupOpen = !startupOpen
-                    Rebuild()
-                },
-                ui.Grow(ui.Label(ui.Strings.Get("startup"), 14, ui.Body, "")),
-                MaterialIcons.Create(startupOpen ? "expand_less": "expand_more", 18, ui.Dim)
-            }
-        )
+        let startup = Goo
+            .Button{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            Height: 52,
+            FlexShrink: 0,
+            BorderWidth: Edges{Top: 1},
+            BorderColor: Color.Parse("#141414"),
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Button,
+                Name: ui.Strings.Get("startup"),
+                Expanded: startupOpen
+            },
+            OnClick: () -> {
+                startupOpen = !startupOpen
+                Rebuild()
+            },
+            ui.Grow(ui.Label(ui.Strings.Get("startup"), 14, ui.Body, "")),
+            MaterialIcons.Create(startupOpen ? "expand_less": "expand_more", 18, ui.Dim)
+        }
+        WidgetKeyBindings.BindActivation(startup)
+        list.Add(startup)
         if startupOpen {
             if let value = draft {
                 list.Add(Startup(input, settings, value))
@@ -609,7 +611,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 ui,
                 "output health",
                 []Blob{
-                    ui.Button("Check", () -> input.OnNavigate.Invoke("Tools"), input.Busy),
+                    ui.Button(
+                        "Check",
+                        () -> {
+                            input.Tools.Tab = "health"
+                            input.OnNavigate.Invoke("Tools")
+                        },
+                        input.Busy
+                    ),
                     Info(
                         input,
                         "health",
@@ -1167,7 +1176,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         input.Ui.Run(
             task,
             () -> {
-                viewKeys = task.Result
+                if dialog == "view-key" && input.Session.State == "Unlocked" {
+                    viewKeys = task.Result
+                } else {
+                    task.Result?.Dispose()
+                }
             }
         )
     }
@@ -1234,7 +1247,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                                 Home(),
                                 input.Session.Settings.ActiveWallet.Replace(".wallet.dat", "") + ".keys.txt"
                             ),
-                            path -> ui.Run(input.Session.Keys.SaveViewKeysAsync(path, keys))
+                            path -> {
+                                if Object.ReferenceEquals(viewKeys, keys) && input.Session.State == "Unlocked" {
+                                    ui.Run(input.Session.Keys.SaveViewKeysAsync(path, keys))
+                                }
+                            }
                         ),
                         input.Busy
                     ),
@@ -1644,6 +1661,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private async func PurgeData(session WalletSession) {
         try {
             await session.PurgeDataAsync()
+            await LoadChain(session)
         } finally {
             purging = false
             dialog = ""
@@ -1832,31 +1850,31 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         for index in 0 ... ids.Length {
             let id = ids[index]
             let on = id == selected
-            group.Add(
-                Goo
-                    .Button{
-                    Height: 28,
-                    Padding: Edges{Left: 12, Right: 12},
-                    AlignItems: AlignItems.Center,
-                    JustifyContent: JustifyContent.Center,
-                    BorderRadius: 7,
-                    BackgroundColor: on ? Color.Parse("#1a1a1a"): Color.Transparent,
-                    Hover: Style{BackgroundColor: ui.Rule},
-                    Focus: Theme.Read().FocusStyle,
-                    Disabled: disabled || input.Busy,
-                    Accessibility: Accessibility{
-                        Role: AccessibilityRole.Radio,
-                        Name: ui.Strings.Get(names[index]),
-                        Checked: on ? AccessibilityChecked.True: AccessibilityChecked.False
-                    },
-                    OnClick: () -> {
-                        if !on {
-                            chosen(id)
-                        }
-                    },
-                    ui.Label(ui.Strings.Get(names[index]), 14, on ? ui.Ink: ui.Body, "")
-                }
-            )
+            let button = Goo
+                .Button{
+                Height: 28,
+                Padding: Edges{Left: 12, Right: 12},
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.Center,
+                BorderRadius: 7,
+                BackgroundColor: on ? Color.Parse("#1a1a1a"): Color.Transparent,
+                Hover: Style{BackgroundColor: ui.Rule},
+                Focus: Theme.Read().FocusStyle,
+                Disabled: disabled || input.Busy,
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.Radio,
+                    Name: ui.Strings.Get(names[index]),
+                    Checked: on ? AccessibilityChecked.True: AccessibilityChecked.False
+                },
+                OnClick: () -> {
+                    if !on {
+                        chosen(id)
+                    }
+                },
+                ui.Label(ui.Strings.Get(names[index]), 14, on ? ui.Ink: ui.Body, "")
+            }
+            WidgetKeyBindings.BindActivation(button)
+            group.Add(button)
         }
         return group
     }
