@@ -832,7 +832,8 @@ class HistoryPage : Cell[HistoryInput] {
 
     private func Details(row HistoryRow) Blob {
         let ui = current.Ui
-        let recipient = row.Recipients.ElementAtOrDefault(proofRecipient)
+        let recipients = ProofRecipients(row)
+        let recipient = recipients.ElementAtOrDefault(proofRecipient)
         let panel = Container{
             Gap: 12,
             Padding: Edges{Top: 4, Bottom: 14, Left: row.Width < 1000 ? 16.0: 38.0, Right: 16},
@@ -848,7 +849,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Segments(
                     "tabs",
                     "Transaction",
-                    []string{"details", "proof"},
+                    recipients.Length > 0 ? []string{"details", "proof"}: []string{"details"},
                     tab,
                     id -> {
                         tab = id
@@ -879,15 +880,13 @@ class HistoryPage : Cell[HistoryInput] {
                 )
             }
             panel.Add(tabs)
-            if tab == "proof" {
-                if row.Recipients.Length > 1 {
+            if tab == "proof" && recipients.Length > 0 {
+                if recipients.Length > 1 {
                     panel.Add(
                         Cell.Mount[ToggleGroupInput, ToggleGroup](
                             "proof-recipient",
                             ToggleGroupInput{
-                                Items: row
-                                    .Recipients
-                                    .Select(
+                                Items: recipients.Select(
                                     (entry WalletRecipient, index int32) -> ToggleOption{
                                         Id: index.ToString(),
                                         Label: ui.Strings.Get("Recipient") + " " + (index + 1).ToString()
@@ -1260,13 +1259,26 @@ class HistoryPage : Cell[HistoryInput] {
         }
     }
 
+    private func ProofRecipients(row HistoryRow)[]WalletRecipient -> row
+        .Recipients
+        .Where((recipient WalletRecipient) -> recipient.Address != current.Snapshot.Address)
+        .GroupBy((recipient WalletRecipient) -> recipient.Address)
+        .Select(
+        group -> WalletRecipient{
+            Address: group.Key,
+            Amount: group.Aggregate(0UL, (total uint64, recipient WalletRecipient) -> total + recipient.Amount)
+        }
+    )
+        .ToArray()
+
     private func Prove(row HistoryRow) {
         let proofs = current.Session.Proofs
         let selected = proofRecipient
-        if selected >= row.Recipients.Length {
+        let recipients = ProofRecipients(row)
+        if selected >= recipients.Length {
             return
         }
-        let recipient = row.Recipients[selected]
+        let recipient = recipients[selected]
         let amount = WalletAmount.Format(recipient.Amount)
         let prove = Task.Run(() -> proofs.ProveAsync(row.TxId))
         proofFor = row.TxId
@@ -1299,7 +1311,7 @@ class HistoryPage : Cell[HistoryInput] {
 
     private func ProofText(row HistoryRow) string {
         let strings = current.Ui.Strings
-        let recipient = row.Recipients.ElementAtOrDefault(proofRecipient)
+        let recipient = ProofRecipients(row).ElementAtOrDefault(proofRecipient)
         return strings.Get("transaction") + " " + row.TxId + "\n" + strings.Get("proof key") +
             " " +
             proofKey +
@@ -1393,7 +1405,7 @@ class HistoryPage : Cell[HistoryInput] {
     private async func Choose(window Window, name string) string {
         let result = await window.ShowFileDialogAsync(
             FileDialogKind.SaveFile,
-            FileDialogOptions{Title: current.Ui.Strings.Get("save"), InitialPath: name}
+            FileDialogOptions{Title: current.Ui.Strings.Get("save"), InitialPath: Path.GetFullPath(name)}
         )
         if result.Status == FileDialogStatus.Success && result.Paths.Count > 0 {
             return result.Paths[0]
