@@ -74,12 +74,14 @@ class MiningService {
     private async func PostAsync(path string, body Action[Utf8JsonWriter]?, ct CancellationToken) {
         await session.BeginAsync(ct)
         try {
-            session.RequireUnlocked()
-            session.Touch()
-            using let response = await session.Node.Api.JsonAsync(path, body, ct, method: HttpMethod.Post)
-        } catch (error WalletException) {
-            if error.StatusCode != 409 {
-                throw error
+            try {
+                session.RequireUnlocked()
+                session.Touch()
+                using let response = await session.Node.Api.JsonAsync(path, body, ct, method: HttpMethod.Post)
+            } catch (error WalletException) {
+                if error.StatusCode != 409 {
+                    throw error
+                }
             }
         } finally {
             session.End()

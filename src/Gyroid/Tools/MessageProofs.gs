@@ -45,26 +45,28 @@ class MessageProofs {
         WalletValidation.ValidateMessage(message)
         await session.BeginAsync(ct)
         try {
-            using let response = await session
-                .Node
-                .Api
-                .JsonAsync(
-                "verify",
-                writer -> {
-                    writer.WriteStartObject()
-                    writer.WriteString("address", WalletValidation.ValidateAddress(address))
-                    writer.WriteString("message", message)
-                    writer.WriteString("signature", signature)
-                    writer.WriteEndObject()
-                },
-                ct
-            )
-            return NodeJson.Flag(response.RootElement, "valid")
-        } catch (error WalletException) {
-            if error.StatusCode == 400 {
-                return false
+            try {
+                using let response = await session
+                    .Node
+                    .Api
+                    .JsonAsync(
+                    "verify",
+                    writer -> {
+                        writer.WriteStartObject()
+                        writer.WriteString("address", WalletValidation.ValidateAddress(address))
+                        writer.WriteString("message", message)
+                        writer.WriteString("signature", signature)
+                        writer.WriteEndObject()
+                    },
+                    ct
+                )
+                return NodeJson.Flag(response.RootElement, "valid")
+            } catch (error WalletException) {
+                if error.StatusCode == 400 {
+                    return false
+                }
+                throw error
             }
-            throw error
         } finally {
             session.End()
         }
@@ -103,29 +105,31 @@ class MessageProofs {
         let expected = WalletAmount.Parse(amount)
         await session.BeginAsync(ct)
         try {
-            using let response = await session
-                .Node
-                .Api
-                .JsonAsync(
-                "verify-proof",
-                writer -> {
-                    writer.WriteStartObject()
-                    writer.WriteString("txid", txid)
-                    writer.WriteString("tx_key", txKey)
-                    writer.WriteString("address", WalletValidation.ValidateAddress(address))
-                    writer.WriteEndObject()
-                },
-                ct
-            )
-            return NodeJson.Flag(response.RootElement, "valid") && NodeJson.Number(
-                response.RootElement,
-                "total_matched"
-            ) == expected
-        } catch (error WalletException) {
-            if error.StatusCode == 400 {
-                return false
+            try {
+                using let response = await session
+                    .Node
+                    .Api
+                    .JsonAsync(
+                    "verify-proof",
+                    writer -> {
+                        writer.WriteStartObject()
+                        writer.WriteString("txid", txid)
+                        writer.WriteString("tx_key", txKey)
+                        writer.WriteString("address", WalletValidation.ValidateAddress(address))
+                        writer.WriteEndObject()
+                    },
+                    ct
+                )
+                return NodeJson.Flag(response.RootElement, "valid") && NodeJson.Number(
+                    response.RootElement,
+                    "total_matched"
+                ) == expected
+            } catch (error WalletException) {
+                if error.StatusCode == 400 {
+                    return false
+                }
+                throw error
             }
-            throw error
         } finally {
             session.End()
         }
