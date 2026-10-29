@@ -393,6 +393,7 @@ class Strings {
             case "Connecting": "连接中"
             case "Operation failed": "操作失败"
             case "Refresh failed": "刷新失败"
+            case "Wallet background task failed": "钱包后台任务失败"
             case "Copy failed": "复制失败"
             case "Clipboard could not be cleared": "无法清除剪贴板"
             case "File dialog unavailable": "无法打开文件选择器"

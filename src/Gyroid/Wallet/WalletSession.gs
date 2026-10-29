@@ -26,7 +26,11 @@ class WalletSession : IDisposable {
     let Mining MiningService
     let Checks PrivacyChecks
     let gate SemaphoreSlim = SemaphoreSlim(1, 1)
-    let autoLockChanged SemaphoreSlim = SemaphoreSlim(0, 1)
+    let autoLockChanged chan[bool] = chan[bool](1)
+    let restartRequested chan[bool] = chan[bool](1)
+    let eventsChanged chan[bool] = chan[bool](1)
+    let background Task
+    var BackgroundError string = ""
     var snapshot WalletSnapshot = WalletSnapshot()
     let Send SendService
     let History HistoryService
@@ -38,7 +42,7 @@ class WalletSession : IDisposable {
     var disposed bool
     var Changed Action? = nil
     let shutdown CancellationTokenSource = CancellationTokenSource()
-    var events CancellationTokenSource? = nil
+    var events Context? = nil
     var eventsEnabled bool
     var nextRestart DateTimeOffset
     var lastActivity int64 = WalletLockScheduler.Now()
@@ -59,11 +63,11 @@ class WalletSession : IDisposable {
         Proofs = MessageProofs(this)
         Mining = MiningService(this)
         Checks = PrivacyChecks(this)
-        Node.Exited = () -> Task.Run(() -> RestartOwnedAsync())
+        Node.Exited = () -> restartRequested.Writer.TryWrite(true)
         Node.Changed = () -> Changed?.Invoke()
         PublishEmpty()
         Node.Publish()
-        Task.Run(() -> AutoLockAsync())
+        background = RunBackgroundAsync(Context.FromToken(shutdown.Token))
     }
 
     async func BeginAsync(ct CancellationToken, notify bool = true) {
@@ -91,9 +95,7 @@ class WalletSession : IDisposable {
         }
         isBusy = false
         UpdateEvents()
-        if settings.AutoLockMinutes > 0 && autoLockChanged.CurrentCount == 0 {
-            autoLockChanged.Release()
-        }
+        autoLockChanged.Writer.TryWrite(true)
         gate.Release()
         if !disposed && notify {
             Changed?.Invoke()
@@ -108,32 +110,49 @@ class WalletSession : IDisposable {
         ref lastActivity
     ) >= int64(settings.AutoLockMinutes) * 60000
 
-    private async func AutoLockAsync() {
-        let ct = shutdown.Token
+    private async func RunBackgroundAsync(ctx Context) {
         try {
-            while !ct.IsCancellationRequested {
-                if settings.AutoLockMinutes == 0 || !managed || state != "Unlocked" {
-                    await autoLockChanged.WaitAsync(ct)
-                    continue
-                }
-                let remaining = int64(settings.AutoLockMinutes) * 60000
-                - (WalletLockScheduler.Now() - Interlocked.Read(ref lastActivity))
-                if remaining > 0 {
-                    await autoLockChanged.WaitAsync(int32(Math.Min(remaining, 250)), ct)
-                    continue
-                }
-                await BeginAsync(ct)
-                try {
-                    if managed && state == "Unlocked" && IdleExpired() {
-                        await LockCoreAsync(ct)
-                    }
-                } catch (error WalletException) {
-                    PublishEmpty()
-                } finally {
-                    End()
-                }
+            scope {
+                go AutoLock(ctx)
+                go RestartOwned(ctx)
+                go ManageEvents(ctx)
             }
-        } catch (error OperationCanceledException) { }
+        } catch (error OperationCanceledException) when shutdown.IsCancellationRequested { } catch (error Exception) {
+            ReportBackgroundFailure(error)
+        }
+    }
+
+    private func ReportBackgroundFailure(error Exception) {
+        BackgroundError = "Wallet background task failed"
+        Console.Error.WriteLine(BackgroundError + ": " + error.GetType().Name)
+        Changed?.Invoke()
+    }
+
+    private func AutoLock(ctx Context) {
+        let ct = ctx.Token
+        while !ctx.IsCancelled {
+            if settings.AutoLockMinutes == 0 || !managed || state != "Unlocked" {
+                let changed = <-autoLockChanged
+                continue
+            }
+            let remaining = int64(settings.AutoLockMinutes) * 60000
+            - (WalletLockScheduler.Now() - Interlocked.Read(ref lastActivity))
+            if remaining > 0 {
+                select {
+                    case <- autoLockChanged { }
+                    case <- after(TimeSpan.FromMilliseconds(Math.Min(remaining, 250))) { }
+                }
+                continue
+            }
+            await BeginAsync(ct)
+            try {
+                if managed && state == "Unlocked" && IdleExpired() {
+                    await LockCoreAsync(ct)
+                }
+            } finally {
+                End()
+            }
+        }
     }
 
     func EnableEvents() {
@@ -142,37 +161,52 @@ class WalletSession : IDisposable {
     }
 
     private func StopEvents() {
-        events?.Cancel()
-        events?.Dispose()
-        events = nil
+        events?.TryCancel()
+        eventsChanged.Writer.TryWrite(true)
     }
 
     private func UpdateEvents() {
         if disposed || !connected || state == "Locked" || state == "Unknown" {
             StopEvents()
-        } else if eventsEnabled && events == nil {
-            let source = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token)
-            events = source
-            let ct = source.Token
-            Task.Run(() -> ListenEventsAsync(ct))
+        } else if eventsEnabled {
+            eventsChanged.Writer.TryWrite(true)
         }
     }
 
-    private async func ListenEventsAsync(ct CancellationToken) {
-        while !ct.IsCancellationRequested {
-            try {
-                await Node.Api.EventsAsync(_ -> RefreshEventAsync(ct), ct)
-            } catch (error Exception) {
-                if ct.IsCancellationRequested {
-                    return
+    private func ManageEvents(ctx Context) {
+        while !ctx.IsCancelled {
+            let changed = <-eventsChanged
+            scope {
+                await gate.WaitAsync(ctx.Token)
+                try {
+                    if !disposed && connected && eventsEnabled && state != "Locked" && state != "Unknown" {
+                        events = ctx
+                        go ListenEvents(ctx)
+                    }
+                } finally {
+                    gate.Release()
                 }
             }
-            try {
-                await Task.Delay(2000, ct)
-            } catch (error OperationCanceledException) {
-                return
-            }
+            events = nil
         }
+    }
+
+    private func ListenEvents(ctx Context) {
+        let ct = ctx.Token
+        try {
+            while !ctx.IsCancelled {
+                try {
+                    await Node.Api.EventsAsync(_ -> RefreshEventAsync(ct), ct)
+                } catch (error HttpRequestException) {
+                    ReportBackgroundFailure(error)
+                } catch (error IOException) {
+                    ReportBackgroundFailure(error)
+                } catch (error WalletException) {
+                    ReportBackgroundFailure(error)
+                }
+                await Task.Delay(2000, ct)
+            }
+        } catch (error OperationCanceledException) when ctx.IsCancelled { }
     }
 
     private async func RefreshEventAsync(ct CancellationToken) {
@@ -208,14 +242,15 @@ class WalletSession : IDisposable {
         }
     }
 
-    private async func RestartOwnedAsync() {
-        let ct = shutdown.Token
-        try {
+    private func RestartOwned(ctx Context) {
+        let ct = ctx.Token
+        while !ctx.IsCancelled {
+            let requested = <-restartRequested
             await Task.Delay(2000, ct)
             await gate.WaitAsync(ct)
             try {
                 if disposed || settings.NodeMode == "manual" || !Node.Supervisor.NeedsRestart {
-                    return
+                    continue
                 }
                 StopEvents()
                 connected = false
@@ -236,10 +271,6 @@ class WalletSession : IDisposable {
             } finally {
                 gate.Release()
             }
-        } catch (error Exception) {
-            Node.Publish()
-        }
-        if !disposed {
             Changed?.Invoke()
         }
     }
@@ -386,9 +417,7 @@ class WalletSession : IDisposable {
                 await WalletLockScheduler.ScheduleAsync(Node, minutes)
             }
             Touch()
-            if autoLockChanged.CurrentCount == 0 {
-                autoLockChanged.Release()
-            }
+            autoLockChanged.Writer.TryWrite(true)
         } finally {
             End()
         }
@@ -1016,8 +1045,13 @@ class WalletSession : IDisposable {
             return
         }
         disposed = true
+        Node.Exited = nil
         shutdown.Cancel()
-        StopEvents()
+        background.GetAwaiter().GetResult()
+        autoLockChanged.Writer.TryComplete()
+        restartRequested.Writer.TryComplete()
+        eventsChanged.Writer.TryComplete()
+        shutdown.Dispose()
         Send.InvalidateConfirmation()
         Node.Dispose()
         managed = false

@@ -29,6 +29,8 @@ partial class App {
             error
         } else if refreshError.Length > 0 {
             refreshError
+        } else if wallet.BackgroundError.Length > 0 {
+            wallet.BackgroundError
         } else if snapshot.State == "Unlocked" && !snapshot.Connected {
             "Not connected"
         } else {
@@ -52,6 +54,7 @@ partial class App {
             OnDismiss: () -> {
                 error = ""
                 refreshError = ""
+                wallet.BackgroundError = ""
                 Rebuild()
             }
         }.Build()

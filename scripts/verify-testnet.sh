@@ -146,17 +146,20 @@ def wait_for(check, seconds=20):
 
 def ready(index):
     try:
+        if b"Daemon mode" not in (root / f"core{index}.log").read_bytes():
+            return False
         return api(index, "status")
     except (FileNotFoundError, urllib.error.URLError, ConnectionError):
         return False
 
 
 def launch(index):
-    process = subprocess.Popen(["taskset", "-c", "0-3", "nice", "-n", "19", "ionice", "-c3",
-                                core, "--testnet", "--data", str(root / f"node{index}"),
-                                "--api", f"127.0.0.1:{ports[index]}"],
-                               env=environment, cwd=root / f"node{index}",
-                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    with (root / f"core{index}.log").open("wb") as output:
+        process = subprocess.Popen(["taskset", "-c", "0-3", "nice", "-n", "19", "ionice", "-c3",
+                                    core, "--testnet", "--data", str(root / f"node{index}"),
+                                    "--api", f"127.0.0.1:{ports[index]}"],
+                                   env=environment, cwd=root / f"node{index}",
+                                   stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT)
     processes.append(process)
     return process
 
