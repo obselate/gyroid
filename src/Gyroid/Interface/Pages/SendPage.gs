@@ -72,7 +72,7 @@ class SendPage : Cell[SendPageInput] {
         let over = total > spendable
         let card = ui.Glass()
         card.Width = Percent(100)
-        card.MaxWidth = multi ? 780.0: 600.0
+        card.MaxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
         card.MaxHeight = Percent(100)
         card.BorderRadius = 14
         card.Padding = compact ? 18.0: 22.0
@@ -93,7 +93,7 @@ class SendPage : Cell[SendPageInput] {
             }
         )
         if multi {
-            let size = Math.Clamp(input.Height * 0.05, 28.0, 40.0)
+            let size = Math.Clamp(input.Height * 0.05, 28.0, 64.0)
             let sum = ui.Hidden(WalletAmount.Format(total))
             card.Add(Hero(input, ui.Label(sum, size, ui.Lime, ""), sum.Length, size))
             let list = Container{Gap: 8, MinHeight: 0, FlexShrink: 1, OverflowY: Overflow.Scroll}
@@ -102,7 +102,7 @@ class SendPage : Cell[SendPageInput] {
             }
             card.Add(list)
         } else {
-            let size = Math.Clamp(input.Height * 0.07, 36.0, 60.0)
+            let size = Math.Clamp(input.Height * 0.07, 36.0, 100.0)
             card.Add(Hero(input, Amount(input, over, size), rows[0].Amount.Length, size))
             card.Add(Container{Gap: 10, FlexShrink: 0, AddressField(input, rows[0]), MemoField(input, rows[0])})
         }
@@ -193,8 +193,8 @@ class SendPage : Cell[SendPageInput] {
             Gap: 14,
             FlexShrink: 0,
             Padding: Edges{
-                Top: Math.Clamp(input.Height * 0.032, 4.0, 30.0),
-                Bottom: Math.Clamp(input.Height * 0.032, 4.0, 30.0)
+                Top: Math.Clamp(input.Height * 0.032, 4.0, 60.0),
+                Bottom: Math.Clamp(input.Height * 0.032, 4.0, 60.0)
             },
             Container{
                 Width: Percent(100),

@@ -97,14 +97,14 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
     }
 
-    private func Card(input ToolsInput, minimum float64, share float64) Container {
+    private func Card(input ToolsInput) Container {
         let card = input.Ui.Glass()
-        card.Width = Math.Max(minimum, share * input.Width)
+        card.Width = 900
         card.MaxWidth = Percent(100)
         card.MaxHeight = Percent(100)
         card.BorderRadius = 14
-        card.Padding = input.Width < 1100 ? 16.0: 20.0
-        card.Gap = 14
+        card.Padding = input.Width < 1100 ? 16.0: Math.Clamp(input.Height * 0.025, 20.0, 32.0)
+        card.Gap = Math.Clamp(14 + Math.Max(0, input.Height - 640) * 0.025, 14.0, 24.0)
         return card
     }
 
@@ -461,7 +461,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             score.Add(Container{Width: 12, Height: 6, BorderRadius: 2, BackgroundColor: warning ? ui.Orange: ui.Lime})
         }
         let passed = warnings.Count((warning bool) -> !warning)
-        let card = Card(input, 1040, 0.64)
+        let card = Card(input)
         card.Add(
             Header(
                 input,
@@ -744,7 +744,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     private func Phrase(input ToolsInput) Blob {
         let ui = input.Ui
         let compact = input.Width < 1100
-        let card = Card(input, 900, 0.56)
+        let card = Card(input)
         let stepper = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8}
         let labels = []string{"show", "check", "done"}
         for index in 0 ... 3 {
@@ -1008,7 +1008,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             WidgetKeyBindings.BindActivation(button)
             tabs.Add(button)
         }
-        let card = Card(input, 940, 0.6)
+        let card = Card(input)
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,

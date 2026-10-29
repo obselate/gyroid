@@ -18,6 +18,7 @@ data struct ContactsInput {
     var Privacy bool
     var Busy bool
     var Language string
+    var Height float64
     var OnChange Action[SortedDictionary[string, string]]
 }
 
@@ -36,7 +37,7 @@ class ContactsPage : Cell[ContactsInput] {
         let ui = input.Ui
         let card = ui.Glass()
         card.Width = Percent(100)
-        card.MaxWidth = 640
+        card.MaxWidth = Math.Clamp(640 + Math.Max(0, input.Height - 640) * 0.6, 640.0, 900.0)
         card.MaxHeight = Percent(100)
         card.BorderRadius = 14
         card.Gap = 14

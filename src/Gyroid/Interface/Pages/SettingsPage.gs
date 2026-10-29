@@ -45,6 +45,7 @@ data struct SettingsPageInput {
 
 class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private var draft WalletSettings?
+    private var rowHeight float64 = 52
 
     private var startupOpen bool
 
@@ -107,6 +108,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     protected override func Build(input SettingsPageInput) Blob {
         let ui = input.Ui
+        rowHeight = Math.Clamp(52 + Math.Max(0, input.Height - 640) * 0.025, 52.0, 72.0)
         let settings = input.Session.Settings
         if input.Snapshot.State != "Unlocked" && (dialog == "view-key" || viewKeys != nil) {
             Close()
@@ -195,11 +197,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             Gap: 16,
             Width: Percent(100),
-            MaxWidth: navWidth + 836,
+            MaxWidth: Math.Min(900, navWidth + 836),
             Height: Percent(100),
             MinHeight: 0,
             nav,
             pane
+        }
+        if input.Height > 640 {
+            root.Height = section == "advanced" ? Math.Clamp(input.Height * 0.65, 430.0, 740.0): Length.Auto
         }
         if applyPending {
             root.Add(ConfirmApply(input))
@@ -1808,7 +1813,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: 10,
-            Height: 52,
+            Height: rowHeight,
             FlexShrink: 0,
             BorderColor: Color.Parse("#141414"),
             ui.Grow(ui.Label(ui.Strings.Get(label), 14, ui.Body, ""))

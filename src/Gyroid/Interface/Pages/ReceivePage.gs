@@ -134,7 +134,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 )
             )
         }
-        let side = Math.Clamp(input.Height - 340, 180.0, 320.0)
+        let side = Math.Clamp(input.Height - 340, 180.0, 400.0)
         let code = Container{
             Width: side,
             Height: side,

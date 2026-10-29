@@ -729,6 +729,7 @@ partial class App : Cell {
                     Privacy: ui.Privacy,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
+                    Height: height,
                     OnChange: contactsChanged
                 }
             )
