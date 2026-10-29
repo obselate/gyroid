@@ -713,6 +713,7 @@ partial class App : Cell {
                     Privacy: ui.Privacy,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
+                    Decode: ui.Progress("page"),
                     Width: width,
                     Height: height,
                     OnNavigate: navigate,

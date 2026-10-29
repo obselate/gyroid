@@ -33,6 +33,7 @@ data struct ToolsInput {
     var Privacy bool
     var Busy bool
     var Language string
+    var Decode float64
     var Width float64
     var Height float64
     var OnNavigate Action[string]
