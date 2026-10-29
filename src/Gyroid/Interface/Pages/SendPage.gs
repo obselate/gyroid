@@ -542,7 +542,6 @@ class SendPage : Cell[SendPageInput] {
         return ui.Entry(
             TextField{
                 AccessibilityName: ui.Strings.Get("Memo"),
-                Placeholder: ui.Strings.Get("memo"),
                 Value: row.Memo,
                 Controlled: true,
                 Password: input.Privacy,
@@ -553,8 +552,33 @@ class SendPage : Cell[SendPageInput] {
                 } else {
                     nil
                 },
-                Leading: MaterialIcons.Create("notes", 16, ui.Dim),
-                Trailing: ui.Meter(Encoding.UTF8.GetByteCount(row.Memo), WalletValidation.MemoLimit, true),
+                Leading: Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 6,
+                    ui.Label(ui.Strings.Get("Memo"), 12, ui.Body, ""),
+                    ui.Label(ui.Strings.Get("(optional)"), 12, ui.Dim, "")
+                },
+                Trailing: Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 6,
+                    ui.Meter(Encoding.UTF8.GetByteCount(row.Memo), WalletValidation.MemoLimit, true),
+                    Cell.Mount[InfoTipInput, InfoTip](
+                        "memo-info",
+                        InfoTipInput{
+                            Ui: ui,
+                            Topic: "About memos",
+                            Lines: []string{
+                                "Use this optional note for a payment reference, invoice number or message (up to 124 UTF-8 bytes).",
+                                "It is encrypted on chain for the recipient.",
+                                "The sender keeps a copy in their wallet."
+                            },
+                            Language: input.Language,
+                            Width: 300
+                        }
+                    )
+                },
                 OnChange: value -> {
                     row.Memo = value
                     Rebuild()
