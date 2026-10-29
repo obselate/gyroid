@@ -383,7 +383,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             )
         } else {
             height.Add(ui.Label(ui.Strings.Get("Stopped"), 14, ui.Dim, ""))
-            if automatic && status.Progress.Length == 0 {
+            if automatic && status.Phase == NodePhase.None {
                 height.Add(ui.Button("Start", () -> ui.Run(input.Session.StartNodeAsync()), input.Busy))
             }
         }

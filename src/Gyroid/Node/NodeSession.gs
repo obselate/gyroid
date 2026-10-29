@@ -25,13 +25,8 @@ class NodeSession : IDisposable {
         Settings = settings
         Api = NodeApi(settings)
         Supervisor.Exited = () -> Exited?.Invoke()
-        Supervisor.Progress = value -> {
-            let current = NodeStatus{
-                ... Status,
-                Progress: value,
-                Phase: Supervisor.Phase,
-                DownloadPercent: Supervisor.DownloadPercent
-            }
+        Supervisor.Progress = () -> {
+            let current = NodeStatus{... Status, Phase: Supervisor.Phase, DownloadPercent: Supervisor.DownloadPercent}
             if !Status.Matches(current) {
                 Status = current
                 Changed?.Invoke()
@@ -114,7 +109,6 @@ class NodeSession : IDisposable {
                 Endpoint: Settings.Endpoint,
                 DataDirectory: Settings.DataDirectory,
                 Executable: Supervisor.Executable,
-                Progress: Status.Progress,
                 Phase: if Supervisor.Phase != NodePhase.None {
                     Supervisor.Phase
                 } else if NodeJson.Flag(root, "syncing") {
@@ -183,7 +177,6 @@ class NodeSession : IDisposable {
             } else {
                 Settings.BinaryPath
             },
-            Progress: Status.Progress,
             Phase: Supervisor.Phase,
             DownloadPercent: Supervisor.DownloadPercent,
             CheckpointHeight: Supervisor.CheckpointHeight,

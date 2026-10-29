@@ -23,7 +23,7 @@ class NodeSupervisor : IDisposable {
     var disposed bool
     var lease FileStream? = nil
     var nextStart DateTimeOffset
-    var Progress Action[string]? = nil
+    var Progress Action? = nil
     var Exited Action? = nil
     var Source string = "External"
     var Executable string = ""
@@ -365,22 +365,7 @@ class NodeSupervisor : IDisposable {
     func ReportProgress(phase NodePhase, percent int32?) {
         Phase = phase
         DownloadPercent = percent
-        let label = switch phase {
-            case NodePhase.None: ""
-            case NodePhase.Detecting: "Detecting"
-            case NodePhase.Core: "Core"
-            case NodePhase.Checkpoints: "Checkpoints"
-            case NodePhase.Starting: "Starting"
-            case NodePhase.Connecting: "Connecting"
-            case NodePhase.ChainSync: "ChainSync"
-        }
-        Progress?.Invoke(
-            if percent != nil {
-                label + " " + percent.ToString() + "%"
-            } else {
-                label
-            }
-        )
+        Progress?.Invoke()
     }
 
     private async func SaveCheckpointsAsync(settings WalletSettings, ct CancellationToken) bool {

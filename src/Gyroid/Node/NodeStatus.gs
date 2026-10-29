@@ -36,13 +36,30 @@ class NodeStatus {
     var Endpoint string = ""
     var DataDirectory string = ""
     var Executable string = ""
-    var Progress string = ""
     var Phase NodePhase = NodePhase.None
     var DownloadPercent int32?
     var UpgradeDate string = ""
     var UpgradeDeadline string = ""
     var UpgradeNotice string = ""
     var UpgradeBlocksLeft uint64
+
+    prop Progress string {
+        get {
+            let label = switch Phase {
+                case NodePhase.None, NodePhase.ChainSync: ""
+                case NodePhase.Detecting: "Detecting"
+                case NodePhase.Core: "Core"
+                case NodePhase.Checkpoints: "Checkpoints"
+                case NodePhase.Starting: "Starting"
+                case NodePhase.Connecting: "Connecting"
+            }
+            return if DownloadPercent != nil {
+                label + " " + DownloadPercent.ToString() + "%"
+            } else {
+                label
+            }
+        }
+    }
 
     func Matches(other NodeStatus) bool ->
     Source == other.Source &&
@@ -67,7 +84,6 @@ class NodeStatus {
         Endpoint == other.Endpoint &&
         DataDirectory == other.DataDirectory &&
         Executable == other.Executable &&
-        Progress == other.Progress &&
         Phase == other.Phase &&
         DownloadPercent == other.DownloadPercent &&
         UpgradeDate == other.UpgradeDate &&
