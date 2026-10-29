@@ -36,7 +36,7 @@ class ContactsPage : Cell[ContactsInput] {
         let ui = input.Ui
         let card = ui.Glass()
         card.Width = Percent(100)
-        card.MaxWidth = 640
+        card.Height = Percent(100)
         card.MaxHeight = Percent(100)
         card.BorderRadius = 14
         card.Gap = 14
@@ -53,6 +53,7 @@ class ContactsPage : Cell[ContactsInput] {
         let list = Container{
             Gap: 8,
             MinHeight: 0,
+            FlexGrow: 1,
             FlexShrink: 1,
             OverflowY: Overflow.Scroll,
             ScrollbarY: Theme.Read().Scrollbar

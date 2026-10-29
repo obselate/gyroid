@@ -1384,7 +1384,7 @@ class HistoryPage : Cell[HistoryInput] {
             text.Append(row.Kind + "," + amount + "," + fee + "," + row.Height.ToString() + "," + time + "," + row.TxId)
             if withMemos {
                 writer.WriteString("memo", row.Memo)
-                let memo = "=+-@".Contains(row.Memo.FirstOrDefault()) ? "'" + row.Memo: row.Memo
+                let memo = "=+-@\t\r".Contains(row.Memo.FirstOrDefault()) ? "'" + row.Memo: row.Memo
                 text.Append(",\"" + memo.Replace("\"", "\"\"") + "\"")
             }
             writer.WriteEndObject()

@@ -855,7 +855,9 @@ class OverviewPage : Cell[OverviewInput] {
                     Kind: "out",
                     Amount: send.Amount,
                     Label: label.Length > 0 ? label: Short(send.TxId),
-                    Status: send.Status == "mempool" ? "mempool": "",
+                    Status: send.Status == "not_found" ? ui.Strings.Get(
+                        "not found"
+                    ): send.Status == "mempool" ? "mempool": "",
                     Order: if send.Status == "mempool" {
                         uint64.MaxValue
                     } else {
