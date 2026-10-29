@@ -78,7 +78,8 @@ class WalletLockScheduler {
             writer.WriteString("endpoint", settings.Endpoint)
             writer.WriteString("data_directory", settings.DataDirectory)
             writer.WriteString("wallet_directory", settings.WalletDirectory)
-            writer.WriteString("binary_path", node.Supervisor.Executable)
+            writer.WriteString("binary_path", settings.BinaryPath)
+            writer.WriteString("discovered_binary_path", settings.DiscoveredBinaryPath)
             writer.WriteNumber("pid", pid)
             writer.WriteString("core_identity", identity)
             writer.WriteNumber("deadline", Now() + int64(minutes) * 60000)
@@ -109,6 +110,7 @@ class WalletLockScheduler {
                     DataDirectory: NodeJson.Text(root, "data_directory"),
                     WalletDirectory: NodeJson.Text(root, "wallet_directory"),
                     BinaryPath: NodeJson.Text(root, "binary_path"),
+                    DiscoveredBinaryPath: NodeJson.Text(root, "discovered_binary_path"),
                     OwnedProcessId: root.GetProperty("pid").GetInt32()
                 }
                 let identity = NodeJson.Text(root, "core_identity")
