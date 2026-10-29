@@ -142,9 +142,11 @@ class NodeSession : IDisposable {
             }
             current.LastBlockTime = Status.LastBlockTime
             current.SyncRate = Status.SyncRate
-            if current.Height != Status.Height {
-                if current.Syncing && Status.Height > 0 && current.Height > Status.Height {
-                    current.SyncRate = float64(current.Height - Status.Height) /
+            let progress = current.SyncProgress ?? current.Height
+            let previous = Status.SyncProgress ?? Status.Height
+            if progress != previous {
+                if current.Syncing && previous > 0 && progress > previous {
+                    current.SyncRate = float64(progress - previous) /
                     Stopwatch.GetElapsedTime(heightChanged).TotalSeconds
                 }
                 heightChanged = Stopwatch.GetTimestamp()

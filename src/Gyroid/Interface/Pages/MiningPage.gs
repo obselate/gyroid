@@ -51,6 +51,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         if !opened {
             opened = true
             Load(input)
+            timer = input.Window?.SetInterval(() -> Load(input), 5000)
         }
         let ui = input.Ui
         let status = input.History.Status
@@ -175,17 +176,14 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                 guard let value = status else {
                     return
                 }
+                let changed = value.Running || value.Running != input.History.Status.Running
                 Record(input.History, value)
                 if disposed {
                     return
                 }
-                if value.Running {
-                    timer ??= input.Window?.SetInterval(() -> Load(input), 5000)
-                } else {
-                    timer?.Dispose()
-                    timer = nil
+                if changed {
+                    Rebuild()
                 }
-                Rebuild()
             }
         )
     }

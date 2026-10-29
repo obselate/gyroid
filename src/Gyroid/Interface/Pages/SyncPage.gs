@@ -250,8 +250,9 @@ class SyncPage : Cell[SyncInput] {
         } else if connectingSince == 0 {
             connectingSince = Stopwatch.GetTimestamp()
         }
-        if node.Height != lastHeight || heightSince == 0 || step == 4 && stallTimer == nil {
-            lastHeight = node.Height
+        let progress = node.SyncProgress ?? node.Height
+        if progress != lastHeight || heightSince == 0 || step == 4 && stallTimer == nil {
+            lastHeight = progress
             heightSince = now
             stallTimer?.Dispose()
             stallTimer = step == 4 ? input.Ui.Delay(60000, () -> Rebuild()): nil

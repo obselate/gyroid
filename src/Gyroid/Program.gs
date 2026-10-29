@@ -138,6 +138,17 @@ func Main() {
             }
         )
     }
+    using let interrupt PosixSignalRegistration? = if OperatingSystem.IsWindows() {
+        nil
+    } else {
+        PosixSignalRegistration.Create(
+            PosixSignal.SIGINT,
+            signal -> {
+                signal.Cancel = true
+                window.Post(() -> view.Quit())
+            }
+        )
+    }
     window.Open()
     view.Start()
     window.Run()
