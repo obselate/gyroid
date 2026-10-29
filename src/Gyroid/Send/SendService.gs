@@ -41,6 +41,7 @@ class SendService {
         requests[]WalletRecipient,
         ct CancellationToken = default(CancellationToken)
     ) SendEstimate {
+        await Task.Delay(2000, ct)
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()
@@ -58,7 +59,6 @@ class SendService {
                 throw WalletException("View-only wallets cannot send")
             }
             let handles = await ResolveRecipientsAsync(recipients, ct)
-            await Task.Delay(2000, ct)
             using let result = await session
                 .Node
                 .Api
@@ -135,6 +135,8 @@ class SendService {
                 .GetProperty("outputs")
                 .EnumerateArray()
                 .Where((output JsonElement) -> NodeJson.Text(output, "status") == "unspent")
+                .OrderByDescending((output JsonElement) -> NodeJson.Number(output, "amount"))
+                .Take(256)
                 .ToArray()
             var available uint64 = 0
             for output in inputs {
@@ -187,6 +189,7 @@ class SendService {
     }
 
     async func SubmitAsync(estimate SendEstimate, ct CancellationToken = default(CancellationToken)) SendResult {
+        await Task.Delay(2000, ct)
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()
@@ -309,7 +312,6 @@ class SendService {
     }
 
     private async func SubmitPendingCoreAsync(pending PendingSend, ct CancellationToken) SendResult {
-        await Task.Delay(2000, ct)
         try {
             using let response = await session
                 .Node
@@ -332,7 +334,7 @@ class SendService {
             let inputs = await SubmittedInputCountAsync(txid)
             return SendResult(txid, result.Fee, result.Change, inputs)
         } catch (error WalletException) {
-            if error.StatusCode == 429 {
+            if error.StatusCode == 403 || error.StatusCode == 429 || error.StatusCode == 503 {
                 store.Clear()
                 throw error
             }
@@ -362,6 +364,7 @@ class SendService {
     }
 
     async func ResumeAsync(ct CancellationToken = default(CancellationToken)) SendResult {
+        await Task.Delay(2000, ct)
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()
