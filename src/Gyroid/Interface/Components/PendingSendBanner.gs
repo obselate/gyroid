@@ -26,19 +26,7 @@ partial class App {
 
     private func PendingSendCard() Blob {
         let card = ui.PageContent(ui.Strings.Get("send"), 640)
-        if wallet.Send.Error.Length > 0 {
-            card.Add(
-                Text{
-                    Content: ui.Strings.Explain(wallet.Send.Error),
-                    FontFamily: ui.Font,
-                    FontSize: 13,
-                    Color: ui.Orange,
-                    TextWrap: TextWrap.Wrap
-                }
-            )
-        } else {
-            card.Add(PendingSendBanner())
-        }
+        card.Add(PendingSendBanner())
         return card
     }
 
@@ -49,7 +37,9 @@ partial class App {
         content.Gap = 10
         content.Add(ui.Label(ui.Strings.Get("Pending send"), 14, ui.Orange))
         let outcome = wallet.Send.Outcome
-        let message = if let value = pending {
+        let message = if wallet.Send.Error.Length > 0 {
+            ui.Strings.Explain(wallet.Send.Error)
+        } else if let value = pending {
             ui.Strings.Get(value.State)
         } else if outcome.TxId.Length > 0 {
             ui.Strings.Get("Submitted") + ": " + outcome.TxId
@@ -61,7 +51,7 @@ partial class App {
             ui.ActionRow(
                 []Blob{
                     ui.Button(
-                        if pending?.Retryable == true {
+                        if wallet.Send.Error.Length == 0 && pending?.Retryable == true {
                             "Resubmit"
                         } else {
                             "Dismiss"
@@ -79,7 +69,7 @@ partial class App {
     }
 
     private func ConfirmPendingSend() Blob {
-        let resume = wallet.Send.Pending?.Retryable == true
+        let resume = wallet.Send.Error.Length == 0 && wallet.Send.Pending?.Retryable == true
         let close Action = () -> {
             confirmPendingSend = false
             Rebuild()

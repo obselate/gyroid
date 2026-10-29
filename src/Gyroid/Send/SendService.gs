@@ -397,10 +397,6 @@ class SendService {
         try {
             session.RequireUnlocked()
             using let lease = store.AcquireLease()
-            store.Load()
-            if store.Error.Length > 0 {
-                throw WalletException(store.Error)
-            }
             store.Clear()
             Outcome = SendOutcome()
         } finally {

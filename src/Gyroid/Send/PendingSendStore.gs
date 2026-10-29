@@ -49,7 +49,7 @@ class PendingSendStore {
             if (File.GetAttributes(PendingPath()) & FileAttributes.Directory) != 0 {
                 throw WalletException("Pending send file is invalid")
             }
-            using let json = JsonDocument.Parse(PrivateFiles.ReadText(PendingPath(), 16384, true))
+            using let json = JsonDocument.Parse(PrivateFiles.ReadText(PendingPath(), 131072, true))
             let root = json.RootElement
             var coreStarted int64 = 0
             if root.TryGetProperty("core_started", out let started) {
@@ -120,5 +120,6 @@ class PendingSendStore {
         File.Delete(PendingPath())
         PrivateFiles.FlushDirectory(session.settings.DataDirectory)
         Pending = nil
+        Error = ""
     }
 }

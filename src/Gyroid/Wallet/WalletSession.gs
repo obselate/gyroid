@@ -10,6 +10,7 @@ import Gyroid.Tools
 import System
 import System.Collections.Generic
 import System.IO
+import System.Linq
 import System.Net.Http
 import System.Text
 import System.Text.Json
@@ -443,6 +444,13 @@ class WalletSession : IDisposable {
     async func PurgeDataAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
+            if Directory.Exists(settings.DataDirectory) && Directory.EnumerateFileSystemEntries(
+                settings.DataDirectory,
+                "gyroid-pending-send.*.json"
+            )
+                .Any() {
+                throw WalletException("Resolve or dismiss all pending sends before purging blockchain data")
+            }
             await ConnectCoreAsync(ct)
             if !Node.Supervisor.Owned {
                 throw WalletException("This process does not own the node. External nodes are never stopped")
