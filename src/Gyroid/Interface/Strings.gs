@@ -175,6 +175,7 @@ class Strings {
             case "send": "发送"
             case "Pending send": "待处理的发送"
             case "Send outcome unknown": "发送结果未知"
+            case "Send in progress": "发送进行中"
             case "No send record. Outcome unknown": "未找到发送记录，结果未知"
             case "Resubmit": "重新提交"
             case "Submitted": "已提交"

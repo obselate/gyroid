@@ -282,6 +282,16 @@ class SendService {
             } else if status == "failed" {
                 Outcome = SendOutcome(error: NodeJson.Text(root, "error"))
                 store.Clear()
+            } else if status == "in_progress" || status == "accepted" {
+                store.Pending = PendingSend{
+                    ... pending,
+                    CanRetry: false,
+                    State: if status == "in_progress" {
+                        "Send in progress"
+                    } else {
+                        "Send outcome unknown"
+                    }
+                }
             } else if status == "not_found" && session.State == "Unlocked" {
                 store.Pending = PendingSend{
                     ... pending,

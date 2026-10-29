@@ -380,7 +380,11 @@ partial class App : Cell {
             () -> {
                 ui.Operations--
                 if unknown {
-                    screen = "Send"
+                    screen = if wallet.Snapshot.State == "Unlocked" {
+                        "Send"
+                    } else {
+                        ""
+                    }
                     Refresh()
                 } else {
                     error = message
@@ -551,7 +555,7 @@ partial class App : Cell {
             },
             Chrome()
         }
-        let page = if screen.Length > 0 {
+        let page = if screen.Length > 0 && (screen != "Send" || snapshot.State == "Unlocked") {
             screen
         } else if snapshot.Page == "Wallet" {
             "Overview"
