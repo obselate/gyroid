@@ -339,7 +339,7 @@ class SendService {
                 store.Clear()
                 throw error
             }
-            await RecoverCoreAsync(CancellationToken.None)
+            await RecoverCoreAsync(ct)
             let outcome = Outcome
             Outcome = SendOutcome()
             if store.Pending != nil {
