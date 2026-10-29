@@ -110,7 +110,7 @@ class WalletSession : IDisposable {
         ref lastActivity
     ) >= int64(settings.AutoLockMinutes) * 60000
 
-    private async func RunBackgroundAsync(ctx Context) {
+    private async func RunBackgroundAsync(parentContext Context) {
         try {
             scope {
                 go AutoLock(ctx)
@@ -128,9 +128,9 @@ class WalletSession : IDisposable {
         Changed?.Invoke()
     }
 
-    private func AutoLock(ctx Context) {
-        let ct = ctx.Token
-        while !ctx.IsCancelled {
+    private func AutoLock(sessionContext Context) {
+        let ct = sessionContext.Token
+        while !sessionContext.IsCancelled {
             if settings.AutoLockMinutes == 0 || !managed || state != "Unlocked" {
                 let changed = <-autoLockChanged
                 continue
@@ -149,6 +149,8 @@ class WalletSession : IDisposable {
                 if managed && state == "Unlocked" && IdleExpired() {
                     await LockCoreAsync(ct)
                 }
+            } catch (error WalletException) {
+                PublishEmpty()
             } finally {
                 End()
             }
@@ -173,15 +175,16 @@ class WalletSession : IDisposable {
         }
     }
 
-    private func ManageEvents(ctx Context) {
-        while !ctx.IsCancelled {
+    private func ManageEvents(sessionContext Context) {
+        while !sessionContext.IsCancelled {
             let changed = <-eventsChanged
             scope {
-                await gate.WaitAsync(ctx.Token)
+                let listenerContext = ctx
+                await gate.WaitAsync(listenerContext.Token)
                 try {
                     if !disposed && connected && eventsEnabled && state != "Locked" && state != "Unknown" {
-                        events = ctx
-                        go ListenEvents(ctx)
+                        events = listenerContext
+                        go ListenEvents(listenerContext)
                     }
                 } finally {
                     gate.Release()
@@ -191,22 +194,16 @@ class WalletSession : IDisposable {
         }
     }
 
-    private func ListenEvents(ctx Context) {
-        let ct = ctx.Token
+    private func ListenEvents(listenerContext Context) {
+        let ct = listenerContext.Token
         try {
-            while !ctx.IsCancelled {
+            while !listenerContext.IsCancelled {
                 try {
                     await Node.Api.EventsAsync(_ -> RefreshEventAsync(ct), ct)
-                } catch (error HttpRequestException) {
-                    ReportBackgroundFailure(error)
-                } catch (error IOException) {
-                    ReportBackgroundFailure(error)
-                } catch (error WalletException) {
-                    ReportBackgroundFailure(error)
-                }
+                } catch (error HttpRequestException) { } catch (error IOException) { } catch (error WalletException) { }
                 await Task.Delay(2000, ct)
             }
-        } catch (error OperationCanceledException) when ctx.IsCancelled { }
+        } catch (error OperationCanceledException) when listenerContext.IsCancelled { }
     }
 
     private async func RefreshEventAsync(ct CancellationToken) {
@@ -242,36 +239,42 @@ class WalletSession : IDisposable {
         }
     }
 
-    private func RestartOwned(ctx Context) {
-        let ct = ctx.Token
-        while !ctx.IsCancelled {
+    private func RestartOwned(sessionContext Context) {
+        let ct = sessionContext.Token
+        while !sessionContext.IsCancelled {
             let requested = <-restartRequested
-            await Task.Delay(2000, ct)
-            await gate.WaitAsync(ct)
             try {
-                if disposed || settings.NodeMode == "manual" || !Node.Supervisor.NeedsRestart {
-                    continue
+                await Task.Delay(2000, ct)
+                await gate.WaitAsync(ct)
+                try {
+                    if disposed || settings.NodeMode == "manual" || !Node.Supervisor.NeedsRestart {
+                        continue
+                    }
+                    StopEvents()
+                    connected = false
+                    managed = false
+                    Send.InvalidateConfirmation()
+                    state = "Unloaded"
+                    PublishEmpty()
+                    Node.Publish()
+                    Changed?.Invoke()
+                    let delay = nextRestart - DateTimeOffset.UtcNow
+                    if delay > TimeSpan.Zero {
+                        await Task.Delay(delay, ct)
+                    }
+                    nextRestart = DateTimeOffset.UtcNow.AddSeconds(10)
+                    Node.Reconnect()
+                    await ConnectCoreAsync(ct)
+                    UpdateEvents()
+                } finally {
+                    gate.Release()
                 }
-                StopEvents()
-                connected = false
-                managed = false
-                Send.InvalidateConfirmation()
-                state = "Unloaded"
-                PublishEmpty()
+            } catch (error Exception) {
                 Node.Publish()
-                Changed?.Invoke()
-                let delay = nextRestart - DateTimeOffset.UtcNow
-                if delay > TimeSpan.Zero {
-                    await Task.Delay(delay, ct)
-                }
-                nextRestart = DateTimeOffset.UtcNow.AddSeconds(10)
-                Node.Reconnect()
-                await ConnectCoreAsync(ct)
-                UpdateEvents()
-            } finally {
-                gate.Release()
             }
-            Changed?.Invoke()
+            if !disposed {
+                Changed?.Invoke()
+            }
         }
     }
 
