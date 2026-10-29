@@ -134,6 +134,8 @@ class PrivateFiles {
             } else {
                 let flags = if OperatingSystem.IsMacOS() {
                     260
+                } else if RuntimeInformation.ProcessArchitecture == Architecture.Arm64 {
+                    34816
                 } else {
                     133120
                 }

@@ -59,11 +59,15 @@ class PrivacyChecks {
         if session.Snapshot.Address.Length == 0 || !File.Exists(PhraseStatePath()) {
             return nil
         }
-        using let state = JsonDocument.Parse(PrivateFiles.ReadText(PhraseStatePath(), 65536, true))
-        return if state.RootElement.TryGetProperty(WalletKey(), out let date) {
-            date.GetDateTime().ToLocalTime()
-        } else {
-            nil
+        try {
+            using let state = JsonDocument.Parse(PrivateFiles.ReadText(PhraseStatePath(), 65536, true))
+            return if state.RootElement.TryGetProperty(WalletKey(), out let date) {
+                date.GetDateTime().ToLocalTime()
+            } else {
+                nil
+            }
+        } catch (error Exception) {
+            return nil
         }
     }
 

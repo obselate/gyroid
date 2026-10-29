@@ -72,7 +72,7 @@ class SendPage : Cell[SendPageInput] {
         let over = total > spendable
         let card = ui.Glass()
         card.Width = Percent(100)
-        card.MaxWidth = multi ? 780.0: 600.0
+        card.Height = Percent(100)
         card.MaxHeight = Percent(100)
         card.BorderRadius = 14
         card.Padding = compact ? 18.0: 22.0
@@ -102,7 +102,7 @@ class SendPage : Cell[SendPageInput] {
             }
             card.Add(list)
         } else {
-            let size = Math.Clamp(input.Height * 0.07, 36.0, 60.0)
+            let size = Math.Clamp(44 + (input.Height - 640) * 0.2, 36.0, 140.0)
             card.Add(Hero(input, Amount(input, over, size), rows[0].Amount.Length, size))
             card.Add(Container{Gap: 10, FlexShrink: 0, AddressField(input, rows[0]), MemoField(input, rows[0])})
         }
@@ -190,6 +190,8 @@ class SendPage : Cell[SendPageInput] {
         let ui = input.Ui
         let hero = Container{
             AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.Center,
+            FlexGrow: 1,
             Gap: 14,
             FlexShrink: 0,
             Padding: Edges{

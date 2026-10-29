@@ -786,8 +786,8 @@ partial class App : Cell {
                     FlexGrow: 1,
                     FlexBasis: 0,
                     MinWidth: 0,
-                    AlignItems: AlignItems.Center,
-                    JustifyContent: JustifyContent.Center,
+                    AlignItems: WalletAvailable() ? AlignItems.Stretch: AlignItems.Center,
+                    JustifyContent: WalletAvailable() ? JustifyContent.FlexStart: JustifyContent.Center,
                     content
                 }
             )
@@ -800,9 +800,6 @@ partial class App : Cell {
         if WalletAvailable() {
             main.Padding = 0
             main.Width = Percent(100)
-            if page != "Transactions" {
-                main.MaxWidth = 1400
-            }
             frame.Padding = Edges{Left: 14, Right: 20, Bottom: 20}
             frame.Gap = 16
             frame.Add(Sidebar(page))
