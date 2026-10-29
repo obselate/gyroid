@@ -16,6 +16,8 @@ data struct SeedPageInput {
     var Language string
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnDone Action
+    var Issue string
+    var OnRetry Action
 }
 
 class SeedPage : Cell[SeedPageInput], IDisposable {
@@ -36,6 +38,13 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         card.BorderRadius = 14
         card.Gap = 14
         card.Add(ui.Label(ui.Strings.Get("recovery phrase"), 17, ui.Ink, ""))
+        if input.Words.Length == 0 {
+            if input.Issue.Length > 0 {
+                card.Add(ui.Label(ui.Strings.Explain(input.Issue), 13, ui.Pink, ""))
+                card.Add(ui.Button("Retry", input.OnRetry, input.Busy, true))
+            }
+            return card
+        }
         let words = input.Words
         if !Object.ReferenceEquals(words, shown) {
             shown = words
@@ -55,7 +64,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                         line = Container{FlexDirection: FlexDirection.Row, Gap: 6}
                         grid.Add(line)
                     }
-                    line.Add(Word(ui, index, String(words, start, position - start)))
+                    line.Add(Word(ui, index, words, start, position - start))
                     index++
                 }
                 start = position + 1
@@ -76,7 +85,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                 }
             )
         )
-        actions.Add(ui.Button("Copy", () -> ui.Copy(String(words), 30000)))
+        actions.Add(ui.Button("Copy", () -> ui.Copy(words, 30000)))
         actions.Add(ui.Button("Export", () -> Export(input), input.Busy))
         actions.Add(Container{FlexGrow: 1})
         if !input.FromWallet {
@@ -103,31 +112,55 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         return card
     }
 
-    private func Word(ui Presentation, index int32, word string) Blob -> Container{
-        FlexGrow: 1,
-        FlexBasis: 0,
-        MinWidth: 0,
-        Height: 36,
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        Gap: 10,
-        Padding: Edges{Left: 10, Right: 10},
-        BorderWidth: 1,
-        BorderRadius: 8,
-        BorderColor: ui.Rule,
-        BackgroundColor: ui.Surface,
-        Accessibility: Accessibility{
-            Name: index.ToString() + " " + if visible {
-                word
-            } else {
-                ui.Strings.Get("hidden")
-            }
-        },
-        ui.Label(index.ToString(), 12, ui.Dim, ""),
+    private func Word(ui Presentation, index int32, words[]char, start int32, length int32) Blob {
+        var word = ""
         if visible {
-            ui.Label(word, 14, ui.Lime, "")
-        } else {
-            ui.Frame(String('x', word.Length), 0, hold ^ index, Random(hold ^ index), 14, ui.Body)
+            var low = 0
+            var high = Bip39Wordlist.Words.Length - 1
+            while low <= high {
+                let middle = low + (high - low) / 2
+                let candidate = Bip39Wordlist.Words[middle]
+                let order = ReadOnlySpan[char](words, start, length).CompareTo(
+                    System.MemoryExtensions.AsSpan(candidate),
+                    StringComparison.Ordinal
+                )
+                if order == 0 {
+                    word = candidate
+                    break
+                }
+                if order < 0 {
+                    high = middle - 1
+                } else {
+                    low = middle + 1
+                }
+            }
+        }
+        return Container{
+            FlexGrow: 1,
+            FlexBasis: 0,
+            MinWidth: 0,
+            Height: 36,
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            Padding: Edges{Left: 10, Right: 10},
+            BorderWidth: 1,
+            BorderRadius: 8,
+            BorderColor: ui.Rule,
+            BackgroundColor: ui.Surface,
+            Accessibility: Accessibility{
+                Name: if visible {
+                    word
+                } else {
+                    index.ToString() + " " + ui.Strings.Get("hidden")
+                }
+            },
+            ui.Label(index.ToString(), 12, ui.Dim, ""),
+            if visible {
+                ui.Label(word, 14, ui.Lime, "")
+            } else {
+                ui.Frame(String('x', length), 0, hold ^ index, Random(hold ^ index), 14, ui.Body)
+            }
         }
     }
 

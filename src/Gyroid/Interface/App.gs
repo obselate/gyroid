@@ -79,6 +79,12 @@ partial class App : Cell {
 
     private var seed[]?char
 
+    private var seedPassword[]?char
+
+    private var seedIssue string = ""
+
+    private let retrySeed Action
+
     private var contacts SortedDictionary[string, string] = SortedDictionary[string, string](StringComparer.Ordinal)
 
     private let finishSeed Action
@@ -141,7 +147,12 @@ partial class App : Cell {
         revealSeed = buffer -> {
             Run(ShowSeed(wallet.Keys.RevealSeedAsync(buffer), true), nil, buffer)
         }
-        createWallet = (filename, buffer) -> Run(ShowSeed(wallet.CreateAsync(filename, buffer), false), nil, buffer)
+        retrySeed = () -> {
+            if let buffer = seedPassword {
+                Run(ShowSeed(wallet.Keys.RevealSeedAsync(buffer), false))
+            }
+        }
+        createWallet = (filename, buffer) -> Run(CreateWallet(filename, buffer))
         closeSettings = () -> Back()
         ApplyPreferences()
         nodeAnchor.MetricsChanged += _ -> {
@@ -250,8 +261,46 @@ partial class App : Cell {
         Rebuild()
     }
 
+    private async func CreateWallet(filename string, buffer[]char) {
+        try {
+            await wallet.CreateAsync(filename, buffer)
+        } catch (failure Exception) {
+            Array.Clear(buffer)
+            throw failure
+        }
+        if window?.TryPost(
+            () -> {
+                if wallet.Snapshot.State != "Unlocked" || wallet.LockQueued {
+                    Array.Clear(buffer)
+                    return
+                }
+                ClearSeed()
+                seedPassword = buffer
+                seed = []char{}
+                Open("Seed")
+                retrySeed()
+            }
+        ) != true {
+            Array.Clear(buffer)
+        }
+    }
+
     private async func ShowSeed(task Task[[]char], fromWallet bool) {
-        let words = await task
+        var words[]char
+        try {
+            words = await task
+        } catch (failure WalletException) {
+            if seedPassword == nil {
+                throw failure
+            }
+            window?.TryPost(
+                () -> {
+                    seedIssue = failure.Message
+                    Rebuild()
+                }
+            )
+            return
+        }
         if window?.TryPost(
             () -> {
                 if wallet.Snapshot.State != "Unlocked" || wallet.LockQueued {
@@ -270,6 +319,11 @@ partial class App : Cell {
 
     private func ClearSeed() {
         ui.ReleaseClipboard()
+        if let password = seedPassword {
+            Array.Clear(password)
+        }
+        seedPassword = nil
+        seedIssue = ""
         if let words = seed {
             Array.Clear(words)
         }
@@ -638,7 +692,9 @@ partial class App : Cell {
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
                     ChooseFile: chooseFile,
-                    OnDone: finishSeed
+                    OnDone: finishSeed,
+                    Issue: seedIssue,
+                    OnRetry: retrySeed
                 }
             )
         } else if page == "Tools" || page == "Privacy" {

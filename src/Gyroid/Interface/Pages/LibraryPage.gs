@@ -614,6 +614,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         if input.Busy || Incomplete() {
             return
         }
+        let filename = input.Ui.WalletFile(name)
         let secret = password.ToCharArray()
         let again = confirmation.ToCharArray()
         issue = WalletValidation.PasswordError(secret, again)
@@ -623,8 +624,9 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Rebuild()
             return
         }
-        let filename = input.Ui.WalletFile(name)
         let session = input.Session
+        password = ""
+        confirmation = ""
         if form == "Phrase" {
             let words = phrase.ToCharArray()
             phrase = ""
