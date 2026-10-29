@@ -20,7 +20,16 @@ class NodeDiscovery {
             }
             let platform = CoreRelease.Platform()
             let executable = CoreRelease.ExecutableName()
-            let wrapper = Path.Combine(cfg, "cores", "v" + CoreRelease.Version, executable)
+            let cores = Path.Combine(cfg, "cores")
+            let wrapper = if Directory.Exists(cores) {
+                Directory
+                    .EnumerateFiles(cores, executable, SearchOption.AllDirectories)
+                    .OrderByDescending(candidate -> File.GetLastWriteTimeUtc(candidate))
+                    .FirstOrDefault() ??
+                    ""
+            } else {
+                ""
+            }
             var wrapped = false
             var data = AppSettings.DefaultData(network)
             var wallets = AppSettings.DefaultWallets(network)
@@ -32,12 +41,9 @@ class NodeDiscovery {
             var binary = ""
             var active = ""
             if File.Exists(wrapper) {
-                try {
-                    CoreRelease.VerifyExecutable(wrapper)
-                    binary = wrapper
-                    settings.LauncherBinaryPath = wrapper
-                    wrapped = true
-                } catch (error WalletException) { }
+                binary = wrapper
+                settings.LauncherBinaryPath = wrapper
+                wrapped = true
             }
             if wrapped {
                 data = Path.Combine(cfg, "data", network)
@@ -124,11 +130,6 @@ class NodeDiscovery {
                 }
                 for candidate in candidates {
                     if File.Exists(candidate) {
-                        try {
-                            CoreRelease.VerifyExecutable(candidate)
-                        } catch (error WalletException) {
-                            continue
-                        }
                         binary = candidate
                         break
                     }
@@ -180,11 +181,6 @@ class NodeDiscovery {
                         CoreRelease.InstallationPath()
                     } {
                         if File.Exists(candidate) {
-                            try {
-                                CoreRelease.VerifyExecutable(candidate)
-                            } catch (error WalletException) {
-                                continue
-                            }
                             binary = candidate
                             break
                         }
@@ -228,20 +224,6 @@ class NodeDiscovery {
             }
         }
 
-        func ProgramError(path string) string {
-            if !File.Exists(path) {
-                return "Node program not found"
-            }
-            try {
-                CoreRelease.VerifyExecutable(path)
-            } catch (error WalletException) {
-                return error.Message
-            } catch (error IOException) {
-                return "Node program not found"
-            } catch (error UnauthorizedAccessException) {
-                return "Node program not found"
-            }
-            return ""
-        }
+        func ProgramError(path string) string -> File.Exists(path) ? "": "Node program not found"
     }
 }

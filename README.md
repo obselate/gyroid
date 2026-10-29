@@ -12,7 +12,7 @@ sha256sum --ignore-missing --check SHA256SUMS
 
 On Windows, compare `Get-FileHash <archive>` with the line in `SHA256SUMS`.
 
-Extract the archive and run `Gyroid` (`Gyroid.exe` on Windows). Linux needs a Wayland session and a Vulkan driver. On first start, Gyroid downloads the Blocknet core and checks its SHA-256 before it runs it.
+Extract the archive and run `Gyroid` (`Gyroid.exe` on Windows). Linux needs a Wayland session and a Vulkan driver. Gyroid uses an installed Blocknet core. If none is installed, it downloads the latest release and checks the archive against that release's `SHA256SUMS.txt`. It does not upgrade an installed core automatically.
 
 ## Build from source
 

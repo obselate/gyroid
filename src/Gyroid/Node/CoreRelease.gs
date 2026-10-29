@@ -4,17 +4,17 @@ import Gyroid.Platform
 import System
 import System.IO
 import System.IO.Compression
+import System.Linq
 import System.Net.Http
 import System.Runtime.InteropServices
 import System.Security.Cryptography
+import System.Text.Json
 import System.Threading
 import System.Threading.Tasks
 
 class CoreRelease {
     shared {
-        let Version string = "0.22.0"
         let UpgradeHeight uint64 = 103680
-        let MismatchMessage string = "Core executable does not match the pinned Blocknet " + Version + " release"
 
         func ExecutableName() string -> "blocknet-core-" + Platform() + if OperatingSystem.IsWindows() {
             ".exe"
@@ -22,19 +22,32 @@ class CoreRelease {
             ""
         }
 
-        func InstallationPath() string -> Path.Combine(
-            Environment.GetFolderPath(
-                Environment.SpecialFolder.LocalApplicationData,
-                Environment.SpecialFolderOption.DoNotVerify
-            ),
-            "Gyroid",
-            "core",
-            "v" + Version,
-            ExecutableName()
-        )
+        func InstallationPath() string {
+            let directory = Path.Combine(
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.LocalApplicationData,
+                    Environment.SpecialFolderOption.DoNotVerify
+                ),
+                "Gyroid",
+                "core"
+            )
+            let path = Path.Combine(directory, ExecutableName())
+            return if File.Exists(path) || !Directory.Exists(directory) {
+                path
+            } else {
+                Directory
+                    .EnumerateFiles(directory, ExecutableName(), SearchOption.AllDirectories)
+                    .OrderByDescending(candidate -> File.GetLastWriteTimeUtc(candidate))
+                    .FirstOrDefault() ??
+                    path
+            }
+        }
 
         async func DownloadAsync(progress Action[string]?, cancellation CancellationToken) string {
             let path = InstallationPath()
+            if File.Exists(path) {
+                return path
+            }
             let directory = Path.GetDirectoryName(path) ??
                 throw WalletException("Core installation directory is unavailable")
             Directory.CreateDirectory(directory)
@@ -46,91 +59,133 @@ class CoreRelease {
                 )
             }
             let archivePath = path + "." + Guid.NewGuid().ToString("N") + ".zip"
-            let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+            let metadataPath = archivePath + ".json"
+            let checksumsPath = archivePath + ".sha256"
+            let temporary = archivePath + ".tmp"
             using let deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation)
             deadline.CancelAfter(TimeSpan.FromMinutes(3))
             let ct = deadline.Token
             using let http = HttpClient(SocketsHttpHandler{AllowAutoRedirect: false, UseProxy: false})
-            var address = Uri(
-                "https://github.com/blocknetprivacy/core/releases/download/v" +
-                    Version +
-                    "/blocknet-core-" +
-                    Platform() +
-                    "-" +
-                    Version +
-                    ".zip"
-            )
-            progress?.Invoke("0%")
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Gyroid")
             try {
-                for redirect in 0 ... 3 {
-                    using let response = await http.GetAsync(address, HttpCompletionOption.ResponseHeadersRead, ct)
-                    let code = int32(response.StatusCode)
-                    if code == 301 || code == 302 || code == 303 || code == 307 || code == 308 {
-                        let location = response
-                            .Headers
-                            .Location ??
-                            throw WalletException("Core download redirect is missing")
-                        let next = Uri(address, location)
-                        if next.Scheme != "https" ||
-                            next.Host != "release-assets.githubusercontent.com" ||
-                            !next.IsDefaultPort ||
-                            next
-                            .UserInfo
-                            .Length != 0 {
-                            throw WalletException("Core download redirect is not an official release asset")
-                        }
-                        address = next
-                        continue
-                    }
-                    if !response.IsSuccessStatusCode {
-                        throw WalletException("Core download failed")
-                    }
-                    let length = response.Content.Headers.ContentLength ?? 0
-                    if length > 33554432 {
-                        throw WalletException("Core download exceeds the size limit")
-                    }
-                    using let input = await response.Content.ReadAsStreamAsync(ct)
-                    using let output = PrivateFiles.CreatePrivate(archivePath)
-                    let buffer = [65536]uint8
-                    var percent int32 = -1
-                    while true {
-                        let count = await input.ReadAsync(buffer, 0, buffer.Length, ct)
-                        if count == 0 {
-                            break
-                        }
-                        if output.Length + count > 33554432 {
-                            throw WalletException("Core download exceeds the size limit")
-                        }
-                        await output.WriteAsync(buffer, 0, count, ct)
-                        let current = if length > 0 {
-                            int32(Math.Min(100L, output.Length * 100 / length))
-                        } else {
-                            0
-                        }
-                        if current != percent {
-                            percent = current
-                            progress?.Invoke(current.ToString() + "%")
-                        }
-                    }
-                    output.Flush(true)
-                    output.Dispose()
-                    await InstallAsync(archivePath, temporary, path, ct)
-                    return path
+                await DownloadFileAsync(
+                    http,
+                    Uri("https://api.github.com/repos/blocknetprivacy/core/releases/latest"),
+                    metadataPath,
+                    1048576,
+                    nil,
+                    ct
+                )
+                using let metadata = JsonDocument.Parse(File.ReadAllBytes(metadataPath))
+                let tag = metadata.RootElement.GetProperty("tag_name").GetString() ?? ""
+                if !tag.StartsWith("v", StringComparison.Ordinal) || tag.Length < 2 {
+                    throw WalletException("Core release version is unavailable")
                 }
-                throw WalletException("Core download has too many redirects")
+                let filename = "blocknet-core-" + Platform() + "-" + tag.Substring(1) + ".zip"
+                let release = "https://github.com/blocknetprivacy/core/releases/download/" + Uri.EscapeDataString(tag) +
+                    "/"
+                await DownloadFileAsync(http, Uri(release + "SHA256SUMS.txt"), checksumsPath, 1048576, nil, ct)
+                await DownloadFileAsync(
+                    http,
+                    Uri(release + Uri.EscapeDataString(filename)),
+                    archivePath,
+                    33554432,
+                    progress,
+                    ct
+                )
+                using let archive = File.OpenRead(archivePath)
+                let digest = Convert.ToHexString(SHA256.HashData(archive))
+                archive.Dispose()
+                var expected = ""
+                for line in File.ReadAllLines(checksumsPath) {
+                    let parts = line.Split([]char{' ', '\t'}, StringSplitOptions.RemoveEmptyEntries)
+                    if parts.Length == 2 && parts[1].TrimStart('*') == filename {
+                        expected = parts[0]
+                        break
+                    }
+                }
+                if !digest.Equals(expected, StringComparison.OrdinalIgnoreCase) {
+                    throw WalletException("Core archive checksum does not match the release")
+                }
+                await InstallAsync(archivePath, temporary, path, ct)
+                return path
             } catch (error OperationCanceledException) {
                 cancellation.ThrowIfCancellationRequested()
                 throw WalletException("Core download timed out")
             } catch (error HttpRequestException) {
                 throw WalletException("Core download failed")
             } finally {
-                if File.Exists(archivePath) {
-                    File.Delete(archivePath)
-                }
-                if File.Exists(temporary) {
-                    File.Delete(temporary)
+                for file in[]string{archivePath, metadataPath, checksumsPath, temporary} {
+                    if File.Exists(file) {
+                        File.Delete(file)
+                    }
                 }
             }
+        }
+
+        private async func DownloadFileAsync(
+            http HttpClient,
+            address Uri,
+            path string,
+            maximum int64,
+            progress Action[string]?,
+            ct CancellationToken
+        ) {
+            var current = address
+            for redirect in 0 ... 3 {
+                using let response = await http.GetAsync(current, HttpCompletionOption.ResponseHeadersRead, ct)
+                let code = int32(response.StatusCode)
+                if code == 301 || code == 302 || code == 303 || code == 307 || code == 308 {
+                    let location = response
+                        .Headers
+                        .Location ??
+                        throw WalletException("Core download redirect is missing")
+                    let next = Uri(current, location)
+                    if next.Scheme != "https" ||
+                        next.Host != "release-assets.githubusercontent.com" ||
+                        !next.IsDefaultPort ||
+                        next
+                        .UserInfo
+                        .Length != 0 {
+                        throw WalletException("Core download redirect is not an official release asset")
+                    }
+                    current = next
+                    continue
+                }
+                if !response.IsSuccessStatusCode {
+                    throw WalletException("Core download failed")
+                }
+                let length = response.Content.Headers.ContentLength ?? 0
+                if length > maximum {
+                    throw WalletException("Core download exceeds the size limit")
+                }
+                using let input = await response.Content.ReadAsStreamAsync(ct)
+                using let output = PrivateFiles.CreatePrivate(path)
+                let buffer = [65536]uint8
+                var percent int32 = -1
+                while true {
+                    let count = await input.ReadAsync(buffer, 0, buffer.Length, ct)
+                    if count == 0 {
+                        break
+                    }
+                    if output.Length + count > maximum {
+                        throw WalletException("Core download exceeds the size limit")
+                    }
+                    await output.WriteAsync(buffer, 0, count, ct)
+                    let value = if length > 0 {
+                        int32(Math.Min(100L, output.Length * 100 / length))
+                    } else {
+                        0
+                    }
+                    if value != percent {
+                        percent = value
+                        progress?.Invoke(value.ToString() + "%")
+                    }
+                }
+                output.Flush(true)
+                return
+            }
+            throw WalletException("Core download has too many redirects")
         }
 
         async func InstallAsync(archivePath string, temporary string, path string, ct CancellationToken) {
@@ -156,7 +211,6 @@ class CoreRelease {
                 }
                 output.Flush(true)
                 output.Dispose()
-                VerifyExecutable(temporary)
                 if !OperatingSystem.IsWindows() {
                     File.SetUnixFileMode(
                         temporary,
@@ -178,7 +232,7 @@ class CoreRelease {
             RuntimeInformation.ProcessArchitecture == Architecture.X64 {
                 "amd64"
             } else {
-                throw WalletException("No pinned core is available for this platform")
+                throw WalletException("No core release is available for this platform")
             }
             return arch + "-" + if OperatingSystem.IsLinux() {
                 "linux"
@@ -187,23 +241,7 @@ class CoreRelease {
             } else if OperatingSystem.IsWindows() {
                 "windows"
             } else {
-                throw WalletException("No pinned core is available for this platform")
-            }
-        }
-
-        func VerifyExecutable(path string) {
-            using let stream = FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
-            let digest = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant()
-            let expected = switch Platform() {
-                case "amd64-linux": "d64a062646792c60c11ddbc232044943557a6a1deadbcc8cd6dc66c788b89342"
-                case "arm64-linux": "106ac50e65c1a741fa949c84e96d057240e3df3d9ace2383128fc4506904e88c"
-                case "amd64-macos": "47778cf2ee19035ac1dcddf839d8123faade0fac4926d07124e54cb52e845f62"
-                case "arm64-macos": "1a17f97de27339d00a4d8923d644b6aff0055762a3975fd73788f354f613fe7d"
-                case "amd64-windows": "79e27d922e442d8152eb89e04b9db4f555e3a326a06f5334a30e86b2adbdb260"
-                default: throw WalletException("No pinned core is available for this platform")
-            }
-            if digest != expected {
-                throw WalletException(MismatchMessage)
+                throw WalletException("No core release is available for this platform")
             }
         }
     }

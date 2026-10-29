@@ -98,7 +98,7 @@ partial class App {
     private func NodePopover(status NodeStatus, state string) Blob {
         let box = nodeAnchor.BorderBox
         let center = box.Y + box.Height / 2
-        let version = status.Version.Length > 0 ? "v" + status.Version: ui.Strings.Get("unknown")
+        let version = status.Version.Length > 0 ? " · v" + status.Version: ""
         let card = Container{
             Width: 330,
             Padding: Edges{Left: 18, Right: 18, Top: 16, Bottom: 16},
@@ -113,7 +113,7 @@ partial class App {
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
                 ui.Label(ui.Strings.Get(state), 14, NodeColor(state), ""),
-                ui.Label(ui.Strings.Get(status.Network) + " · " + version, 14, ui.Dim, "")
+                ui.Label(ui.Strings.Get(status.Network) + version, 14, ui.Dim, "")
             }
         }
         if status.Running {

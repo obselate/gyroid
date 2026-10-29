@@ -7,6 +7,7 @@ import System.Diagnostics
 import System.Globalization
 import System.IO
 import System.Runtime.InteropServices
+import System.Security.Principal
 import System.Text
 
 @DllImport("iphlpapi.dll", EntryPoint: "GetExtendedTcpTable")
@@ -20,6 +21,9 @@ func WalletProcessPath(process IntPtr, flags uint32, path IntPtr, ref size int32
 
 @DllImport("kernel32.dll", EntryPoint: "CloseHandle")
 func CloseWalletHandle(handle IntPtr) bool;
+
+@DllImport("advapi32.dll", EntryPoint: "OpenProcessToken", SetLastError: true)
+func OpenWalletProcessToken(process IntPtr, access uint32, out token IntPtr) bool;
 
 @DllImport("libproc", EntryPoint: "proc_pidpath")
 func WalletMacProcessPath(pid int32, path[]uint8, size uint32) int32;
@@ -35,6 +39,54 @@ func FreeWalletMemory(memory IntPtr) IntPtr;
 
 class CoreProcess {
     shared {
+        func VerifyIdentity(pid int32, configured string, discovered string) {
+            if OperatingSystem.IsLinux() {
+                var sameUser = false
+                for line in File.ReadLines("/proc/" + pid.ToString() + "/status") {
+                    if line.StartsWith("Uid:", StringComparison.Ordinal) {
+                        let fields = line.Split(default([]char), StringSplitOptions.RemoveEmptyEntries)
+                        sameUser = fields.Length == 5 && fields[1] == WalletUserId().ToString() &&
+                            fields[2] == WalletUserId().ToString()
+                        break
+                    }
+                }
+                if !sameUser {
+                    throw WalletException("API listener identity could not be verified")
+                }
+            } else if OperatingSystem.IsWindows() {
+                let process = OpenWalletProcess(4096, false, pid)
+                var token IntPtr
+                try {
+                    if process == IntPtr.Zero || !OpenWalletProcessToken(process, 8, out token) {
+                        throw WalletException("API listener identity could not be verified")
+                    }
+                    using let current = WindowsIdentity.GetCurrent()
+                    using let owner = WindowsIdentity(token)
+                    let user = current.User ?? throw WalletException("API listener identity could not be verified")
+                    if !user.Equals(owner.User) {
+                        throw WalletException("API listener identity could not be verified")
+                    }
+                } finally {
+                    if token != IntPtr.Zero {
+                        CloseWalletHandle(token)
+                    }
+                    CloseWalletHandle(process)
+                }
+            }
+            let executable = ProcessExecutable(pid)
+            let actual = Path.GetFullPath(File.ResolveLinkTarget(executable, true)?.FullName ?? executable)
+            let comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase: StringComparison.Ordinal
+            for path in[]string{configured, discovered} {
+                if path.Length > 0 && actual.Equals(
+                    Path.GetFullPath(File.ResolveLinkTarget(path, true)?.FullName ?? path),
+                    comparison
+                ) {
+                    return
+                }
+            }
+            throw WalletException("API listener is not the configured core executable")
+        }
+
         func Arguments(pid int32)[]string {
             if OperatingSystem.IsLinux() {
                 return File.ReadAllText("/proc/" + pid.ToString() + "/cmdline").Split('\0')
@@ -183,7 +235,15 @@ class CoreProcess {
                         RedirectStandardOutput: true,
                         RedirectStandardError: true
                     }
-                    for argument in[]string{"-nP", "-iTCP:" + endpoint.Port.ToString(), "-sTCP:LISTEN", "-Fp"} {
+                    for argument in[]string{
+                        "-nP",
+                        "-a",
+                        "-u",
+                        WalletUserId().ToString(),
+                        "-iTCP:" + endpoint.Port.ToString(),
+                        "-sTCP:LISTEN",
+                        "-Fp"
+                    } {
                         start.ArgumentList.Add(argument)
                     }
                     using let process = Process.Start(start) ??

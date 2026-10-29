@@ -17,7 +17,6 @@ import System.Threading.Tasks
 
 class NodeApi : IDisposable {
     let settings WalletSettings
-    var verifiedPid int32
     var verifiedStart int64
     let http HttpClient
 
@@ -42,13 +41,9 @@ class NodeApi : IDisposable {
             if settings.OwnedProcessId != 0 && pid != settings.OwnedProcessId {
                 throw WalletException("API listener is not the app-owned core process")
             }
+            CoreProcess.VerifyIdentity(pid, settings.BinaryPath, settings.DiscoveredBinaryPath)
             using let process = Process.GetProcessById(pid)
-            let started = process.StartTime.ToUniversalTime().Ticks
-            if pid != verifiedPid || started != verifiedStart {
-                CoreRelease.VerifyExecutable(CoreProcess.ProcessExecutable(pid))
-                verifiedPid = pid
-                verifiedStart = started
-            }
+            verifiedStart = process.StartTime.ToUniversalTime().Ticks
             return pid
         } catch (error Exception) {
             if error is WalletException {
@@ -60,12 +55,13 @@ class NodeApi : IDisposable {
 
     private async func ConnectVerifiedAsync(ct CancellationToken) Stream {
         let pid = VerifyListener()
+        let started = verifiedStart
         let endpoint = Uri(settings.Endpoint)
         let address = IPAddress.Parse(endpoint.Host.Trim('[', ']'))
         let socket = Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
         try {
             await socket.ConnectAsync(IPEndPoint(address, endpoint.Port), ct)
-            if VerifyListener() != pid {
+            if VerifyListener() != pid || verifiedStart != started {
                 throw WalletException("API listener identity changed during connection")
             }
             return NetworkStream(socket, true)

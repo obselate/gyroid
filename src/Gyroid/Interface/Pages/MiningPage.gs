@@ -285,19 +285,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                         ui.Label((threads * 2).ToString() + " / " + total.ToString() + " GiB", 12.5, ui.Dim, "")
                     }
                 ),
-                Row(
-                    ui,
-                    wide,
-                    "miner",
-                    Container{
-                        FlexDirection: FlexDirection.Row,
-                        AlignItems: AlignItems.Center,
-                        Gap: 8,
-                        ui.Label("blocknet-core " + CoreRelease.Version, 13, ui.Ink, ""),
-                        MaterialIcons.Create("check", 14, ui.Mint),
-                        ui.Label(ui.Strings.Get("verified"), 12.5, ui.Dim, "")
-                    }
-                )
+                Row(ui, wide, "miner", ui.Label("blocknet-core", 13, ui.Ink, ""))
             },
             Container{
                 FlexDirection: FlexDirection.Row,

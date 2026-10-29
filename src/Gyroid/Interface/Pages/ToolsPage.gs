@@ -405,11 +405,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 "dns",
                 "node",
                 nodeValue,
-                Note(input, "v" + CoreRelease.Version),
-                []string{
-                    "This wallet uses a node on this computer",
-                    "Every node program is checked against the pinned release"
-                }
+                Container{},
+                []string{"This wallet uses a node on this computer"}
             ),
             Tile(
                 input,

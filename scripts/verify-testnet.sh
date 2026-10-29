@@ -33,16 +33,23 @@ chmod 700 "$run"
 step=Core
 core=${BLOCKNET_CORE:-}
 if [[ -z "$core" ]]; then
+    release=$(curl --fail --silent --location --proto '=https' --proto-redir '=https' --max-time 180 \
+        https://api.github.com/repos/blocknetprivacy/core/releases/latest)
+    version=$(printf '%s' "$release" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')
+    archive=blocknet-core-amd64-linux-${version#v}.zip
     curl --fail --silent --location --proto '=https' --proto-redir '=https' --max-time 180 \
-        https://github.com/blocknetprivacy/core/releases/download/v0.22.0/blocknet-core-amd64-linux-0.22.0.zip \
-        --output "$run/core.zip"
-    unzip -qq "$run/core.zip" -d "$run/core" 2>/dev/null
+        "https://github.com/blocknetprivacy/core/releases/download/$version/SHA256SUMS.txt" \
+        --output "$run/SHA256SUMS.txt"
+    curl --fail --silent --location --proto '=https' --proto-redir '=https' --max-time 180 \
+        "https://github.com/blocknetprivacy/core/releases/download/$version/$archive" \
+        --output "$run/$archive"
+    (cd "$run" && sha256sum --ignore-missing --check SHA256SUMS.txt >/dev/null)
+    unzip -qq "$run/$archive" -d "$run/core" 2>/dev/null
     core=$run/core/blocknet-core-amd64-linux
     chmod 700 "$core"
 fi
 [[ -x "$core" ]]
 core=$(realpath -- "$core")
-[[ $(sha256sum "$core" | cut -d ' ' -f 1) == d64a062646792c60c11ddbc232044943557a6a1deadbcc8cd6dc66c788b89342 ]]
 printf 'Core %ss PASS\n' "$((SECONDS - started))"
 step=Testnet
 {
@@ -319,6 +326,11 @@ try:
         api(0, "mining/stop", {})
     else:
         wait_for(lambda: api(0, "wallet/balance").get("spendable", 0) > 100000000)
+        height = api(0, "status")["chain_height"]
+        api(0, "mining/threads", {"threads": 1})
+        api(0, "mining/start", {})
+        wait_for(lambda: api(0, "status")["chain_height"] > height, seconds=mining_timeout)
+        api(0, "mining/stop", {})
     report(step, since)
     if snapshot_out:
         step = "Snapshot"

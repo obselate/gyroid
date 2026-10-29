@@ -382,7 +382,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 height.Add(ui.Button("Start", () -> ui.Run(input.Session.StartNodeAsync()), input.Busy))
             }
         }
-        let core = List[Blob]{ui.Label("v" + CoreRelease.Version, 14, ui.Ink, "")}
+        let core = List[Blob]{ui.Label("blocknet-core", 14, ui.Ink, "")}
         if status.Owned && automatic {
             core.Add(
                 ui.Button(
@@ -424,7 +424,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                             input,
                             "mode",
                             "About node mode",
-                            "Automatic runs the verified core. Existing node uses a node you run"
+                            "Automatic runs the installed core. Existing node uses a node you run"
                         )
                     }
                 ),

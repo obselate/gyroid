@@ -221,7 +221,7 @@ class SyncPage : Cell[SyncInput] {
                         ""
                     )
                 } else {
-                    ui.Label(ui.Strings.Get(node.Network) + " · v" + CoreRelease.Version, 12, ui.Dim, "")
+                    ui.Label(ui.Strings.Get(node.Network), 12, ui.Dim, "")
                 }
             )
         )

@@ -242,8 +242,8 @@ class NodeSupervisor : IDisposable {
 
     private func Attach(settings WalletSettings) {
         let pid = CoreProcess.Listener(Uri(settings.Endpoint))
+        CoreProcess.VerifyIdentity(pid, settings.BinaryPath, settings.DiscoveredBinaryPath)
         let executable = CoreProcess.ProcessExecutable(pid)
-        CoreRelease.VerifyExecutable(executable)
         Executable = if OperatingSystem.IsLinux() {
             File.ResolveLinkTarget(executable, true)?.FullName ?? executable
         } else {
@@ -289,8 +289,6 @@ class NodeSupervisor : IDisposable {
                     if !current.ProcessName.StartsWith("blocknet", StringComparison.Ordinal) {
                         continue
                     }
-                    let executable = CoreProcess.ProcessExecutable(current.Id)
-                    CoreRelease.VerifyExecutable(executable)
                     let arguments = CoreProcess.Arguments(current.Id)
                     var endpoint = ""
                     var data = ""
