@@ -32,6 +32,11 @@ class SyncPage : Cell[SyncInput] {
     private var heightSince float64
     private var lastHeight uint64
     private var stallTimer WindowTimer?
+    private let spark ElementHandle = ElementHandle()
+
+    init() {
+        spark.MetricsChanged += _ -> Rebuild()
+    }
 
     protected override func Build(input SyncInput) Blob {
         let ui = input.Ui
@@ -64,9 +69,9 @@ class SyncPage : Cell[SyncInput] {
         card.Gap = Math.Clamp(input.Height * 0.032, 16, 28)
         card.Accessibility = Accessibility{Live: AccessibilityLive.Polite}
         card.Add(Steps(ui, node, step))
-        let size = Math.Clamp(input.Height * 0.11, 48, 92)
+        let size = Math.Clamp(input.Height * (input.Fill ? 0.18: 0.11), 48, input.Fill ? 240: 92)
         let mid = Container{
-            FlexGrow: 1,
+            FlexGrow: input.Fill ? 0.0: 1.0,
             FlexDirection: FlexDirection.Row,
             FlexWrap: FlexWrap.Wrap,
             AlignItems: AlignItems.Center,
@@ -130,7 +135,8 @@ class SyncPage : Cell[SyncInput] {
                     Color.Parse("#1b2609"),
                     "peers · 15 s",
                     inner,
-                    input.Height
+                    input.Height,
+                    input.Fill
                 )
             )
             card.Add(Slots(ui, node.Peers, limit))
@@ -188,7 +194,8 @@ class SyncPage : Cell[SyncInput] {
                     stalled ? Color.Parse("#261c09"): Color.Parse("#1b2609"),
                     "blk/s · 2 min",
                     inner,
-                    input.Height
+                    input.Height,
+                    input.Fill
                 )
             )
             let checkpoint = node.ChainHeight > 0 ? Math.Min(
@@ -443,9 +450,10 @@ class SyncPage : Cell[SyncInput] {
         fill Color,
         label string,
         width float64,
-        windowHeight float64
+        windowHeight float64,
+        stretch bool
     ) Blob {
-        let height = Math.Clamp(windowHeight * 0.08, 44, 70)
+        let height = stretch ? Math.Max(1.0, spark.BorderBox.Height): Math.Clamp(windowHeight * 0.08, 44, 70)
         let plot = Math.Max(1.0, width - 40)
         let line = PathBuilder(0, 0, plot, height)
         let area = PathBuilder(0, 0, plot, height)
@@ -484,6 +492,13 @@ class SyncPage : Cell[SyncInput] {
                 Top: -4,
                 ui.Label(ui.Strings.Get(label), 11, ui.Dim, "")
             }
+        }
+        if stretch {
+            chart.Handle = spark
+            chart.Height = Length.Auto
+            chart.FlexGrow = 1
+            chart.FlexBasis = 0
+            chart.MinHeight = 0
         }
         if samples.Count > 0 {
             line.LineTo(plot, lastY)
