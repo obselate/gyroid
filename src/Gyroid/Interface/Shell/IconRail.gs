@@ -62,7 +62,7 @@ partial class App {
         return button
     }
 
-    private func Sidebar(page string) Blob {
+    private func Sidebar(page AppPage) Blob {
         let blocked = ui.Working()
         let compact = height < 700
         let inset = compact ? 4.0: 8.0
@@ -73,16 +73,18 @@ partial class App {
         rail.AlignItems = AlignItems.Center
         rail.Padding = Edges{Top: inset, Bottom: inset}
         rail.Gap = compact ? 0.0: 2.0
-        rail.Add(RailItem("overview", "grid_view", page == "Overview", blocked, () -> Navigate("Overview")))
+        rail.Add(RailItem("overview", "grid_view", page == AppPage.Overview, blocked, () -> Navigate(AppPage.Overview)))
         if !wallet.Snapshot.ViewOnly {
-            rail.Add(RailItem("send", "north_east", page == "Send", blocked, () -> Navigate("Send")))
+            rail.Add(RailItem("send", "north_east", page == AppPage.Send, blocked, () -> Navigate(AppPage.Send)))
         }
-        rail.Add(RailItem("receive", "south_west", page == "Receive", blocked, () -> Navigate("Receive")))
-        rail.Add(RailItem("history", "schedule", page == "Transactions", blocked, () -> Navigate("Transactions")))
-        rail.Add(RailItem("tools", "tune", page == "Tools", blocked, () -> Navigate("Tools")))
-        rail.Add(RailItem("contacts", "person", page == "Contacts", blocked, () -> Navigate("Contacts")))
-        rail.Add(RailItem("mining", "hardware", page == "Mining", blocked, () -> Navigate("Mining")))
-        rail.Add(RailItem("network", "share", page == "Network", blocked, () -> Navigate("Network")))
+        rail.Add(RailItem("receive", "south_west", page == AppPage.Receive, blocked, () -> Navigate(AppPage.Receive)))
+        rail.Add(
+            RailItem("history", "schedule", page == AppPage.Transactions, blocked, () -> Navigate(AppPage.Transactions))
+        )
+        rail.Add(RailItem("tools", "tune", page == AppPage.Tools, blocked, () -> Navigate(AppPage.Tools)))
+        rail.Add(RailItem("contacts", "person", page == AppPage.Contacts, blocked, () -> Navigate(AppPage.Contacts)))
+        rail.Add(RailItem("mining", "hardware", page == AppPage.Mining, blocked, () -> Navigate(AppPage.Mining)))
+        rail.Add(RailItem("network", "share", page == AppPage.Network, blocked, () -> Navigate(AppPage.Network)))
         rail.Add(Container{FlexGrow: 1})
         rail.Add(NodeBadge())
         rail.Add(
@@ -96,12 +98,12 @@ partial class App {
                 } else {
                     "visibility"
                 },
-                page == "Privacy",
+                page == AppPage.Privacy,
                 blocked,
-                () -> Navigate("Privacy")
+                () -> Navigate(AppPage.Privacy)
             )
         )
-        rail.Add(RailItem("settings", "settings", page == "Settings", blocked, () -> Navigate("Settings")))
+        rail.Add(RailItem("settings", "settings", page == AppPage.Settings, blocked, () -> Navigate(AppPage.Settings)))
         rail.Add(RailItem("lock", "lock", false, wallet.LockQueued, () -> Lock()))
         return rail
     }

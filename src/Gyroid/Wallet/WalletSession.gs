@@ -34,7 +34,7 @@ class WalletSession : IDisposable {
     var snapshot WalletSnapshot = WalletSnapshot()
     let Send SendService
     let History HistoryService
-    var state string = "Unloaded"
+    var state WalletState = WalletState.Unloaded
     var connected bool
     var managed bool
     var isBusy bool
@@ -50,7 +50,7 @@ class WalletSession : IDisposable {
     prop Settings WalletSettings -> settings.Copy()
     prop Snapshot WalletSnapshot -> snapshot
     prop Busy bool -> isBusy
-    prop State string -> state
+    prop State WalletState -> state
     prop LockQueued bool -> lockQueued
 
     init() {
@@ -90,7 +90,7 @@ class WalletSession : IDisposable {
             Send.InvalidateConfirmation()
             managed = false
             connected = false
-            state = "Unloaded"
+            state = WalletState.Unloaded
             PublishEmpty()
         }
         isBusy = false
@@ -131,7 +131,7 @@ class WalletSession : IDisposable {
     private func AutoLock(sessionContext Context) {
         let ct = sessionContext.Token
         while !sessionContext.IsCancelled {
-            if settings.AutoLockMinutes == 0 || !managed || state != "Unlocked" {
+            if settings.AutoLockMinutes == 0 || !managed || state != WalletState.Unlocked {
                 let changed = <-autoLockChanged
                 continue
             }
@@ -146,7 +146,7 @@ class WalletSession : IDisposable {
             }
             await BeginAsync(ct)
             try {
-                if managed && state == "Unlocked" && IdleExpired() {
+                if managed && state == WalletState.Unlocked && IdleExpired() {
                     await LockCoreAsync(ct)
                 }
             } catch (error WalletException) {
@@ -168,7 +168,7 @@ class WalletSession : IDisposable {
     }
 
     private func UpdateEvents() {
-        if disposed || !connected || state == "Locked" || state == "Unknown" {
+        if disposed || !connected || state == WalletState.Locked || state == WalletState.Unknown {
             StopEvents()
         } else if eventsEnabled {
             eventsChanged.Writer.TryWrite(true)
@@ -182,7 +182,11 @@ class WalletSession : IDisposable {
                 let listenerContext = ctx
                 await gate.WaitAsync(listenerContext.Token)
                 try {
-                    if !disposed && connected && eventsEnabled && state != "Locked" && state != "Unknown" {
+                    if !disposed &&
+                        connected &&
+                        eventsEnabled &&
+                        state != WalletState.Locked &&
+                        state != WalletState.Unknown {
                         events = listenerContext
                         go ListenEvents(listenerContext)
                     }
@@ -216,7 +220,7 @@ class WalletSession : IDisposable {
         try {
             ct.ThrowIfCancellationRequested()
             await Node.RefreshStatusAsync(ct)
-            if state == "Unlocked" {
+            if state == WalletState.Unlocked {
                 await RefreshCoreAsync(ct)
             }
         } finally {
@@ -254,7 +258,7 @@ class WalletSession : IDisposable {
                     connected = false
                     managed = false
                     Send.InvalidateConfirmation()
-                    state = "Unloaded"
+                    state = WalletState.Unloaded
                     PublishEmpty()
                     Node.Publish()
                     Changed?.Invoke()
@@ -286,20 +290,20 @@ class WalletSession : IDisposable {
             await Node.ConnectAsync(settings, ct)
             try {
                 using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
-                if state != "Unlocked" {
+                if state != WalletState.Unlocked {
                     Touch()
                 }
-                state = "Unlocked"
+                state = WalletState.Unlocked
             } catch (error WalletException) {
                 if error.StatusCode == 403 {
-                    state = "Locked"
+                    state = WalletState.Locked
                 } else if error.StatusCode == 503 {
-                    state = "Unloaded"
+                    state = WalletState.Unloaded
                 } else {
                     throw error
                 }
             }
-            if state == "Unloaded" {
+            if state == WalletState.Unloaded {
                 managed = false
             } else {
                 managed = true
@@ -322,7 +326,7 @@ class WalletSession : IDisposable {
         await BeginAsync(ct)
         try {
             await ConnectCoreAsync(ct)
-            if state == "Unlocked" {
+            if state == WalletState.Unlocked {
                 await RefreshCoreAsync(ct)
             }
         } finally {
@@ -608,7 +612,7 @@ class WalletSession : IDisposable {
         if !Node.Supervisor.Owned {
             throw WalletException("This process does not own the node. External nodes are never stopped")
         }
-        if managed || state != "Unloaded" {
+        if managed || state != WalletState.Unloaded {
             throw WalletException("Unload the wallet before stopping or restarting the node")
         }
         Node.StopOwned()
@@ -658,7 +662,7 @@ class WalletSession : IDisposable {
                 ct
             )
             managed = true
-            state = "Unlocked"
+            state = WalletState.Unlocked
             Touch()
             settings.ActiveWallet = filename
             PublishEmpty()
@@ -694,7 +698,7 @@ class WalletSession : IDisposable {
                 ct
             )
             managed = true
-            state = "Unlocked"
+            state = WalletState.Unlocked
             Touch()
             settings.ActiveWallet = filename
             PublishEmpty()
@@ -719,7 +723,7 @@ class WalletSession : IDisposable {
                 throw WalletException("Password must contain at least 3 UTF-8 bytes")
             }
             await ConnectCoreAsync(ct)
-            if state == "Unloaded" {
+            if state == WalletState.Unloaded {
                 if settings.ActiveWallet.Length == 0 {
                     throw WalletException("Choose a wallet first")
                 }
@@ -738,7 +742,7 @@ class WalletSession : IDisposable {
                     ct
                 )
             }
-            state = "Unlocked"
+            state = WalletState.Unlocked
             Touch()
             try {
                 WalletLockScheduler.Cancel(settings)
@@ -784,20 +788,20 @@ class WalletSession : IDisposable {
         lockQueued = false
         RequireManaged()
         Send.InvalidateConfirmation()
-        state = "Unknown"
+        state = WalletState.Unknown
         PublishEmpty()
         Changed?.Invoke()
         try {
             using let result = await Node.Api.JsonAsync("wallet/lock", WriteEmpty, ct)
-            state = "Locked"
+            state = WalletState.Locked
             WalletLockScheduler.Cancel(settings)
             PublishEmpty()
         } catch (error WalletException) {
             if error.StatusCode == 503 {
-                state = "Unloaded"
+                state = WalletState.Unloaded
                 managed = false
             } else if error.StatusCode == 403 {
-                state = "Locked"
+                state = WalletState.Locked
             }
             PublishEmpty()
             throw error
@@ -819,7 +823,7 @@ class WalletSession : IDisposable {
         Send.InvalidateConfirmation()
         if managed {
             try {
-                if state == "Unlocked" {
+                if state == WalletState.Unlocked {
                     using let locked = await Node.Api.JsonAsync("wallet/lock", WriteEmpty, ct)
                 }
                 using let result = await Node.Api.JsonAsync("wallet/unload", WriteEmpty, ct)
@@ -831,7 +835,7 @@ class WalletSession : IDisposable {
             WalletLockScheduler.Cancel(settings)
         }
         managed = false
-        state = "Unloaded"
+        state = WalletState.Unloaded
         Send.Reset()
     }
 
@@ -847,9 +851,9 @@ class WalletSession : IDisposable {
             End()
         }
         try {
-            while state == "Unlocked" && !disposed {
+            while state == WalletState.Unlocked && !disposed {
                 using let balance = await Node.Api.JsonAsync("wallet/balance", ct: token)
-                if state != "Unlocked" || disposed {
+                if state != WalletState.Unlocked || disposed {
                     return
                 }
                 if NodeJson.Number(balance.RootElement, "synced_height") >=
@@ -861,8 +865,8 @@ class WalletSession : IDisposable {
             }
         } catch (error OperationCanceledException) when shutdown.IsCancellationRequested { } catch (
             error WalletException
-        ) when state != "Unlocked" ||
-            disposed { } catch (error ObjectDisposedException) when state != "Unlocked" ||
+        ) when state != WalletState.Unlocked ||
+            disposed { } catch (error ObjectDisposedException) when state != WalletState.Unlocked ||
             disposed { }
     }
 
@@ -891,7 +895,7 @@ class WalletSession : IDisposable {
                 ct
             )
             managed = true
-            state = "Unlocked"
+            state = WalletState.Unlocked
             Touch()
             settings.ActiveWallet = filename
             PublishEmpty()
@@ -916,7 +920,7 @@ class WalletSession : IDisposable {
                 await ConnectCoreAsync(ct)
             } else {
                 await Node.RefreshStatusAsync(ct)
-                if state == "Unlocked" {
+                if state == WalletState.Unlocked {
                     await RefreshCoreAsync(ct)
                 }
             }
@@ -969,11 +973,11 @@ class WalletSession : IDisposable {
             }
         } catch (error WalletException) {
             if error.StatusCode == 403 {
-                state = "Locked"
+                state = WalletState.Locked
                 Send.InvalidateConfirmation()
                 PublishEmpty()
             } else if error.StatusCode == 503 {
-                state = "Unloaded"
+                state = WalletState.Unloaded
                 managed = false
                 Send.InvalidateConfirmation()
                 PublishEmpty()
@@ -1006,7 +1010,7 @@ class WalletSession : IDisposable {
     }
 
     func RequireUnloaded() {
-        if managed || state != "Unloaded" {
+        if managed || state != WalletState.Unloaded {
             throw WalletException("Unload the current wallet explicitly before choosing or creating another")
         }
     }
@@ -1019,7 +1023,7 @@ class WalletSession : IDisposable {
 
     func RequireUnlocked() {
         RequireManaged()
-        if state != "Unlocked" {
+        if state != WalletState.Unlocked {
             throw WalletException("Unlock the wallet first")
         }
     }
@@ -1059,7 +1063,7 @@ class WalletSession : IDisposable {
         Node.Dispose()
         managed = false
         connected = false
-        state = "Unloaded"
+        state = WalletState.Unloaded
         PublishEmpty()
     }
 

@@ -40,7 +40,7 @@ data struct SettingsPageInput {
     var OnLanguage Action[string]
     var OnPreference Action
     var OnRevealSeed Action[[]char]
-    var OnNavigate Action[string]
+    var OnNavigate Action[AppPage]
     var OnClose Action
 }
 
@@ -111,12 +111,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         rowHeight = Math.Clamp(52 + Math.Max(0, input.Height - 640) * 0.025, 52.0, 72.0)
         let settings = input.Session.Settings
-        if input.Snapshot.State != "Unlocked" && (dialog == "view-key" || viewKeys != nil) {
+        if input.Snapshot.State != WalletState.Unlocked && (dialog == "view-key" || viewKeys != nil) {
             Close()
         }
         draft ??= settings
         let sections = List[string]{"general", "security", "node"}
-        if input.Snapshot.State == "Unlocked" {
+        if input.Snapshot.State == WalletState.Unlocked {
             sections.Add("wallet")
         }
         sections.Add("advanced")
@@ -343,7 +343,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 }
             )
         }
-        if input.Snapshot.State == "Unlocked" && !input.Snapshot.ViewOnly {
+        if input.Snapshot.State == WalletState.Unlocked && !input.Snapshot.ViewOnly {
             rows.Add(
                 Line(
                     ui,
@@ -394,7 +394,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 ui.Button(
                     "Restart",
                     () -> ui.Run(ct -> input.Session.RestartNodeAsync(ct)),
-                    input.Busy || input.Snapshot.State != "Unloaded"
+                    input.Busy || input.Snapshot.State != WalletState.Unloaded
                 )
             )
         }
@@ -624,7 +624,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         "Check",
                         () -> {
                             input.Tools.Tab = "health"
-                            input.OnNavigate.Invoke("Tools")
+                            input.OnNavigate.Invoke(AppPage.Tools)
                         },
                         input.Busy
                     ),
@@ -1192,7 +1192,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 return task
             },
             () -> {
-                if dialog == "view-key" && input.Session.State == "Unlocked" {
+                if dialog == "view-key" && input.Session.State == WalletState.Unlocked {
                     viewKeys = task.Result
                 } else {
                     task.Result?.Dispose()
@@ -1264,7 +1264,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                                 input.Session.Settings.ActiveWallet.Replace(".wallet.dat", "") + ".keys.txt"
                             ),
                             path -> {
-                                if Object.ReferenceEquals(viewKeys, keys) && input.Session.State == "Unlocked" {
+                                if Object.ReferenceEquals(viewKeys, keys) &&
+                                    input
+                                    .Session
+                                    .State == WalletState.Unlocked {
                                     ui.Run(ct -> input.Session.Keys.SaveViewKeysAsync(path, keys, ct))
                                 }
                             }
@@ -1730,7 +1733,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Rebuild()
             return
         }
-        if input.Snapshot.State != "Unloaded" && !applyPending {
+        if input.Snapshot.State != WalletState.Unloaded && !applyPending {
             applyPending = true
             Rebuild()
             return
@@ -1763,7 +1766,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     ui.Label(ui.Strings.Get("The wallet locks and the node reconnects"), 13, ui.Body, "")
                 },
                 ConfirmText: ui.Strings.Get(
-                    if input.Snapshot.State == "Unlocked" {
+                    if input.Snapshot.State == WalletState.Unlocked {
                         "Lock and apply"
                     } else {
                         "Apply"

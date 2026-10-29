@@ -24,7 +24,7 @@ data struct OverviewInput {
     var Contacts SortedDictionary[string, string]
     var Privacy bool
     var Height float64
-    var OnNavigate Action[string]
+    var OnNavigate Action[AppPage]
     var OnUpgrade Action
 }
 
@@ -811,7 +811,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Detail(ui, "tx", Short(item.TxId).Substring(3)),
                     Detail(ui, ui.Strings.Get("ready at"), ready),
                     Container{FlexGrow: 1},
-                    Link(ui, "history", () -> input.OnNavigate("Transactions"))
+                    Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions))
                 }
             )
         }
@@ -885,7 +885,7 @@ class OverviewPage : Cell[OverviewInput] {
         card.MinWidth = 0
         let header = Header(ui, "recent")
         header.Add(Container{FlexGrow: 1})
-        header.Add(Link(ui, "history", () -> input.OnNavigate("Transactions")))
+        header.Add(Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions)))
         card.Add(header)
         let activities = Activities(input, chain)
         if activities.Count == 0 {
@@ -895,7 +895,7 @@ class OverviewPage : Cell[OverviewInput] {
                     AlignItems: AlignItems.Center,
                     Height: 40,
                     ui.Grow(ui.Label(ui.Strings.Get("no transactions yet"), 14, ui.Dim, "")),
-                    Link(ui, "receive", () -> input.OnNavigate("Receive"))
+                    Link(ui, "receive", () -> input.OnNavigate(AppPage.Receive))
                 }
             )
             return card

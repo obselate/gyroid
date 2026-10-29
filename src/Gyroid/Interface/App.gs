@@ -27,6 +27,23 @@ import System.Numerics
 import System.Threading
 import System.Threading.Tasks
 
+enum AppPage {
+    None,
+    Overview,
+    Send,
+    Receive,
+    Transactions,
+    Tools,
+    Contacts,
+    Mining,
+    Network,
+    Privacy,
+    Settings,
+    Sync,
+    Seed,
+    Library
+}
+
 data class WindowWork(Run Func[CancellationToken, Task])
 
 partial class App : Cell {
@@ -61,9 +78,9 @@ partial class App : Cell {
 
     private var pixelScale float64 = 1
 
-    private var screen string = ""
+    private var screen AppPage = AppPage.None
 
-    private var lastState string = ""
+    private var lastState WalletState
 
     private var error string = ""
 
@@ -77,7 +94,7 @@ partial class App : Cell {
 
     private var statusTimer WindowTimer?
 
-    private let navigate Action[string]
+    private let navigate Action[AppPage]
 
     private var shownHeight string = ""
 
@@ -128,7 +145,7 @@ partial class App : Cell {
         togglePrivacy = () -> TogglePrivacy()
         openNodeSettings = () -> {
             settingsSection = "node"
-            Navigate("Settings")
+            Navigate(AppPage.Settings)
         }
         showUpgrade = () -> {
             upgradeShown = true
@@ -136,7 +153,7 @@ partial class App : Cell {
         }
         sendDone = () -> Refresh()
         chooseFile = (kind, title, path, chosen) -> ChooseFile(kind, title, path, chosen)
-        openReceive = () -> Navigate("Receive")
+        openReceive = () -> Navigate(AppPage.Receive)
         finishSeed = () -> FinishSeed()
         contactsChanged = next -> {
             contacts = next
@@ -241,7 +258,7 @@ partial class App : Cell {
     private func Sync() {
         let node = wallet.Node.Status
         let snapshot = wallet.Snapshot
-        if snapshot.State != "Unlocked" {
+        if snapshot.State != WalletState.Unlocked {
             ClearSeed()
             toolsState.Report = nil
             sendRows.Clear()
@@ -256,7 +273,7 @@ partial class App : Cell {
             ResumePlayback()
             ClearSeed()
             upgradeShown = false
-            screen = ""
+            screen = AppPage.None
             ui.Decode("page")
             lastState = snapshot.State
         }
@@ -282,14 +299,14 @@ partial class App : Cell {
         }
         if window?.TryPost(
             () -> {
-                if wallet.Snapshot.State != "Unlocked" || wallet.LockQueued {
+                if wallet.Snapshot.State != WalletState.Unlocked || wallet.LockQueued {
                     Array.Clear(buffer)
                     return
                 }
                 ClearSeed()
                 seedPassword = buffer
                 seed = []char{}
-                Open("Seed")
+                Open(AppPage.Seed)
                 retrySeed()
             }
         ) != true {
@@ -315,14 +332,14 @@ partial class App : Cell {
         }
         if window?.TryPost(
             () -> {
-                if wallet.Snapshot.State != "Unlocked" || wallet.LockQueued {
+                if wallet.Snapshot.State != WalletState.Unlocked || wallet.LockQueued {
                     Array.Clear(words)
                     return
                 }
                 ClearSeed()
                 seed = words
                 seedFromWallet = fromWallet
-                Open("Seed")
+                Open(AppPage.Seed)
             }
         ) != true {
             Array.Clear(words)
@@ -340,14 +357,14 @@ partial class App : Cell {
             Array.Clear(words)
         }
         seed = nil
-        if screen == "Seed" {
-            screen = seedFromWallet ? "Settings": "Overview"
+        if screen == AppPage.Seed {
+            screen = seedFromWallet ? AppPage.Settings: AppPage.Overview
         }
         seedFromWallet = false
     }
 
     private func FinishSeed() {
-        let target = seedFromWallet ? "Settings": "Overview"
+        let target = seedFromWallet ? AppPage.Settings: AppPage.Overview
         ClearSeed()
         Open(target)
     }
@@ -360,14 +377,14 @@ partial class App : Cell {
         }
     }
 
-    private func Open(target string) {
+    private func Open(target AppPage) {
         upgradeShown = false
-        if target != "Seed" {
+        if target != AppPage.Seed {
             ClearSeed()
         }
         error = ""
         screen = target
-        if target == "Contacts" {
+        if target == AppPage.Contacts {
             LoadContacts()
         }
         ui.Decode("page")
@@ -378,7 +395,7 @@ partial class App : Cell {
         upgradeShown = false
         ClearSeed()
         error = ""
-        screen = ""
+        screen = AppPage.None
         ui.Decode("page")
         Rebuild()
     }
@@ -454,10 +471,10 @@ partial class App : Cell {
                 ui.Operations--
                 UpdatePlayback()
                 if unknown {
-                    screen = if wallet.Snapshot.State == "Unlocked" {
-                        "Send"
+                    screen = if wallet.Snapshot.State == WalletState.Unlocked {
+                        AppPage.Send
                     } else {
-                        ""
+                        AppPage.None
                     }
                     Refresh()
                 } else {
@@ -485,7 +502,7 @@ partial class App : Cell {
         try {
             if statusOnly {
                 await wallet.RefreshStatusAsync(ct)
-            } else if wallet.Snapshot.State == "Unlocked" {
+            } else if wallet.Snapshot.State == WalletState.Unlocked {
                 await wallet.RefreshAsync(ct)
             } else {
                 await wallet.RefreshNodeAsync(ct)
@@ -537,13 +554,16 @@ partial class App : Cell {
         )
     }
 
-    private func WalletAvailable() bool -> wallet.Snapshot.State == "Unlocked" && (screen != "Seed" || seedFromWallet)
+    private func WalletAvailable() bool -> wallet
+        .Snapshot
+        .State == WalletState.Unlocked &&
+        (screen != AppPage.Seed || seedFromWallet)
 
-    private func Navigate(target string) {
+    private func Navigate(target AppPage) {
         if ui.Working() {
             return
         }
-        if target != "Settings" && (!WalletAvailable() || target == "Send" && wallet.Snapshot.ViewOnly) {
+        if target != AppPage.Settings && (!WalletAvailable() || target == AppPage.Send && wallet.Snapshot.ViewOnly) {
             return
         }
         Open(target)
@@ -626,14 +646,14 @@ partial class App : Cell {
             },
             Chrome()
         }
-        let page = if screen.Length > 0 && (snapshot.State == "Unlocked" || screen == "Settings") {
+        let page = if screen != AppPage.None && (snapshot.State == WalletState.Unlocked || screen == AppPage.Settings) {
             screen
-        } else if snapshot.State == "Unlocked" {
-            "Overview"
+        } else if snapshot.State == WalletState.Unlocked {
+            AppPage.Overview
         } else if Preparing() {
-            "Sync"
+            AppPage.Sync
         } else {
-            "Library"
+            AppPage.Library
         }
         let banner = Problem()
         bannerHeight = if banner != nil {
@@ -641,7 +661,7 @@ partial class App : Cell {
         } else {
             0.0
         }
-        let content = if page == "Overview" {
+        let content = if page == AppPage.Overview {
             Cell.Mount[OverviewInput, OverviewPage](
                 "overview",
                 OverviewInput{
@@ -657,7 +677,7 @@ partial class App : Cell {
                     OnUpgrade: showUpgrade
                 }
             )
-        } else if page == "Send" {
+        } else if page == AppPage.Send {
             if wallet.Send.Error.Length > 0 || wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0 {
                 PendingSendCard()
             } else {
@@ -680,7 +700,7 @@ partial class App : Cell {
                     }
                 )
             }
-        } else if page == "Receive" {
+        } else if page == AppPage.Receive {
             Cell.Mount[ReceivePageInput, ReceivePage](
                 "receive",
                 ReceivePageInput{
@@ -697,7 +717,7 @@ partial class App : Cell {
                     Request: receiveRequest
                 }
             )
-        } else if page == "Mining" {
+        } else if page == AppPage.Mining {
             Cell.Mount[MiningPageInput, MiningPage](
                 "mining",
                 MiningPageInput{
@@ -711,9 +731,9 @@ partial class App : Cell {
                     Height: height
                 }
             )
-        } else if page == "Transactions" {
+        } else if page == AppPage.Transactions {
             HistoryView(snapshot)
-        } else if page == "Network" {
+        } else if page == AppPage.Network {
             Cell.Mount[NetworkInput, NetworkPage](
                 "network",
                 NetworkInput{
@@ -728,7 +748,7 @@ partial class App : Cell {
                     Height: height
                 }
             )
-        } else if page == "Sync" {
+        } else if page == AppPage.Sync {
             Cell.Mount[SyncInput, SyncPage](
                 "sync",
                 SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
@@ -749,7 +769,7 @@ partial class App : Cell {
                     OnRetry: retrySeed
                 }
             )
-        } else if page == "Tools" || page == "Privacy" {
+        } else if page == AppPage.Tools || page == AppPage.Privacy {
             Cell.Mount[ToolsInput, ToolsPage](
                 "tools",
                 ToolsInput{
@@ -771,7 +791,7 @@ partial class App : Cell {
                     OnNodeSettings: openNodeSettings
                 }
             )
-        } else if page == "Contacts" {
+        } else if page == AppPage.Contacts {
             Cell.Mount[ContactsInput, ContactsPage](
                 "contacts",
                 ContactsInput{
@@ -784,7 +804,7 @@ partial class App : Cell {
                     OnChange: contactsChanged
                 }
             )
-        } else if page == "Settings" {
+        } else if page == AppPage.Settings {
             Cell.Mount[SettingsPageInput, SettingsPage](
                 "settings",
                 SettingsPageInput{
@@ -834,18 +854,18 @@ partial class App : Cell {
         }
         let span = width - left - 24
         let cardWidth = switch page {
-            case "Overview": span
-            case "Transactions": span
-            case "Network": span
-            case "Sync": 760.0
-            case "Settings": 1004.0
-            case "Seed": 760.0
-            case "Receive": 640.0
-            case "Send": 640.0
-            case "Tools": span
-            case "Privacy": span
-            case "Contacts": 640.0
-            default: 560.0
+            case AppPage.Overview: span
+            case AppPage.Transactions: span
+            case AppPage.Network: span
+            case AppPage.Sync: 760.0
+            case AppPage.Settings: 1004.0
+            case AppPage.Seed: 760.0
+            case AppPage.Receive: 640.0
+            case AppPage.Send: 640.0
+            case AppPage.Tools: span
+            case AppPage.Privacy: span
+            case AppPage.Contacts: 640.0
+            case AppPage.None, AppPage.Library, AppPage.Mining: 560.0
         }
         let side = Math.Min(span * 0.45, span - cardWidth - 48)
         let region = if side >= 240 {
@@ -880,14 +900,40 @@ partial class App : Cell {
                 sceneCenter
             )
         )
-        let main = Container{Key: page, FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MinHeight: 0, Gap: 16, Padding: 24}
+        let main = Container{
+            Key: switch page {
+                case AppPage.None: ""
+                case AppPage.Overview: "Overview"
+                case AppPage.Send: "Send"
+                case AppPage.Receive: "Receive"
+                case AppPage.Transactions: "Transactions"
+                case AppPage.Tools: "Tools"
+                case AppPage.Contacts: "Contacts"
+                case AppPage.Mining: "Mining"
+                case AppPage.Network: "Network"
+                case AppPage.Privacy: "Privacy"
+                case AppPage.Settings: "Settings"
+                case AppPage.Sync: "Sync"
+                case AppPage.Seed: "Seed"
+                case AppPage.Library: "Library"
+            },
+            FlexGrow: 1,
+            FlexBasis: 0,
+            MinWidth: 0,
+            MinHeight: 0,
+            Gap: 16,
+            Padding: 24
+        }
         if let shown = banner {
             main.Add(Container{FlexShrink: 0, shown})
         }
-        if page == "Overview" && (wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0) {
+        if page == AppPage.Overview && (wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0) {
             main.Add(PendingSendBanner())
         }
-        if page == "Overview" || page == "Transactions" || page == "Mining" || page == "Network" {
+        if page == AppPage.Overview ||
+            page == AppPage.Transactions ||
+            page == AppPage.Mining ||
+            page == AppPage.Network {
             main.Add(content)
         } else {
             let stage = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, FlexDirection: FlexDirection.Row}
@@ -910,7 +956,7 @@ partial class App : Cell {
         if WalletAvailable() {
             main.Padding = 0
             main.Width = Percent(100)
-            if page != "Transactions" && page != "Overview" && page != "Network" {
+            if page != AppPage.Transactions && page != AppPage.Overview && page != AppPage.Network {
                 main.MaxWidth = 1400
             }
             frame.Padding = Edges{Left: 14, Right: 20, Bottom: 20}

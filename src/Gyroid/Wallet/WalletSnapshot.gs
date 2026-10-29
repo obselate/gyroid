@@ -2,8 +2,15 @@ package Gyroid.Wallet
 
 import Gyroid.History
 
+enum WalletState {
+    Unloaded,
+    Locked,
+    Unlocked,
+    Unknown
+}
+
 class WalletSnapshot {
-    var State string = "Unloaded"
+    var State WalletState = WalletState.Unloaded
     var Connected bool
     var ViewOnly bool
     var Address string = ""

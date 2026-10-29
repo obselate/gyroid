@@ -212,7 +212,7 @@ partial class App {
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Network")},
             OnClick: () -> {
                 nodeOpen = false
-                Navigate("Network")
+                Navigate(AppPage.Network)
             },
             ui.Label(ui.Strings.Get("Network"), 14, ui.Lime, ""),
             MaterialIcons.Create("chevron_right", 16, ui.Lime)
@@ -227,7 +227,7 @@ partial class App {
                     () -> {
                         nodeOpen = false
                         settingsSection = "node"
-                        Navigate("Settings")
+                        Navigate(AppPage.Settings)
                     }
                 ),
                 networkButton

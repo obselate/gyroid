@@ -33,9 +33,16 @@ data struct HistoryInput {
     var OnReceive Action
 }
 
+enum HistoryRowKind {
+    Received,
+    Mined,
+    Sent,
+    Pending
+}
+
 data struct HistoryRow {
     var Key string
-    var Kind string
+    var Kind HistoryRowKind
     var TxId string
     var Index int32
     var Amount uint64
@@ -209,7 +216,10 @@ class HistoryPage : Cell[HistoryInput] {
         rows.BorderWidth = Edges{Top: 1}
         rows.BorderColor = ui.Rule
         panel.Add(rows)
-        let lensRow = Array.FindIndex(shown, (row HistoryRow) -> row.Kind == "out" && row.TxId == observed)
+        let lensRow = Array.FindIndex(
+            shown,
+            (row HistoryRow) -> row.Kind == HistoryRowKind.Sent && row.TxId == observed
+        )
         if lensRow >= 0 {
             let row = shown[lensRow]
             let portal = Portal()
@@ -253,7 +263,7 @@ class HistoryPage : Cell[HistoryInput] {
         for output in snapshot.History {
             rows.Add(
                 Item(input, "r:" + output.TxId + ":" + output.OutputIndex.ToString()) with{
-                    Kind = output.Coinbase ? "mined": "in",
+                    Kind = output.Coinbase ? HistoryRowKind.Mined: HistoryRowKind.Received,
                     TxId = output.TxId,
                     Index = output.OutputIndex,
                     Amount = output.Amount,
@@ -278,7 +288,7 @@ class HistoryPage : Cell[HistoryInput] {
             }
             rows.Add(
                 Item(input, "s:" + send.TxId) with{
-                    Kind = confirmed ? "out": "pending",
+                    Kind = confirmed ? HistoryRowKind.Sent: HistoryRowKind.Pending,
                     TxId = send.TxId,
                     Amount = send.Amount,
                     Fee = send.Fee,
@@ -312,7 +322,6 @@ class HistoryPage : Cell[HistoryInput] {
 
     private func Item(input HistoryInput, key string) HistoryRow -> HistoryRow{
         Key: key,
-        Kind: "",
         TxId: "",
         Memo: "",
         State: "",
@@ -340,9 +349,9 @@ class HistoryPage : Cell[HistoryInput] {
             }
             let column = Math.Min(columns - 1, int32((row.Height - low) / size))
             let value = float64(row.Amount)
-            if row.Kind == "in" {
+            if row.Kind == HistoryRowKind.Received {
                 received[column] += value
-            } else if row.Kind == "mined" {
+            } else if row.Kind == HistoryRowKind.Mined {
                 mined[column] += value
             } else {
                 sent[column] += value
@@ -620,11 +629,13 @@ class HistoryPage : Cell[HistoryInput] {
         if inside.Length > 0 && inside[0].Time > 0 {
             tip.Add(ui.Label(Moment(inside[0].Time), 12, ui.Dim, ""))
         }
-        for category in[]string{"in", "mined", "out"} {
+        for category in[]HistoryRowKind{HistoryRowKind.Received, HistoryRowKind.Mined, HistoryRowKind.Sent} {
             let rows = inside.Where((row HistoryRow) -> row.Kind == category).ToArray()
             if rows.Length > 0 {
                 let total = rows.Aggregate(0UL, (sum uint64, row HistoryRow) -> sum + row.Amount)
-                tip.Add(ui.Label((category == "out" ? "−": "+") + ui.Amount(total), 12, Tint(category), ""))
+                tip.Add(
+                    ui.Label((category == HistoryRowKind.Sent ? "−": "+") + ui.Amount(total), 12, Tint(category), "")
+                )
             }
         }
         let x = (column + 0.5) * step
@@ -643,9 +654,9 @@ class HistoryPage : Cell[HistoryInput] {
         var fees = 0UL
         var mined = 0UL
         for row in shown {
-            if row.Kind == "in" {
+            if row.Kind == HistoryRowKind.Received {
                 received += row.Amount
-            } else if row.Kind == "mined" {
+            } else if row.Kind == HistoryRowKind.Mined {
                 mined += row.Amount
             } else {
                 sent += row.Amount
@@ -682,11 +693,11 @@ class HistoryPage : Cell[HistoryInput] {
         }
     }
 
-    private func Tint(category string) Color -> switch category {
-        case "in": current.Ui.Mint
-        case "mined": current.Ui.Lime
-        case "pending": current.Ui.Orange
-        default: current.Ui.Pink
+    private func Tint(category HistoryRowKind) Color -> switch category {
+        case HistoryRowKind.Received: current.Ui.Mint
+        case HistoryRowKind.Mined: current.Ui.Lime
+        case HistoryRowKind.Pending: current.Ui.Orange
+        case HistoryRowKind.Sent: current.Ui.Pink
     }
 
     private func Moment(seconds int64) string -> DateTimeOffset
@@ -728,7 +739,7 @@ class HistoryPage : Cell[HistoryInput] {
             .Length > 1 ? Short(recipient?.Address ?? ""): row
             .Memo
             .Length > 0 ? row.Memo: Short(row.TxId)
-        let sign = row.Kind == "in" || row.Kind == "mined" ? "+": "−"
+        let sign = row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "+": "−"
         let notes = Container{
             Padding: Edges{Left: 6},
             FlexDirection: FlexDirection.Row,
@@ -752,7 +763,14 @@ class HistoryPage : Cell[HistoryInput] {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
-                Name: ui.Strings.Get(row.Kind == "in" ? "received": row.Kind == "out" ? "sent": row.Kind) +
+                Name: ui.Strings.Get(
+                    switch row.Kind {
+                        case HistoryRowKind.Received: "received"
+                        case HistoryRowKind.Mined: "mined"
+                        case HistoryRowKind.Sent: "sent"
+                        case HistoryRowKind.Pending: "pending"
+                    }
+                ) +
                     " " +
                     sign +
                     ui.Amount(row.Amount) + " " + ui.Hidden(note) + " " + depth,
@@ -778,10 +796,10 @@ class HistoryPage : Cell[HistoryInput] {
             },
             MaterialIcons.Create(
                 switch row.Kind {
-                    case "in": "south_west"
-                    case "mined": "diamond"
-                    case "pending": "schedule"
-                    default: "north_east"
+                    case HistoryRowKind.Received: "south_west"
+                    case HistoryRowKind.Mined: "diamond"
+                    case HistoryRowKind.Pending: "schedule"
+                    case HistoryRowKind.Sent: "north_east"
                 },
                 16,
                 Tint(row.Kind)
@@ -790,7 +808,12 @@ class HistoryPage : Cell[HistoryInput] {
                 Width: compact ? 112.0: 128.0,
                 FlexShrink: 0,
                 AlignItems: AlignItems.FlexEnd,
-                ui.Label(sign + ui.Amount(row.Amount), 14, row.Kind == "pending" ? ui.Pink: Tint(row.Kind), "")
+                ui.Label(
+                    sign + ui.Amount(row.Amount),
+                    14,
+                    row.Kind == HistoryRowKind.Pending ? ui.Pink: Tint(row.Kind),
+                    ""
+                )
             },
             ui.Grow(notes),
             Container{
@@ -842,7 +865,7 @@ class HistoryPage : Cell[HistoryInput] {
             BorderWidth: Edges{Bottom: 1},
             BorderColor: ui.Rule
         }
-        if row.Kind == "out" {
+        if row.Kind == HistoryRowKind.Sent {
             let tabs = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
@@ -953,7 +976,7 @@ class HistoryPage : Cell[HistoryInput] {
         if row.Time > 0 {
             values.Add(Figure("time", ui.Time(row.Time), ui.Ink, 13))
         }
-        if row.Kind == "out" || row.Kind == "pending" {
+        if row.Kind == HistoryRowKind.Sent || row.Kind == HistoryRowKind.Pending {
             values.Add(Figure("fee", ui.Amount(row.Fee), ui.Ink, 13))
             if row.Recipients.Length == 1 {
                 let address = row.Recipients[0].Address
@@ -971,10 +994,10 @@ class HistoryPage : Cell[HistoryInput] {
                 )
             }
         }
-        if row.Kind == "mined" && row.Depth < 60 {
+        if row.Kind == HistoryRowKind.Mined && row.Depth < 60 {
             values.Add(Figure("spendable at", ui.Count(row.Height + 60), ui.Orange, 13))
         }
-        if row.Kind == "in" {
+        if row.Kind == HistoryRowKind.Received {
             values.Add(Figure("output", "#" + row.Index.ToString(), ui.Ink, 13))
         }
         if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
@@ -1395,16 +1418,23 @@ class HistoryPage : Cell[HistoryInput] {
                 "yyyy-MM-ddTHH:mm:ssZ",
                 CultureInfo.InvariantCulture
             ): ""
-            let amount = (row.Kind == "in" || row.Kind == "mined" ? "": "-") + WalletAmount.Format(row.Amount)
+            let amount = (row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "": "-") +
+                WalletAmount.Format(row.Amount)
             let fee = WalletAmount.Format(row.Fee)
+            let kind = switch row.Kind {
+                case HistoryRowKind.Received: "in"
+                case HistoryRowKind.Mined: "mined"
+                case HistoryRowKind.Sent: "out"
+                case HistoryRowKind.Pending: "pending"
+            }
             writer.WriteStartObject()
-            writer.WriteString("type", row.Kind)
+            writer.WriteString("type", kind)
             writer.WriteString("amount", amount)
             writer.WriteString("fee", fee)
             writer.WriteNumber("height", row.Height)
             writer.WriteString("time", time)
             writer.WriteString("txid", row.TxId)
-            text.Append(row.Kind + "," + amount + "," + fee + "," + row.Height.ToString() + "," + time + "," + row.TxId)
+            text.Append(kind + "," + amount + "," + fee + "," + row.Height.ToString() + "," + time + "," + row.TxId)
             if withMemos {
                 writer.WriteString("memo", row.Memo)
                 let memo = "=+-@\t\r".Contains(row.Memo.FirstOrDefault()) ? "'" + row.Memo: row.Memo

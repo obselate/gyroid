@@ -28,7 +28,7 @@ data struct ToolsInput {
     var State ToolsState
     var Snapshot WalletSnapshot
     var Node NodeStatus
-    var Section string
+    var Section AppPage
     var AutoLock int32
     var Privacy bool
     var Busy bool
@@ -36,7 +36,7 @@ data struct ToolsInput {
     var Decode float64
     var Width float64
     var Height float64
-    var OnNavigate Action[string]
+    var OnNavigate Action[AppPage]
     var OnPrivacy Action
     var OnNodeSettings Action
 }
@@ -76,10 +76,10 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             checkedAt = input.Session.Checks.PhraseChecked()
             fileMode = FileMode(input)
         }
-        if input.Section != "Privacy" && step.Length > 0 {
+        if input.Section != AppPage.Privacy && step.Length > 0 {
             EndPhrase()
         }
-        return if input.Section == "Privacy" {
+        return if input.Section == AppPage.Privacy {
             if step.Length > 0 {
                 Phrase(input)
             } else {
@@ -341,7 +341,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                         true,
                         () -> {
                             input.State.Tab = "health"
-                            input.OnNavigate("Tools")
+                            input.OnNavigate(AppPage.Tools)
                         }
                     )
                 } else {
@@ -441,7 +441,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 "memo errors",
                 Number(input, "memos", "memo errors", ui.Count(memos), memos > 0 ? ui.Orange: ui.Ink, size),
                 if memos > 0 {
-                    Small(input, "View", false, () -> input.OnNavigate("Transactions"))
+                    Small(input, "View", false, () -> input.OnNavigate(AppPage.Transactions))
                 } else {
                     Container{}
                 },
@@ -677,7 +677,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 return task
             },
             () -> {
-                if input.Session.State == "Unlocked" && step == "show" {
+                if input.Session.State == WalletState.Unlocked && step == "show" {
                     Ask(task.Result)
                 } else {
                     Array.Clear(task.Result)

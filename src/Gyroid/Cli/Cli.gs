@@ -160,7 +160,14 @@ class Cli {
                     if let height = status.SyncProgress {
                         Console.WriteLine("Sync height: " + height.ToString(CultureInfo.InvariantCulture))
                     }
-                    Console.WriteLine("Wallet: " + wallet.Snapshot.State)
+                    Console.WriteLine(
+                        "Wallet: " + switch wallet.Snapshot.State {
+                            case WalletState.Unloaded: "Unloaded"
+                            case WalletState.Locked: "Locked"
+                            case WalletState.Unlocked: "Unlocked"
+                            case WalletState.Unknown: "Unknown"
+                        }
+                    )
                     if let pending = wallet.Send.Pending {
                         Console.WriteLine("Pending send: " + pending.State)
                     }

@@ -269,7 +269,7 @@ class SendService {
                 .JsonAsync("wallet/send/status?idempotency_key=" + Uri.EscapeDataString(pending.Key), ct: ct)
             let root = response.RootElement
             let status = NodeJson.Text(root, "state")
-            if session.State == "Unlocked" {
+            if session.State == WalletState.Unlocked {
                 let sends = await session.History.ReadSendsAsync(ct)
                 session.PublishSends(sends)
             }
@@ -292,7 +292,7 @@ class SendService {
                         "Send outcome unknown"
                     }
                 }
-            } else if status == "not_found" && session.State == "Unlocked" {
+            } else if status == "not_found" && session.State == WalletState.Unlocked {
                 store.Pending = PendingSend{
                     ... pending,
                     State: "No send record. Outcome unknown",

@@ -123,7 +123,12 @@ partial class App {
         Rebuild()
     }
 
-    private func Lockable() bool -> wallet.Snapshot.State == "Unlocked" || wallet.Snapshot.State == "Unknown"
+    private func Lockable() bool -> wallet
+        .Snapshot
+        .State == WalletState.Unlocked ||
+        wallet
+        .Snapshot
+        .State == WalletState.Unknown
 
     private func Lock() {
         if !Lockable() {

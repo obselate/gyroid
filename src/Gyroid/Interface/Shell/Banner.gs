@@ -31,7 +31,7 @@ partial class App {
             refreshError
         } else if wallet.BackgroundError.Length > 0 {
             wallet.BackgroundError
-        } else if snapshot.State == "Unlocked" && !snapshot.Connected {
+        } else if snapshot.State == WalletState.Unlocked && !snapshot.Connected {
             "Not connected"
         } else {
             ""

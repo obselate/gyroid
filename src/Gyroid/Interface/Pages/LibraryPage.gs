@@ -16,12 +16,12 @@ import System.Linq
 data struct LibraryInput {
     var Session WalletSession
     var Ui Presentation
-    var State string
+    var State WalletState
     var ActiveWallet string
     var Busy bool
     var Language string
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
-    var OnNavigate Action[string]
+    var OnNavigate Action[AppPage]
     var OnCreate Action[string, []char]
 }
 
@@ -30,7 +30,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
 
     private let wallets SortedDictionary[string, DateTime] = SortedDictionary[string, DateTime](StringComparer.Ordinal)
 
-    private var state string = ""
+    private var state WalletState? = nil
 
     private var activeWallet string = ""
 
@@ -72,14 +72,14 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         if form.Length > 0 {
             return Form(input, card)
         }
-        let loaded = input.State != "Unloaded"
+        let loaded = input.State != WalletState.Unloaded
         let header = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: 8,
             FlexShrink: 0,
             ui.Grow(ui.Label(ui.Strings.Get("wallets"), 17, ui.Ink, "")),
-            Square(input, "settings", "Settings", false, false, () -> input.OnNavigate("Settings"))
+            Square(input, "settings", "Settings", false, false, () -> input.OnNavigate(AppPage.Settings))
         }
         card.Add(header)
         card.Add(ui.Label(input.Session.Settings.WalletDirectory, 12, ui.Dim, ""))
