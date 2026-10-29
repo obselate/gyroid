@@ -7,7 +7,10 @@ import Gyroid.Wallet
 import System
 import System.Collections.Generic
 import System.IO
+import System.Security.Cryptography
+import System.Text
 import System.Text.Json
+import System.Text.RegularExpressions
 import System.Threading
 import System.Threading.Tasks
 
@@ -47,10 +50,13 @@ class PrivacyChecks {
 
     private func PhraseStatePath() string -> AppSettings.ConfigurationPath() + ".phrase-checks.json"
 
-    private func WalletKey() string -> session.settings.Network + ":" + session.settings.ActiveWallet
+    private func WalletKey() string -> session.settings.Network + ":" + Convert.ToHexString(
+        SHA256.HashData(Encoding.UTF8.GetBytes(session.Snapshot.Address))
+    )
+        .ToLowerInvariant()
 
     func PhraseChecked() DateTime? {
-        if !File.Exists(PhraseStatePath()) {
+        if session.Snapshot.Address.Length == 0 || !File.Exists(PhraseStatePath()) {
             return nil
         }
         using let state = JsonDocument.Parse(PrivateFiles.ReadText(PhraseStatePath(), 65536, true))
@@ -62,6 +68,7 @@ class PrivacyChecks {
     }
 
     async func MarkPhraseCheckedAsync() {
+        session.RequireUnlocked()
         let path = PhraseStatePath()
         Directory.CreateDirectory(
             Path.GetDirectoryName(path) ?? throw WalletException("Settings file must have a parent directory")
@@ -80,7 +87,7 @@ class PrivacyChecks {
                 using let writer = Utf8JsonWriter(stream)
                 writer.WriteStartObject()
                 for entry in state.RootElement.EnumerateObject() {
-                    if entry.Name != wallet {
+                    if entry.Name != wallet && Regex.IsMatch(entry.Name, "^[^:]+:[0-9a-f]{64}$") {
                         entry.WriteTo(writer)
                     }
                 }
