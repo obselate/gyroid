@@ -32,6 +32,7 @@ partial class App : Cell {
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
 
     private let receiveRequest ReceiveRequest = ReceiveRequest()
+    private let sendRows List[SendRow] = List[SendRow]()
 
     private let miningHistory MiningHistory = MiningHistory()
     private let toolsState ToolsState = ToolsState()
@@ -200,6 +201,7 @@ partial class App : Cell {
         frameTimer = nil
         ui.ReleaseClipboard()
         ClearSeed()
+        sendRows.Clear()
         wallet.Changed = nil
     }
 
@@ -218,6 +220,7 @@ partial class App : Cell {
         if snapshot.State != "Unlocked" {
             ClearSeed()
             toolsState.Report = nil
+            sendRows.Clear()
         }
         let node = wallet.Node.Status
         if node.Syncing || node.Running && (node.Peers == 0 || node.Height == 0) {
@@ -555,6 +558,7 @@ partial class App : Cell {
                     "send",
                     SendPageInput{
                         Session: wallet,
+                        Rows: sendRows,
                         Ui: ui,
                         Window: window,
                         Snapshot: snapshot,

@@ -505,7 +505,13 @@ class Presentation {
         content
     }
 
-    func Button(content string, action Action, disabled bool = false, primary bool = false) Blob {
+    func Button(
+        content string,
+        action Action,
+        disabled bool = false,
+        primary bool = false,
+        autoFocus bool = false
+    ) Blob {
         let theme = Theme.Read()
         let style = if primary {
             theme.PrimaryButton
@@ -513,18 +519,20 @@ class Presentation {
             theme.Button
         }
         let busy = primary && Working()
+        let button = (
+            style with{
+                Content = Strings.Get(content),
+                OnClick = action,
+                Disabled = disabled || busy,
+                DisabledBackgroundColor = busy ? style.BackgroundColor: style.DisabledBackgroundColor,
+                DisabledTextColor = busy ? Color.Transparent: Dim,
+                FontFamily = Font
+            }
+        ).Build()
+        button.AutoFocus = autoFocus
         return Container{
             Position: PositionType.Relative,
-            (
-                style with{
-                    Content = Strings.Get(content),
-                    OnClick = action,
-                    Disabled = disabled || busy,
-                    DisabledBackgroundColor = busy ? style.BackgroundColor: style.DisabledBackgroundColor,
-                    DisabledTextColor = busy ? Color.Transparent: Dim,
-                    FontFamily = Font
-                }
-            ).Build(),
+            button,
             if busy && playbackActive() {
                 Container{
                     Position: PositionType.Absolute,

@@ -27,6 +27,7 @@ class SendRow {
 
 data struct SendPageInput {
     var Session WalletSession
+    var Rows List[SendRow]
     var Ui Presentation
     var Window Window?
     var Snapshot WalletSnapshot
@@ -41,7 +42,8 @@ data struct SendPageInput {
 }
 
 class SendPage : Cell[SendPageInput] {
-    private let rows List[SendRow] = List[SendRow]()
+    private var rows List[SendRow]
+    private var reviewFocus bool
 
     private var estimate SendEstimate?
 
@@ -51,11 +53,11 @@ class SendPage : Cell[SendPageInput] {
 
     private var openRow int32 = -1
 
-    init() {
-        rows.Add(SendRow())
-    }
-
     protected override func Build(input SendPageInput) Blob {
+        rows = input.Rows
+        if rows.Count == 0 {
+            rows.Add(SendRow())
+        }
         let ui = input.Ui
         let spendable = input.Snapshot.Balance?.Spendable ?? uint64(0)
         let compact = input.Height < 700
@@ -123,7 +125,8 @@ class SendPage : Cell[SendPageInput] {
                 )
             }
         )
-        let review = ui.Button("Review", () -> Review(input), !ready || over || total == 0, true)
+        let review = ui.Button("Review", () -> Review(input), !ready || over || total == 0, true, reviewFocus)
+        reviewFocus = false
         review.MinWidth = 140
         let addRecipient = Goo
             .Button{
@@ -629,6 +632,7 @@ class SendPage : Cell[SendPageInput] {
         let close Action = () -> {
             estimate = nil
             openRow = -1
+            reviewFocus = true
             Rebuild()
         }
         let list = Container{
