@@ -1405,7 +1405,10 @@ class HistoryPage : Cell[HistoryInput] {
     private async func Choose(window Window, name string) string {
         let result = await window.ShowFileDialogAsync(
             FileDialogKind.SaveFile,
-            FileDialogOptions{Title: current.Ui.Strings.Get("save"), InitialPath: Path.GetFullPath(name)}
+            FileDialogOptions{
+                Title: current.Ui.Strings.Get("save"),
+                InitialPath: Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), name)
+            }
         )
         if result.Status == FileDialogStatus.Success && result.Paths.Count > 0 {
             return result.Paths[0]
