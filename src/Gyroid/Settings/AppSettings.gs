@@ -116,7 +116,7 @@ open class AppSettings {
             network
         )
 
-        private func ValidEndpoint(value string) bool ->
+        func ValidEndpoint(value string) bool ->
         Uri.TryCreate(value, UriKind.Absolute, out let endpoint) &&
             endpoint != nil &&
             endpoint.Scheme == "http" &&
@@ -211,7 +211,9 @@ open class AppSettings {
                 if !(error is IOException) &&
                     !(error is JsonException) &&
                     !(error is UnauthorizedAccessException) &&
-                    !(error is InvalidOperationException) {
+                    !(error is InvalidOperationException) &&
+                    !(error is WalletException) &&
+                    !(error is ArgumentException) {
                     throw error
                 }
                 settings.LoadError = "Settings file is invalid. Save settings to replace it"

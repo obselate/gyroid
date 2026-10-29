@@ -2,6 +2,7 @@ package Gyroid.Node
 
 import Gyroid.Platform
 import Gyroid.Settings
+import Gyroid.Wallet
 import System
 import System.IO
 import System.Linq
@@ -43,29 +44,42 @@ class NodeDiscovery {
                 wallets = Path.Combine(cfg, "wallets")
                 let config = Path.Combine(cfg, "config.json")
                 if File.Exists(config) {
-                    using let json = JsonDocument.Parse(PrivateFiles.ReadText(config, 65536))
-                    if json.RootElement.TryGetProperty("cores", out let cores) && cores.TryGetProperty(
-                        network,
-                        out let core
-                    ) {
-                        let configured = NodeJson.Text(core, "data_dir")
-                        if Path.IsPathFullyQualified(configured) {
-                            data = configured
-                        }
-                        let walletFile = NodeJson.Text(core, "wallet_file")
-                        if Path.IsPathFullyQualified(walletFile) {
-                            wallets = Path.GetDirectoryName(walletFile) ?? wallets
-                            active = Path.GetFileName(walletFile)
-                        }
-                        let address = NodeJson.Text(core, "api_addr")
-                        if address.Length > 0 {
-                            endpoint = if address.StartsWith("http://", StringComparison.Ordinal) {
+                    try {
+                        using let json = JsonDocument.Parse(PrivateFiles.ReadText(config, 65536))
+                        if json.RootElement.TryGetProperty("cores", out let cores) && cores.TryGetProperty(
+                            network,
+                            out let core
+                        ) {
+                            let address = NodeJson.Text(core, "api_addr")
+                            let configuredEndpoint = if address.Length == 0 {
+                                endpoint
+                            } else if address.StartsWith("http://", StringComparison.Ordinal) {
                                 address
                             } else {
                                 "http://" + address + "/"
                             }
+                            if !AppSettings.ValidEndpoint(configuredEndpoint) {
+                                throw WalletException("API endpoint must be a loopback HTTP origin")
+                            }
+                            let walletFile = NodeJson.Text(core, "wallet_file")
+                            if Path.IsPathFullyQualified(walletFile) {
+                                WalletValidation.ValidateFilename(Path.GetFileName(walletFile))
+                            }
+                            let configured = NodeJson.Text(core, "data_dir")
+                            if Path.IsPathFullyQualified(configured) {
+                                data = configured
+                            }
+                            if Path.IsPathFullyQualified(walletFile) {
+                                wallets = Path.GetDirectoryName(walletFile) ?? wallets
+                                active = Path.GetFileName(walletFile)
+                            }
+                            endpoint = configuredEndpoint
                         }
-                    }
+                    } catch (error WalletException) { } catch (error IOException) { } catch (
+                        error UnauthorizedAccessException
+                    ) { } catch (error JsonException) { } catch (error InvalidOperationException) { } catch (
+                        error ArgumentException
+                    ) { }
                 }
             }
             var installed = wrapped
@@ -143,19 +157,31 @@ class NodeDiscovery {
                     data = Path.Combine(application, "data")
                     wallets = application
                     let selection = Path.Combine(application, "active_wallet")
-                    active = if File.Exists(selection) {
-                        PrivateFiles.ReadText(selection, 1024).Trim()
-                    } else {
-                        "wallet.dat"
+                    active = "wallet.dat"
+                    if File.Exists(selection) {
+                        try {
+                            let selected = PrivateFiles.ReadText(selection, 1024).Trim()
+                            WalletValidation.ValidateFilename(selected)
+                            active = selected
+                        } catch (error WalletException) { } catch (error IOException) { } catch (
+                            error UnauthorizedAccessException
+                        ) { } catch (error ArgumentException) { }
                     }
                     let configuration = Path.Combine(data, "settings.json")
                     if File.Exists(configuration) {
-                        using let json = JsonDocument.Parse(PrivateFiles.ReadText(configuration, 65536))
-                        let walletFile = NodeJson.Text(json.RootElement, "wallet_file")
-                        if Path.IsPathFullyQualified(walletFile) {
-                            wallets = Path.GetDirectoryName(walletFile) ?? wallets
-                            active = Path.GetFileName(walletFile)
-                        }
+                        try {
+                            using let json = JsonDocument.Parse(PrivateFiles.ReadText(configuration, 65536))
+                            let walletFile = NodeJson.Text(json.RootElement, "wallet_file")
+                            if Path.IsPathFullyQualified(walletFile) {
+                                WalletValidation.ValidateFilename(Path.GetFileName(walletFile))
+                                wallets = Path.GetDirectoryName(walletFile) ?? wallets
+                                active = Path.GetFileName(walletFile)
+                            }
+                        } catch (error WalletException) { } catch (error IOException) { } catch (
+                            error UnauthorizedAccessException
+                        ) { } catch (error JsonException) { } catch (error InvalidOperationException) { } catch (
+                            error ArgumentException
+                        ) { }
                     }
                 }
                 if binary.Length == 0 {
