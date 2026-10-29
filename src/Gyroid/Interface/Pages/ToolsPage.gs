@@ -1284,7 +1284,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         Value: value,
         Controlled: true,
         Width: Percent(100),
-        EntryHeight: Math.Max(38, (input.Height - 300) / (input.State.Tab == "proof" ? 4: 3)),
+        FontFamily: input.Ui.Font,
+        ContentDirection: Direction.LeftToRight,
+        EntryHeight: Math.Max(38, (input.Height - 380) / (input.State.Tab == "proof" ? 4: 3)),
         Password: input.Privacy && input.State.Tab == "proof",
         Disabled: input.Busy,
         OnChange: text -> {
