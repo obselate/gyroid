@@ -589,13 +589,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             scan.Add(
                 Cell.Mount[SpinnerInput, Spinner](
                     "rescan",
-                    SpinnerInput{Size: 16, Color: ui.Lime, Label: ui.Strings.Get("Scanning")}
+                    SpinnerInput{Size: 16, Color: ui.Lime, Label: ui.Strings.Get("Syncing")}
                 )
             )
         }
         scan.Add(
             ui.Button(
-                "Rescan",
+                "Sync",
                 () -> {
                     let task = input.Session.SyncAsync()
                     rescan = task
@@ -604,7 +604,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 input.Busy
             )
         )
-        scan.Add(Info(input, "rescan", "About rescan", "Scan blocks the wallet has not checked yet"))
+        scan.Add(Info(input, "rescan", "About sync", "Scan blocks the wallet has not checked yet"))
         let rows = List[Container]{
             Line(ui, "scan height", scan.ToArray()),
             Line(

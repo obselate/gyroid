@@ -41,7 +41,7 @@ class WalletSession : IDisposable {
     var events CancellationTokenSource? = nil
     var eventsEnabled bool
     var nextRestart DateTimeOffset
-    var lastActivity int64 = Environment.TickCount64
+    var lastActivity int64 = WalletLockScheduler.Now()
 
     prop Settings WalletSettings -> settings.Copy()
     prop Snapshot WalletSnapshot -> snapshot
@@ -101,10 +101,10 @@ class WalletSession : IDisposable {
     }
 
     func Touch() {
-        Interlocked.Exchange(ref lastActivity, Environment.TickCount64)
+        Interlocked.Exchange(ref lastActivity, WalletLockScheduler.Now())
     }
 
-    private func IdleExpired() bool -> settings.AutoLockMinutes > 0 && Environment.TickCount64 - Interlocked.Read(
+    private func IdleExpired() bool -> settings.AutoLockMinutes > 0 && WalletLockScheduler.Now() - Interlocked.Read(
         ref lastActivity
     ) >= int64(settings.AutoLockMinutes) * 60000
 
@@ -117,9 +117,9 @@ class WalletSession : IDisposable {
                     continue
                 }
                 let remaining = int64(settings.AutoLockMinutes) * 60000
-                - (Environment.TickCount64 - Interlocked.Read(ref lastActivity))
+                - (WalletLockScheduler.Now() - Interlocked.Read(ref lastActivity))
                 if remaining > 0 {
-                    await autoLockChanged.WaitAsync(int32(Math.Min(remaining, int32.MaxValue)), ct)
+                    await autoLockChanged.WaitAsync(int32(Math.Min(remaining, 250)), ct)
                     continue
                 }
                 await BeginAsync(ct)
@@ -249,12 +249,7 @@ class WalletSession : IDisposable {
             if !connected {
                 Node.Supervisor.Progress?.Invoke("Detecting")
             }
-            let walletFile = await Node.ConnectAsync(settings, ct)
-            let comparison = if OperatingSystem.IsWindows() {
-                StringComparison.OrdinalIgnoreCase
-            } else {
-                StringComparison.Ordinal
-            }
+            await Node.ConnectAsync(settings, ct)
             try {
                 using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
                 if state != "Unlocked" {
@@ -273,12 +268,6 @@ class WalletSession : IDisposable {
             if state == "Unloaded" {
                 managed = false
             } else {
-                let filename = Path.GetFileName(walletFile)
-                if !managed && !string.Equals(settings.ActiveWallet, filename, comparison) {
-                    Library.WalletPath(filename)
-                    settings.ActiveWallet = filename
-                    await WalletSettings.SaveAsync(settings, ct)
-                }
                 managed = true
             }
             connected = true

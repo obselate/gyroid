@@ -16,9 +16,18 @@ class Cli {
         func Run(input[]string, stopped ManualResetEventSlim, started Action[WalletSession]) int32 {
             var arguments = input
             let command = arguments[1]
-            if arguments.Length > 2 && arguments[2] == "--help" {
-                Usage(Console.Out)
-                return 0
+            for index in 2 ... arguments.Length {
+                if arguments[index] == "--" {
+                    break
+                }
+                if arguments[index] == "--help" {
+                    Usage(
+                        Console.Out,
+                        index > 2 && (command == "node" || command == "settings" || command == "view-only")
+                        ? command + " " + arguments[2]: command
+                    )
+                    return 0
+                }
             }
             if command == "sign" && arguments.Length == 4 && arguments[2] == "--" {
                 arguments = []string{arguments[0], command, arguments[3]}
@@ -505,7 +514,28 @@ class Cli {
             }
         }
 
-        func Usage(writer TextWriter) int32 {
+        func Usage(writer TextWriter, command string = "") int32 {
+            if command.Length > 0 {
+                let syntax = switch command {
+                    case "node": "node status | start | stop | purge"
+                    case "settings": "settings [auto-lock <minutes>]"
+                    case "settings auto-lock": "settings auto-lock <minutes>"
+                    case "view-only create": "view-only create <filename.wallet.dat>"
+                    case "view-only import": "view-only import <filename.dat>"
+                    case "history": "history [--limit N]"
+                    case "send": "send <address> <amount> [--memo TEXT] [--dry-run] | send --resume"
+                    case "load": "load <filename.dat>"
+                    case "sign": "sign [--] <message>"
+                    case "verify": "verify <address> <message> <signature>"
+                    case "prove": "prove <txid>"
+                    case "verify-proof": "verify-proof <txid> <tx-key> <address> <amount>"
+                    case "viewkeys": "viewkeys --show"
+                    case "view-only": "view-only create <filename.wallet.dat> | view-only import <filename.dat>"
+                    default: command
+                }
+                writer.WriteLine("Usage: gyroid " + syntax)
+                return 2
+            }
             writer.WriteLine("Usage: gyroid [--width N] [--height N] [--scale N]")
             writer.WriteLine("       gyroid --help | --version | status | balance | address | unlock | lock")
             writer.WriteLine("       gyroid node status | start | stop | purge")

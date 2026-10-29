@@ -5,14 +5,34 @@ import Gyroid.Platform
 import System
 import System.Diagnostics
 import System.IO
+import System.Runtime.InteropServices
 import System.Security.Cryptography
 import System.Text
 import System.Text.Json
 import System.Threading
 import System.Threading.Tasks
 
+@StructLayout(LayoutKind.Sequential)
+struct BootTime {
+    var Seconds int64
+    var Nanoseconds int64
+}
+
+@DllImport("libc")
+func clock_gettime(clock int32, out value BootTime) int32;
+
 class WalletLockScheduler {
     shared {
+        func Now() int64 {
+            if !OperatingSystem.IsLinux() {
+                return Environment.TickCount64
+            }
+            if clock_gettime(7, out let value) != 0 {
+                throw WalletException("Could not read suspend-aware clock")
+            }
+            return value.Seconds * 1000 + value.Nanoseconds / 1000000
+        }
+
         private func CoreIdentity(settings WalletSettings) string {
             let cookie = PrivateFiles.Cookie(Path.Combine(settings.DataDirectory, "api.cookie"))
             return Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes(cookie)))
@@ -61,7 +81,7 @@ class WalletLockScheduler {
             writer.WriteString("binary_path", node.Supervisor.Executable)
             writer.WriteNumber("pid", pid)
             writer.WriteString("core_identity", identity)
-            writer.WriteNumber("deadline", Environment.TickCount64 + int64(minutes) * 60000)
+            writer.WriteNumber("deadline", Now() + int64(minutes) * 60000)
             writer.WriteString("token", token)
             writer.WriteEndObject()
             await writer.FlushAsync()
@@ -101,11 +121,11 @@ class WalletLockScheduler {
                 Console.WriteLine("ready")
                 Console.Out.Flush()
                 let path = Path.Combine(settings.DataDirectory, "gyroid-autolock")
-                while Environment.TickCount64 < deadline {
+                while Now() < deadline {
                     if !File.Exists(path) || PrivateFiles.ReadText(path, 64, true) != token {
                         return 0
                     }
-                    Thread.Sleep(int32(Math.Max(0, Math.Min(deadline - Environment.TickCount64, 250))))
+                    Thread.Sleep(int32(Math.Max(0, Math.Min(deadline - Now(), 250))))
                 }
                 if !File.Exists(path) || PrivateFiles.ReadText(path, 64, true) != token ||
                     CoreIdentity(settings) != identity {
