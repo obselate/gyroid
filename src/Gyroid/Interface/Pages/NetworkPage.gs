@@ -684,23 +684,27 @@ class NetworkPage : Cell[NetworkInput] {
         return card
     }
 
-    private func Segment(ui Presentation, key string, count int32) Blob -> Goo
-        .Button{
-        Padding: Edges{Left: 12, Right: 12, Top: 5, Bottom: 5},
-        BorderRadius: 7,
-        BackgroundColor: tab == key ? Color.Parse("#1a1a1a"): Color.Transparent,
-        Hover: Style{BackgroundColor: ui.Rule},
-        Focus: Theme.Read().FocusStyle,
-        Accessibility: Accessibility{
-            Role: AccessibilityRole.Tab,
-            Name: ui.Strings.Get(key) + " " + count.ToString(),
-            Selected: tab == key
-        },
-        OnClick: () -> {
-            tab = key
-            Rebuild()
-        },
-        ui.Label(ui.Strings.Get(key) + " " + count.ToString(), 14, tab == key ? ui.Ink: ui.Body, "")
+    private func Segment(ui Presentation, key string, count int32) Blob {
+        let button = Goo
+            .Button{
+            Padding: Edges{Left: 12, Right: 12, Top: 5, Bottom: 5},
+            BorderRadius: 7,
+            BackgroundColor: tab == key ? Color.Parse("#1a1a1a"): Color.Transparent,
+            Hover: Style{BackgroundColor: ui.Rule},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Tab,
+                Name: ui.Strings.Get(key) + " " + count.ToString(),
+                Selected: tab == key
+            },
+            OnClick: () -> {
+                tab = key
+                Rebuild()
+            },
+            ui.Label(ui.Strings.Get(key) + " " + count.ToString(), 14, tab == key ? ui.Ink: ui.Body, "")
+        }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Legend(ui Presentation, label string, count int32, color Color) Blob {

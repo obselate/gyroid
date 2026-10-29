@@ -197,7 +197,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     private func Square(input LibraryInput, icon string, label string, active bool, disabled bool, click Action) Blob {
         let ui = input.Ui
         let off = disabled || input.Busy
-        return Goo
+        let button = Goo
             .Button{
             Width: 38,
             Height: 38,
@@ -225,11 +225,13 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 }
             )
         }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Tile(input LibraryInput, icon string, label string, primary bool, click Action) Blob {
         let ui = input.Ui
-        return Goo
+        let button = Goo
             .Button{
             FlexGrow: 1,
             FlexBasis: 0,
@@ -251,6 +253,8 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             MaterialIcons.Create(icon, 20, ui.Lime),
             ui.Label(ui.Strings.Get(label), 14, ui.Ink, "")
         }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Menu(input LibraryInput) Blob {
@@ -285,7 +289,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
 
     private func Item(input LibraryInput, icon string, label string, click Action) Blob {
         let ui = input.Ui
-        return Goo
+        let button = Goo
             .Button{
             Height: 38,
             FlexDirection: FlexDirection.Row,
@@ -301,6 +305,8 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             MaterialIcons.Create(icon, 16, ui.Lime),
             ui.Label(ui.Strings.Get(label), 14, ui.Body, "")
         }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Row(input LibraryInput, filename string, used DateTime, loaded bool) Blob {
@@ -309,61 +315,58 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let expanded = filename == opened
         let label = ui.WalletName(filename)
         let colors = []Color{ui.Lime, ui.Blue, ui.Orange, ui.Mint, ui.Violet, ui.Pink}
+        let button = Goo
+            .Button{
+            Height: 48,
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            Disabled: input.Busy || loaded && !active,
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
+            OnClick: () -> {
+                opened = expanded ? "": filename
+                password = ""
+                reveal = false
+                issue = ""
+                Rebuild()
+            },
+            Container{
+                Width: 10,
+                Height: 10,
+                BorderRadius: 3,
+                FlexShrink: 0,
+                BackgroundColor: colors[filename.Sum((c char) -> int32(c)) % colors.Length]
+            },
+            ui.Grow(
+                ui.Label(
+                    label,
+                    14,
+                    if active {
+                        ui.Mint
+                    } else if loaded {
+                        ui.Dim
+                    } else {
+                        ui.Ink
+                    },
+                    ""
+                )
+            ),
+            ui.Label(Used(ui, used), 13, ui.Dim, ""),
+            if active {
+                Container{}
+            } else {
+                Container{FlexShrink: 0, MaterialIcons.Create(expanded ? "expand_more": "chevron_right", 16, ui.Dim)}
+            }
+        }
+        WidgetKeyBindings.BindActivation(button)
         let head = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: 8,
             Height: 48,
             FlexShrink: 0,
-            ui.Grow(
-                Goo
-                    .Button{
-                    Height: 48,
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    Gap: 10,
-                    Disabled: input.Busy || loaded && !active,
-                    Focus: Theme.Read().FocusStyle,
-                    Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
-                    OnClick: () -> {
-                        opened = expanded ? "": filename
-                        password = ""
-                        reveal = false
-                        issue = ""
-                        Rebuild()
-                    },
-                    Container{
-                        Width: 10,
-                        Height: 10,
-                        BorderRadius: 3,
-                        FlexShrink: 0,
-                        BackgroundColor: colors[filename.Sum((c char) -> int32(c)) % colors.Length]
-                    },
-                    ui.Grow(
-                        ui.Label(
-                            label,
-                            14,
-                            if active {
-                                ui.Mint
-                            } else if loaded {
-                                ui.Dim
-                            } else {
-                                ui.Ink
-                            },
-                            ""
-                        )
-                    ),
-                    ui.Label(Used(ui, used), 13, ui.Dim, ""),
-                    if active {
-                        Container{}
-                    } else {
-                        Container{
-                            FlexShrink: 0,
-                            MaterialIcons.Create(expanded ? "expand_more": "chevron_right", 16, ui.Dim)
-                        }
-                    }
-                }
-            )
+            ui.Grow(button)
         }
         if active {
             head.Add(Square(input, "download", "Unload", false, false, () -> ui.Run(input.Session.UnloadAsync())))

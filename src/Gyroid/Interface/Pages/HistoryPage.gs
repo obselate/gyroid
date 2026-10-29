@@ -801,6 +801,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Container{Width: 52, ui.Label(depth, 12, mature ? ui.Body: ui.Orange, "")}
             }
         }
+        WidgetKeyBindings.BindActivation(line)
         if row.Width >= 1100 {
             line.Children.Add(
                 Container{
@@ -1108,6 +1109,7 @@ class HistoryPage : Cell[HistoryInput] {
             MaterialIcons.Create("download", 16, ui.Ink),
             ui.Label(ui.Strings.Get("export"), 12, ui.Ink, "")
         }
+        WidgetKeyBindings.BindActivation(button)
         let shownRange = to > 0 ? ui.Count(from) + " – " + ui.Count(to): ui.Strings.Get(period)
         let content = Container{
             Gap: 12,

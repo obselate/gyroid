@@ -323,22 +323,26 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         ui.Grow(value)
     }
 
-    private func Step(input MiningPageInput, icon string, label string, threads int32, enabled bool) Blob -> Goo
-        .Button{
-        Width: 26,
-        Height: 26,
-        AlignItems: AlignItems.Center,
-        JustifyContent: JustifyContent.Center,
-        BorderWidth: 1,
-        BorderRadius: 7,
-        BorderColor: input.Ui.Edge,
-        BackgroundColor: Color.Parse("#0b0b0b"),
-        Disabled: !enabled || input.Busy,
-        Hover: Style{BackgroundColor: input.Ui.Rule},
-        Focus: Theme.Read().FocusStyle,
-        Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: input.Ui.Strings.Get(label)},
-        OnClick: () -> Act(input, input.Session.Mining.SetThreadsAsync(threads)),
-        MaterialIcons.Create(icon, 14, enabled ? input.Ui.Ink: input.Ui.Dim)
+    private func Step(input MiningPageInput, icon string, label string, threads int32, enabled bool) Blob {
+        let button = Goo
+            .Button{
+            Width: 26,
+            Height: 26,
+            AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.Center,
+            BorderWidth: 1,
+            BorderRadius: 7,
+            BorderColor: input.Ui.Edge,
+            BackgroundColor: Color.Parse("#0b0b0b"),
+            Disabled: !enabled || input.Busy,
+            Hover: Style{BackgroundColor: input.Ui.Rule},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: input.Ui.Strings.Get(label)},
+            OnClick: () -> Act(input, input.Session.Mining.SetThreadsAsync(threads)),
+            MaterialIcons.Create(icon, 14, enabled ? input.Ui.Ink: input.Ui.Dim)
+        }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Command(
@@ -371,6 +375,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             MaterialIcons.Create(icon, 14, tint),
             ui.Label(ui.Strings.Get(label), 13, tint, "")
         }
+        WidgetKeyBindings.BindActivation(button)
         if input.Busy {
             button.Add(
                 Container{

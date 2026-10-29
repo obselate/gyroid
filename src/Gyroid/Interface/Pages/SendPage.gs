@@ -125,6 +125,26 @@ class SendPage : Cell[SendPageInput] {
         )
         let review = ui.Button("Review", () -> Review(input), !ready || over || total == 0, true)
         review.MinWidth = 140
+        let addRecipient = Goo
+            .Button{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 8,
+            Height: 30,
+            Padding: Edges{Left: 6, Right: 6},
+            BorderRadius: 6,
+            Disabled: input.Busy,
+            Hover: Style{BackgroundColor: ui.Rule},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Add recipient")},
+            OnClick: () -> {
+                rows.Add(SendRow())
+                Rebuild()
+            },
+            MaterialIcons.Create("add", 16, ui.Lime),
+            ui.Label(ui.Strings.Get("recipient"), 14, ui.Lime, "")
+        }
+        WidgetKeyBindings.BindActivation(addRecipient)
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -132,25 +152,7 @@ class SendPage : Cell[SendPageInput] {
                 JustifyContent: JustifyContent.SpaceBetween,
                 Gap: 12,
                 FlexShrink: 0,
-                Goo
-                    .Button{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    Gap: 8,
-                    Height: 30,
-                    Padding: Edges{Left: 6, Right: 6},
-                    BorderRadius: 6,
-                    Disabled: input.Busy,
-                    Hover: Style{BackgroundColor: ui.Rule},
-                    Focus: Theme.Read().FocusStyle,
-                    Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Add recipient")},
-                    OnClick: () -> {
-                        rows.Add(SendRow())
-                        Rebuild()
-                    },
-                    MaterialIcons.Create("add", 16, ui.Lime),
-                    ui.Label(ui.Strings.Get("recipient"), 14, ui.Lime, "")
-                },
+                addRecipient,
                 review
             }
         )
@@ -272,7 +274,7 @@ class SendPage : Cell[SendPageInput] {
 
     private func Share(input SendPageInput, label string, atoms uint64, click Action) Blob {
         let ui = input.Ui
-        return Goo
+        let button = Goo
             .Button{
             Height: 28,
             Padding: Edges{Left: 14, Right: 14},
@@ -288,6 +290,8 @@ class SendPage : Cell[SendPageInput] {
             OnClick: click,
             ui.Label(ui.Strings.Get(label), 12, ui.Body, "")
         }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Line(input SendPageInput, index int32) Blob {
@@ -363,26 +367,30 @@ class SendPage : Cell[SendPageInput] {
         return line
     }
 
-    private func Icon(input SendPageInput, icon Blob, label string, active bool, action Action) Blob -> Goo
-        .Button{
-        Width: 30,
-        Height: 30,
-        Margin: Edges{Top: 4},
-        FlexShrink: 0,
-        AlignItems: AlignItems.Center,
-        JustifyContent: JustifyContent.Center,
-        BorderRadius: 8,
-        BackgroundColor: active ? input.Ui.Rule: Color.Transparent,
-        Disabled: input.Busy,
-        Hover: Style{BackgroundColor: input.Ui.Rule},
-        Focus: Theme.Read().FocusStyle,
-        Accessibility: Accessibility{
-            Role: AccessibilityRole.Button,
-            Name: input.Ui.Strings.Get(label),
-            Expanded: active
-        },
-        OnClick: action,
-        icon
+    private func Icon(input SendPageInput, icon Blob, label string, active bool, action Action) Blob {
+        let button = Goo
+            .Button{
+            Width: 30,
+            Height: 30,
+            Margin: Edges{Top: 4},
+            FlexShrink: 0,
+            AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.Center,
+            BorderRadius: 8,
+            BackgroundColor: active ? input.Ui.Rule: Color.Transparent,
+            Disabled: input.Busy,
+            Hover: Style{BackgroundColor: input.Ui.Rule},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{
+                Role: AccessibilityRole.Button,
+                Name: input.Ui.Strings.Get(label),
+                Expanded: active
+            },
+            OnClick: action,
+            icon
+        }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func AddressField(input SendPageInput, row SendRow) Blob {
@@ -462,40 +470,38 @@ class SendPage : Cell[SendPageInput] {
             Accessibility: Accessibility{Role: AccessibilityRole.List, Name: ui.Strings.Get("contacts")}
         }
         for (name, destination) in matches {
-            list.Add(
-                Goo
-                    .Button{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    Gap: 10,
-                    Height: 36,
-                    Padding: Edges{Left: 10, Right: 10},
-                    BorderRadius: 7,
-                    Hover: Style{BackgroundColor: ui.Rule},
-                    Focus: Theme.Read().FocusStyle,
-                    Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: name},
-                    OnClick: () -> {
-                        row.Address = name
-                        row.Suggest = false
-                        Rebuild()
-                    },
-                    MaterialIcons.Create("person", 14, ui.Dim),
-                    ui.Grow(
-                        Text{
-                            Content: name,
-                            StyleRanges: []TextStyleRange{
-                                TextStyleRange(TextRange(0, text.Length), Style{Color: ui.Lime})
-                            },
-                            FontFamily: ui.Font,
-                            FontSize: 14,
-                            Color: ui.Ink,
-                            TextWrap: TextWrap.NoWrap,
-                            TextTrimming: TextTrimming.Ellipsis
-                        }
-                    ),
-                    ui.Label(ui.Short(destination), 13, ui.Dim, "")
-                }
-            )
+            let button = Goo
+                .Button{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 10,
+                Height: 36,
+                Padding: Edges{Left: 10, Right: 10},
+                BorderRadius: 7,
+                Hover: Style{BackgroundColor: ui.Rule},
+                Focus: Theme.Read().FocusStyle,
+                Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: name},
+                OnClick: () -> {
+                    row.Address = name
+                    row.Suggest = false
+                    Rebuild()
+                },
+                MaterialIcons.Create("person", 14, ui.Dim),
+                ui.Grow(
+                    Text{
+                        Content: name,
+                        StyleRanges: []TextStyleRange{TextStyleRange(TextRange(0, text.Length), Style{Color: ui.Lime})},
+                        FontFamily: ui.Font,
+                        FontSize: 14,
+                        Color: ui.Ink,
+                        TextWrap: TextWrap.NoWrap,
+                        TextTrimming: TextTrimming.Ellipsis
+                    }
+                ),
+                ui.Label(ui.Short(destination), 13, ui.Dim, "")
+            }
+            WidgetKeyBindings.BindActivation(button)
+            list.Add(button)
         }
         field.Add(
             Cell.Mount[PopoverInput, Popover](
@@ -753,6 +759,7 @@ class SendPage : Cell[SendPageInput] {
             },
             head
         }
+        WidgetKeyBindings.BindActivation(entry)
         if recipient.Memo.Length > 0 {
             entry.Add(
                 Container{

@@ -94,7 +94,7 @@ class ContactsPage : Cell[ContactsInput] {
 
     private func Square(input ContactsInput, icon string, label string, active bool, click Action) Blob {
         let ui = input.Ui
-        return Goo
+        let button = Goo
             .Button{
             Width: 34,
             Height: 34,
@@ -112,6 +112,8 @@ class ContactsPage : Cell[ContactsInput] {
             OnClick: click,
             MaterialIcons.Create(icon, 16, active ? ui.Lime: ui.Body)
         }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Row(input ContactsInput, label string, destination string) Blob {

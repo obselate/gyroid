@@ -121,7 +121,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     private func Small(input ToolsInput, label string, primary bool, action Action) Blob {
         let ui = input.Ui
         let color = primary ? ui.Lime: ui.Ink
-        return Goo
+        let button = Goo
             .Button{
             Height: 28,
             Padding: Edges{Left: 10, Right: 10},
@@ -139,6 +139,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             OnClick: action,
             ui.Label(ui.Strings.Get(label), 12, color, "")
         }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Info(input ToolsInput, key string, topic string, lines[]string) Blob ->
@@ -271,6 +273,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             Arc(LockShare(input.AutoLock), compact ? 20.0: 26.0),
             ui.Label(LockText(input), size, input.AutoLock == 0 ? ui.Orange: ui.Ink, "")
         }
+        WidgetKeyBindings.BindActivation(lockValue)
         if hovered == "lock" && !editing {
             lockValue.Add(MaterialIcons.Create("expand_more", 16, ui.Ink))
         }
@@ -300,6 +303,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             OnClick: input.OnNodeSettings,
             ui.Label(ui.Strings.Get("local"), size, ui.Ink, "")
         }
+        WidgetKeyBindings.BindActivation(nodeValue)
         if hovered == "node" {
             nodeValue.Add(MaterialIcons.Create("north_east", 16, ui.Ink))
         }
@@ -588,29 +592,29 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
         for minutes in[]int32{5, 15, 60, 0} {
             let chosen = minutes == input.AutoLock
-            row.Add(
-                Goo
-                    .Button{
-                    Padding: Edges{Left: compact ? 6.0: 10.0, Right: compact ? 6.0: 10.0, Top: 4, Bottom: 4},
-                    BorderRadius: 7,
-                    BackgroundColor: chosen ? Color.Parse("#1a1a1a"): Color.Transparent,
-                    Hover: Style{BackgroundColor: ui.Rule},
-                    Focus: Theme.Read().FocusStyle,
-                    Disabled: input.Busy,
-                    Accessibility: Accessibility{
-                        Role: AccessibilityRole.Radio,
-                        Name: Minutes(input, minutes),
-                        Checked: chosen ? AccessibilityChecked.True: AccessibilityChecked.False
-                    },
-                    OnClick: () -> {
-                        editing = false
-                        if !chosen {
-                            ui.Run(input.Session.SaveAutoLockAsync(minutes))
-                        }
-                    },
-                    ui.Label(Minutes(input, minutes), compact ? 13.0: 14.0, chosen ? ui.Ink: ui.Body, "")
-                }
-            )
+            let button = Goo
+                .Button{
+                Padding: Edges{Left: compact ? 6.0: 10.0, Right: compact ? 6.0: 10.0, Top: 4, Bottom: 4},
+                BorderRadius: 7,
+                BackgroundColor: chosen ? Color.Parse("#1a1a1a"): Color.Transparent,
+                Hover: Style{BackgroundColor: ui.Rule},
+                Focus: Theme.Read().FocusStyle,
+                Disabled: input.Busy,
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.Radio,
+                    Name: Minutes(input, minutes),
+                    Checked: chosen ? AccessibilityChecked.True: AccessibilityChecked.False
+                },
+                OnClick: () -> {
+                    editing = false
+                    if !chosen {
+                        ui.Run(input.Session.SaveAutoLockAsync(minutes))
+                    }
+                },
+                ui.Label(Minutes(input, minutes), compact ? 13.0: 14.0, chosen ? ui.Ink: ui.Body, "")
+            }
+            WidgetKeyBindings.BindActivation(button)
+            row.Add(button)
         }
         return row
     }
@@ -856,33 +860,30 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             )
             for index in 0 ... suggestions.Count {
                 let word = suggestions[index]
-                pick.Add(
-                    Goo
-                        .Button{
-                        Height: compact ? 30.0: 34.0,
-                        Padding: Edges{Left: compact ? 12.0: 16.0, Right: compact ? 12.0: 16.0},
-                        AlignItems: AlignItems.Center,
-                        BorderWidth: 1,
-                        BorderRadius: 7,
-                        BorderColor: index == 0 ? ui.Lime: ui.Edge,
-                        BackgroundColor: control,
-                        Hover: Style{BackgroundColor: ui.Rule},
-                        Focus: Theme.Read().FocusStyle,
-                        Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: word},
-                        OnClick: () -> Answer(input, word),
-                        Text{
-                            Content: word,
-                            FontSize: compact ? 13.0: 14.0,
-                            Color: index == 0 ? ui.Lime: ui.Ink,
-                            StyleRanges: []TextStyleRange{
-                                TextStyleRange(
-                                    TextRange(typed.Length, word.Length - typed.Length),
-                                    Style{Color: ui.Dim}
-                                )
-                            }
+                let button = Goo
+                    .Button{
+                    Height: compact ? 30.0: 34.0,
+                    Padding: Edges{Left: compact ? 12.0: 16.0, Right: compact ? 12.0: 16.0},
+                    AlignItems: AlignItems.Center,
+                    BorderWidth: 1,
+                    BorderRadius: 7,
+                    BorderColor: index == 0 ? ui.Lime: ui.Edge,
+                    BackgroundColor: control,
+                    Hover: Style{BackgroundColor: ui.Rule},
+                    Focus: Theme.Read().FocusStyle,
+                    Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: word},
+                    OnClick: () -> Answer(input, word),
+                    Text{
+                        Content: word,
+                        FontSize: compact ? 13.0: 14.0,
+                        Color: index == 0 ? ui.Lime: ui.Ink,
+                        StyleRanges: []TextStyleRange{
+                            TextStyleRange(TextRange(typed.Length, word.Length - typed.Length), Style{Color: ui.Dim})
                         }
                     }
-                )
+                }
+                WidgetKeyBindings.BindActivation(button)
+                pick.Add(button)
             }
         }
         card.Add(pick)
@@ -988,27 +989,27 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             if id == "sign" && viewOnly {
                 continue
             }
-            tabs.Add(
-                Goo
-                    .Button{
-                    Padding: Edges{Left: 12, Right: 12, Top: 6, Bottom: 6},
-                    BorderRadius: 8,
-                    BackgroundColor: tab == id ? selected: Color.Transparent,
-                    Hover: Style{BackgroundColor: tab == id ? selected: ui.Rule},
-                    Focus: Theme.Read().FocusStyle,
-                    Accessibility: Accessibility{
-                        Role: AccessibilityRole.Tab,
-                        Name: ui.Strings.Get(id),
-                        Selected: tab == id
-                    },
-                    OnClick: () -> {
-                        state.Tab = id
-                        ResetVerdict()
-                        Rebuild()
-                    },
-                    ui.Label(ui.Strings.Get(id), 13, tab == id ? ui.Lime: ui.Body, "")
-                }
-            )
+            let button = Goo
+                .Button{
+                Padding: Edges{Left: 12, Right: 12, Top: 6, Bottom: 6},
+                BorderRadius: 8,
+                BackgroundColor: tab == id ? selected: Color.Transparent,
+                Hover: Style{BackgroundColor: tab == id ? selected: ui.Rule},
+                Focus: Theme.Read().FocusStyle,
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.Tab,
+                    Name: ui.Strings.Get(id),
+                    Selected: tab == id
+                },
+                OnClick: () -> {
+                    state.Tab = id
+                    ResetVerdict()
+                    Rebuild()
+                },
+                ui.Label(ui.Strings.Get(id), 13, tab == id ? ui.Lime: ui.Body, "")
+            }
+            WidgetKeyBindings.BindActivation(button)
+            tabs.Add(button)
         }
         let card = Card(input, 940, 0.6)
         card.Add(

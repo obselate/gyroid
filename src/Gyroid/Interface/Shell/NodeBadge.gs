@@ -79,6 +79,7 @@ partial class App {
             ui.Label(height, 11, state == "offline" ? ui.Dim: ui.Ink, ""),
             ui.Label(detail, 10.5, state == "synced" ? ui.Dim: NodeColor(state), "")
         }
+        WidgetKeyBindings.BindActivation(badge)
         if state == "syncing" && percent != nil {
             badge.Add(
                 Container{
@@ -176,6 +177,28 @@ partial class App {
                 }
             )
         }
+        let networkButton = Goo
+            .Button{
+            Height: 34,
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 6,
+            Padding: Edges{Left: 14, Right: 10},
+            BorderWidth: 1,
+            BorderRadius: 8,
+            BorderColor: ui.Lime,
+            BackgroundColor: ui.Raised,
+            Hover: Style{BackgroundColor: ui.Rule},
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Network")},
+            OnClick: () -> {
+                nodeOpen = false
+                Navigate("Network")
+            },
+            ui.Label(ui.Strings.Get("Network"), 14, ui.Lime, ""),
+            MaterialIcons.Create("chevron_right", 16, ui.Lime)
+        }
+        WidgetKeyBindings.BindActivation(networkButton)
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -188,27 +211,7 @@ partial class App {
                         Navigate("Settings")
                     }
                 ),
-                Goo
-                    .Button{
-                    Height: 34,
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    Gap: 6,
-                    Padding: Edges{Left: 14, Right: 10},
-                    BorderWidth: 1,
-                    BorderRadius: 8,
-                    BorderColor: ui.Lime,
-                    BackgroundColor: ui.Raised,
-                    Hover: Style{BackgroundColor: ui.Rule},
-                    Focus: Theme.Read().FocusStyle,
-                    Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Network")},
-                    OnClick: () -> {
-                        nodeOpen = false
-                        Navigate("Network")
-                    },
-                    ui.Label(ui.Strings.Get("Network"), 14, ui.Lime, ""),
-                    MaterialIcons.Create("chevron_right", 16, ui.Lime)
-                }
+                networkButton
             }
         )
         let fill = PathBuilder(0, 0, 10, 18).MoveTo(10, 0).LineTo(1, 9).LineTo(10, 18).Close().Build()

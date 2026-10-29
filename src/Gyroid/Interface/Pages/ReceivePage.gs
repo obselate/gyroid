@@ -194,30 +194,30 @@ class ReceivePage : Cell[ReceivePageInput] {
             if id == "link" && empty {
                 continue
             }
-            tabs.Add(
-                Goo
-                    .Button{
-                    FlexGrow: 1,
-                    FlexBasis: 0,
-                    Height: 28,
-                    AlignItems: AlignItems.Center,
-                    JustifyContent: JustifyContent.Center,
-                    BorderRadius: 7,
-                    BackgroundColor: shown == id ? Color.Parse("#1a1a1a"): Color.Transparent,
-                    Hover: Style{BackgroundColor: ui.Rule},
-                    Focus: Theme.Read().FocusStyle,
-                    Accessibility: Accessibility{
-                        Role: AccessibilityRole.Tab,
-                        Name: ui.Strings.Get(label),
-                        Selected: shown == id
-                    },
-                    OnClick: () -> {
-                        request.Format = id
-                        Rebuild()
-                    },
-                    ui.Label(ui.Strings.Get(label), 13, shown == id ? ui.Ink: ui.Body, "")
-                }
-            )
+            let button = Goo
+                .Button{
+                FlexGrow: 1,
+                FlexBasis: 0,
+                Height: 28,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.Center,
+                BorderRadius: 7,
+                BackgroundColor: shown == id ? Color.Parse("#1a1a1a"): Color.Transparent,
+                Hover: Style{BackgroundColor: ui.Rule},
+                Focus: Theme.Read().FocusStyle,
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.Tab,
+                    Name: ui.Strings.Get(label),
+                    Selected: shown == id
+                },
+                OnClick: () -> {
+                    request.Format = id
+                    Rebuild()
+                },
+                ui.Label(ui.Strings.Get(label), 13, shown == id ? ui.Ink: ui.Body, "")
+            }
+            WidgetKeyBindings.BindActivation(button)
+            tabs.Add(button)
         }
         let grouped = ui.Grouped(input.Address)
         let first = grouped.IndexOf(' ')
@@ -445,6 +445,7 @@ class ReceivePage : Cell[ReceivePageInput] {
             MaterialIcons.Create(icon, 16, color),
             ui.Label(ui.Strings.Get(label), 14, color, "")
         }
+        WidgetKeyBindings.BindActivation(button)
         if note.Length > 0 {
             button.Add(ui.Label(ui.Strings.Get(note), 14, ui.Dim, ""))
         }

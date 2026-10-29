@@ -31,11 +31,11 @@ partial class App {
         } else {
             ui.Body
         }
-        return Goo
+        let button = Goo
             .Button{
             Width: 60,
             Height: height < 700 ? 44.0: 48.0,
-            FlexShrink: 0,
+            FlexShrink: 1,
             FlexDirection: FlexDirection.Column,
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center,
@@ -58,6 +58,8 @@ partial class App {
             MaterialIcons.Create(icon, 20, color),
             ui.Label(ui.Strings.Get(label), 11, color, "")
         }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Sidebar(page string) Blob {

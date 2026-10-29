@@ -230,15 +230,19 @@ class OverviewPage : Cell[OverviewInput] {
         }
     }
 
-    private func Link(ui Presentation, label string, action Action) Blob -> Goo
-        .Button{
-        FlexShrink: 0,
-        BorderRadius: 3,
-        BackgroundColor: Color.Transparent,
-        Focus: Theme.Read().FocusStyle,
-        Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get(label)},
-        OnClick: action,
-        ui.Label(ui.Strings.Get(label) + " ›", 12, ui.Lime, "")
+    private func Link(ui Presentation, label string, action Action) Blob {
+        let button = Goo
+            .Button{
+            FlexShrink: 0,
+            BorderRadius: 3,
+            BackgroundColor: Color.Transparent,
+            Focus: Theme.Read().FocusStyle,
+            Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get(label)},
+            OnClick: action,
+            ui.Label(ui.Strings.Get(label) + " ›", 12, ui.Lime, "")
+        }
+        WidgetKeyBindings.BindActivation(button)
+        return button
     }
 
     private func Header(ui Presentation, label string) Container -> Container{
@@ -327,7 +331,6 @@ class OverviewPage : Cell[OverviewInput] {
         let card = ui.Glass()
         card.Handle = hero
         card.FlexGrow = 1
-        card.FlexBasis = 0
         card.Padding = Edges{Top: 16, Bottom: 16, Left: 20, Right: 20}
         card.Gap = 14
         if peeking {
@@ -619,7 +622,7 @@ class OverviewPage : Cell[OverviewInput] {
     private func Incoming(input OverviewInput, arrivals List[Arrival]) Blob {
         let ui = input.Ui
         let card = Card(ui)
-        card.FlexShrink = 0
+        card.FlexShrink = 1
         card.MaxHeight = Percent(62)
         let header = Header(ui, "incoming")
         header.Add(ui.Label(arrivals.Count.ToString(), 14, ui.Dim, ""))
@@ -721,6 +724,7 @@ class OverviewPage : Cell[OverviewInput] {
                 }
             }
         }
+        WidgetKeyBindings.BindActivation(row)
         if unfolded {
             let ready = DateTime
                 .Now
