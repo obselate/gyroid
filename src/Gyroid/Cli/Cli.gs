@@ -171,11 +171,10 @@ class Cli {
                     if command == "load" {
                         wallet.Library.ChooseWalletAsync(arguments[2]).GetAwaiter().GetResult()
                     }
-                    let password = ReadPassword()
-                    try {
+                    {
+                        let password = ReadPassword()
+                        defer Array.Clear(password)
                         wallet.UnlockAsync(password, scheduleLock: true).GetAwaiter().GetResult()
-                    } finally {
-                        Array.Clear(password)
                     }
                     Console.WriteLine("Wallet unlocked")
                 } else if command == "lock" {
@@ -345,49 +344,35 @@ class Cli {
                     throw WalletException("View keys can only be shown on a terminal")
                 }
                 let password = ReadPassword()
-                try {
-                    using let keys = wallet.Keys.ExportViewKeysAsync(password).GetAwaiter().GetResult()
-                    Console.Write("Spend public key: ")
-                    Console.WriteLine(keys.SpendPublic)
-                    Console.Write("View private key: ")
-                    Console.WriteLine(keys.ViewPrivate)
-                    Console.Write("View public key: ")
-                    Console.WriteLine(keys.ViewPublic)
-                } finally {
-                    Array.Clear(password)
-                }
+                defer Array.Clear(password)
+                using let keys = wallet.Keys.ExportViewKeysAsync(password).GetAwaiter().GetResult()
+                Console.Write("Spend public key: ")
+                Console.WriteLine(keys.SpendPublic)
+                Console.Write("View private key: ")
+                Console.WriteLine(keys.ViewPrivate)
+                Console.Write("View public key: ")
+                Console.WriteLine(keys.ViewPublic)
             } else if arguments[2] == "create" {
-                let password = ReadPassword()
-                try {
+                {
+                    let password = ReadPassword()
+                    defer Array.Clear(password)
                     let filePassword = ReadPassword("View-only file password: ")
-                    try {
-                        wallet.Keys.CreateViewOnlyAsync(arguments[3], password, filePassword).GetAwaiter().GetResult()
-                    } finally {
-                        Array.Clear(filePassword)
-                    }
-                } finally {
-                    Array.Clear(password)
+                    defer Array.Clear(filePassword)
+                    wallet.Keys.CreateViewOnlyAsync(arguments[3], password, filePassword).GetAwaiter().GetResult()
                 }
                 Console.WriteLine("View-only wallet file created")
             } else {
-                let spendPublic = ReadPassword("Spend public key: ")
-                try {
+                {
+                    let spendPublic = ReadPassword("Spend public key: ")
+                    defer Array.Clear(spendPublic)
                     let viewPrivate = ReadPassword("View private key: ")
-                    try {
-                        let password = ReadPassword("View-only file password: ")
-                        try {
-                            wallet
-                                .ImportViewOnlyAsync(arguments[3], spendPublic, viewPrivate, password)
-                                .GetAwaiter()
-                                .GetResult()
-                        } finally {
-                            Array.Clear(password)
-                        }
-                    } finally {
-                        Array.Clear(viewPrivate)
-                    }
-                } finally {
-                    Array.Clear(spendPublic)
+                    defer Array.Clear(viewPrivate)
+                    let password = ReadPassword("View-only file password: ")
+                    defer Array.Clear(password)
+                    wallet
+                        .ImportViewOnlyAsync(arguments[3], spendPublic, viewPrivate, password)
+                        .GetAwaiter()
+                        .GetResult()
                 }
                 Console.WriteLine("View-only wallet imported")
             }
