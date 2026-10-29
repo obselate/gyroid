@@ -169,7 +169,6 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     }
 
     func Dispose() {
-        loading = false
         disposed = true
         shutdown.Cancel()
         worker?.GetAwaiter().GetResult()
