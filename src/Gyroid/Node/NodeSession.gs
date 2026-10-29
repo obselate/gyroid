@@ -26,7 +26,7 @@ class NodeSession : IDisposable {
         Api = NodeApi(settings)
         Supervisor.Exited = () -> Exited?.Invoke()
         Supervisor.Progress = value -> {
-            Status = NodeStatus{
+            let current = NodeStatus{
                 ... Status,
                 Progress: value,
                 Phase: if value == "Detecting" {
@@ -36,7 +36,10 @@ class NodeSession : IDisposable {
                 },
                 DownloadPercent: Supervisor.DownloadPercent
             }
-            Changed?.Invoke()
+            if !Status.Matches(current) {
+                Status = current
+                Changed?.Invoke()
+            }
         }
         Publish()
     }

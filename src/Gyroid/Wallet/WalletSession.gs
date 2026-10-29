@@ -66,7 +66,7 @@ class WalletSession : IDisposable {
         Task.Run(() -> AutoLockAsync())
     }
 
-    async func BeginAsync(ct CancellationToken) {
+    async func BeginAsync(ct CancellationToken, notify bool = true) {
         if disposed {
             throw WalletException("Wallet controller is closed")
         }
@@ -76,10 +76,12 @@ class WalletSession : IDisposable {
             throw WalletException("Wallet controller is closed")
         }
         isBusy = true
-        Changed?.Invoke()
+        if notify {
+            Changed?.Invoke()
+        }
     }
 
-    func End() {
+    func End(notify bool = true) {
         if disposed {
             Send.InvalidateConfirmation()
             managed = false
@@ -93,7 +95,7 @@ class WalletSession : IDisposable {
             autoLockChanged.Release()
         }
         gate.Release()
-        if !disposed {
+        if !disposed && notify {
             Changed?.Invoke()
         }
     }
@@ -175,6 +177,11 @@ class WalletSession : IDisposable {
 
     private async func RefreshEventAsync(ct CancellationToken) {
         await gate.WaitAsync(ct)
+        let previous = snapshot
+        let node = Node.Status
+        let pending = Send.Pending
+        let outcome = Send.Outcome
+        let sendError = Send.Error
         try {
             ct.ThrowIfCancellationRequested()
             await Node.RefreshStatusAsync(ct)
@@ -184,7 +191,18 @@ class WalletSession : IDisposable {
         } finally {
             UpdateEvents()
             gate.Release()
-            if !disposed {
+            if !disposed &&
+                (
+                !snapshot.Matches(previous) || !Node.Status.Matches(node) ||
+                    Send
+                    .Pending
+                    ?.State != pending?.State ||
+                    Send
+                    .Pending
+                    ?.Retryable != pending?.Retryable ||
+                    Send.Outcome != outcome ||
+                    Send.Error != sendError
+            ) {
                 Changed?.Invoke()
             }
         }
@@ -580,7 +598,8 @@ class WalletSession : IDisposable {
     }
 
     async func RefreshNodeAsync(ct CancellationToken = default(CancellationToken)) {
-        await BeginAsync(ct)
+        await BeginAsync(ct, false)
+        let node = Node.Status
         try {
             if !await Node.TryAttachAsync(ct) {
                 return
@@ -590,16 +609,17 @@ class WalletSession : IDisposable {
             Node.Publish()
             throw error
         } finally {
-            End()
+            End(!Node.Status.Matches(node))
         }
     }
 
     async func RefreshStatusAsync(ct CancellationToken = default(CancellationToken)) {
-        await BeginAsync(ct)
+        await BeginAsync(ct, false)
+        let node = Node.Status
         try {
             await Node.RefreshStatusAsync(ct)
         } finally {
-            End()
+            End(!Node.Status.Matches(node))
         }
     }
 
@@ -861,7 +881,12 @@ class WalletSession : IDisposable {
     }
 
     async func RefreshAsync(ct CancellationToken = default(CancellationToken)) {
-        await BeginAsync(ct)
+        await BeginAsync(ct, false)
+        let previous = snapshot
+        let node = Node.Status
+        let pending = Send.Pending
+        let outcome = Send.Outcome
+        let sendError = Send.Error
         try {
             if Node.Supervisor.NeedsRestart && settings.NodeMode != "manual" {
                 Node.Reconnect()
@@ -874,7 +899,17 @@ class WalletSession : IDisposable {
                 }
             }
         } finally {
-            End()
+            End(
+                !snapshot.Matches(previous) || !Node.Status.Matches(node) ||
+                    Send
+                    .Pending
+                    ?.State != pending?.State ||
+                    Send
+                    .Pending
+                    ?.Retryable != pending?.Retryable ||
+                    Send.Outcome != outcome ||
+                    Send.Error != sendError
+            )
         }
     }
 

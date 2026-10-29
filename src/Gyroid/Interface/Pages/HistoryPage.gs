@@ -1221,6 +1221,7 @@ class HistoryPage : Cell[HistoryInput] {
                     }
                     fetching = false
                     if let error = failure {
+                        requested.ExceptWith(heights)
                         current.Ui.Run(Task.FromException(error))
                     }
                     Rebuild()

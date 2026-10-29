@@ -139,6 +139,7 @@ class OverviewPage : Cell[OverviewInput] {
                     }
                     fetching = false
                     if let error = failure {
+                        requested.ExceptWith(heights)
                         ui.Run(Task.FromException(error))
                     }
                     Rebuild()

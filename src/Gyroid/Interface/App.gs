@@ -59,15 +59,6 @@ partial class App : Cell {
 
     private var lastState string = ""
 
-    private var shownSnapshot WalletSnapshot? = nil
-    private var shownNode NodeStatus? = nil
-    private var shownLockQueued bool
-    private var shownPending bool
-    private var shownSendState string? = nil
-    private var shownRetryable bool? = nil
-    private var shownSendError string = ""
-    private var shownOutcome SendOutcome? = nil
-
     private var error string = ""
 
     private var bannerHeight float64
@@ -226,32 +217,6 @@ partial class App : Cell {
 
     private func Sync() {
         let node = wallet.Node.Status
-        let pending = wallet.Send.Pending
-        if let previous = shownSnapshot {
-            if let previousNode = shownNode {
-                if wallet.Snapshot.Matches(previous) && node.Matches(previousNode) &&
-                    wallet.LockQueued == shownLockQueued &&
-                    (pending != nil) == shownPending &&
-                    pending?.State == shownSendState &&
-                    pending?.Retryable == shownRetryable &&
-                    wallet
-                    .Send
-                    .Error == shownSendError &&
-                    wallet
-                    .Send
-                    .Outcome == shownOutcome {
-                    return
-                }
-            }
-        }
-        shownSnapshot = wallet.Snapshot
-        shownNode = node
-        shownLockQueued = wallet.LockQueued
-        shownPending = pending != nil
-        shownSendState = pending?.State
-        shownRetryable = pending?.Retryable
-        shownSendError = wallet.Send.Error
-        shownOutcome = wallet.Send.Outcome
         let snapshot = wallet.Snapshot
         if snapshot.State != "Unlocked" {
             ClearSeed()
@@ -431,7 +396,6 @@ partial class App : Cell {
                     refreshError = message
                     Rebuild()
                 }
-                Sync()
             }
         )
     }
