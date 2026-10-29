@@ -614,7 +614,7 @@ class WalletSession : IDisposable {
         }
     }
 
-    async func CreateAsync(filename string, password[]char, ct CancellationToken = default(CancellationToken))[]char {
+    async func CreateAsync(filename string, password[]char, ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
             RequireUnloaded()
@@ -631,7 +631,6 @@ class WalletSession : IDisposable {
             settings.ActiveWallet = filename
             PublishEmpty()
             await WalletSettings.SaveAsync(settings, ct)
-            return await Node.Api.SeedAsync(password, ct)
         } finally {
             End()
         }

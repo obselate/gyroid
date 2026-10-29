@@ -234,6 +234,10 @@ class Presentation {
 
     var ClipboardText[]char = []char{}
 
+    private var clipboardBytes[]uint8 = []uint8{}
+
+    private var clipboardOwner[]uint8 = []uint8{}
+
     let Decoding Dictionary[string, int64] = Dictionary[string, int64]()
 
     private var DecodeSeed int32
@@ -360,26 +364,84 @@ class Presentation {
         )
     }
 
+    func Copy(content[]char, clearAfterMs float64) {
+        guard let host = window else {
+            return
+        }
+        ReleaseClipboard()
+        let bytes = Encoding.UTF8.GetBytes(content)
+        try {
+            let text = TransferRepresentation("text/plain;charset=utf-8", ReadOnlyMemory[uint8](bytes))
+            System.Runtime.InteropServices.MemoryMarshal.TryGetArray[uint8](text.Bytes, out let segment)
+            clipboardBytes = segment.Array ?? throw InvalidOperationException("Clipboard buffer unavailable")
+            clipboardOwner = Guid.NewGuid().ToByteArray()
+            ClipboardTimer = host.SetTimeout(
+                () -> {
+                    ReleaseClipboard()
+                    rebuild()
+                },
+                clearAfterMs
+            )
+            let result = host
+                .WriteClipboardAsync(
+                TransferData(
+                    []TransferRepresentation{
+                        text,
+                        TransferRepresentation(
+                            "application/x-gyroid-clipboard-owner",
+                            ReadOnlyMemory[uint8](clipboardOwner)
+                        )
+                    },
+                    Array.Empty[Uri]()
+                )
+            )
+                .GetAwaiter()
+                .GetResult()
+            if result.Status != DataTransferStatus.Success {
+                throw WalletException("Copy failed")
+            }
+        } catch (failure Exception) {
+            ReleaseClipboard()
+            report("Copy failed")
+            rebuild()
+        } finally {
+            Array.Clear(bytes)
+        }
+    }
+
     func ReleaseClipboard() {
         guard let host = window else {
             return
         }
-        guard let timer = ClipboardTimer else {
+        if ClipboardTimer == nil && clipboardBytes.Length == 0 && ClipboardText.Length == 0 {
             return
         }
-        timer.Dispose()
+        ClipboardTimer?.Dispose()
         ClipboardTimer = nil
         try {
-            let current = host.GetClipboardText()
-            if System
-                .Security
-                .Cryptography
-                .CryptographicOperations
-                .FixedTimeEquals(
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](System.MemoryExtensions.AsSpan(current)),
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](ReadOnlySpan[char](ClipboardText))
-            ) {
-                host.SetClipboardText("")
+            if clipboardBytes.Length > 0 {
+                let current = host
+                    .ReadClipboardDataAsync([]string{"application/x-gyroid-clipboard-owner"})
+                    .GetAwaiter()
+                    .GetResult()
+                for item in current.Data.Representations {
+                    if item.Bytes.Span.SequenceEqual(ReadOnlySpan[uint8](clipboardOwner)) {
+                        host.SetClipboardText("")
+                        break
+                    }
+                }
+            } else {
+                let current = host.GetClipboardText()
+                if System
+                    .Security
+                    .Cryptography
+                    .CryptographicOperations
+                    .FixedTimeEquals(
+                    System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](System.MemoryExtensions.AsSpan(current)),
+                    System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](ReadOnlySpan[char](ClipboardText))
+                ) {
+                    host.SetClipboardText("")
+                }
             }
         } catch (failure Exception) {
             report("Clipboard could not be cleared")
@@ -387,6 +449,10 @@ class Presentation {
         } finally {
             Array.Clear(ClipboardText)
             ClipboardText = []char{}
+            Array.Clear(clipboardBytes)
+            clipboardBytes = []uint8{}
+            Array.Clear(clipboardOwner)
+            clipboardOwner = []uint8{}
         }
     }
 
