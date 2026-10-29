@@ -1,6 +1,6 @@
 package Gyroid.History
 
-class WalletOutput {
+data class WalletOutput {
     var TxId string = ""
     var OutputIndex int32
     var Amount uint64
@@ -10,13 +10,13 @@ class WalletOutput {
     var Memo string = ""
 }
 
-class WalletRecipient {
+data class WalletRecipient {
     var Address string = ""
     var Amount uint64
     var Memo string = ""
 }
 
-class WalletSend {
+data class WalletSend {
     var TxId string = ""
     var Timestamp int64
     var RecordedHeight uint64

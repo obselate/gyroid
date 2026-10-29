@@ -1,6 +1,6 @@
 package Gyroid.Node
 
-class NetworkBlock {
+data class NetworkBlock {
     var Height uint64
     var Hash string = ""
     var PreviousHash string = ""
@@ -9,14 +9,14 @@ class NetworkBlock {
     var Difficulty uint64
 }
 
-class NetworkPeer {
+data class NetworkPeer {
     var Id string = ""
     var Address string = ""
     var Transport string = ""
     var Family string = ""
 }
 
-class BannedPeer {
+data class BannedPeer {
     var Id string = ""
     var Reason string = ""
     var Count uint64
@@ -24,7 +24,7 @@ class BannedPeer {
     var Expires int64
 }
 
-class NetworkReport {
+data class NetworkReport {
     var Hashrate float64
     var Difficulty uint64
     var Emitted float64
