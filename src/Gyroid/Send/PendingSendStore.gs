@@ -6,9 +6,12 @@ import Gyroid.Wallet
 import System
 import System.IO
 import System.Text.Json
-import System.Threading.Tasks
 
 class PendingSendStore {
+    shared {
+        private let SizeLimit int32 = 1048576
+    }
+
     let session WalletSession
     var Pending PendingSend? = nil
     var Error string = ""
@@ -49,7 +52,7 @@ class PendingSendStore {
             if (File.GetAttributes(PendingPath()) & FileAttributes.Directory) != 0 {
                 throw WalletException("Pending send file is invalid")
             }
-            using let json = JsonDocument.Parse(PrivateFiles.ReadText(PendingPath(), 131072, true))
+            using let json = JsonDocument.Parse(PrivateFiles.ReadText(PendingPath(), SizeLimit, true))
             let root = json.RootElement
             var coreStarted int64 = 0
             if root.TryGetProperty("core_started", out let started) {
@@ -92,23 +95,24 @@ class PendingSendStore {
     }
 
     func Save(pending PendingSend) {
-        let path = PendingPath()
+        using let data = MemoryStream()
+        using let writer = Utf8JsonWriter(data)
+        writer.WriteStartObject()
+        writer.WriteString("idempotency_key", pending.Key)
+        writer.WriteString("body", pending.Body)
+        writer.WriteString("wallet", pending.Wallet)
+        writer.WriteString("network", pending.Network)
+        writer.WriteNumber("timestamp", pending.Timestamp)
+        writer.WriteNumber("core_started", pending.CoreStarted)
+        writer.WriteEndObject()
+        writer.Flush()
+        if data.Length > SizeLimit {
+            throw WalletException("Send request is too large")
+        }
         PrivateFiles
             .WriteAtomic(
-            path,
-            stream -> {
-                using let writer = Utf8JsonWriter(stream)
-                writer.WriteStartObject()
-                writer.WriteString("idempotency_key", pending.Key)
-                writer.WriteString("body", pending.Body)
-                writer.WriteString("wallet", pending.Wallet)
-                writer.WriteString("network", pending.Network)
-                writer.WriteNumber("timestamp", pending.Timestamp)
-                writer.WriteNumber("core_started", pending.CoreStarted)
-                writer.WriteEndObject()
-                writer.Flush()
-                return Task.CompletedTask
-            },
+            PendingPath(),
+            stream -> stream.WriteAsync(data.GetBuffer(), 0, int32(data.Length)),
             false,
             true
         )
