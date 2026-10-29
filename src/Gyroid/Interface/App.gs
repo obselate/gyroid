@@ -51,7 +51,7 @@ partial class App : Cell {
     private let openReceive Action
 
     private var window Window?
-    private let workers chan[WindowWork] = chan[WindowWork](16)
+    private let workers chan[WindowWork] = Chan.Unbounded[WindowWork]()
     private var workerTask Task? = nil
     private var closed bool
 
@@ -387,7 +387,7 @@ partial class App : Cell {
         try {
             scope {
                 for work in workers {
-                    go work.Run(ctx.Token)
+                    go RunWork(work, ctx.Token)
                 }
                 ctx.TryCancel()
             }
@@ -399,6 +399,17 @@ partial class App : Cell {
                     Rebuild()
                 }
             )
+        }
+    }
+
+    private async func RunWork(work WindowWork, ct CancellationToken) {
+        try {
+            await work.Run(ct)
+        } catch (failure OperationCanceledException) when ct.IsCancellationRequested {
+            throw failure
+        } catch (failure Exception) {
+            Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
+            window?.TryPost(() -> ui.Report("Window background task failed"))
         }
     }
 
