@@ -601,13 +601,15 @@ class WalletSession : IDisposable {
         await BeginAsync(ct, false)
         let node = Node.Status
         try {
-            if !await Node.TryAttachAsync(ct) {
-                return
+            try {
+                if !await Node.TryAttachAsync(ct) {
+                    return
+                }
+                await Node.RefreshStatusAsync(ct)
+            } catch (error Exception) {
+                Node.Publish()
+                throw error
             }
-            await Node.RefreshStatusAsync(ct)
-        } catch (error Exception) {
-            Node.Publish()
-            throw error
         } finally {
             End(!Node.Status.Matches(node))
         }

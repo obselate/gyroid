@@ -319,6 +319,7 @@ partial class App : Cell {
 
     private func Run(task Task, done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
         ui.Operations++
+        UpdatePlayback()
         error = ""
         Rebuild()
         Complete(task, done, secret, extra)
@@ -349,6 +350,7 @@ partial class App : Cell {
         window?.TryPost(
             () -> {
                 ui.Operations--
+                UpdatePlayback()
                 if unknown {
                     screen = if wallet.Snapshot.State == "Unlocked" {
                         "Send"

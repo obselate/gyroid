@@ -47,7 +47,9 @@ partial class App {
 
     private func PlaybackActive() bool ->
     !reduceMotion && !hidden && window?.IsFocused == true && window?.IsVisible == true
-    && window?.State != WindowState.Minimized && Stopwatch.GetElapsedTime(lastActivity).TotalSeconds < 10
+    &&
+        window?.State != WindowState.Minimized &&
+        (ui.Operations > 0 || Stopwatch.GetElapsedTime(lastActivity).TotalSeconds < 10)
 
     private func UpdatePlayback() {
         let active = PlaybackActive()
@@ -78,7 +80,7 @@ partial class App {
     }
 
     private func Tick() {
-        if Stopwatch.GetElapsedTime(lastActivity).TotalSeconds >= 10 {
+        if ui.Operations == 0 && Stopwatch.GetElapsedTime(lastActivity).TotalSeconds >= 10 {
             UpdatePlayback()
             Rebuild()
             return

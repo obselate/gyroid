@@ -68,52 +68,56 @@ class CoreRelease {
             using let http = HttpClient(SocketsHttpHandler{AllowAutoRedirect: false, UseProxy: false})
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Gyroid")
             try {
-                await DownloadFileAsync(
-                    http,
-                    Uri("https://api.github.com/repos/blocknetprivacy/core/releases/latest"),
-                    metadataPath,
-                    1048576,
-                    nil,
-                    ct
-                )
-                using let metadata = JsonDocument.Parse(File.ReadAllBytes(metadataPath))
-                let tag = metadata.RootElement.GetProperty("tag_name").GetString() ?? ""
-                if !tag.StartsWith("v", StringComparison.Ordinal) || tag.Length < 2 {
-                    throw WalletException("Core release version is unavailable")
-                }
-                let filename = "blocknet-core-" + Platform() + "-" + tag.Substring(1) + ".zip"
-                let release = "https://github.com/blocknetprivacy/core/releases/download/" + Uri.EscapeDataString(tag) +
-                    "/"
-                await DownloadFileAsync(http, Uri(release + "SHA256SUMS.txt"), checksumsPath, 1048576, nil, ct)
-                await DownloadFileAsync(
-                    http,
-                    Uri(release + Uri.EscapeDataString(filename)),
-                    archivePath,
-                    33554432,
-                    progress,
-                    ct
-                )
-                using let archive = File.OpenRead(archivePath)
-                let digest = Convert.ToHexString(SHA256.HashData(archive))
-                archive.Dispose()
-                var expected = ""
-                for line in File.ReadAllLines(checksumsPath) {
-                    let parts = line.Split([]char{' ', '\t'}, StringSplitOptions.RemoveEmptyEntries)
-                    if parts.Length == 2 && parts[1].TrimStart('*') == filename {
-                        expected = parts[0]
-                        break
+                try {
+                    await DownloadFileAsync(
+                        http,
+                        Uri("https://api.github.com/repos/blocknetprivacy/core/releases/latest"),
+                        metadataPath,
+                        1048576,
+                        nil,
+                        ct
+                    )
+                    using let metadata = JsonDocument.Parse(File.ReadAllBytes(metadataPath))
+                    let tag = metadata.RootElement.GetProperty("tag_name").GetString() ?? ""
+                    if !tag.StartsWith("v", StringComparison.Ordinal) || tag.Length < 2 {
+                        throw WalletException("Core release version is unavailable")
                     }
+                    let filename = "blocknet-core-" + Platform() + "-" + tag.Substring(1) + ".zip"
+                    let release = "https://github.com/blocknetprivacy/core/releases/download/" + Uri.EscapeDataString(
+                        tag
+                    ) +
+                        "/"
+                    await DownloadFileAsync(http, Uri(release + "SHA256SUMS.txt"), checksumsPath, 1048576, nil, ct)
+                    await DownloadFileAsync(
+                        http,
+                        Uri(release + Uri.EscapeDataString(filename)),
+                        archivePath,
+                        33554432,
+                        progress,
+                        ct
+                    )
+                    using let archive = File.OpenRead(archivePath)
+                    let digest = Convert.ToHexString(SHA256.HashData(archive))
+                    archive.Dispose()
+                    var expected = ""
+                    for line in File.ReadAllLines(checksumsPath) {
+                        let parts = line.Split([]char{' ', '\t'}, StringSplitOptions.RemoveEmptyEntries)
+                        if parts.Length == 2 && parts[1].TrimStart('*') == filename {
+                            expected = parts[0]
+                            break
+                        }
+                    }
+                    if !digest.Equals(expected, StringComparison.OrdinalIgnoreCase) {
+                        throw WalletException("Core archive checksum does not match the release")
+                    }
+                    await InstallAsync(archivePath, temporary, path, ct)
+                    return path
+                } catch (error OperationCanceledException) {
+                    cancellation.ThrowIfCancellationRequested()
+                    throw WalletException("Core download timed out")
+                } catch (error HttpRequestException) {
+                    throw WalletException("Core download failed")
                 }
-                if !digest.Equals(expected, StringComparison.OrdinalIgnoreCase) {
-                    throw WalletException("Core archive checksum does not match the release")
-                }
-                await InstallAsync(archivePath, temporary, path, ct)
-                return path
-            } catch (error OperationCanceledException) {
-                cancellation.ThrowIfCancellationRequested()
-                throw WalletException("Core download timed out")
-            } catch (error HttpRequestException) {
-                throw WalletException("Core download failed")
             } finally {
                 for file in[]string{archivePath, metadataPath, checksumsPath, temporary} {
                     if File.Exists(file) {
