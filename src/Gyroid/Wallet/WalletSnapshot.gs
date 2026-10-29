@@ -3,7 +3,6 @@ package Gyroid.Wallet
 import Gyroid.History
 
 class WalletSnapshot {
-    var Page string = "Welcome"
     var State string = "Unloaded"
     var Connected bool
     var ViewOnly bool

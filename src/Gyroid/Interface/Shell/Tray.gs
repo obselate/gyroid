@@ -77,7 +77,7 @@ partial class App {
             Close()
             return true
         }
-        ClearSecrets()
+        upgradeShown = false
         ClearSeed()
         ui.ReleaseClipboard()
         if tray?.Status == TrayStatus.Registered {
@@ -129,7 +129,7 @@ partial class App {
         if !Lockable() {
             return
         }
-        ClearSecrets()
+        upgradeShown = false
         ClearSeed()
         ui.ReleaseClipboard()
         Run(wallet.LockAsync())

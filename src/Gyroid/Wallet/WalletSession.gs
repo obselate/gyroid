@@ -30,7 +30,6 @@ class WalletSession : IDisposable {
     let Send SendService
     let History HistoryService
     var state string = "Unloaded"
-    var page string = "Welcome"
     var connected bool
     var managed bool
     var isBusy bool
@@ -61,9 +60,6 @@ class WalletSession : IDisposable {
         Checks = PrivacyChecks(this)
         Node.Exited = () -> Task.Run(() -> RestartOwnedAsync())
         Node.Changed = () -> Changed?.Invoke()
-        if settings.ActiveWallet.Length > 0 {
-            page = "Unlock"
-        }
         PublishEmpty()
         Node.Publish()
         Task.Run(() -> AutoLockAsync())
@@ -84,12 +80,10 @@ class WalletSession : IDisposable {
 
     func End() {
         if disposed {
-            Keys.ClearSeed()
             Send.InvalidateConfirmation()
             managed = false
             connected = false
             state = "Unloaded"
-            page = "Welcome"
             PublishEmpty()
         }
         isBusy = false
@@ -207,14 +201,8 @@ class WalletSession : IDisposable {
                 StopEvents()
                 connected = false
                 managed = false
-                Keys.ClearSeed()
                 Send.InvalidateConfirmation()
                 state = "Unloaded"
-                page = if settings.ActiveWallet.Length > 0 {
-                    "Unlock"
-                } else {
-                    "Welcome"
-                }
                 PublishEmpty()
                 Node.Publish()
                 Changed?.Invoke()
@@ -265,11 +253,6 @@ class WalletSession : IDisposable {
             }
             if state == "Unloaded" {
                 managed = false
-                page = if settings.ActiveWallet.Length == 0 {
-                    "Welcome"
-                } else {
-                    "Unlock"
-                }
             } else {
                 let filename = Path.GetFileName(walletFile)
                 if !managed && !string.Equals(settings.ActiveWallet, filename, comparison) {
@@ -278,11 +261,6 @@ class WalletSession : IDisposable {
                     await WalletSettings.SaveAsync(settings, ct)
                 }
                 managed = true
-                page = if state == "Locked" {
-                    "Unlock"
-                } else {
-                    "Wallet"
-                }
             }
             connected = true
             if managed {
@@ -365,11 +343,6 @@ class WalletSession : IDisposable {
             Node.Settings = settings
             Node.Reconnect()
             connected = false
-            page = if settings.ActiveWallet.Length == 0 {
-                "Welcome"
-            } else {
-                "Unlock"
-            }
             PublishEmpty()
             Node.Publish()
             await ConnectCoreAsync(ct)
@@ -477,7 +450,6 @@ class WalletSession : IDisposable {
             marker.Write(identity, 0, identity.Length)
             marker.Flush(true)
             connected = false
-            page = "Unlock"
             PublishEmpty()
             Node.Publish()
         } finally {
@@ -608,7 +580,7 @@ class WalletSession : IDisposable {
         }
     }
 
-    async func CreateAsync(filename string, password[]char, ct CancellationToken = default(CancellationToken)) {
+    async func CreateAsync(filename string, password[]char, ct CancellationToken = default(CancellationToken))[]char {
         await BeginAsync(ct)
         try {
             RequireUnloaded()
@@ -622,13 +594,10 @@ class WalletSession : IDisposable {
             managed = true
             state = "Unlocked"
             Touch()
-            page = "Wallet"
             settings.ActiveWallet = filename
             PublishEmpty()
             await WalletSettings.SaveAsync(settings, ct)
-            await Keys.ReadSeedAsync(password, ct)
-            page = "Seed"
-            PublishEmpty()
+            return await Node.Api.SeedAsync(password, ct)
         } finally {
             End()
         }
@@ -662,7 +631,6 @@ class WalletSession : IDisposable {
             managed = true
             state = "Unlocked"
             Touch()
-            page = "Wallet"
             settings.ActiveWallet = filename
             PublishEmpty()
             await WalletSettings.SaveAsync(settings, ct)
@@ -707,7 +675,6 @@ class WalletSession : IDisposable {
             }
             state = "Unlocked"
             Touch()
-            page = "Wallet"
             try {
                 WalletLockScheduler.Cancel(settings)
                 if scheduleLock && settings.AutoLockMinutes > 0 {
@@ -751,10 +718,8 @@ class WalletSession : IDisposable {
         StopEvents()
         lockQueued = false
         RequireManaged()
-        Keys.ClearSeed()
         Send.InvalidateConfirmation()
         state = "Unknown"
-        page = "Unlock"
         PublishEmpty()
         Changed?.Invoke()
         try {
@@ -766,7 +731,6 @@ class WalletSession : IDisposable {
             if error.StatusCode == 503 {
                 state = "Unloaded"
                 managed = false
-                page = "Welcome"
             } else if error.StatusCode == 403 {
                 state = "Locked"
             }
@@ -779,7 +743,6 @@ class WalletSession : IDisposable {
         await BeginAsync(ct)
         try {
             await UnloadCoreAsync(ct)
-            page = "Welcome"
             PublishEmpty()
         } finally {
             End()
@@ -788,7 +751,6 @@ class WalletSession : IDisposable {
 
     private async func UnloadCoreAsync(ct CancellationToken) {
         StopEvents()
-        Keys.ClearSeed()
         Send.InvalidateConfirmation()
         if managed {
             try {
@@ -865,7 +827,6 @@ class WalletSession : IDisposable {
             )
             managed = true
             state = "Unlocked"
-            page = "Wallet"
             Touch()
             settings.ActiveWallet = filename
             PublishEmpty()
@@ -881,7 +842,6 @@ class WalletSession : IDisposable {
         try {
             if Node.Supervisor.NeedsRestart && settings.NodeMode != "manual" {
                 Node.Reconnect()
-                Keys.ClearSeed()
                 Send.InvalidateConfirmation()
                 await ConnectCoreAsync(ct)
             } else {
@@ -917,7 +877,6 @@ class WalletSession : IDisposable {
             }
             let outputs = await History.ReloadAsync(sends, ct)
             snapshot = WalletSnapshot{
-                Page: page,
                 State: state,
                 Connected: connected,
                 Address: NodeJson.Text(address.RootElement, "address"),
@@ -931,15 +890,11 @@ class WalletSession : IDisposable {
         } catch (error WalletException) {
             if error.StatusCode == 403 {
                 state = "Locked"
-                page = "Unlock"
-                Keys.ClearSeed()
                 Send.InvalidateConfirmation()
                 PublishEmpty()
             } else if error.StatusCode == 503 {
                 state = "Unloaded"
                 managed = false
-                page = "Welcome"
-                Keys.ClearSeed()
                 Send.InvalidateConfirmation()
                 PublishEmpty()
             } else {
@@ -958,7 +913,6 @@ class WalletSession : IDisposable {
     func PublishHistory(outputs[]WalletOutput) {
         snapshot = WalletSnapshot{
             ... snapshot,
-            Page: page,
             State: state,
             Connected: connected,
             History: outputs,
@@ -992,12 +946,11 @@ class WalletSession : IDisposable {
 
     func PublishEmpty() {
         History.Reset()
-        snapshot = WalletSnapshot{Page: page, State: state, Connected: connected}
+        snapshot = WalletSnapshot{State: state, Connected: connected}
     }
 
     func PublishCurrent() {
         snapshot = WalletSnapshot{
-            Page: page,
             State: state,
             Connected: connected,
             Address: snapshot.Address,
@@ -1017,13 +970,11 @@ class WalletSession : IDisposable {
         disposed = true
         shutdown.Cancel()
         StopEvents()
-        Keys.ClearSeed()
         Send.InvalidateConfirmation()
         Node.Dispose()
         managed = false
         connected = false
         state = "Unloaded"
-        page = "Welcome"
         PublishEmpty()
     }
 

@@ -40,7 +40,7 @@ data struct ToolsInput {
     var OnNodeSettings Action
 }
 
-class ToolsPage : Cell[ToolsInput] {
+class ToolsPage : Cell[ToolsInput], IDisposable {
     private var message string = ""
     private var signature string = ""
     private var signer string = ""
@@ -74,6 +74,9 @@ class ToolsPage : Cell[ToolsInput] {
             loaded = true
             checkedAt = input.Session.Checks.PhraseChecked()
             fileMode = FileMode(input)
+        }
+        if input.Section != "Privacy" && step.Length > 0 {
+            EndPhrase()
         }
         return if input.Section == "Privacy" {
             if step.Length > 0 {
@@ -648,6 +651,7 @@ class ToolsPage : Cell[ToolsInput] {
         wrong = false
         found = 0
         asked = []int32{}
+        Array.Clear(answers)
         answers = []string{}
         Rebuild()
     }
@@ -658,7 +662,16 @@ class ToolsPage : Cell[ToolsInput] {
         }
         let task = input.Session.Keys.PhraseAsync(password.ToCharArray())
         password = ""
-        input.Ui.Run(task, () -> Ask(task.Result))
+        input.Ui.Run(
+            task,
+            () -> {
+                if input.Session.State == "Unlocked" && step == "show" {
+                    Ask(task.Result)
+                } else {
+                    Array.Clear(task.Result)
+                }
+            }
+        )
     }
 
     private func Ask(phrase[]char) {
@@ -718,6 +731,13 @@ class ToolsPage : Cell[ToolsInput] {
             )
         }
         Rebuild()
+    }
+
+    func Dispose() {
+        step = ""
+        password = ""
+        typed = ""
+        Array.Clear(answers)
     }
 
     private func Phrase(input ToolsInput) Blob {

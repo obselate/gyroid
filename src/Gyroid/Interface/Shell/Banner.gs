@@ -29,7 +29,7 @@ partial class App {
             error
         } else if refreshError.Length > 0 {
             refreshError
-        } else if snapshot.Page == "Wallet" && !snapshot.Connected {
+        } else if snapshot.State == "Unlocked" && !snapshot.Connected {
             "Not connected"
         } else {
             ""

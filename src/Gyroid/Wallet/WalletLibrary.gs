@@ -58,7 +58,6 @@ class WalletLibrary {
             }
             session.settings.ActiveWallet = filename
             await WalletSettings.SaveAsync(session.settings, ct)
-            session.page = "Unlock"
             session.PublishEmpty()
         } finally {
             session.End()
@@ -96,7 +95,6 @@ class WalletLibrary {
                 }
                 session.settings.ActiveWallet = filename
                 await WalletSettings.SaveAsync(session.settings, ct)
-                session.page = "Unlock"
                 session.PublishEmpty()
             } catch (error IOException) {
                 throw WalletException("Wallet file could not be imported. Existing files are never replaced")

@@ -10,7 +10,7 @@ import System.IO
 data struct SeedPageInput {
     var Session WalletSession
     var Ui Presentation
-    var Words[]?char
+    var Words[]char
     var FromWallet bool
     var Busy bool
     var Language string
@@ -27,8 +27,6 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
 
     private var hold int32
 
-    private var password string = ""
-
     protected override func Build(input SeedPageInput) Blob {
         let ui = input.Ui
         let card = ui.Glass()
@@ -38,41 +36,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         card.BorderRadius = 14
         card.Gap = 14
         card.Add(ui.Label(ui.Strings.Get("recovery phrase"), 17, ui.Ink, ""))
-        guard let words = input.Words else {
-            shown = nil
-            card.MaxWidth = 560
-            card.Add(
-                Container{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.FlexStart,
-                    Gap: 10,
-                    FlexShrink: 0,
-                    ui.Grow(
-                        Container{
-                            MinWidth: 0,
-                            ui.Entry(
-                                TextField{
-                                    AccessibilityName: ui.Strings.Get("Password"),
-                                    Placeholder: ui.Strings.Get("Password"),
-                                    Value: password,
-                                    Controlled: true,
-                                    Password: true,
-                                    RevealButton: true,
-                                    Disabled: input.Busy,
-                                    OnChange: value -> {
-                                        password = value
-                                        Rebuild()
-                                    },
-                                    OnSubmit: _ -> Reveal(input)
-                                }
-                            )
-                        }
-                    ),
-                    ui.Button("Show", () -> Reveal(input), input.Busy || password.Length == 0, true)
-                }
-            )
-            return card
-        }
+        let words = input.Words
         if !Object.ReferenceEquals(words, shown) {
             shown = words
             visible = false
@@ -165,15 +129,6 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         } else {
             ui.Frame(String('x', word.Length), 0, hold ^ index, Random(hold ^ index), 14, ui.Body)
         }
-    }
-
-    private func Reveal(input SeedPageInput) {
-        if input.Busy || password.Length == 0 {
-            return
-        }
-        let secret = password.ToCharArray()
-        password = ""
-        input.Ui.Run(input.Session.Keys.RevealSeedAsync(secret), nil, secret)
     }
 
     private func Export(input SeedPageInput) {

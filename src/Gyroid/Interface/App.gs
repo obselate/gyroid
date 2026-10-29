@@ -24,7 +24,6 @@ import System.Globalization
 import System.IO
 import System.Linq
 import System.Numerics
-import System.Text
 import System.Threading.Tasks
 
 partial class App : Cell {
@@ -57,7 +56,7 @@ partial class App : Cell {
 
     private var screen string = ""
 
-    private var lastPage string = ""
+    private var lastState string = ""
 
     private var error string = ""
 
@@ -77,10 +76,6 @@ partial class App : Cell {
 
     private var seedFromWallet bool
 
-    private var shownState string = ""
-
-    private var clears int32
-
     private var seed[]?char
 
     private var contacts SortedDictionary[string, string] = SortedDictionary[string, string](StringComparer.Ordinal)
@@ -97,6 +92,8 @@ partial class App : Cell {
     private let preferenceChanged Action
 
     private let revealSeed Action[[]char]
+
+    private let createWallet Action[string, []char]
 
     private let closeSettings Action
 
@@ -141,14 +138,10 @@ partial class App : Cell {
             Rebuild()
         }
         revealSeed = buffer -> {
-            seedFromWallet = true
-            Run(wallet.Keys.RevealSeedAsync(buffer), nil, buffer)
+            Run(ShowSeed(wallet.Keys.RevealSeedAsync(buffer), true), nil, buffer)
         }
-        closeSettings = () -> {
-            screen = ""
-            ui.Decode("page")
-            Rebuild()
-        }
+        createWallet = (filename, buffer) -> Run(ShowSeed(wallet.CreateAsync(filename, buffer), false), nil, buffer)
+        closeSettings = () -> Back()
         ApplyPreferences()
         nodeAnchor.MetricsChanged += _ -> {
             if nodeOpen {
@@ -192,7 +185,7 @@ partial class App : Cell {
             return false
         }
         wallet.Changed = () -> owner.Post(() -> Sync())
-        lastPage = wallet.Snapshot.Page
+        lastState = wallet.Snapshot.State
         Tick()
     }
 
@@ -206,7 +199,6 @@ partial class App : Cell {
         frameTimer?.Dispose()
         frameTimer = nil
         ui.ReleaseClipboard()
-        ClearSecrets()
         ClearSeed()
         wallet.Changed = nil
     }
@@ -221,44 +213,12 @@ partial class App : Cell {
         height = owner.Height / owner.UiScale
     }
 
-    private func Fingerprint(snapshot WalletSnapshot) string {
-        let node = wallet.Node.Status
-        let text = StringBuilder(
-            "${snapshot.Page} ${snapshot.State} ${snapshot.Connected} ${snapshot.ViewOnly} ${snapshot.Address} ${snapshot.HistoryTotal} ${wallet.Send.Pending?.Retryable} ${wallet.Send.Pending?.State} ${wallet.LockQueued} ${wallet.Node.Status.Progress} ${node.Source} ${node.Owned} ${node.Running} ${node.Height} ${node.ChainHeight} ${node.Syncing} ${node.SyncProgress} ${node.Phase} ${node.Peers} ${node.Mempool} ${node.LastBlockTime} ${node.Endpoint} ${node.DataDirectory}"
-        )
-        if let value = snapshot.Balance {
-            text.Append(
-                " ${value.Scanning} ${value.ScanHeight} ${value.ChainHeight} ${value.Balance} ${value.Spendable} ${value.Pending} ${value.Outputs} ${value.MemoErrors}"
-            )
-        }
-        for output in snapshot.History {
-            text.Append(
-                " ${output.TxId}:${output.OutputIndex} ${output.Amount} ${output.BlockHeight} ${output.Spent} ${output.Memo}"
-            )
-        }
-        for send in snapshot.Sends {
-            text.Append(
-                " ${send.TxId} ${send.Status} ${send.Confirmations} ${send.Timestamp} ${send.Amount} ${send.Fee}"
-            )
-            for recipient in send.Recipients {
-                text.Append(" ${recipient.Address} ${recipient.Memo}")
-            }
-        }
-        return text.ToString()
-    }
-
     private func Sync() {
         let snapshot = wallet.Snapshot
-        let seeded = snapshot.Page == "Seed" && TakeSeed()
-        let state = Fingerprint(snapshot)
-        if !seeded && state == shownState {
-            return
-        }
         if snapshot.State != "Unlocked" {
             ClearSeed()
             toolsState.Report = nil
         }
-        shownState = state
         let node = wallet.Node.Status
         if node.Syncing || node.Running && (node.Peers == 0 || node.Height == 0) {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
@@ -266,19 +226,13 @@ partial class App : Cell {
             statusTimer?.Dispose()
             statusTimer = nil
         }
-        let page = snapshot.Page
-        if page != lastPage {
+        if snapshot.State != lastState {
             ResumePlayback()
-            ClearSecrets()
-            if lastPage == "Seed" {
-                ClearSeed()
-            }
-            if !seedFromWallet || page != "Seed" && page != "Wallet" {
-                screen = ""
-                ui.Decode("page")
-            }
-            lastPage = page
-            seedFromWallet = seedFromWallet && page == "Seed"
+            ClearSeed()
+            upgradeShown = false
+            screen = ""
+            ui.Decode("page")
+            lastState = snapshot.State
         }
         let heights = if let value = snapshot.Balance {
             value.ScanHeight.ToString() + " " + value.ChainHeight.ToString()
@@ -293,18 +247,22 @@ partial class App : Cell {
         Rebuild()
     }
 
-    private func ClearSecrets() {
-        clears++
-        upgradeShown = false
-    }
-
-    private func TakeSeed() bool {
-        guard let words = wallet.Keys.TakePendingSeed() else {
-            return false
+    private async func ShowSeed(task Task[[]char], fromWallet bool) {
+        let words = await task
+        if window?.TryPost(
+            () -> {
+                if wallet.Snapshot.State != "Unlocked" || wallet.LockQueued {
+                    Array.Clear(words)
+                    return
+                }
+                ClearSeed()
+                seed = words
+                seedFromWallet = fromWallet
+                Open("Seed")
+            }
+        ) != true {
+            Array.Clear(words)
         }
-        ClearSeed()
-        seed = words
-        return true
     }
 
     private func ClearSeed() {
@@ -313,11 +271,16 @@ partial class App : Cell {
             Array.Clear(words)
         }
         seed = nil
+        if screen == "Seed" {
+            screen = seedFromWallet ? "Settings": "Overview"
+        }
+        seedFromWallet = false
     }
 
     private func FinishSeed() {
+        let target = seedFromWallet ? "Settings": "Overview"
         ClearSeed()
-        wallet.Keys.ContinueFromSeed()
+        Open(target)
     }
 
     private func LoadContacts() {
@@ -329,7 +292,10 @@ partial class App : Cell {
     }
 
     private func Open(target string) {
-        ClearSecrets()
+        upgradeShown = false
+        if target != "Seed" {
+            ClearSeed()
+        }
         error = ""
         screen = target
         if target == "Contacts" {
@@ -340,7 +306,8 @@ partial class App : Cell {
     }
 
     private func Back() {
-        ClearSecrets()
+        upgradeShown = false
+        ClearSeed()
         error = ""
         screen = ""
         ui.Decode("page")
@@ -462,8 +429,7 @@ partial class App : Cell {
         )
     }
 
-    private func WalletAvailable() bool ->
-    wallet.Snapshot.State == "Unlocked" && (wallet.Snapshot.Page == "Wallet" || seedFromWallet)
+    private func WalletAvailable() bool -> wallet.Snapshot.State == "Unlocked" && (screen != "Seed" || seedFromWallet)
 
     private func Navigate(target string) {
         if ui.Working() {
@@ -471,9 +437,6 @@ partial class App : Cell {
         }
         if target != "Settings" && (!WalletAvailable() || target == "Send" && wallet.Snapshot.ViewOnly) {
             return
-        }
-        if seedFromWallet && wallet.Snapshot.Page == "Seed" {
-            FinishSeed()
         }
         Open(target)
     }
@@ -555,16 +518,14 @@ partial class App : Cell {
             },
             Chrome()
         }
-        let page = if screen.Length > 0 && (screen != "Send" || snapshot.State == "Unlocked") {
+        let page = if screen.Length > 0 && (snapshot.State == "Unlocked" || screen == "Settings") {
             screen
-        } else if snapshot.Page == "Wallet" {
+        } else if snapshot.State == "Unlocked" {
             "Overview"
         } else if Preparing() {
             "Sync"
-        } else if snapshot.Page == "Welcome" || snapshot.Page == "Unlock" {
-            "Library"
         } else {
-            snapshot.Page
+            "Library"
         }
         let banner = Problem()
         bannerHeight = if banner != nil {
@@ -661,13 +622,13 @@ partial class App : Cell {
                 "sync",
                 SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
             )
-        } else if page == "Seed" || seedFromWallet && seed != nil {
+        } else if let words = seed {
             Cell.Mount[SeedPageInput, SeedPage](
                 "seed",
                 SeedPageInput{
                     Session: wallet,
                     Ui: ui,
-                    Words: seed,
+                    Words: words,
                     FromWallet: seedFromWallet,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
@@ -740,14 +701,13 @@ partial class App : Cell {
                 LibraryInput{
                     Session: wallet,
                     Ui: ui,
-                    Page: snapshot.Page,
                     State: snapshot.State,
                     ActiveWallet: wallet.Settings.ActiveWallet,
-                    Clears: clears,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
                     ChooseFile: chooseFile,
-                    OnNavigate: navigate
+                    OnNavigate: navigate,
+                    OnCreate: createWallet
                 }
             )
         }

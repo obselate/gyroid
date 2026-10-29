@@ -7,27 +7,19 @@ import System.Threading
 
 class WalletKeys {
     let session WalletSession
-    var pendingSeed[]?char = nil
 
     init(session WalletSession) {
         this.session = session
     }
 
-    async func ReadSeedAsync(password[]char, ct CancellationToken) {
-        ClearSeed()
-        pendingSeed = await session.Node.Api.SeedAsync(password, ct)
-    }
-
-    async func RevealSeedAsync(password[]char, ct CancellationToken = default(CancellationToken)) {
+    async func RevealSeedAsync(password[]char, ct CancellationToken = default(CancellationToken))[]char {
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()
             if session.Snapshot.ViewOnly {
                 throw WalletException("View-only wallets do not have a spend recovery phrase")
             }
-            await ReadSeedAsync(password, ct)
-            session.page = "Seed"
-            session.PublishCurrent()
+            return await session.Node.Api.SeedAsync(password, ct)
         } finally {
             session.End()
         }
@@ -45,21 +37,6 @@ class WalletKeys {
             Array.Clear(password)
             session.End()
         }
-    }
-
-    func TakePendingSeed()[]?char {
-        let seed = pendingSeed
-        pendingSeed = nil
-        return seed
-    }
-
-    func ContinueFromSeed() {
-        ClearSeed()
-        if session.State == "Unlocked" {
-            session.page = "Wallet"
-            session.PublishCurrent()
-        }
-        session.Changed?.Invoke()
     }
 
     async func ExportSeedAsync(path string, seed[]char, ct CancellationToken = default(CancellationToken)) {
@@ -145,13 +122,6 @@ class WalletKeys {
         } finally {
             session.End()
         }
-    }
-
-    func ClearSeed() {
-        if let seed = pendingSeed {
-            Array.Clear(seed)
-        }
-        pendingSeed = nil
     }
 }
 

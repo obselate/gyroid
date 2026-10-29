@@ -16,22 +16,23 @@ import System.Linq
 data struct LibraryInput {
     var Session WalletSession
     var Ui Presentation
-    var Page string
     var State string
     var ActiveWallet string
-    var Clears int32
     var Busy bool
     var Language string
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnNavigate Action[string]
+    var OnCreate Action[string, []char]
 }
 
-class LibraryPage : Cell[LibraryInput] {
+class LibraryPage : Cell[LibraryInput], IDisposable {
     private let menuAnchor ElementHandle = ElementHandle()
 
     private let wallets SortedDictionary[string, DateTime] = SortedDictionary[string, DateTime](StringComparer.Ordinal)
 
-    private var clears int32 = -1
+    private var state string = ""
+
+    private var activeWallet string = ""
 
     private var form string = ""
 
@@ -57,8 +58,9 @@ class LibraryPage : Cell[LibraryInput] {
 
     protected override func Build(input LibraryInput) Blob {
         let ui = input.Ui
-        if input.Clears != clears {
-            clears = input.Clears
+        if input.State != state || input.ActiveWallet != activeWallet {
+            state = input.State
+            activeWallet = input.ActiveWallet
             Load(input)
         }
         let card = ui.Glass()
@@ -150,7 +152,7 @@ class LibraryPage : Cell[LibraryInput] {
 
     private func Load(input LibraryInput) {
         Clear()
-        opened = input.Page == "Unlock" ? input.ActiveWallet: ""
+        opened = input.ActiveWallet
         wallets.Clear()
         try {
             for filename in input.Session.Library.ListWallets() {
@@ -628,7 +630,11 @@ class LibraryPage : Cell[LibraryInput] {
             let key = viewKey.ToCharArray()
             input.Ui.Run(session.ImportViewOnlyAsync(filename, spendKey.ToCharArray(), key, secret), nil, secret, key)
         } else {
-            input.Ui.Run(session.CreateAsync(filename, secret), nil, secret)
+            input.OnCreate(filename, secret)
         }
+    }
+
+    func Dispose() {
+        Clear()
     }
 }
