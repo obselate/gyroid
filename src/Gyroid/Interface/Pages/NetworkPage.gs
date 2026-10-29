@@ -3,6 +3,7 @@ package Gyroid.Interface
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Actions
+import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Gyroid.History
 import Gyroid.Node
@@ -32,6 +33,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     private let requested chan[NetworkInput] = chan[NetworkInput](1)
     private var worker Task? = nil
     private var disposed bool
+    private var failed bool
     private var tab string = "peers"
     private var selected uint64
     private var hovered string = ""
@@ -147,13 +149,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         last.Add(Header(input, "Last block", "last", tip.Timestamp > 0 ? ui.Clock(tip.Timestamp): "-", Container{}))
         last.Add(Ribbon(input, tip))
         last.Add(Details(input, shown, tip))
-        return Container{
-            FlexGrow: 1,
-            FlexBasis: 0,
-            MinHeight: 0,
-            Width: Percent(100),
-            Gap: 12,
-            figures,
+        let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: 12}
+        if failed {
+            page.Add(Banner{Tone: Tone.Danger, Content: ui.Strings.Get("Refresh failed"), FontFamily: ui.Font}.Build())
+        }
+        page.Add(figures)
+        page.Add(
             Container{
                 FlexGrow: 1,
                 FlexBasis: 0,
@@ -163,10 +164,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 Container{FlexGrow: 1.32, FlexBasis: 0, MinWidth: 0, MinHeight: 0, Gap: 12, times, last},
                 Peers(input)
             }
-        }
+        )
+        return page
     }
 
     func Dispose() {
+        loading = false
         disposed = true
         shutdown.Cancel()
         worker?.GetAwaiter().GetResult()
@@ -193,25 +196,34 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
 
     private async func Load(input NetworkInput, pageContext Context) {
         let previous = report
-        var result NetworkReport? = nil
-        try {
-            result = await input.Session.Node.ReadNetworkAsync(previous, pageContext.Token)
-        } catch (failure OperationCanceledException) when pageContext.IsCancelled {
-            return
-        } catch (failure Exception) { }
-        input.Window?.TryPost(
-            () -> {
-                if disposed {
-                    return
-                }
-                loading = false
-                guard let value = result else {
-                    return
-                }
-                report = value
-                Rebuild()
+        while !pageContext.IsCancelled {
+            var result NetworkReport? = nil
+            try {
+                result = await input.Session.Node.ReadNetworkAsync(previous, pageContext.Token)
+            } catch (failure OperationCanceledException) when pageContext.IsCancelled {
+                return
+            } catch (failure Exception) { }
+            if pageContext.IsCancelled {
+                return
             }
-        )
+            input.Window?.TryPost(
+                () -> {
+                    if disposed {
+                        return
+                    }
+                    failed = result == nil
+                    if let value = result {
+                        loading = false
+                        report = value
+                    }
+                    Rebuild()
+                }
+            )
+            if result != nil {
+                return
+            }
+            await Task.Delay(5000, pageContext.Token)
+        }
     }
 
     private func Card(ui Presentation) Container {
