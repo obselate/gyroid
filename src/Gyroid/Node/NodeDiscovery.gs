@@ -75,11 +75,7 @@ class NodeDiscovery {
                             }
                             endpoint = configuredEndpoint
                         }
-                    } catch (error WalletException) { } catch (error IOException) { } catch (
-                        error UnauthorizedAccessException
-                    ) { } catch (error JsonException) { } catch (error InvalidOperationException) { } catch (
-                        error ArgumentException
-                    ) { }
+                    } catch (error Exception) { }
                 }
             }
             var installed = wrapped
@@ -163,9 +159,7 @@ class NodeDiscovery {
                             let selected = PrivateFiles.ReadText(selection, 1024).Trim()
                             WalletValidation.ValidateFilename(selected)
                             active = selected
-                        } catch (error WalletException) { } catch (error IOException) { } catch (
-                            error UnauthorizedAccessException
-                        ) { } catch (error ArgumentException) { }
+                        } catch (error Exception) { }
                     }
                     let configuration = Path.Combine(data, "settings.json")
                     if File.Exists(configuration) {
@@ -177,11 +171,7 @@ class NodeDiscovery {
                                 wallets = Path.GetDirectoryName(walletFile) ?? wallets
                                 active = Path.GetFileName(walletFile)
                             }
-                        } catch (error WalletException) { } catch (error IOException) { } catch (
-                            error UnauthorizedAccessException
-                        ) { } catch (error JsonException) { } catch (error InvalidOperationException) { } catch (
-                            error ArgumentException
-                        ) { }
+                        } catch (error Exception) { }
                     }
                 }
                 if binary.Length == 0 {
