@@ -119,7 +119,7 @@ class HistoryService {
         uint64,
         int64
     ] {
-        await session.BeginAsync(ct)
+        await session.BeginAsync(ct, false)
         try {
             session.RequireUnlocked()
             let times = Dictionary[uint64, int64]()
@@ -129,7 +129,7 @@ class HistoryService {
             }
             return times
         } finally {
-            session.End()
+            session.End(false)
         }
     }
 

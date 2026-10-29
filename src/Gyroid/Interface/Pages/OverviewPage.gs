@@ -62,6 +62,7 @@ class OverviewPage : Cell[OverviewInput] {
     private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
     private let requested HashSet[uint64] = HashSet[uint64]()
     private var fetching bool
+    private var failedSnapshot WalletSnapshot? = nil
 
     init() {
         hero.MetricsChanged += _ -> if hero.BorderBox.Width != heroWidth {
@@ -103,6 +104,13 @@ class OverviewPage : Cell[OverviewInput] {
     }
 
     private func RequestTimes(input OverviewInput) {
+        if fetching {
+            return
+        }
+        if failedSnapshot != nil && failedSnapshot != input.Snapshot {
+            requested.IntersectWith(times.Keys)
+            failedSnapshot = nil
+        }
         guard let window = input.Window else {
             return
         }
@@ -114,23 +122,23 @@ class OverviewPage : Cell[OverviewInput] {
             .Where((height uint64) -> height > 0 && !requested.Contains(height))
             .Distinct()
             .ToArray()
-        if fetching || missing.Length == 0 {
+        if missing.Length == 0 {
             return
         }
         for height in missing {
             requested.Add(height)
         }
         fetching = true
-        FetchTimes(window, input.Session.History, input.Ui, missing)
+        FetchTimes(window, input.Session.History, input.Snapshot, missing)
     }
 
-    private async func FetchTimes(window Window, history HistoryService, ui Presentation, heights[]uint64) {
+    private async func FetchTimes(window Window, history HistoryService, snapshot WalletSnapshot, heights[]uint64) {
         var fetched = Dictionary[uint64, int64]()
-        var failure Exception? = nil
+        var failed = false
         try {
             fetched = await Task.Run(() -> history.BlockTimesAsync(heights))
         } catch (error Exception) {
-            failure = error
+            failed = true
         } finally {
             window.TryPost(
                 () -> {
@@ -138,11 +146,12 @@ class OverviewPage : Cell[OverviewInput] {
                         times[entry.Key] = entry.Value
                     }
                     fetching = false
-                    if let error = failure {
-                        requested.ExceptWith(heights)
-                        ui.Run(Task.FromException(error))
+                    if failed {
+                        failedSnapshot = snapshot
                     }
-                    Rebuild()
+                    if fetched.Count > 0 {
+                        Rebuild()
+                    }
                 }
             )
         }
