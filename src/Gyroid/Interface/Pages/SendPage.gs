@@ -44,6 +44,7 @@ data struct SendPageInput {
 class SendPage : Cell[SendPageInput] {
     private var rows List[SendRow]
     private var reviewFocus bool
+    private var reviewable bool
 
     private var estimate SendEstimate?
 
@@ -70,6 +71,7 @@ class SendPage : Cell[SendPageInput] {
             ready = ready && atoms != nil && Kind(input, row.Address).Length > 0 && ui.MemoIssue(row.Memo).Length == 0
         }
         let over = total > spendable
+        reviewable = ready && !over && total > 0
         let card = ui.Glass()
         card.Width = Percent(100)
         card.MaxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
@@ -125,7 +127,7 @@ class SendPage : Cell[SendPageInput] {
                 )
             }
         )
-        let review = ui.Button("Review", () -> Review(input), !ready || over || total == 0, true, reviewFocus)
+        let review = ui.Button("Review", () -> Review(input), !reviewable, true, reviewFocus)
         reviewFocus = false
         review.MinWidth = 140
         let addRecipient = Goo
@@ -873,7 +875,7 @@ class SendPage : Cell[SendPageInput] {
     }
 
     private func Review(input SendPageInput) {
-        if input.Busy {
+        if !reviewable {
             return
         }
         let requests = rows.Select(

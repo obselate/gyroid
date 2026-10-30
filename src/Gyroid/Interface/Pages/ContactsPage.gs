@@ -239,7 +239,13 @@ class ContactsPage : Cell[ContactsInput] {
     private func Save(input ContactsInput) {
         let label = contactName.Trim()
         let original = editing ?? ""
-        if input.Busy || label.Length == 0 || label != original && input.Contacts.ContainsKey(label) {
+        if input.Busy ||
+            label.Length == 0 ||
+            contactAddress.Length == 0 ||
+            label != original &&
+            input
+            .Contacts
+            .ContainsKey(label) {
             return
         }
         try {
