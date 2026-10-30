@@ -286,13 +286,11 @@ class ReceivePage : Cell[ReceivePageInput] {
                 () -> ui.Copy(payload, 120000)
             )
         }
-        let card = ui.Glass()
+        let card = WalletParts.Card(ui, input.Height < 700 ? 18.0: 22.0, radius: 14)
         let form = WalletForm(ui, false, nil, []string{})
         card.Width = Percent(100)
         card.MaxWidth = 900
         card.MaxHeight = Percent(100)
-        card.BorderRadius = 14
-        card.Padding = input.Height < 700 ? 18.0: 22.0
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,

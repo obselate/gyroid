@@ -137,11 +137,9 @@ class HistoryPage : Cell[HistoryInput] {
         shown = all.Where((row HistoryRow) -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last)
             .ToArray()
         RequestTimes(shown.Take(50).Select((row HistoryRow) -> row.Height))
-        let panel = ui.Glass()
+        let panel = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 20, Right: 20}, compact ? 8.0: 10.0)
         panel.FlexGrow = 1
         panel.AlignSelf = AlignSelf.Stretch
-        panel.Padding = Edges{Top: 12, Bottom: 12, Left: 20, Right: 20}
-        panel.Gap = compact ? 8.0: 10.0
         let bar = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,

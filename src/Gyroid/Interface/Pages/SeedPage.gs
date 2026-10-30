@@ -31,12 +31,10 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
 
     protected override func Build(input SeedPageInput) Blob {
         let ui = input.Ui
-        let card = ui.Glass()
+        let card = WalletParts.Card(ui, gap: 14, radius: 14)
         card.Width = Percent(100)
         card.MaxWidth = 760
         card.MaxHeight = Percent(100)
-        card.BorderRadius = 14
-        card.Gap = 14
         card.Add(ui.Label(ui.Strings.Get("recovery phrase"), 17, ui.Ink, ""))
         if input.Words.Length == 0 {
             if input.Issue.Length > 0 {

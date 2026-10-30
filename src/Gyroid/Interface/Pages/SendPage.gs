@@ -72,13 +72,10 @@ class SendPage : Cell[SendPageInput] {
         }
         let over = total > spendable
         form = WalletForm(ui, ready && !over && total > 0, () -> Review(input), []string{})
-        let card = ui.Glass()
+        let card = WalletParts.Card(ui, compact ? 18.0: 22.0, compact ? 13.0: 16.0, 14)
         card.Width = Percent(100)
         card.MaxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
         card.MaxHeight = Percent(100)
-        card.BorderRadius = 14
-        card.Padding = compact ? 18.0: 22.0
-        card.Gap = compact ? 13.0: 16.0
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -100,7 +97,7 @@ class SendPage : Cell[SendPageInput] {
             card.Add(Hero(input, ui.Label(sum, size, ui.Lime, ""), sum.Length, size))
             let list = Container{Gap: 8, MinHeight: 0, FlexShrink: 1, OverflowY: Overflow.Scroll}
             for index in 0 ... rows.Count {
-                list.Add(Line(input, index))
+                list.Add(Recipient(input, index))
             }
             card.Add(list)
         } else {
@@ -304,7 +301,7 @@ class SendPage : Cell[SendPageInput] {
         return button
     }
 
-    private func Line(input SendPageInput, index int32) Blob {
+    private func Recipient(input SendPageInput, index int32) Blob {
         let ui = input.Ui
         let row = rows[index]
         let memoUsed = Encoding.UTF8.GetByteCount(row.Memo)

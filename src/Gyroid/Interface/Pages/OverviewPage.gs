@@ -314,34 +314,14 @@ class OverviewPage : Cell[OverviewInput] {
         return button
     }
 
-    private func Header(ui Presentation, label string) Container -> Container{
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        Gap: 8,
-        Height: 24,
-        FlexShrink: 0,
-        Margin: Edges{Bottom: 4},
-        ui.Label(ui.Strings.Get(label), 12, ui.Body, "")
-    }
-
-    private func Card(ui Presentation) Container {
-        let card = ui.Glass()
-        card.Padding = Edges{Top: 12, Bottom: 12, Left: 16, Right: 16}
-        card.Gap = 0
-        card.Overflow = Overflow.Hidden
-        return card
-    }
-
     private func Upgrade(input OverviewInput) Blob {
         let ui = input.Ui
         let node = input.Node
-        let bar = ui.Glass()
+        let bar = WalletParts.Card(ui, Edges{Top: 0, Bottom: 0, Left: 16, Right: 10}, 14)
         bar.FlexShrink = 0
         bar.FlexDirection = FlexDirection.Row
         bar.AlignItems = AlignItems.Center
-        bar.Gap = 14
         bar.Height = 40
-        bar.Padding = Edges{Top: 0, Bottom: 0, Left: 16, Right: 10}
         bar.Add(ui.Label(ui.Strings.Get("Network upgrade") + " " + node.UpgradeDate, 12, ui.Body, ""))
         bar.Add(
             Container{
@@ -399,11 +379,9 @@ class OverviewPage : Cell[OverviewInput] {
         } else {
             Math.Clamp(Math.Min(input.Height * 0.12, inner * 1.53 / value.Length), 34, 150)
         }
-        let card = ui.Glass()
+        let card = WalletParts.Card(ui, Edges{Top: 16, Bottom: 16, Left: 20, Right: 20}, 14)
         card.Handle = hero
         card.FlexGrow = 1
-        card.Padding = Edges{Top: 16, Bottom: 16, Left: 20, Right: 20}
-        card.Gap = 14
         if peeking {
             card.BorderColor = Color.Parse("#3a3a3a")
         }
@@ -692,10 +670,13 @@ class OverviewPage : Cell[OverviewInput] {
 
     private func Incoming(input OverviewInput, arrivals List[Arrival]) Blob {
         let ui = input.Ui
-        let card = Card(ui)
+        let card = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 16, Right: 16}, 0)
+        card.Overflow = Overflow.Hidden
         card.FlexShrink = 1
         card.MaxHeight = Percent(62)
-        let header = Header(ui, "incoming")
+        let header = WalletParts.Header(ui.Label(ui.Strings.Get("incoming"), 12, ui.Body, ""))
+        header.Height = 24
+        header.Margin = Edges{Bottom: 4}
         header.Add(ui.Label(arrivals.Count.ToString(), 14, ui.Dim, ""))
         header.Add(Container{FlexGrow: 1})
         header.Add(ui.Label(ui.Strings.Get("all ready"), 12, ui.Body, ""))
@@ -881,11 +862,14 @@ class OverviewPage : Cell[OverviewInput] {
 
     private func Recent(input OverviewInput, chain uint64) Blob {
         let ui = input.Ui
-        let card = Card(ui)
+        let card = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 16, Right: 16}, 0)
+        card.Overflow = Overflow.Hidden
         card.FlexGrow = 1
         card.FlexBasis = 0
         card.MinWidth = 0
-        let header = Header(ui, "recent")
+        let header = WalletParts.Header(ui.Label(ui.Strings.Get("recent"), 12, ui.Body, ""))
+        header.Height = 24
+        header.Margin = Edges{Bottom: 4}
         header.Add(Container{FlexGrow: 1})
         header.Add(Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions)))
         card.Add(header)

@@ -564,18 +564,6 @@ class Presentation {
         }
     }
 
-    func Glass() Container -> Container{
-        BackgroundColor: Surface.WithAlpha(Pane),
-        BackdropBlur: 16,
-        BorderWidth: 1,
-        BorderColor: Theme.Read().HairlineColor,
-        BorderRadius: 6,
-        Padding: 20,
-        Gap: 16,
-        MinWidth: 0,
-        MinHeight: 0
-    }
-
     func Accent(color Color, content Blob) Blob -> Container{
         BorderWidth: Edges{Left: 3},
         BorderColor: color,
@@ -703,26 +691,6 @@ class Presentation {
             }
         )
         return meter
-    }
-
-    func PageContent(title string, maxWidth float64 = 520, trailing Blob? = nil) Container {
-        let card = Glass()
-        card.Width = Percent(100)
-        card.MaxWidth = maxWidth
-        card.MaxHeight = Percent(100)
-        let header = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Baseline,
-            JustifyContent: JustifyContent.SpaceBetween,
-            Gap: 16,
-            FlexShrink: 0,
-            Label(title, 18, Ink)
-        }
-        if let value = trailing {
-            header.Add(value)
-        }
-        card.Add(header)
-        return card
     }
 
     func ActionRow(children[]Blob) Blob {

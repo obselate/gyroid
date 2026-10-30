@@ -35,12 +35,10 @@ class ContactsPage : Cell[ContactsInput] {
 
     protected override func Build(input ContactsInput) Blob {
         let ui = input.Ui
-        let card = ui.Glass()
+        let card = WalletParts.Card(ui, gap: 14, radius: 14)
         card.Width = Percent(100)
         card.MaxWidth = Math.Clamp(640 + Math.Max(0, input.Height - 640) * 0.6, 640.0, 900.0)
         card.MaxHeight = Percent(100)
-        card.BorderRadius = 14
-        card.Gap = 14
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -48,7 +46,16 @@ class ContactsPage : Cell[ContactsInput] {
                 Gap: 8,
                 FlexShrink: 0,
                 ui.Grow(ui.Label(ui.Strings.Get("contacts"), 17, ui.Ink, "")),
-                Square(input, "person_add", ui.Strings.Get("Add contact"), editing == "", () -> Edit("", ""))
+                WalletParts.Square(
+                    ui,
+                    "person_add",
+                    ui.Strings.Get("Add contact"),
+                    editing == "",
+                    input.Busy,
+                    () -> Edit("", ""),
+                    34,
+                    ui.Body
+                )
             }
         )
         let list = Container{
@@ -93,30 +100,6 @@ class ContactsPage : Cell[ContactsInput] {
         Rebuild()
     }
 
-    private func Square(input ContactsInput, icon string, label string, active bool, click Action) Blob {
-        let ui = input.Ui
-        let button = Goo
-            .Button{
-            Width: 34,
-            Height: 34,
-            FlexShrink: 0,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center,
-            BorderWidth: 1,
-            BorderRadius: 8,
-            BorderColor: active ? ui.Lime: ui.Edge,
-            BackgroundColor: Color.Parse("#0b0b0b"),
-            Disabled: input.Busy,
-            Hover: Style{BackgroundColor: ui.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label},
-            OnClick: click,
-            MaterialIcons.Create(icon, 16, active ? ui.Lime: ui.Body)
-        }
-        WidgetKeyBindings.BindActivation(button)
-        return button
-    }
-
     private func Row(input ContactsInput, label string, destination string) Blob {
         let ui = input.Ui
         return Container{
@@ -135,16 +118,28 @@ class ContactsPage : Cell[ContactsInput] {
             MaterialIcons.Create("person", 16, ui.Dim),
             ui.Grow(ui.Label(label, 14, ui.Ink, "")),
             Container{FlexShrink: 1, MinWidth: 0, ui.Label(ui.Hidden(ui.Short(destination)), 13, ui.Dim, "")},
-            Square(input, "edit", ui.Strings.Get("Edit") + " " + label, false, () -> Edit(label, destination)),
-            Square(
-                input,
+            WalletParts.Square(
+                ui,
+                "edit",
+                ui.Strings.Get("Edit") + " " + label,
+                false,
+                input.Busy,
+                () -> Edit(label, destination),
+                34,
+                ui.Body
+            ),
+            WalletParts.Square(
+                ui,
                 "delete",
                 ui.Strings.Get("Delete") + " " + label,
                 false,
+                input.Busy,
                 () -> {
                     deleting = label
                     Rebuild()
-                }
+                },
+                34,
+                ui.Body
             )
         }
     }

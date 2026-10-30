@@ -25,16 +25,15 @@ partial class App {
     private var confirmPendingSend bool
 
     private func PendingSendCard() Blob {
-        let card = ui.PageContent(ui.Strings.Get("send"), 640)
+        let card = WalletParts.PageContent(ui, ui.Strings.Get("send"), 640)
         card.Add(PendingSendBanner())
         return card
     }
 
     private func PendingSendBanner() Blob {
         let pending = wallet.Send.Pending
-        let content = ui.Glass()
+        let content = WalletParts.Card(ui, gap: 10)
         content.FlexShrink = 0
-        content.Gap = 10
         content.Add(ui.Label(ui.Strings.Get("Pending send"), 14, ui.Orange))
         let outcome = wallet.Send.Outcome
         let message = if wallet.Send.Error.Length > 0 {

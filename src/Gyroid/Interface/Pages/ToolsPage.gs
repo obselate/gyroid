@@ -99,27 +99,6 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
     }
 
-    private func Card(input ToolsInput) Container {
-        let card = input.Ui.Glass()
-        card.Width = 900
-        card.MaxWidth = Percent(100)
-        card.MaxHeight = Percent(100)
-        card.BorderRadius = 14
-        card.Padding = input.Width < 1100 ? 16.0: Math.Clamp(input.Height * 0.025, 20.0, 32.0)
-        card.Gap = Math.Clamp(14 + Math.Max(0, input.Height - 640) * 0.025, 14.0, 24.0)
-        return card
-    }
-
-    private func Header(input ToolsInput, title string, trailing Blob) Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        Gap: 16,
-        FlexShrink: 0,
-        input.Ui.Label(input.Ui.Strings.Get(title), 17, input.Ui.Ink, ""),
-        Container{FlexGrow: 1},
-        trailing
-    }
-
     private func Small(input ToolsInput, label string, primary bool, action Action) Blob {
         let ui = input.Ui
         let color = primary ? ui.Lime: ui.Ink
@@ -463,11 +442,11 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             score.Add(Container{Width: 12, Height: 6, BorderRadius: 2, BackgroundColor: warning ? ui.Orange: ui.Lime})
         }
         let passed = warnings.Count((warning bool) -> !warning)
-        let card = Card(input)
+        let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
         card.Add(
-            Header(
-                input,
-                "privacy",
+            WalletParts.Header(
+                ui.Label(ui.Strings.Get("privacy"), 17, ui.Ink, ""),
+                16,
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
@@ -761,7 +740,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             WalletForm(ui, Suggestions().Count > 0, () -> Answer(input, Suggestions()[0]), []string{typed})
         }
         let compact = input.Width < 1100
-        let card = Card(input)
+        let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
         let stepper = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8}
         let labels = []string{"show", "check", "done"}
         for index in 0 ... 3 {
@@ -802,7 +781,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 }
             )
         }
-        card.Add(Header(input, "recovery phrase", stepper))
+        card.Add(WalletParts.Header(ui.Label(ui.Strings.Get("recovery phrase"), 17, ui.Ink, ""), 16, stepper))
         let progress = Container{FlexDirection: FlexDirection.Row, Gap: 4}
         for index in 0 ... 3 {
             progress.Add(
@@ -1041,7 +1020,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             WidgetKeyBindings.BindActivation(button)
             tabs.Add(button)
         }
-        let card = Card(input)
+        let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,

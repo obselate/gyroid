@@ -127,12 +127,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             ui.Delay(0, () -> ui.Run(ct -> LoadChain(input.Session, ct)))
         }
         let navWidth = input.Width < 1100 ? 132.0: 168.0
-        let nav = ui.Glass()
+        let nav = WalletParts.Card(ui, 8, 2, 14)
         nav.Width = navWidth
         nav.FlexShrink = 0
-        nav.Padding = 8
-        nav.Gap = 2
-        nav.BorderRadius = 14
         nav.Accessibility = Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("settings")}
         for id in sections {
             let selected = id == section
@@ -222,8 +219,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         return Rows(
             ui,
             []Container{
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "language",
                     []Blob{
                         Segment(
@@ -237,8 +235,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         )
                     }
                 ),
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "background",
                     []Blob{
                         Segment(
@@ -257,8 +256,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         )
                     }
                 ),
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "UI scale",
                     []Blob{
                         Segment(
@@ -278,8 +278,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         )
                     }
                 ),
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "reduce motion",
                     []Blob{
                         Toggle(
@@ -295,8 +296,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         )
                     }
                 ),
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "start in tray",
                     []Blob{
                         Toggle(
@@ -319,8 +321,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private func Security(input SettingsPageInput, settings WalletSettings) Blob {
         let ui = input.Ui
         let rows = List[Container]{
-            Line(
+            WalletParts.Line(
                 ui,
+                rowHeight,
                 "auto-lock",
                 []Blob{
                     Segment(
@@ -334,8 +337,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     )
                 }
             ),
-            Line(
+            WalletParts.Line(
                 ui,
+                rowHeight,
                 "lock on minimize",
                 []Blob{
                     Toggle(
@@ -351,8 +355,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     )
                 }
             ),
-            Line(
+            WalletParts.Line(
                 ui,
+                rowHeight,
                 "hide values on start",
                 []Blob{
                     MaterialIcons.Create("visibility_off", 16, ui.Dim),
@@ -367,8 +372,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         }
         if input.Snapshot.State == WalletState.Unlocked && !input.Snapshot.ViewOnly {
             rows.Add(
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "recovery phrase",
                     []Blob{
                         ui.Label(ui.Strings.Get("12 words"), 14, ui.Dim, ""),
@@ -435,8 +441,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let list = Rows(
             ui,
             []Container{
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "mode",
                     []Blob{
                         Segment(
@@ -456,11 +463,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         )
                     }
                 ),
-                Line(ui, "height", height.ToArray()),
-                Line(ui, "core", core.ToArray()),
-                Line(ui, "network upgrade", upgrade.ToArray()),
-                Line(
+                WalletParts.Line(ui, rowHeight, "height", height.ToArray()),
+                WalletParts.Line(ui, rowHeight, "core", core.ToArray()),
+                WalletParts.Line(ui, rowHeight, "network upgrade", upgrade.ToArray()),
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "data folder",
                     []Blob{
                         ui.Label(Shorten(folder), 14, ui.Dim, ""),
@@ -627,9 +635,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         )
         scan.Add(Info(input, "rescan", "About sync", "Scan blocks the wallet has not checked yet"))
         let rows = List[Container]{
-            Line(ui, "scan height", scan.ToArray()),
-            Line(
+            WalletParts.Line(ui, rowHeight, "scan height", scan.ToArray()),
+            WalletParts.Line(
                 ui,
+                rowHeight,
                 "output health",
                 []Blob{
                     ui.Button(
@@ -651,16 +660,25 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         }
         if !input.Snapshot.ViewOnly {
             rows.Add(
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
                     "view key",
                     []Blob{ui.Label("••••••••", 14, ui.Dim, ""), ui.Button("Show", () -> Open("view-key"), input.Busy)}
                 )
             )
-            rows.Add(Line(ui, "keys file", []Blob{ui.Button("Export…", () -> Open("view-key"), input.Busy)}))
             rows.Add(
-                Line(
+                WalletParts.Line(
                     ui,
+                    rowHeight,
+                    "keys file",
+                    []Blob{ui.Button("Export…", () -> Open("view-key"), input.Busy)}
+                )
+            )
+            rows.Add(
+                WalletParts.Line(
+                    ui,
+                    rowHeight,
                     "view-only wallet",
                     []Blob{
                         ui.Button(
@@ -687,8 +705,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             )
         }
         rows.Add(
-            Line(
+            WalletParts.Line(
                 ui,
+                rowHeight,
                 "wallet file",
                 []Blob{
                     ui.Label(Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)), 14, ui.Dim, ""),
@@ -698,10 +717,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         )
         pane.Add(Rows(ui, rows.ToArray()))
         if input.Snapshot.ViewOnly {
-            let note = Card(ui)
+            let note = WalletParts.Card(ui, 16, 10, 14)
             note.FlexDirection = FlexDirection.Row
             note.AlignItems = AlignItems.Center
-            note.Gap = 10
             note.FlexShrink = 0
             note.Add(MaterialIcons.Create("warning", 16, ui.Body))
             note.Add(
@@ -880,7 +898,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let tip = input.Node.Height
         let start = localCheckpoint - localCheckpoint % 1000
-        let card = Card(ui)
+        let card = WalletParts.Card(ui, 16, 12, 14)
         card.FlexShrink = 0
         card.Add(
             Container{
@@ -1007,7 +1025,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func Instrument(input SettingsPageInput, title string, key string, topic string, line string) Container {
         let ui = input.Ui
-        let card = Card(ui)
+        let card = WalletParts.Card(ui, 16, 12, 14)
         card.FlexGrow = 1
         card.FlexBasis = 0
         card.Add(
@@ -1161,7 +1179,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         }
         let form = WalletForm(ui, !input.Busy, () -> Reveal(input), []string{password})
         let title = dialog == "phrase" ? "recovery phrase": "view keys"
-        return WalletForm.Modal(
+        return WalletParts.Modal(
             ui,
             input.Window,
             input.Width,
@@ -1241,7 +1259,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             }
         }
-        return WalletForm.Modal(
+        return WalletParts.Modal(
             ui,
             input.Window,
             input.Width,
@@ -1457,7 +1475,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             actions.Add(ui.Button("Cancel", close))
             actions.Add(ui.Button("Create", form.Submit, !form.CanSubmit, true))
         }
-        return WalletForm.Modal(
+        return WalletParts.Modal(
             ui,
             input.Window,
             input.Width,
@@ -1551,7 +1569,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let close Action = () -> Close()
         if purging {
-            return WalletForm.Modal(
+            return WalletParts.Modal(
                 ui,
                 input.Window,
                 input.Width,
@@ -1659,7 +1677,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 }
             ).Build()
         )
-        return WalletForm.Modal(
+        return WalletParts.Modal(
             ui,
             input.Window,
             input.Width,
@@ -1779,9 +1797,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     }
 
     private func Rows(ui Presentation, rows[]Container) Container {
-        let list = Card(ui)
-        list.Padding = Edges{Top: 4, Bottom: 4, Left: 16, Right: 16}
-        list.Gap = 0
+        let list = WalletParts.Card(ui, Edges{Top: 4, Bottom: 4, Left: 16, Right: 16}, 0, 14)
         list.FlexShrink = 1
         list.OverflowY = Overflow.Scroll
         for index in 0 ... rows.Length {
@@ -1791,30 +1807,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             list.Add(rows[index])
         }
         return list
-    }
-
-    private func Line(ui Presentation, label string, parts[]Blob) Container {
-        let row = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 10,
-            Height: rowHeight,
-            FlexShrink: 0,
-            BorderColor: Color.Parse("#141414"),
-            ui.Grow(ui.Label(ui.Strings.Get(label), 14, ui.Body, ""))
-        }
-        for part in parts {
-            row.Add(part)
-        }
-        return row
-    }
-
-    private func Card(ui Presentation) Container {
-        let card = ui.Glass()
-        card.BorderRadius = 14
-        card.Padding = 16
-        card.Gap = 12
-        return card
     }
 
     private func Segment(

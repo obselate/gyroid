@@ -51,7 +51,7 @@ class SyncPage : Cell[SyncInput] {
         let padX = Math.Clamp(input.Width * 0.03, 20, 32)
         let width = input.Fill ? input.Width: Math.Min(760, input.Width - 48)
         let inner = width - padX * 2
-        let card = ui.Glass()
+        let card = WalletParts.Card(ui)
         card.Width = width
         card.MinHeight = input.Fill ? 0.0: Math.Min(420, input.Height - 100)
         if input.Fill {

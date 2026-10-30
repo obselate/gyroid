@@ -82,10 +82,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             average = float64(tip.Timestamp - blocks[0].Timestamp) / (blocks.Length - 1)
         }
         let change = tip.Difficulty > 0 ? (float64(report.Difficulty) / tip.Difficulty - 1) * 100: 0.0
-        let figures = Card(ui)
+        let figures = WalletParts.Card(ui, Edges{Left: 22, Right: 22, Top: 14, Bottom: 14}, 20, 14)
         figures.FlexDirection = FlexDirection.Row
-        figures.Padding = Edges{Left: 22, Right: 22, Top: 14, Bottom: 14}
-        figures.Gap = 20
         figures.FlexShrink = 0
         figures.Add(Figure(input, "Height", ui.Count(node.Height), ""))
         figures.Add(Figure(input, "Hashrate", Rate(report.Hashrate), Unit(report.Hashrate)))
@@ -114,11 +112,11 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             )
         )
         figures.Add(Figure(input, "Emitted", report.Emitted.ToString("0.0", CultureInfo.InvariantCulture), "%"))
-        let times = Card(ui)
+        let times = WalletParts.Card(ui, Edges{Left: 18, Right: 18, Top: 14, Bottom: 12}, 8, 14)
         times.FlexGrow = 1
         times.FlexBasis = 0
         times.Add(
-            Header(
+            ChartHeader(
                 input,
                 "Block time",
                 "time",
@@ -143,10 +141,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         } else {
             tip
         }
-        let last = Card(ui)
+        let last = WalletParts.Card(ui, Edges{Left: 18, Right: 18, Top: 14, Bottom: 12}, 8, 14)
         last.FlexGrow = 1.15
         last.FlexBasis = 0
-        last.Add(Header(input, "Last block", "last", tip.Timestamp > 0 ? ui.Clock(tip.Timestamp): "-", Container{}))
+        last.Add(
+            ChartHeader(input, "Last block", "last", tip.Timestamp > 0 ? ui.Clock(tip.Timestamp): "-", Container{})
+        )
         last.Add(Ribbon(input, tip))
         last.Add(Details(input, shown, tip))
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: 12}
@@ -225,14 +225,6 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         }
     }
 
-    private func Card(ui Presentation) Container {
-        let card = ui.Glass()
-        card.BorderRadius = 14
-        card.Padding = Edges{Left: 18, Right: 18, Top: 14, Bottom: 12}
-        card.Gap = 8
-        return card
-    }
-
     private func Figure(input NetworkInput, label string, value string, unit string) Blob {
         let ui = input.Ui
         return Container{
@@ -264,14 +256,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         }
     }
 
-    private func Header(input NetworkInput, label string, key string, value string, trailing Blob) Blob {
+    private func ChartHeader(input NetworkInput, label string, key string, value string, trailing Blob) Blob {
         let ui = input.Ui
-        return Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 12,
-            FlexShrink: 0,
+        return WalletParts.Header(
             ui.Label(ui.Strings.Get(label), 13, ui.Body, ""),
+            12,
+            trailing,
             Cell.Mount[DecodeValueInput, DecodeValue](
                 key,
                 DecodeValueInput{
@@ -283,10 +273,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     Live: AccessibilityLive.Off,
                     Ui: ui
                 }
-            ),
-            Container{FlexGrow: 1},
-            trailing
-        }
+            )
+        )
     }
 
     private func TimeChart(ui Presentation) Blob {
@@ -615,10 +603,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
 
     private func Peers(input NetworkInput) Blob {
         let ui = input.Ui
-        let card = ui.Glass()
-        card.BorderRadius = 14
-        card.Padding = Edges{Left: 14, Right: 14, Top: 12, Bottom: 12}
-        card.Gap = 8
+        let card = WalletParts.Card(ui, Edges{Left: 14, Right: 14, Top: 12, Bottom: 12}, 8, 14)
         card.FlexGrow = 1
         card.FlexBasis = 0
         card.Add(

@@ -220,39 +220,4 @@ class WalletForm {
             )
         }
     }
-
-    shared {
-        func Modal(
-            ui Presentation,
-            window Window?,
-            availableWidth float64,
-            key string,
-            name string,
-            width float64,
-            header Blob,
-            content Blob,
-            footer Blob,
-            close Action
-        ) Blob -> Cell
-            .Mount[ModalDialog, ModalDialogHost](
-            key,
-            ModalDialog{
-                Open: true,
-                CreateRoot: ui.DialogRoot,
-                KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
-                AccessibilityName: ui.Strings.Get(name),
-                Width: Math.Min(availableWidth - 40, width),
-                MaxHeight: Percent(100),
-                Padding: 22,
-                Gap: 14,
-                BackgroundColor: ui.Raised,
-                BorderRadius: 14,
-                Header: header,
-                Content: content,
-                Footer: footer,
-                OnCancel: close,
-                OnClose: close
-            }
-        )
-    }
 }

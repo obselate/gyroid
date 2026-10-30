@@ -66,13 +66,10 @@ partial class App {
         let blocked = ui.Working()
         let compact = height < 700
         let inset = compact ? 4.0: 8.0
-        let rail = ui.Glass()
+        let rail = WalletParts.Card(ui, Edges{Top: inset, Bottom: inset}, compact ? 0.0: 2.0, 14)
         rail.Width = 72
         rail.FlexShrink = 0
-        rail.BorderRadius = 14
         rail.AlignItems = AlignItems.Center
-        rail.Padding = Edges{Top: inset, Bottom: inset}
-        rail.Gap = compact ? 0.0: 2.0
         rail.Add(RailItem("overview", "grid_view", page == AppPage.Overview, blocked, () -> Navigate(AppPage.Overview)))
         if !wallet.Snapshot.ViewOnly {
             rail.Add(RailItem("send", "north_east", page == AppPage.Send, blocked, () -> Navigate(AppPage.Send)))

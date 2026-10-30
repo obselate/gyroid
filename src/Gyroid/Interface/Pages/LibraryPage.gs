@@ -63,12 +63,10 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             activeWallet = input.ActiveWallet
             Load(input)
         }
-        let card = ui.Glass()
+        let card = WalletParts.Card(ui, gap: 14, radius: 14)
         card.Width = Percent(100)
         card.MaxWidth = 560
         card.MaxHeight = Percent(100)
-        card.BorderRadius = 14
-        card.Gap = 14
         if form.Length > 0 {
             return Form(input, card)
         }
@@ -79,7 +77,14 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Gap: 8,
             FlexShrink: 0,
             ui.Grow(ui.Label(ui.Strings.Get("wallets"), 17, ui.Ink, "")),
-            Square(input, "settings", "Settings", false, false, () -> input.OnNavigate(AppPage.Settings))
+            WalletParts.Square(
+                ui,
+                "settings",
+                ui.Strings.Get("Settings"),
+                false,
+                input.Busy,
+                () -> input.OnNavigate(AppPage.Settings)
+            )
         }
         card.Add(header)
         card.Add(ui.Label(input.Session.Settings.WalletDirectory, 12, ui.Dim, ""))
@@ -107,12 +112,12 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 Container{
                     Handle: menuAnchor,
                     FlexShrink: 0,
-                    Square(
-                        input,
+                    WalletParts.Square(
+                        ui,
                         "add",
-                        "Add wallet",
+                        ui.Strings.Get("Add wallet"),
                         menu,
-                        loaded,
+                        loaded || input.Busy,
                         () -> {
                             menu = !menu
                             Rebuild()
@@ -193,41 +198,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         TextWrap: TextWrap.Wrap,
         FlexShrink: 0,
         Accessibility: Accessibility{Role: AccessibilityRole.Alert, Name: ui.Strings.Explain(issue)}
-    }
-
-    private func Square(input LibraryInput, icon string, label string, active bool, disabled bool, click Action) Blob {
-        let ui = input.Ui
-        let off = disabled || input.Busy
-        let button = Goo
-            .Button{
-            Width: 38,
-            Height: 38,
-            FlexShrink: 0,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center,
-            BorderWidth: 1,
-            BorderRadius: 8,
-            BorderColor: active ? ui.Lime: ui.Edge,
-            BackgroundColor: Color.Parse("#0b0b0b"),
-            Disabled: off,
-            Hover: Style{BackgroundColor: ui.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
-            OnClick: click,
-            MaterialIcons.Create(
-                icon,
-                16,
-                if active {
-                    ui.Lime
-                } else if off {
-                    ui.Dim
-                } else {
-                    ui.Body
-                }
-            )
-        }
-        WidgetKeyBindings.BindActivation(button)
-        return button
     }
 
     private func Tile(input LibraryInput, icon string, label string, primary bool, click Action) Blob {
@@ -382,7 +352,14 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         }
         if active {
             head.Add(
-                Square(input, "download", "Unload", false, false, () -> ui.Run(ct -> input.Session.UnloadAsync(ct)))
+                WalletParts.Square(
+                    ui,
+                    "download",
+                    ui.Strings.Get("Unload"),
+                    false,
+                    input.Busy,
+                    () -> ui.Run(ct -> input.Session.UnloadAsync(ct))
+                )
             )
         }
         let row = Container{
@@ -424,12 +401,12 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                         )
                     }
                 ),
-                Square(
-                    input,
+                WalletParts.Square(
+                    ui,
                     reveal ? "visibility_off": "visibility",
-                    "Show password",
+                    ui.Strings.Get("Show password"),
                     reveal,
-                    false,
+                    input.Busy,
                     () -> {
                         reveal = !reveal
                         Rebuild()
@@ -502,12 +479,12 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 AlignItems: AlignItems.Center,
                 Gap: 12,
                 FlexShrink: 0,
-                Square(
-                    input,
+                WalletParts.Square(
+                    ui,
                     "arrow_back",
-                    "Back",
+                    ui.Strings.Get("Back"),
                     false,
-                    false,
+                    input.Busy,
                     () -> {
                         Clear()
                         issue = ""
