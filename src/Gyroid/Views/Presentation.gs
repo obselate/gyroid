@@ -58,8 +58,8 @@ class Presentation {
                 DangerFillColor = Pink,
                 DangerHoverColor = Pink,
                 InfoFillColor = Color.Parse("#00111a"),
-                SuccessFillColor = Color.Parse("#111a00"),
-                WarningFillColor = Color.Parse("#1a1100"),
+                SuccessFillColor = SuccessFill,
+                WarningFillColor = WarningFill,
                 DangerQuietColor = Color.Parse("#1a0011")
             }
         ).WithGlass() with{
@@ -89,6 +89,23 @@ class Presentation {
     let Blue Color = Color.Parse("#00aaff")
     let Mint Color = Color.Parse("#00ffaa")
     let Violet Color = Color.Parse("#aa00ff")
+    let Field Color = Color.Parse("#080808")
+    let FieldEdge Color = Color.Parse("#2a2a2a")
+    let Control Color = Color.Parse("#0b0b0b")
+    let Selected Color = Color.Parse("#1a1a1a")
+    let Active Color = Color.Parse("#121906")
+    let FaintRule Color = Color.Parse("#141414")
+    let StrongRule Color = Color.Parse("#3a3a3a")
+    let PopoverEdge Color = Color.Parse("#333333")
+    let SuccessFill Color = Color.Parse("#111a00")
+    let WarningFill Color = Color.Parse("#1a1100")
+    let Expanded Color = Color.Parse("#0f0f0f")
+    let ExportEdge Color = Color.Parse("#4a4a4a")
+    let Unallocated Color = Color.Parse("#262626")
+    let ActionFill Color = Color.Parse("#0b1203")
+    let PendingStroke Color = Color.Parse("#b37700")
+    let SyncFill Color = Color.Parse("#1b2609")
+    let SuccessStroke Color = Color.Parse("#4d7300")
 
     func Working() bool -> Operations > 0
 }
