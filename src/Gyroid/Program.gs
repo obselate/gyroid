@@ -2,11 +2,8 @@ package Gyroid
 
 import Goo
 import Goo.Widgets.Layout
-import Gyroid.Cli
-import Gyroid.Interface
-import Gyroid.Node
-import Gyroid.Platform
-import Gyroid.Wallet
+import Gyroid.Services
+import Gyroid.Views
 import System
 import System.Globalization
 import System.Reflection
