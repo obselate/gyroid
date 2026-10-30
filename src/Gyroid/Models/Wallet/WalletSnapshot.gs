@@ -18,6 +18,8 @@ class WalletSnapshot {
     var HistoryMore bool
     var Sends[]WalletSend = []WalletSend{}
 
+    func ScanBehind(height uint64) bool -> Balance?.Scanning == true || (Balance?.ScanHeight ?? height) < height
+
     func Matches(other WalletSnapshot) bool {
         if State != other.State ||
             Connected != other.Connected ||

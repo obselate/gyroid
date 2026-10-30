@@ -274,14 +274,7 @@ partial class App : Cell {
             toolsState.Report = nil
             sendRows.Clear()
         }
-        if !node.Running ||
-            node.Syncing ||
-            node.Peers == 0 ||
-            node.Height == 0 ||
-            snapshot
-            .Balance
-            ?.Scanning == true ||
-            (snapshot.Balance?.ScanHeight ?? node.Height) < node.Height {
+        if !node.Running || node.Syncing || node.Peers == 0 || node.Height == 0 || snapshot.ScanBehind(node.Height) {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
         } else {
             statusTimer?.Dispose()

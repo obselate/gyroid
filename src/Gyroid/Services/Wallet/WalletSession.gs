@@ -641,15 +641,7 @@ class WalletSession : IDisposable {
         let node = Node.Status
         try {
             await Node.RefreshStatusAsync(ct)
-            if state == WalletState.Unlocked &&
-                (
-                snapshot
-                    .Balance
-                    ?.Scanning == true ||
-                    (snapshot.Balance?.ScanHeight ?? Node.Status.Height) < Node
-                    .Status
-                    .Height
-            ) {
+            if state == WalletState.Unlocked && snapshot.ScanBehind(Node.Status.Height) {
                 await RefreshCoreAsync(ct)
             }
         } finally {
