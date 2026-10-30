@@ -341,6 +341,7 @@ class WalletSession : IDisposable {
             next.Privacy = settings.Privacy
             next.Language = settings.Language
             next.NodeMode = settings.NodeMode
+            next.UiScalePercent = settings.UiScalePercent
             if next.Network != settings.Network {
                 if next.DataDirectory == settings.DataDirectory &&
                     (
