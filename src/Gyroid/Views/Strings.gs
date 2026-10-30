@@ -389,7 +389,6 @@ class Strings {
             case "Restore": "还原"
             case "Close": "关闭"
             case "Dismiss": "关闭"
-            case "Show password": "显示密码"
             case "Hide password": "隐藏密码"
             case "Starting": "启动中"
             case "Core download": "节点程序下载"
