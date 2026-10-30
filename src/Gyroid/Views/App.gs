@@ -686,7 +686,22 @@ partial class App : Cell {
                 }
             )
         } else if page == AppPage.Send {
-            if wallet.Send.Error.Length > 0 || wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0 {
+            if wallet
+                .Send
+                .Error
+                .Length > 0 ||
+                wallet
+                .Send
+                .Pending != nil ||
+                wallet
+                .Send
+                .Outcome
+                .TxId
+                .Length > 0 ||
+                wallet
+                .Send
+                .Outcome
+                .Error != nil {
                 PendingSendCard()
             } else {
                 Cell.Mount[SendPageInput, SendPage](
@@ -936,7 +951,8 @@ partial class App : Cell {
         if let shown = banner {
             main.Add(Container{FlexShrink: 0, shown})
         }
-        if page == AppPage.Overview && (wallet.Send.Pending != nil || wallet.Send.Outcome.Text.Length > 0) {
+        if page == AppPage.Overview &&
+            (wallet.Send.Pending != nil || wallet.Send.Outcome.TxId.Length > 0 || wallet.Send.Outcome.Error != nil) {
             main.Add(PendingSendBanner())
         }
         if page == AppPage.Overview ||

@@ -168,8 +168,8 @@ class Cli {
                     if let pending = wallet.Send.Pending {
                         Console.WriteLine("Pending send: " + pending.State)
                     }
-                    if wallet.Send.Outcome.Text.Length > 0 {
-                        Console.WriteLine(wallet.Send.Outcome.Text)
+                    if wallet.Send.Outcome.TxId.Length > 0 || wallet.Send.Outcome.Error != nil {
+                        Console.WriteLine(WalletText.Outcome(wallet.Send.Outcome))
                     }
                 } else if command == "unlock" || command == "load" {
                     if command == "load" {
@@ -236,12 +236,12 @@ class Cli {
                     if resume {
                         if wallet.Send.Pending == nil {
                             if wallet.Send.Outcome.TxId.Length > 0 {
-                                Console.WriteLine(wallet.Send.Outcome.Text)
+                                Console.WriteLine(WalletText.Outcome(wallet.Send.Outcome))
                                 return 0
                             }
                             throw WalletException(
-                                if wallet.Send.Outcome.Text.Length > 0 {
-                                    wallet.Send.Outcome.Text
+                                if wallet.Send.Outcome.TxId.Length > 0 || wallet.Send.Outcome.Error != nil {
+                                    WalletText.Outcome(wallet.Send.Outcome)
                                 } else {
                                     "No pending send"
                                 }

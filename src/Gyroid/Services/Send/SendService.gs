@@ -345,7 +345,7 @@ class SendService {
             if outcome.TxId.Length > 0 {
                 return SendResult(outcome.TxId, 0, 0, 0)
             }
-            throw WalletException(outcome.Text)
+            throw WalletException(WalletText.Outcome(outcome))
         }
     }
 
@@ -376,8 +376,8 @@ class SendService {
                     return SendResult(Outcome.TxId, 0, 0, 0)
                 }
                 throw WalletException(
-                    if Outcome.Text.Length > 0 {
-                        Outcome.Text
+                    if Outcome.TxId.Length > 0 || Outcome.Error != nil {
+                        WalletText.Outcome(Outcome)
                     } else {
                         "No pending send"
                     }

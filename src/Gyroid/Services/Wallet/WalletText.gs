@@ -1,11 +1,20 @@
 package Gyroid.Services
 
+import Gyroid.Models
 import System
 import System.Collections.Generic
 import System.Globalization
 
 class WalletText {
     shared {
+        func Outcome(value SendOutcome) string -> if value.TxId.Length > 0 {
+            "Submitted: " + value.TxId
+        } else if let message = value.Error {
+            "Send failed: " + message
+        } else {
+            ""
+        }
+
         func Hidden(privacy bool, value string) string -> if privacy {
             "••••••••"
         } else {
