@@ -206,7 +206,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             pane
         }
         if input.Height > 640 {
-            root.Height = Math.Clamp(input.Height * 0.65, 430.0, 740.0)
+            root.Height = Math.Clamp(input.Height * 0.65, 480.0, 740.0)
         }
         if applyPending {
             root.Add(ConfirmApply(input))
