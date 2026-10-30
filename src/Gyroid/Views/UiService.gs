@@ -102,7 +102,7 @@ class UiService {
         guard let host = window else {
             return
         }
-        ReleaseClipboard()
+        ReleaseClipboard(clear: false)
         try {
             host.SetClipboardText(content)
         } catch (failure Exception) {
@@ -118,13 +118,14 @@ class UiService {
             },
             clearAfterMs
         )
+        rebuild()
     }
 
     func Copy(content[]char, clearAfterMs float64) {
         guard let host = window else {
             return
         }
-        ReleaseClipboard()
+        ReleaseClipboard(clear: false)
         let bytes = Encoding.UTF8.GetBytes(content)
         try {
             let text = TransferRepresentation("text/plain;charset=utf-8", ReadOnlyMemory[uint8](bytes))
@@ -156,6 +157,7 @@ class UiService {
             if result.Status != DataTransferStatus.Success {
                 throw WalletException("Copy failed")
             }
+            rebuild()
         } catch (failure Exception) {
             ReleaseClipboard()
             report("Copy failed")
@@ -165,7 +167,7 @@ class UiService {
         }
     }
 
-    func ReleaseClipboard() {
+    func ReleaseClipboard(clear bool = true) {
         guard let host = window else {
             return
         }
@@ -175,7 +177,7 @@ class UiService {
         ClipboardTimer?.Dispose()
         ClipboardTimer = nil
         try {
-            if clipboardBytes.Length > 0 {
+            if clear && clipboardBytes.Length > 0 {
                 let current = host
                     .ReadClipboardDataAsync([]string{"application/x-gyroid-clipboard-owner"})
                     .GetAwaiter()
@@ -186,7 +188,7 @@ class UiService {
                         break
                     }
                 }
-            } else {
+            } else if clear {
                 let current = host.GetClipboardText()
                 if System
                     .Security
