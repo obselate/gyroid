@@ -111,18 +111,21 @@ class WalletForm {
                 )
             }
         ),
-        CreateRoot: (_, root) -> Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: 12,
-            FlexShrink: 0,
-            Container{
-                Width: 136,
-                Height: 38,
-                FlexShrink: 0,
-                JustifyContent: JustifyContent.Center,
-                ui.Label(ui.Strings.Get(label), 13, ui.Body, "")
-            },
-            root.Children[0]
+        CreateRoot: (_, root) -> {
+            root.FlexDirection = FlexDirection.Row
+            root.Gap = 12
+            root.FlexShrink = 0
+            root.Children.Insert(
+                0,
+                Container{
+                    Width: 136,
+                    Height: 38,
+                    FlexShrink: 0,
+                    JustifyContent: JustifyContent.Center,
+                    ui.Label(ui.Strings.Get(label), 13, ui.Body, "")
+                }
+            )
+            return root
         }
     }.Build()
 
