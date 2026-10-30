@@ -758,13 +758,16 @@ class Presentation {
             return Container{}
         }
         let end = float64(CoreRelease.UpgradeHeight) + (deadline - date).TotalDays * 288
-        let now = Math.Min(span, span * status.Height / end)
+        let now = status.Syncing ? 0.0: Math.Min(span, span * status.Height / end)
         let upgrade = span * CoreRelease.UpgradeHeight / end
         let bar = Container{
             Width: span,
             Height: 8,
             Accessibility: Accessibility{
-                Name: Count(status.Height) + " / " + Count(CoreRelease.UpgradeHeight) + " · " + status.UpgradeDeadline
+                Name: (status.Syncing ? "": Count(status.Height) + " / ") +
+                    Count(CoreRelease.UpgradeHeight) +
+                    " · " +
+                    status.UpgradeDeadline
             },
             Container{Position: PositionType.Absolute, Width: now, Height: 8, BorderRadius: 2, BackgroundColor: Lime}
         }
