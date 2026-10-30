@@ -45,8 +45,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
 
     private var menu bool
 
-    private var reveal bool
-
     private var issue string = ""
 
     private var name string = ""
@@ -152,7 +150,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     private func Clear() {
         form = ""
         menu = false
-        reveal = false
         name = ""
         password = ""
         confirmation = ""
@@ -308,7 +305,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                     state = input.Session.State
                     opened = expanded ? "": filename
                     password = ""
-                    reveal = false
                     issue = ""
                     Rebuild()
                 }
@@ -395,7 +391,8 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                                 AccessibilityName: ui.Strings.Get("Password"),
                                 Value: password,
                                 Controlled: true,
-                                Password: !reveal,
+                                Password: true,
+                                RevealButton: true,
                                 Invalid: issue.Length > 0,
                                 Disabled: input.Busy,
                                 OnChange: value -> {
@@ -405,17 +402,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                                 }
                             }
                         )
-                    }
-                ),
-                WalletParts.Square(
-                    ui,
-                    reveal ? "visibility_off": "visibility",
-                    ui.Strings.Get("Show password"),
-                    reveal,
-                    input.Busy,
-                    () -> {
-                        reveal = !reveal
-                        Rebuild()
                     }
                 ),
                 Button(ui, "Unlock", unlock.Submit, !unlock.CanSubmit, true)
