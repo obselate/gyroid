@@ -1852,6 +1852,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Hover: Style{BackgroundColor: ui.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Disabled: disabled || input.Busy || index >= enabledCount,
+                Opacity: index >= enabledCount ? 0.4: 1.0,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Radio,
                     Name: ui.Strings.Get(names[index]),
