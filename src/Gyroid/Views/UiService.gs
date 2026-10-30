@@ -102,7 +102,6 @@ class UiService {
         guard let host = window else {
             return
         }
-        ReleaseClipboard(clear: false)
         try {
             host.SetClipboardText(content)
         } catch (failure Exception) {
@@ -110,6 +109,7 @@ class UiService {
             rebuild()
             return
         }
+        ReleaseClipboard(clear: false)
         ClipboardText = content.ToCharArray()
         ClipboardTimer = host.SetTimeout(
             () -> {
@@ -125,20 +125,13 @@ class UiService {
         guard let host = window else {
             return
         }
-        ReleaseClipboard(clear: false)
         let bytes = Encoding.UTF8.GetBytes(content)
+        var nextClipboardBytes = []uint8{}
         try {
             let text = TransferRepresentation("text/plain;charset=utf-8", ReadOnlyMemory[uint8](bytes))
             System.Runtime.InteropServices.MemoryMarshal.TryGetArray[uint8](text.Bytes, out let segment)
-            clipboardBytes = segment.Array ?? throw InvalidOperationException("Clipboard buffer unavailable")
-            clipboardOwner = Guid.NewGuid().ToByteArray()
-            ClipboardTimer = host.SetTimeout(
-                () -> {
-                    ReleaseClipboard()
-                    rebuild()
-                },
-                clearAfterMs
-            )
+            nextClipboardBytes = segment.Array ?? throw InvalidOperationException("Clipboard buffer unavailable")
+            let nextClipboardOwner = Guid.NewGuid().ToByteArray()
             let result = host
                 .WriteClipboardAsync(
                 TransferData(
@@ -146,7 +139,7 @@ class UiService {
                         text,
                         TransferRepresentation(
                             "application/x-gyroid-clipboard-owner",
-                            ReadOnlyMemory[uint8](clipboardOwner)
+                            ReadOnlyMemory[uint8](nextClipboardOwner)
                         )
                     },
                     Array.Empty[Uri]()
@@ -157,13 +150,24 @@ class UiService {
             if result.Status != DataTransferStatus.Success {
                 throw WalletException("Copy failed")
             }
+            ReleaseClipboard(clear: false)
+            clipboardBytes = nextClipboardBytes
+            nextClipboardBytes = []uint8{}
+            clipboardOwner = nextClipboardOwner
+            ClipboardTimer = host.SetTimeout(
+                () -> {
+                    ReleaseClipboard()
+                    rebuild()
+                },
+                clearAfterMs
+            )
             rebuild()
         } catch (failure Exception) {
-            ReleaseClipboard()
             report("Copy failed")
             rebuild()
         } finally {
             Array.Clear(bytes)
+            Array.Clear(nextClipboardBytes)
         }
     }
 
