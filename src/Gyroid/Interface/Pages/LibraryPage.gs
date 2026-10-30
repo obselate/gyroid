@@ -614,6 +614,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     private func Incomplete() bool -> name.Trim()
         .Length == 0 ||
         password.Length == 0 ||
+        confirmation.Length == 0 ||
         form == "Phrase" &&
         phrase
         .Trim().Length == 0 || form == "ViewOnly" && (spendKey.Length == 0 || viewKey.Length == 0)
