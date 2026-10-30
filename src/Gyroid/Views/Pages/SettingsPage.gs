@@ -136,7 +136,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         nav.Accessibility = Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("settings")}
         for id in sections {
             let selected = id == section
-            let fill = selected ? Color.Parse("#121906"): Color.Transparent
+            let fill = selected ? ui.Active: Color.Transparent
             let button = Goo
                 .Button{
                 FlexDirection: FlexDirection.Row,
@@ -219,7 +219,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func General(input SettingsPageInput, settings WalletSettings) Blob {
         let ui = input.Ui
-        return Rows(
+        return WalletParts.Rows(
             ui,
             []Container{
                 WalletParts.Line(
@@ -228,12 +228,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     "language",
                     []Blob{
                         Segment(
-                            input,
+                            ui,
                             "language",
                             []string{"en", "zh-Hans"},
                             []string{"English", "简体中文"},
                             input.Language,
-                            false,
+                            input.Busy,
                             input.OnLanguage
                         )
                     }
@@ -244,12 +244,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     "background",
                     []Blob{
                         Segment(
-                            input,
+                            ui,
                             "background",
                             []string{"gyroid", "glyphs", "off"},
                             []string{"gyroid", "glyphs", "off"},
                             settings.Background,
-                            false,
+                            input.Busy,
                             id -> Prefer(
                                 input,
                                 value -> {
@@ -265,12 +265,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     "UI scale",
                     []Blob{
                         Segment(
-                            input,
+                            ui,
                             "UI scale",
                             []string{"100", "125", "150", "175", "200"},
                             []string{"100% (system)", "125%", "150%", "175%", "200%"},
                             settings.UiScalePercent.ToString(CultureInfo.InvariantCulture),
-                            false,
+                            input.Busy,
                             id -> Prefer(
                                 input,
                                 value -> {
@@ -330,12 +330,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 "auto-lock",
                 []Blob{
                     Segment(
-                        input,
+                        ui,
                         "auto-lock",
                         []string{"5", "15", "60", "0"},
                         []string{"5m", "15m", "1h", "never"},
                         settings.AutoLockMinutes.ToString(),
-                        false,
+                        input.Busy,
                         id -> ui.Actions.Run(ct -> input.Session.SaveAutoLockAsync(int32.Parse(id), ct))
                     )
                 }
@@ -392,7 +392,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             )
         }
-        return Rows(ui, rows.ToArray())
+        return WalletParts.Rows(ui, rows.ToArray())
     }
 
     private func NodeSection(input SettingsPageInput, settings WalletSettings) Blob {
@@ -445,7 +445,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         } else {
             settings.DataDirectory
         }
-        let list = Rows(
+        let list = WalletParts.Rows(
             ui,
             []Container{
                 WalletParts.Line(
@@ -454,12 +454,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     "mode",
                     []Blob{
                         Segment(
-                            input,
+                            ui,
                             "mode",
                             []string{"automatic", "manual"},
                             []string{"automatic", "existing node"},
                             settings.NodeMode,
-                            Pinned("NODE_MODE"),
+                            Pinned("NODE_MODE") || input.Busy,
                             id -> ui.Actions.Run(ct -> input.Session.SaveNodeModeAsync(id, ct))
                         ),
                         Info(
@@ -512,7 +512,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Height: 52,
             FlexShrink: 0,
             BorderWidth: Edges{Top: 1},
-            BorderColor: Color.Parse("#141414"),
+            BorderColor: ui.FaintRule,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -550,12 +550,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             FlexShrink: 0,
             Padding: Edges{Bottom: 14},
             Segment(
-                input,
+                ui,
                 "Network",
                 []string{"mainnet", "testnet"},
                 []string{"Mainnet", "Testnet"},
                 value.Network,
-                Pinned("NETWORK"),
+                Pinned("NETWORK") || input.Busy,
                 id -> {
                     value.Network = id
                     Rebuild()
@@ -729,7 +729,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 }
             )
         )
-        pane.Add(Rows(ui, rows.ToArray()))
+        pane.Add(WalletParts.Rows(ui, rows.ToArray()))
         if input.Snapshot.ViewOnly {
             let note = WalletParts.Card(ui, 16, 10, 14)
             note.FlexDirection = FlexDirection.Row
@@ -1347,36 +1347,32 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         if note.Length > 0 {
             name.Add(Label(ui, ui.Strings.Get(note), 11, ui.Orange, ""))
         }
+        let field = FieldBox(
+            ui,
+            Label(
+                ui,
+                if masked {
+                    "••••••••"
+                } else if text.Length > 30 {
+                    text.Substring(0, 20) + "…" + text.Substring(text.Length - 8)
+                } else {
+                    text
+                },
+                12.5,
+                masked ? ui.Dim: ui.Body,
+                ""
+            ),
+            Edges{Left: 12, Right: 12}
+        )
+        field.Height = 34
+        field.JustifyContent = JustifyContent.Center
         let row = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: 10,
             FlexShrink: 0,
             name,
-            Grow(
-                Container{
-                    Height: 34,
-                    JustifyContent: JustifyContent.Center,
-                    Padding: Edges{Left: 12, Right: 12},
-                    BorderRadius: 8,
-                    BorderWidth: 1,
-                    BorderColor: Color.Parse("#2a2a2a"),
-                    BackgroundColor: Color.Parse("#080808"),
-                    Label(
-                        ui,
-                        if masked {
-                            "••••••••"
-                        } else if text.Length > 30 {
-                            text.Substring(0, 20) + "…" + text.Substring(text.Length - 8)
-                        } else {
-                            text
-                        },
-                        12.5,
-                        masked ? ui.Dim: ui.Body,
-                        ""
-                    )
-                }
-            )
+            Grow(field)
         }
         if secret {
             row.Add(
@@ -1831,73 +1827,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         input.Ui.Actions.Run(ct -> input.Session.SavePreferenceAsync(change, ct), input.OnPreference)
     }
 
-    private func Rows(ui Presentation, rows[]Container) Container {
-        let list = WalletParts.Card(ui, Edges{Top: 4, Bottom: 4, Left: 16, Right: 16}, 0, 14)
-        list.FlexShrink = 1
-        list.OverflowY = Overflow.Scroll
-        for index in 0 ... rows.Length {
-            if index < rows.Length - 1 {
-                rows[index].BorderWidth = Edges{Bottom: 1}
-            }
-            list.Add(rows[index])
-        }
-        return list
-    }
-
-    private func Segment(
-        input SettingsPageInput,
-        label string,
-        ids[]string,
-        names[]string,
-        selected string,
-        disabled bool,
-        chosen Action[string],
-        enabledCount int32 = Int32.MaxValue
-    ) Blob {
-        let ui = input.Ui
-        let group = Container{
-            FlexDirection: FlexDirection.Row,
-            Padding: 3,
-            BorderRadius: 10,
-            BackgroundColor: ui.Black,
-            BorderWidth: 1,
-            BorderColor: ui.Rule,
-            FlexShrink: 0,
-            Accessibility: Accessibility{Role: AccessibilityRole.Group, Name: ui.Strings.Get(label)}
-        }
-        for index in 0 ... ids.Length {
-            let id = ids[index]
-            let on = id == selected
-            let button = Goo
-                .Button{
-                Height: 28,
-                Padding: Edges{Left: 12, Right: 12},
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
-                BorderRadius: 7,
-                BackgroundColor: on ? Color.Parse("#1a1a1a"): Color.Transparent,
-                Hover: Style{BackgroundColor: ui.Rule},
-                Focus: Theme.Read().FocusStyle,
-                Disabled: disabled || input.Busy || index >= enabledCount,
-                Opacity: index >= enabledCount ? 0.4: 1.0,
-                Accessibility: Accessibility{
-                    Role: AccessibilityRole.Radio,
-                    Name: ui.Strings.Get(names[index]),
-                    Checked: on ? AccessibilityChecked.True: AccessibilityChecked.False
-                },
-                OnClick: () -> {
-                    if !on {
-                        chosen(id)
-                    }
-                },
-                Label(ui, ui.Strings.Get(names[index]), 14, on ? ui.Ink: ui.Body, "")
-            }
-            WidgetKeyBindings.BindActivation(button)
-            group.Add(button)
-        }
-        return group
-    }
-
     private func Violations(ui Presentation, count int) string ->
     ui.Strings.Get(count == 1 ? "{0} violation": "{0} violations").Replace("{0}", count.ToString())
 
@@ -1913,7 +1842,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         OffTrackColor: input.Ui.Edge,
         OnTrackColor: input.Ui.Lime,
         ThumbColor: Color.Parse("#8c8c8c"),
-        OnThumbColor: Color.Parse("#050505")
+        OnThumbColor: input.Ui.Surface
     }.Build()
 
     private func Info(input SettingsPageInput, key string, topic string, line string) Blob ->

@@ -5,6 +5,7 @@ import Goo.Widgets
 import Goo.Widgets.Actions
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
+import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
@@ -305,11 +306,11 @@ partial class App {
             upgradeShown = false
             Rebuild()
         }
-        return Cell.Mount[ModalDialog, ModalDialogHost](
+        return WalletParts.Modal(
+            ui,
             "upgrade",
             ModalDialog{
                 Open: true,
-                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 AccessibilityName: ui.Strings.Get("Network upgrade"),
                 Width: Math.Min(width - 48, 600),
                 Header: Label(ui, ui.Strings.Get("Network upgrade"), 18, ui.Ink, ""),

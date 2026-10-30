@@ -61,7 +61,6 @@ class OverviewPage : Cell[OverviewInput] {
     private var peeking bool
     private var expanded string = ""
     private let fraction Color = Color.Parse("#588203")
-    private let track Color = Color.Parse("#1a1a1a")
     private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
     private let requested HashSet[uint64] = HashSet[uint64]()
     private var fetching bool
@@ -385,7 +384,7 @@ class OverviewPage : Cell[OverviewInput] {
         card.Handle = hero
         card.FlexGrow = 1
         if peeking {
-            card.BorderColor = Color.Parse("#3a3a3a")
+            card.BorderColor = ui.StrongRule
         }
         let header = Container{
             FlexDirection: FlexDirection.Row,
@@ -411,7 +410,7 @@ class OverviewPage : Cell[OverviewInput] {
                     BorderWidth: 1,
                     BorderRadius: 6,
                     BorderColor: peeking ? ui.Lime: ui.Edge,
-                    BackgroundColor: peeking ? Color.Parse("#121906"): Color.Transparent,
+                    BackgroundColor: peeking ? ui.Active: Color.Transparent,
                     Focusable: true,
                     Focus: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Show amounts")},
@@ -488,7 +487,7 @@ class OverviewPage : Cell[OverviewInput] {
             }
         }
         if masked || total == 0 {
-            bar.Add(Container{FlexGrow: 1, Height: height, BorderRadius: 2, BackgroundColor: track})
+            bar.Add(Container{FlexGrow: 1, Height: height, BorderRadius: 2, BackgroundColor: ui.Selected})
         } else {
             if ready > 0 {
                 bar.Add(Segment(ready, height, ui.Lime))
@@ -528,14 +527,14 @@ class OverviewPage : Cell[OverviewInput] {
                     HitTestSelf: false,
                     Padding: Edges{Top: 10, Bottom: 10, Left: 12, Right: 12},
                     Gap: 4,
-                    BackgroundColor: Color.Parse("#0b0b0b"),
+                    BackgroundColor: ui.Control,
                     BorderWidth: 1,
-                    BorderColor: Color.Parse("#333333"),
+                    BorderColor: ui.PopoverEdge,
                     BorderRadius: 6,
                     BoxShadows: []BoxShadow{BoxShadow{OffsetY: 10, Blur: 28, Color: ui.Black}},
-                    Reading(ui, "confirming", Fixed(confirming)),
-                    Reading(ui, "outputs", outputs.ToString()),
-                    Reading(ui, "all ready", Wait(input, last))
+                    KeyValue(ui, ui.Strings.Get("confirming"), Fixed(confirming)),
+                    KeyValue(ui, ui.Strings.Get("outputs"), outputs.ToString()),
+                    KeyValue(ui, ui.Strings.Get("all ready"), Wait(input, last))
                 }
             )
         }
@@ -558,13 +557,6 @@ class OverviewPage : Cell[OverviewInput] {
         Height: height,
         BorderRadius: 2,
         BackgroundColor: color
-    }
-
-    private func Reading(ui Presentation, label string, value string) Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        Gap: 8,
-        Label(ui, ui.Strings.Get(label), 12, ui.Body, ""),
-        Label(ui, value, 12, ui.Ink, "")
     }
 
     private func Legend(
@@ -653,8 +645,8 @@ class OverviewPage : Cell[OverviewInput] {
                 Placement: PopoverPlacement.BottomStart,
                 Width: Length.Auto,
                 Padding: 12,
-                BackgroundColor: Color.Parse("#0b0b0b"),
-                BorderColor: Color.Parse("#333333"),
+                BackgroundColor: ui.Control,
+                BorderColor: ui.PopoverEdge,
                 TakeFocus: false,
                 AccessibilityName: ui.Strings.Get("About confirming"),
                 Content: Container{
@@ -756,7 +748,7 @@ class OverviewPage : Cell[OverviewInput] {
                         Height: 4,
                         BorderRadius: 2,
                         Overflow: Overflow.Hidden,
-                        BackgroundColor: Fade(track, faded),
+                        BackgroundColor: Fade(ui.Selected, faded),
                         Container{
                             Width: Percent(100.0 * item.Confirmations / item.Required),
                             Height: 4,
@@ -795,22 +787,15 @@ class OverviewPage : Cell[OverviewInput] {
                     Gap: 18,
                     RowGap: 6,
                     Padding: Edges{Left: 28, Top: 4},
-                    Detail(ui, ui.Strings.Get("block"), Count(item.Height)),
-                    Detail(ui, "tx", Short(item.TxId).Substring(3)),
-                    Detail(ui, ui.Strings.Get("ready at"), ready),
+                    KeyValue(ui, ui.Strings.Get("block"), Count(item.Height), 6, ui.Dim),
+                    KeyValue(ui, "tx", Short(item.TxId).Substring(3), 6, ui.Dim),
+                    KeyValue(ui, ui.Strings.Get("ready at"), ready, 6, ui.Dim),
                     Container{FlexGrow: 1},
                     Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions))
                 }
             )
         }
         return row
-    }
-
-    private func Detail(ui Presentation, label string, value string) Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        Gap: 6,
-        Label(ui, label, 12, ui.Dim, ""),
-        Label(ui, value, 12, ui.Ink, "")
     }
 
     private func Activities(input OverviewInput, chain uint64) List[Activity] {

@@ -294,7 +294,7 @@ class SendPage : Cell[SendPageInput] {
             Padding: Edges{Left: 14, Right: 14},
             JustifyContent: JustifyContent.Center,
             BorderWidth: 1,
-            BorderColor: Color.Parse("#2a2a2a"),
+            BorderColor: ui.FieldEdge,
             BorderRadius: 6,
             BackgroundColor: ui.Black,
             Disabled: input.Busy || atoms == 0,
@@ -348,8 +348,8 @@ class SendPage : Cell[SendPageInput] {
                         }
                     )
                 },
-                Icon(
-                    input,
+                ExpandButton(
+                    ui,
                     if memoUsed > 0 {
                         Meter(ui, memoUsed, WalletValidation.MemoLimit, false)
                     } else {
@@ -357,16 +357,18 @@ class SendPage : Cell[SendPageInput] {
                     },
                     "Memo",
                     row.MemoOpen,
+                    input.Busy,
                     () -> {
                         row.MemoOpen = !row.MemoOpen
                         Rebuild()
                     }
                 ),
-                Icon(
-                    input,
+                ExpandButton(
+                    ui,
                     MaterialIcons.Create("close", 16, ui.Dim),
                     "Remove recipient",
                     false,
+                    input.Busy,
                     () -> {
                         rows.RemoveAt(index)
                         Rebuild()
@@ -378,32 +380,6 @@ class SendPage : Cell[SendPageInput] {
             line.Add(Container{Padding: Edges{Left: 26, Right: 76}, MemoField(input, row)})
         }
         return line
-    }
-
-    private func Icon(input SendPageInput, icon Blob, label string, active bool, action Action) Blob {
-        let button = Goo
-            .Button{
-            Width: 30,
-            Height: 30,
-            Margin: Edges{Top: 4},
-            FlexShrink: 0,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center,
-            BorderRadius: 8,
-            BackgroundColor: active ? input.Ui.Rule: Color.Transparent,
-            Disabled: input.Busy,
-            Hover: Style{BackgroundColor: input.Ui.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{
-                Role: AccessibilityRole.Button,
-                Name: input.Ui.Strings.Get(label),
-                Expanded: active
-            },
-            OnClick: action,
-            icon
-        }
-        WidgetKeyBindings.BindActivation(button)
-        return button
     }
 
     private func AddressField(input SendPageInput, row SendRow) Blob {
@@ -421,11 +397,12 @@ class SendPage : Cell[SendPageInput] {
             trailing.Add(MaterialIcons.Create("check", 16, ui.Mint))
         } else if text.Length == 0 && input.Contacts.Count > 0 {
             trailing.Add(
-                Icon(
-                    input,
+                ExpandButton(
+                    ui,
                     MaterialIcons.Create("menu_book", 16, ui.Body),
                     "contacts",
                     row.Suggest,
+                    input.Busy,
                     () -> {
                         row.Suggest = !row.Suggest
                         Rebuild()
@@ -597,7 +574,7 @@ class SendPage : Cell[SendPageInput] {
             total = Add(total, amount)
         }
         if input.Privacy || spendable == 0 {
-            bar.Add(Segment(1, Color.Parse("#262626")))
+            bar.Add(Segment(1, ui.Unallocated))
             return bar
         }
         if total > spendable {
@@ -645,7 +622,7 @@ class SendPage : Cell[SendPageInput] {
         if change > 0 {
             bar.Add(Segment(float64(change), ui.Mint))
         }
-        bar.Add(Segment(float64(spendable - total), Color.Parse("#262626")))
+        bar.Add(Segment(float64(spendable - total), ui.Unallocated))
         return bar
     }
 
@@ -672,7 +649,7 @@ class SendPage : Cell[SendPageInput] {
             FlexShrink: 1,
             OverflowY: Overflow.Scroll,
             BorderWidth: Edges{Top: 1},
-            BorderColor: Color.Parse("#1a1a1a")
+            BorderColor: ui.Selected
         }
         for index in 0 ... pending.Recipients.Length {
             list.Add(Recipient(input, pending, index))
@@ -793,10 +770,10 @@ class SendPage : Cell[SendPageInput] {
             FlexShrink: 0,
             Padding: Edges{Top: 11, Bottom: 11, Left: expanded ? 10.0: 4.0, Right: expanded ? 10.0: 4.0},
             BorderRadius: expanded ? 8.0: 0.0,
-            BackgroundColor: expanded ? Color.Parse("#080808"): Color.Transparent,
+            BackgroundColor: expanded ? ui.Field: Color.Transparent,
             BorderWidth: Edges{Bottom: 1},
-            BorderColor: Color.Parse("#1a1a1a"),
-            Hover: Style{BackgroundColor: Color.Parse("#080808")},
+            BorderColor: ui.Selected,
+            Hover: Style{BackgroundColor: ui.Field},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,

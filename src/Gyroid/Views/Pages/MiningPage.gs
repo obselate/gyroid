@@ -274,7 +274,19 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                         AlignItems: AlignItems.Center,
                         Gap: 10,
                         Grow(Label(ui, String.Format(ui.Strings.Get("{0} cores"), cores), 13, ui.Ink, "")),
-                        Step(input, "chevron_left", "Fewer threads", threads - 1, threads > 1),
+                        WalletParts.Square(
+                            ui,
+                            "chevron_left",
+                            ui.Strings.Get("Fewer threads"),
+                            false,
+                            threads <= 1 || input.Busy,
+                            () -> Act(input, ct -> input.Session.Mining.SetThreadsAsync(threads - 1, ct)),
+                            26,
+                            radius: 7,
+                            iconSize: 14,
+                            iconColor: threads > 1 ? ui.Ink: ui.Dim,
+                            shrink: 1
+                        ),
                         Container{
                             MinWidth: 22,
                             AlignItems: AlignItems.Center,
@@ -290,7 +302,19 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                                 ""
                             )
                         },
-                        Step(input, "chevron_right", "More threads", threads + 1, threads > 0 && threads < cores)
+                        WalletParts.Square(
+                            ui,
+                            "chevron_right",
+                            ui.Strings.Get("More threads"),
+                            false,
+                            threads <= 0 || threads >= cores || input.Busy,
+                            () -> Act(input, ct -> input.Session.Mining.SetThreadsAsync(threads + 1, ct)),
+                            26,
+                            radius: 7,
+                            iconSize: 14,
+                            iconColor: threads > 0 && threads < cores ? ui.Ink: ui.Dim,
+                            shrink: 1
+                        )
                     }
                 ),
                 Row(
@@ -343,28 +367,6 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         Grow(value)
     }
 
-    private func Step(input MiningPageInput, icon string, label string, threads int32, enabled bool) Blob {
-        let button = Goo
-            .Button{
-            Width: 26,
-            Height: 26,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center,
-            BorderWidth: 1,
-            BorderRadius: 7,
-            BorderColor: input.Ui.Edge,
-            BackgroundColor: Color.Parse("#0b0b0b"),
-            Disabled: !enabled || input.Busy,
-            Hover: Style{BackgroundColor: input.Ui.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: input.Ui.Strings.Get(label)},
-            OnClick: () -> Act(input, ct -> input.Session.Mining.SetThreadsAsync(threads, ct)),
-            MaterialIcons.Create(icon, 14, enabled ? input.Ui.Ink: input.Ui.Dim)
-        }
-        WidgetKeyBindings.BindActivation(button)
-        return button
-    }
-
     private func Command(
         input MiningPageInput,
         icon string,
@@ -386,7 +388,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             BorderWidth: 1,
             BorderRadius: 8,
             BorderColor: border,
-            BackgroundColor: Color.Parse("#0b0b0b"),
+            BackgroundColor: ui.Control,
             Disabled: input.Busy,
             Hover: Style{BackgroundColor: ui.Rule},
             Focus: Theme.Read().FocusStyle,
@@ -516,7 +518,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                         Top: 0,
                         Bottom: 0,
                         Width: 1,
-                        BackgroundColor: Color.Parse("#3a3a3a")
+                        BackgroundColor: ui.StrongRule
                     }
                 )
                 area.Add(Dot(x, y, ui.Ink))
@@ -528,7 +530,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     BorderWidth: 1,
                     BorderRadius: 8,
                     BorderColor: ui.Edge,
-                    BackgroundColor: Color.Parse("#0b0b0b"),
+                    BackgroundColor: ui.Control,
                     Label(
                         ui,
                         sample.Time.ToString(format, CultureInfo.InvariantCulture) + " · " + sample.Rate.ToString(

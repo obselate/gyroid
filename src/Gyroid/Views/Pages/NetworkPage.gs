@@ -6,6 +6,7 @@ import Goo.Widgets.Actions
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Gyroid.Components
+import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
 import Gyroid.Models
@@ -300,8 +301,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let extent = height - 22
         let step = inner / 60
         let target = Level(300, extent)
-        plot.Add(Rule(2, Level(900, extent), inner, Color.Parse("#141414")))
-        plot.Add(Rule(2, Level(600, extent), inner, Color.Parse("#141414")))
+        plot.Add(Rule(2, Level(900, extent), inner, ui.FaintRule))
+        plot.Add(Rule(2, Level(600, extent), inner, ui.FaintRule))
         plot.Add(Place(inner + 10, Level(900, extent) - 7, Label(ui, "15:00", 11, ui.Dim, "")))
         plot.Add(Place(inner + 10, Level(600, extent) - 7, Label(ui, "10:00", 11, ui.Dim, "")))
         for index in 0 ... count {
@@ -427,7 +428,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     Top: bottom + 3,
                     Width: 1,
                     Height: seconds % 12 == 0 ? 6.0: 3.0,
-                    BackgroundColor: seconds % 12 == 0 ? ui.Dim: Color.Parse("#3a3a3a")
+                    BackgroundColor: seconds % 12 == 0 ? ui.Dim: ui.StrongRule
                 }
             )
         }
@@ -476,15 +477,15 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Fit: ShapeFit.Fill,
                         CornerRadius: 2,
                         BackgroundColor: if chosen {
-                            pending ? Color.Parse("#734d00"): Color.Parse("#4d7300")
+                            pending ? Color.Parse("#734d00"): ui.SuccessStroke
                         } else {
-                            pending ? Color.Parse("#1a1100"): Color.Parse("#111a00")
+                            pending ? ui.WarningFill: ui.SuccessFill
                         },
                         BorderWidth: chosen ? 1.4: 1.0,
                         BorderColor: if chosen {
                             ui.Ink
                         } else {
-                            pending ? Color.Parse("#b37700"): Color.Parse("#77b300")
+                            pending ? ui.PendingStroke: Color.Parse("#77b300")
                         },
                         Dashes: pending && !chosen ? DashPattern([]float64{3, 2}, 0): nil
                     }
@@ -513,7 +514,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Width: 1,
                         Height: bottom - 12,
                         HitTestSelf: false,
-                        BackgroundColor: Color.Parse("#b37700")
+                        BackgroundColor: ui.PendingStroke
                     }
                 )
                 plot.Add(
@@ -609,22 +610,31 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let card = WalletParts.Card(ui, Edges{Left: 14, Right: 14, Top: 12, Bottom: 12}, 8, 14)
         card.FlexGrow = 1
         card.FlexBasis = 0
+        let tabs = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.TabList}, ui.Field)
+        for index in 0 ... 2 {
+            let key = index == 0 ? "peers": "banned"
+            let count = key == "peers" ? report.Peers.Length: report.Banned.Length
+            let text = ui.Strings.Get(key) + " " + count.ToString()
+            tabs.Add(
+                Choice(
+                    ui,
+                    text,
+                    tab == key,
+                    () -> {
+                        tab = key
+                        Rebuild()
+                    },
+                    Accessibility{Role: AccessibilityRole.Tab, Name: text, Selected: tab == key},
+                    Edges{Left: 12, Right: 12, Top: 5, Bottom: 5}
+                )
+            )
+        }
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 FlexShrink: 0,
-                Container{
-                    FlexDirection: FlexDirection.Row,
-                    Padding: 3,
-                    BorderRadius: 10,
-                    BorderWidth: 1,
-                    BorderColor: ui.Rule,
-                    BackgroundColor: Color.Parse("#080808"),
-                    Accessibility: Accessibility{Role: AccessibilityRole.TabList},
-                    Segment(ui, "peers", report.Peers.Length),
-                    Segment(ui, "banned", report.Banned.Length)
-                },
+                tabs,
                 Container{FlexGrow: 1},
                 Cell.Mount[InfoTipInput, InfoTip](
                     "peers-info",
@@ -725,29 +735,6 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             }
         )
         return card
-    }
-
-    private func Segment(ui Presentation, key string, count int32) Blob {
-        let button = Goo
-            .Button{
-            Padding: Edges{Left: 12, Right: 12, Top: 5, Bottom: 5},
-            BorderRadius: 7,
-            BackgroundColor: tab == key ? Color.Parse("#1a1a1a"): Color.Transparent,
-            Hover: Style{BackgroundColor: ui.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{
-                Role: AccessibilityRole.Tab,
-                Name: ui.Strings.Get(key) + " " + count.ToString(),
-                Selected: tab == key
-            },
-            OnClick: () -> {
-                tab = key
-                Rebuild()
-            },
-            Label(ui, ui.Strings.Get(key) + " " + count.ToString(), 14, tab == key ? ui.Ink: ui.Body, "")
-        }
-        WidgetKeyBindings.BindActivation(button)
-        return button
     }
 
     private func Legend(ui Presentation, label string, count int32, color Color) Blob {
@@ -856,7 +843,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         HitTestSelf: false,
                         Padding: Edges{Left: 12, Right: 12, Top: 10, Bottom: 10},
                         Gap: 5,
-                        BackgroundColor: Color.Parse("#0b0b0b"),
+                        BackgroundColor: ui.Control,
                         BorderWidth: 1,
                         BorderColor: ui.Edge,
                         BorderRadius: 10,

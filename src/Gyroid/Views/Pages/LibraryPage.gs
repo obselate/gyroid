@@ -241,7 +241,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 Gap: 8,
                 Width: 250,
                 Padding: 6,
-                BackgroundColor: Color.Parse("#0b0b0b"),
+                BackgroundColor: ui.Control,
                 BorderColor: ui.Edge,
                 Role: AccessibilityRole.Menu,
                 AccessibilityName: ui.Strings.Get("Add wallet"),

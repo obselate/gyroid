@@ -62,11 +62,11 @@ partial class App {
             confirmPendingSend = false
             Rebuild()
         }
-        return Cell.Mount[ModalDialog, ModalDialogHost](
+        return WalletParts.Modal(
+            ui,
             "pending-send",
             ModalDialog{
                 Open: true,
-                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Pending send"),
                 Width: Math.Min(width - 48, 600),

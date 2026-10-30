@@ -179,16 +179,8 @@ class ReceivePage : Cell[ReceivePageInput] {
             code.Add(Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: ui.Black})
         }
         let copied = ReadOnlySpan[char](input.Clipboard).SequenceEqual(System.MemoryExtensions.AsSpan(payload))
-        let tabs = Container{
-            FlexDirection: FlexDirection.Row,
-            Padding: 3,
-            BorderRadius: 10,
-            BackgroundColor: ui.Black,
-            BorderWidth: 1,
-            BorderColor: ui.Rule,
-            FlexShrink: 0,
-            Accessibility: Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("Share as")}
-        }
+        let tabs = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("Share as")})
+        tabs.FlexShrink = 0
         for (id, label) in[]KeyValuePair[string, string]{
             KeyValuePair[string, string]("link", "Link"),
             KeyValuePair[string, string]("address", "Address"),
@@ -197,29 +189,23 @@ class ReceivePage : Cell[ReceivePageInput] {
             if id == "link" && empty {
                 continue
             }
-            let button = Goo
-                .Button{
-                FlexGrow: 1,
-                FlexBasis: 0,
-                Height: 28,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
-                BorderRadius: 7,
-                BackgroundColor: shown == id ? Color.Parse("#1a1a1a"): Color.Transparent,
-                Hover: Style{BackgroundColor: ui.Rule},
-                Focus: Theme.Read().FocusStyle,
-                Accessibility: Accessibility{
-                    Role: AccessibilityRole.Tab,
-                    Name: ui.Strings.Get(label),
-                    Selected: shown == id
-                },
-                OnClick: () -> {
+            let button = Choice(
+                ui,
+                ui.Strings.Get(label),
+                shown == id,
+                () -> {
                     request.Format = id
                     Rebuild()
                 },
-                Label(ui, ui.Strings.Get(label), 13, shown == id ? ui.Ink: ui.Body, "")
-            }
-            WidgetKeyBindings.BindActivation(button)
+                Accessibility{Role: AccessibilityRole.Tab, Name: ui.Strings.Get(label), Selected: shown == id},
+                0,
+                13
+            )
+            button.FlexGrow = 1
+            button.FlexBasis = 0
+            button.Height = 28
+            button.AlignItems = AlignItems.Center
+            button.JustifyContent = JustifyContent.Center
             tabs.Add(button)
         }
         let grouped = Grouped(input.Address)
@@ -248,6 +234,14 @@ class ReceivePage : Cell[ReceivePageInput] {
             Color: ui.Ink,
             TextWrap: TextWrap.Wrap
         }
+        let field = FieldBox(
+            ui,
+            preview,
+            Edges{Left: 14, Right: 14, Top: 12, Bottom: 12},
+            copied ? ui.Mint: ui.FieldEdge
+        )
+        field.MinHeight = 72
+        field.Accessibility = Accessibility{Role: AccessibilityRole.Status}
         let action = if paid != nil {
             Action(
                 input,
@@ -255,7 +249,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 "New request",
                 ui.Ink,
                 ui.Edge,
-                Color.Parse("#0b0b0b"),
+                ui.Control,
                 "",
                 () -> {
                     request.Amount = ""
@@ -267,16 +261,7 @@ class ReceivePage : Cell[ReceivePageInput] {
         } else if copied {
             Action(input, "check", "Copied", ui.Mint, ui.Mint, Color.Parse("#00140d"), "clears in 2 min", () -> { })
         } else if shown == "qr" {
-            Action(
-                input,
-                "download",
-                "Save QR image",
-                ui.Lime,
-                ui.Lime,
-                Color.Parse("#0b1203"),
-                "",
-                () -> SaveQr(input)
-            )
+            Action(input, "download", "Save QR image", ui.Lime, ui.Lime, ui.ActionFill, "", () -> SaveQr(input))
         } else {
             Action(
                 input,
@@ -284,7 +269,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 shown == "link" ? "Copy link": "Copy address",
                 ui.Lime,
                 ui.Lime,
-                Color.Parse("#0b1203"),
+                ui.ActionFill,
                 "",
                 () -> ui.Actions.Copy(payload, 120000)
             )
@@ -394,22 +379,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                 }
                             )
                         },
-                        Container{
-                            Gap: 12,
-                            FlexShrink: 0,
-                            tabs,
-                            Container{
-                                MinHeight: 72,
-                                Padding: Edges{Left: 14, Right: 14, Top: 12, Bottom: 12},
-                                BorderWidth: 1,
-                                BorderRadius: 8,
-                                BorderColor: copied ? ui.Mint: Color.Parse("#2a2a2a"),
-                                BackgroundColor: Color.Parse("#080808"),
-                                Accessibility: Accessibility{Role: AccessibilityRole.Status},
-                                preview
-                            },
-                            action
-                        }
+                        Container{Gap: 12, FlexShrink: 0, tabs, field, action}
                     }
                 )
             }

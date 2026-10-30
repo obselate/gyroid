@@ -547,7 +547,7 @@ class HistoryPage : Cell[HistoryInput] {
             BorderWidth: 1,
             BorderColor: ui.Rule,
             BorderRadius: 4,
-            BackgroundColor: Color.Parse("#080808"),
+            BackgroundColor: ui.Field,
             area,
             axis
         }
@@ -581,7 +581,7 @@ class HistoryPage : Cell[HistoryInput] {
         Width: Math.Max(0.0, right - left),
         Top: 0,
         Bottom: 0,
-        BackgroundColor: Color.Parse("#000000").WithAlpha(0.88),
+        BackgroundColor: current.Ui.Black.WithAlpha(0.88),
         HitTestSelf: false
     }
 
@@ -681,24 +681,11 @@ class HistoryPage : Cell[HistoryInput] {
             Gap: input.Width < 1000 ? 14.0: 22.0,
             FlexShrink: 0,
             Padding: Edges{Top: 2, Left: 2, Right: 2},
-            Figure("in", received > 0 ? "+" + Amount(ui.Privacy, received): "0", ui.Mint, 14),
-            Figure("out", sent > 0 ? "−" + Amount(ui.Privacy, sent): "0", ui.Pink, 14),
-            Figure("fees", fees > 0 ? Amount(ui.Privacy, fees): "0", ui.Body, 14),
-            Figure("mined", mined > 0 ? "+" + Amount(ui.Privacy, mined): "0", ui.Lime, 14),
-            Figure("net", net, ui.Ink, input.Width < 1000 ? 16.0: 18.0)
-        }
-    }
-
-    private func Figure(label string, value string, color Color, size float64) Blob {
-        let ui = current.Ui
-        return Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Baseline,
-            Gap: 7,
-            FlexShrink: 0,
-            Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-            Label(ui, ui.Strings.Get(label), 12, ui.Dim, ""),
-            Label(ui, value, size, color)
+            Figure(ui, "in", received > 0 ? "+" + Amount(ui.Privacy, received): "0", ui.Mint, 14, compact: true),
+            Figure(ui, "out", sent > 0 ? "−" + Amount(ui.Privacy, sent): "0", ui.Pink, 14, compact: true),
+            Figure(ui, "fees", fees > 0 ? Amount(ui.Privacy, fees): "0", ui.Body, 14, compact: true),
+            Figure(ui, "mined", mined > 0 ? "+" + Amount(ui.Privacy, mined): "0", ui.Lime, 14, compact: true),
+            Figure(ui, "net", net, ui.Ink, input.Width < 1000 ? 16.0: 18.0, compact: true)
         }
     }
 
@@ -767,7 +754,7 @@ class HistoryPage : Cell[HistoryInput] {
             Padding: Edges{Left: 10, Right: 10},
             BorderWidth: Edges{Bottom: 1},
             BorderColor: row.Open ? Color.Transparent: ui.Rule,
-            BackgroundColor: row.Open ? Color.Parse("#0f0f0f"): Color.Transparent,
+            BackgroundColor: row.Open ? ui.Expanded: Color.Transparent,
             Hover: Style{BackgroundColor: Color.Parse("#0c0c0c")},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
@@ -875,7 +862,7 @@ class HistoryPage : Cell[HistoryInput] {
         let panel = Container{
             Gap: 12,
             Padding: Edges{Top: 4, Bottom: 14, Left: row.Width < 1000 ? 16.0: 38.0, Right: 16},
-            BackgroundColor: Color.Parse("#0f0f0f"),
+            BackgroundColor: ui.Expanded,
             BorderWidth: Edges{Bottom: 1},
             BorderColor: ui.Rule
         }
@@ -970,7 +957,14 @@ class HistoryPage : Cell[HistoryInput] {
                     } else {
                         Container{}
                     },
-                    Figure("amount", Amount(ui.Privacy, recipient?.Amount ?? 0UL) + " BNT", ui.Ink, 14),
+                    Figure(
+                        ui,
+                        "amount",
+                        Amount(ui.Privacy, recipient?.Amount ?? 0UL) + " BNT",
+                        ui.Ink,
+                        14,
+                        compact: true
+                    ),
                     Container{FlexGrow: 1},
                     Button(ui, "save", () -> SaveProof(row), !ready),
                     Button(ui, "copy proof", () -> ui.Actions.Copy(ProofText(row), 120000), !ready, true)
@@ -982,21 +976,24 @@ class HistoryPage : Cell[HistoryInput] {
         let values = Container{FlexDirection: FlexDirection.Row, FlexWrap: FlexWrap.Wrap, RowGap: 8, ColumnGap: 26}
         values.Add(
             Figure(
+                ui,
                 "height",
                 row.Height > 0 ? Count(row.Height): ui.Strings.Get("pending"),
                 row.Height > 0 ? ui.Ink: ui.Orange,
-                13
+                13,
+                compact: true
             )
         )
         if row.Time > 0 {
-            values.Add(Figure("time", Time(row.Time), ui.Ink, 13))
+            values.Add(Figure(ui, "time", Time(row.Time), ui.Ink, 13, compact: true))
         }
         if row.Kind == HistoryRowKind.Sent || row.Kind == HistoryRowKind.Pending {
-            values.Add(Figure("fee", Amount(ui.Privacy, row.Fee), ui.Ink, 13))
+            values.Add(Figure(ui, "fee", Amount(ui.Privacy, row.Fee), ui.Ink, 13, compact: true))
             if row.Recipients.Length == 1 {
                 let address = row.Recipients[0].Address
                 values.Add(
                     Figure(
+                        ui,
                         "recipient",
                         Hidden(
                             ui.Privacy,
@@ -1005,19 +1002,20 @@ class HistoryPage : Cell[HistoryInput] {
                             ): address
                         ),
                         ui.Ink,
-                        13
+                        13,
+                        compact: true
                     )
                 )
             }
         }
         if row.Kind == HistoryRowKind.Mined && row.Depth < 60 {
-            values.Add(Figure("spendable at", Count(row.Height + 60), ui.Orange, 13))
+            values.Add(Figure(ui, "spendable at", Count(row.Height + 60), ui.Orange, 13, compact: true))
         }
         if row.Kind == HistoryRowKind.Received {
-            values.Add(Figure("output", "#" + row.Index.ToString(), ui.Ink, 13))
+            values.Add(Figure(ui, "output", "#" + row.Index.ToString(), ui.Ink, 13, compact: true))
         }
         if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
-            values.Add(Figure("memo", Hidden(ui.Privacy, row.Memo), ui.Ink, 13))
+            values.Add(Figure(ui, "memo", Hidden(ui.Privacy, row.Memo), ui.Ink, 13, compact: true))
         }
         panel.Add(values)
         if row.Recipients.Length > 1 {
@@ -1025,10 +1023,10 @@ class HistoryPage : Cell[HistoryInput] {
                 let details = Container{
                     Gap: 4,
                     Block("recipient", entry.Address, Spaced(entry.Address, 10), ui.Body),
-                    Figure("amount", Amount(ui.Privacy, entry.Amount) + " BNT", ui.Ink, 13)
+                    Figure(ui, "amount", Amount(ui.Privacy, entry.Amount) + " BNT", ui.Ink, 13, compact: true)
                 }
                 if entry.Memo.Length > 0 {
-                    details.Add(Figure("memo", Hidden(ui.Privacy, entry.Memo), ui.Ink, 13))
+                    details.Add(Figure(ui, "memo", Hidden(ui.Privacy, entry.Memo), ui.Ink, 13, compact: true))
                 }
                 panel.Add(details)
             }
@@ -1129,10 +1127,10 @@ class HistoryPage : Cell[HistoryInput] {
             Gap: 8,
             Padding: Edges{Left: 12, Right: 12},
             BorderWidth: 1,
-            BorderColor: exporting ? Color.Parse("#4a4a4a"): ui.Edge,
+            BorderColor: exporting ? ui.ExportEdge: ui.Edge,
             BorderRadius: 4,
-            BackgroundColor: exporting ? Color.Parse("#141414"): ui.Raised,
-            Hover: Style{BorderColor: Color.Parse("#4a4a4a")},
+            BackgroundColor: exporting ? ui.FaintRule: ui.Raised,
+            Hover: Style{BorderColor: ui.ExportEdge},
             Focus: Theme.Read().FocusStyle,
             Disabled: shown.Length == 0,
             Opacity: shown.Length == 0 ? 0.4: 1.0,
@@ -1197,7 +1195,7 @@ class HistoryPage : Cell[HistoryInput] {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                Figure("rows", shown.Length.ToString(), ui.Ink, 14),
+                Figure(ui, "rows", shown.Length.ToString(), ui.Ink, 14, compact: true),
                 Button(ui, "save", () -> SaveExport(input), shown.Length == 0, true)
             }
         }

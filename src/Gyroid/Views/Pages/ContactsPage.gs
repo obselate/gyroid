@@ -263,11 +263,11 @@ class ContactsPage : Cell[ContactsInput] {
             deleting = ""
             Rebuild()
         }
-        return Cell.Mount[ModalDialog, ModalDialogHost](
+        return WalletParts.Modal(
+            ui,
             "delete-contact",
             ModalDialog{
                 Open: true,
-                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Delete"),
                 Width: 420,

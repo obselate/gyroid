@@ -11,6 +11,119 @@ import System
 
 class ControlParts {
     shared {
+        func FieldBox(ui Presentation, content Blob, padding Edges, border Color? = nil) Container -> Container{
+            Padding: padding,
+            BorderRadius: 8,
+            BorderWidth: 1,
+            BorderColor: border ?? ui.FieldEdge,
+            BackgroundColor: ui.Field,
+            content
+        }
+
+        func ChoiceGroup(ui Presentation, accessibility Accessibility, background Color? = nil) Container -> Container{
+            FlexDirection: FlexDirection.Row,
+            Padding: 3,
+            BorderRadius: 10,
+            BackgroundColor: background ?? ui.Black,
+            BorderWidth: 1,
+            BorderColor: ui.Rule,
+            Accessibility: accessibility
+        }
+
+        func Choice(
+            ui Presentation,
+            content string,
+            selected bool,
+            action Action,
+            accessibility Accessibility,
+            padding Edges,
+            size float64 = 14,
+            disabled bool = false
+        ) Goo
+            .Button {
+            let button = Goo
+                .Button{
+                Padding: padding,
+                BorderRadius: 7,
+                BackgroundColor: selected ? ui.Selected: Color.Transparent,
+                Hover: Style{BackgroundColor: ui.Rule},
+                Focus: Theme.Read().FocusStyle,
+                Disabled: disabled,
+                Accessibility: accessibility,
+                OnClick: action,
+                Label(ui, content, size, selected ? ui.Ink: ui.Body, "")
+            }
+            WidgetKeyBindings.BindActivation(button)
+            return button
+        }
+
+        func Segment(
+            ui Presentation,
+            label string,
+            ids[]string,
+            names[]string,
+            selected string,
+            disabled bool,
+            chosen Action[string],
+            enabledCount int32 = Int32.MaxValue
+        ) Blob {
+            let group = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.Group, Name: ui.Strings.Get(label)})
+            group.FlexShrink = 0
+            for index in 0 ... ids.Length {
+                let id = ids[index]
+                let on = id == selected
+                let button = Choice(
+                    ui,
+                    ui.Strings.Get(names[index]),
+                    on,
+                    () -> {
+                        if !on {
+                            chosen(id)
+                        }
+                    },
+                    Accessibility{
+                        Role: AccessibilityRole.Radio,
+                        Name: ui.Strings.Get(names[index]),
+                        Checked: on ? AccessibilityChecked.True: AccessibilityChecked.False
+                    },
+                    Edges{Left: 12, Right: 12},
+                    disabled: disabled || index >= enabledCount
+                )
+                button.Height = 28
+                button.AlignItems = AlignItems.Center
+                button.JustifyContent = JustifyContent.Center
+                button.Opacity = index >= enabledCount ? 0.4: 1.0
+                group.Add(button)
+            }
+            return group
+        }
+
+        func ExpandButton(ui Presentation, icon Blob, label string, active bool, disabled bool, action Action) Blob {
+            let button = Goo
+                .Button{
+                Width: 30,
+                Height: 30,
+                Margin: Edges{Top: 4},
+                FlexShrink: 0,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.Center,
+                BorderRadius: 8,
+                BackgroundColor: active ? ui.Rule: Color.Transparent,
+                Disabled: disabled,
+                Hover: Style{BackgroundColor: ui.Rule},
+                Focus: Theme.Read().FocusStyle,
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.Button,
+                    Name: ui.Strings.Get(label),
+                    Expanded: active
+                },
+                OnClick: action,
+                icon
+            }
+            WidgetKeyBindings.BindActivation(button)
+            return button
+        }
+
         func Tabs(
             ui Presentation,
             key string,
@@ -88,8 +201,8 @@ class ControlParts {
                 Width = Percent(100),
                 EntryHeight = 38,
                 BorderRadius = 8,
-                BackgroundColor = Color.Parse("#080808"),
-                BorderColor = Color.Parse("#2a2a2a"),
+                BackgroundColor = ui.Field,
+                BorderColor = ui.FieldEdge,
                 FontFamily = ui.Font
             }
         ).Build()

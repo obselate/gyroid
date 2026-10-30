@@ -11,6 +11,19 @@ import System
 
 class WalletParts {
     shared {
+        func Rows(ui Presentation, rows[]Container) Container {
+            let list = Card(ui, Edges{Top: 4, Bottom: 4, Left: 16, Right: 16}, 0, 14)
+            list.FlexShrink = 1
+            list.OverflowY = Overflow.Scroll
+            for index in 0 ... rows.Length {
+                if index < rows.Length - 1 {
+                    rows[index].BorderWidth = Edges{Bottom: 1}
+                }
+                list.Add(rows[index])
+            }
+            return list
+        }
+
         func Card(ui Presentation, padding Edges? = nil, gap float64 = 16, radius float64 = 6) Container -> Container{
             BackgroundColor: ui.Surface.WithAlpha(ui.Pane),
             BackdropBlur: 16,
@@ -61,7 +74,7 @@ class WalletParts {
                 Gap: 10,
                 Height: height,
                 FlexShrink: 0,
-                BorderColor: Color.Parse("#141414"),
+                BorderColor: ui.FaintRule,
                 Grow(Label(ui, ui.Strings.Get(label), 14, ui.Body, ""))
             }
             for part in parts {
@@ -78,29 +91,42 @@ class WalletParts {
             disabled bool,
             click Action,
             size float64 = 38,
-            disabledColor Color? = nil
+            disabledColor Color? = nil,
+            radius float64 = 8,
+            iconSize float64 = 16,
+            iconColor Color? = nil,
+            shrink float64 = 0
         ) Blob {
             let button = Goo
                 .Button{
                 Width: size,
                 Height: size,
-                FlexShrink: 0,
+                FlexShrink: shrink,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.Center,
                 BorderWidth: 1,
-                BorderRadius: 8,
+                BorderRadius: radius,
                 BorderColor: active ? ui.Lime: ui.Edge,
-                BackgroundColor: Color.Parse("#0b0b0b"),
+                BackgroundColor: ui.Control,
                 Disabled: disabled,
                 Hover: Style{BackgroundColor: ui.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label},
                 OnClick: click,
-                MaterialIcons.Create(icon, 16, active ? ui.Lime: disabled ? disabledColor ?? ui.Dim: ui.Body)
+                MaterialIcons.Create(
+                    icon,
+                    iconSize,
+                    iconColor ?? (active ? ui.Lime: disabled ? disabledColor ?? ui.Dim: ui.Body)
+                )
             }
             WidgetKeyBindings.BindActivation(button)
             return button
         }
+
+        func Modal(ui Presentation, key string, dialog ModalDialog) Blob -> Cell.Mount[ModalDialog, ModalDialogHost](
+            key,
+            dialog with{CreateRoot = (dialog, backdrop, panel) -> DialogRoot(ui)}
+        )
 
         func Modal(
             ui Presentation,
@@ -113,12 +139,11 @@ class WalletParts {
             content Blob,
             footer Blob,
             close Action
-        ) Blob -> Cell
-            .Mount[ModalDialog, ModalDialogHost](
+        ) Blob -> Modal(
+            ui,
             key,
             ModalDialog{
                 Open: true,
-                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
                 AccessibilityName: ui.Strings.Get(name),
                 Width: Math.Min(availableWidth - 40, width),

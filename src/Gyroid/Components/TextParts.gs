@@ -11,6 +11,19 @@ import System.Collections.Generic
 
 class TextParts {
     shared {
+        func KeyValue(
+            ui Presentation,
+            label string,
+            value string,
+            gap float64 = 8,
+            color Color? = nil
+        ) Blob -> Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: gap,
+            Label(ui, label, 12, color ?? ui.Body, ""),
+            Label(ui, value, 12, ui.Ink, "")
+        }
+
         func ChainState(ui Presentation, state string, confirmations uint64) string -> if state == "confirmed" {
             ui.Strings.Get("Confirmed") + " " + Count(confirmations)
         } else if state == "mempool" {
@@ -97,14 +110,16 @@ class TextParts {
             value string,
             color Color,
             size float64 = 14,
-            channel string = "page"
+            channel string = "page",
+            compact bool = false
         ) Blob -> Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
-            Gap: 10,
+            Gap: compact ? 7: 10,
             MinWidth: 0,
+            FlexShrink: compact ? 0: 1,
             Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-            TextParts.Label(ui, ui.Strings.Get(label), 12, ui.Body),
+            TextParts.Label(ui, ui.Strings.Get(label), 12, compact ? ui.Dim: ui.Body, compact ? "": "page"),
             TextParts.Label(ui, value, size, color, channel)
         }
 

@@ -29,7 +29,7 @@ partial class App {
             Gap: 4,
             BorderRadius: 10,
             BackgroundColor: if selected {
-                Color.Parse("#121906")
+                ui.Active
             } else {
                 Color.Transparent
             },

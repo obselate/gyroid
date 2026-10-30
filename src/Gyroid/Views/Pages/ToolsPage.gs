@@ -69,9 +69,6 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     private var typed string = ""
     private var wrong bool
     private let error Color = Color.Parse("#ff3d6e")
-    private let tile Color = Color.Parse("#0a0a0a")
-    private let control Color = Color.Parse("#0b0b0b")
-    private let selected Color = Color.Parse("#121906")
     private let ring Color = Color.Parse("#141f00")
 
     protected override func Build(input ToolsInput) Blob {
@@ -115,8 +112,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             BorderWidth: 1,
             BorderRadius: 7,
             BorderColor: primary ? ui.Lime: ui.Edge,
-            BackgroundColor: control,
-            Hover: Style{BackgroundColor: primary ? selected: ui.Rule},
+            BackgroundColor: ui.Control,
+            Hover: Style{BackgroundColor: primary ? ui.Active: ui.Rule},
             Focus: Theme.Read().FocusStyle,
             Disabled: input.Busy,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
@@ -139,7 +136,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
     )
 
-    private func Arc(fraction float64, size float64) Blob {
+    private func Arc(ui Presentation, fraction float64, size float64) Blob {
         let track = PathBuilder(0, 0, size, size)
         let arc = PathBuilder(0, 0, size, size)
         let middle = size / 2
@@ -166,7 +163,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Path: track.Build(),
                 Fit: ShapeFit.Fill,
                 BorderWidth: 3,
-                BorderColor: Color.Parse("#1d1d1d")
+                BorderColor: ui.Rule
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -175,7 +172,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Path: arc.Build(),
                 Fit: ShapeFit.Fill,
                 BorderWidth: 3,
-                BorderColor: fraction > 0 ? Color.Parse("#aaff00"): Color.Transparent
+                BorderColor: fraction > 0 ? ui.Lime: Color.Transparent
             }
         }
     }
@@ -254,7 +251,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 editing = !editing
                 Rebuild()
             },
-            Arc(LockShare(input.AutoLock), compact ? 20.0: 26.0),
+            Arc(ui, LockShare(input.AutoLock), compact ? 20.0: 26.0),
             Label(ui, LockText(input), size, input.AutoLock == 0 ? ui.Orange: ui.Ink, "")
         }
         WidgetKeyBindings.BindActivation(lockValue)
@@ -514,11 +511,11 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             BorderColor: if edit {
                 ui.Lime
             } else if hovered == key {
-                Color.Parse("#3a3a3a")
+                ui.StrongRule
             } else {
                 ui.Rule
             },
-            BackgroundColor: hovered == key && !edit ? Color.Parse("#121212"): tile,
+            BackgroundColor: hovered == key && !edit ? Color.Parse("#121212"): ui.Raised,
             BoxShadows: if edit {
                 []BoxShadow{BoxShadow{Spread: 3, Color: ring}}
             } else {
@@ -562,39 +559,28 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     private func LockChoices(input ToolsInput) Blob {
         let ui = input.Ui
         let compact = input.Width < 1100
-        let row = Container{
-            FlexDirection: FlexDirection.Row,
-            Padding: 3,
-            BorderRadius: 10,
-            BackgroundColor: ui.Black,
-            BorderWidth: 1,
-            BorderColor: ui.Rule,
-            Accessibility: Accessibility{Name: ui.Strings.Get("auto-lock")}
-        }
+        let row = ChoiceGroup(ui, Accessibility{Name: ui.Strings.Get("auto-lock")})
         for minutes in[]int32{5, 15, 60, 0} {
             let chosen = minutes == input.AutoLock
-            let button = Goo
-                .Button{
-                Padding: Edges{Left: compact ? 6.0: 10.0, Right: compact ? 6.0: 10.0, Top: 4, Bottom: 4},
-                BorderRadius: 7,
-                BackgroundColor: chosen ? Color.Parse("#1a1a1a"): Color.Transparent,
-                Hover: Style{BackgroundColor: ui.Rule},
-                Focus: Theme.Read().FocusStyle,
-                Disabled: input.Busy,
-                Accessibility: Accessibility{
-                    Role: AccessibilityRole.Radio,
-                    Name: Minutes(input, minutes),
-                    Checked: chosen ? AccessibilityChecked.True: AccessibilityChecked.False
-                },
-                OnClick: () -> {
+            let button = Choice(
+                ui,
+                Minutes(input, minutes),
+                chosen,
+                () -> {
                     editing = false
                     if !chosen {
                         ui.Actions.Run(ct -> input.Session.SaveAutoLockAsync(minutes, ct))
                     }
                 },
-                Label(ui, Minutes(input, minutes), compact ? 13.0: 14.0, chosen ? ui.Ink: ui.Body, "")
-            }
-            WidgetKeyBindings.BindActivation(button)
+                Accessibility{
+                    Role: AccessibilityRole.Radio,
+                    Name: Minutes(input, minutes),
+                    Checked: chosen ? AccessibilityChecked.True: AccessibilityChecked.False
+                },
+                Edges{Left: compact ? 6.0: 10.0, Right: compact ? 6.0: 10.0, Top: 4, Bottom: 4},
+                compact ? 13.0: 14.0,
+                input.Busy
+            )
             row.Add(button)
         }
         return row
@@ -875,7 +861,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                     BorderWidth: 1,
                     BorderRadius: 7,
                     BorderColor: index == 0 ? ui.Lime: ui.Edge,
-                    BackgroundColor: control,
+                    BackgroundColor: ui.Control,
                     Hover: Style{BackgroundColor: ui.Rule},
                     Focus: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: word},
@@ -933,7 +919,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             } else {
                 ui.Rule
             },
-            BackgroundColor: tile,
+            BackgroundColor: ui.Raised,
             BoxShadows: if invalid {
                 []BoxShadow{BoxShadow{Spread: 3, Color: Color.Parse("#24090f")}}
             } else if active {
@@ -1017,8 +1003,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 .Button{
                 Padding: Edges{Left: 12, Right: 12, Top: 6, Bottom: 6},
                 BorderRadius: 8,
-                BackgroundColor: tab == id ? selected: Color.Transparent,
-                Hover: Style{BackgroundColor: tab == id ? selected: ui.Rule},
+                BackgroundColor: tab == id ? ui.Active: Color.Transparent,
+                Hover: Style{BackgroundColor: tab == id ? ui.Active: ui.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Tab,
@@ -1224,7 +1210,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             BorderWidth: 1,
             BorderRadius: 10,
             BorderColor: ui.Rule,
-            BackgroundColor: tile,
+            BackgroundColor: ui.Raised,
             title,
             Number(input, "stat-" + label, label, value, color, input.Width < 1100 ? 22.0: 28.0)
         }
@@ -1247,7 +1233,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             Gap: 8,
             Padding: Edges{Left: 8, Right: 8, Top: heading ? 6.0: 9.0, Bottom: heading ? 6.0: 9.0},
             BorderWidth: Edges{Bottom: 1},
-            BorderColor: heading ? ui.Rule: Color.Parse("#141414"),
+            BorderColor: heading ? ui.Rule: ui.FaintRule,
             FlexShrink: 0
         }
         for index in 0 ... cells.Length {

@@ -136,7 +136,7 @@ class SyncPage : Cell[SyncInput] {
                     15,
                     limit,
                     ui.Lime,
-                    Color.Parse("#1b2609"),
+                    ui.SyncFill,
                     "peers · 15 s",
                     inner,
                     input.Height,
@@ -195,7 +195,7 @@ class SyncPage : Cell[SyncInput] {
                     120,
                     top,
                     color,
-                    stalled ? Color.Parse("#261c09"): Color.Parse("#1b2609"),
+                    stalled ? Color.Parse("#261c09"): ui.SyncFill,
                     "blk/s · 2 min",
                     inner,
                     input.Height,
@@ -359,7 +359,7 @@ class SyncPage : Cell[SyncInput] {
                         Height: 1,
                         MinWidth: 6,
                         Margin: Edges{Right: 6},
-                        BackgroundColor: done ? Color.Parse("#4d7300"): ui.Edge
+                        BackgroundColor: done ? ui.SuccessStroke: ui.Edge
                     }
                 )
             }
@@ -549,7 +549,7 @@ class SyncPage : Cell[SyncInput] {
     }
 
     private func Track(ui Presentation, share float64, checkpoint float64, color Color) Container {
-        let bar = Container{Height: 10, BorderRadius: 3, BackgroundColor: Color.Parse("#141414")}
+        let bar = Container{Height: 10, BorderRadius: 3, BackgroundColor: ui.FaintRule}
         if checkpoint > 0 {
             bar.Add(
                 Container{
@@ -595,7 +595,7 @@ class SyncPage : Cell[SyncInput] {
                     FlexBasis: 0,
                     Height: 10,
                     BorderRadius: 3,
-                    BackgroundColor: uint64(index) < peers ? ui.Lime: Color.Parse("#141414")
+                    BackgroundColor: uint64(index) < peers ? ui.Lime: ui.FaintRule
                 }
             )
         }
