@@ -29,6 +29,7 @@ class WalletSettings : AppSettings {
         AutoLockMinutes: AutoLockMinutes,
         Background: Background,
         ReduceMotion: ReduceMotion,
+        UiScalePercent: UiScalePercent,
         StartInTray: StartInTray,
         LockOnMinimize: LockOnMinimize,
         DiscoveredDataDirectory: DiscoveredDataDirectory,

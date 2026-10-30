@@ -108,7 +108,7 @@ func Main() {
         throw InvalidOperationException("Application instance unavailable")
     }
     using let wallet = WalletSession()
-    let view = App(wallet)
+    let view = App(wallet, Array.IndexOf(arguments, "--scale") >= 0)
     activationTarget = view
     let window = Window{
         Title: "Gyroid",
@@ -153,6 +153,7 @@ func Main() {
         )
     }
     window.Open()
+    view.UpdateScale()
     view.Start()
     window.Run()
 }

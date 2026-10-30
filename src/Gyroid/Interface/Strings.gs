@@ -598,6 +598,8 @@ class Strings {
             case "glyphs": "字符"
             case "off": "关"
             case "reduce motion": "减少动画"
+            case "UI scale": "界面缩放"
+            case "100% (system)": "100%（系统）"
             case "start in tray": "启动时最小化"
             case "auto-lock": "自动锁定"
             case "5m": "5 分钟"

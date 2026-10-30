@@ -77,6 +77,8 @@ partial class App : Cell {
     private var height float64 = 800
 
     private var pixelScale float64 = 1
+    private let scaleOverride bool
+    private var maximumScalePercent int32 = 100
 
     private var screen AppPage = AppPage.None
 
@@ -127,8 +129,9 @@ partial class App : Cell {
 
     private let closeSettings Action
 
-    init(wallet WalletSession) {
+    init(wallet WalletSession, scaleOverride bool = false) {
         this.wallet = wallet
+        this.scaleOverride = scaleOverride
         ui = Presentation(
             wallet.Settings.Language,
             wallet.Settings.Privacy,
@@ -199,6 +202,10 @@ partial class App : Cell {
             Resize(owner)
             Rebuild()
         }
+        owner.DisplayChanged += () -> {
+            UpdateScale()
+            Rebuild()
+        }
         owner.StateChanged += _ -> {
             if owner.State == WindowState.Minimized && wallet.Settings.LockOnMinimize {
                 Lock()
@@ -249,6 +256,26 @@ partial class App : Cell {
     private func Resize(owner Window) {
         width = owner.Width / owner.UiScale
         height = owner.Height / owner.UiScale
+    }
+
+    func UpdateScale() {
+        guard let owner = window else {
+            return
+        }
+        if !owner.IsOpen {
+            return
+        }
+        let display = owner.GetCurrentDisplay()
+        let usable = display?.UsableBounds ?? display?.Bounds
+        maximumScalePercent = if let bounds = usable {
+            int32(Math.Clamp(Math.Floor(Math.Min(bounds.Width / 960, bounds.Height / 640) * 4) * 25, 100.0, 200.0))
+        } else {
+            100
+        }
+        if !scaleOverride {
+            owner.UiScale = float32(Math.Min(wallet.Settings.UiScalePercent, maximumScalePercent)) / 100F
+        }
+        Resize(owner)
     }
 
     private func Sync() {
@@ -815,6 +842,7 @@ partial class App : Cell {
                     Clipboard: ui.ClipboardText,
                     Width: width,
                     Height: height,
+                    MaximumScalePercent: maximumScalePercent,
                     ChooseFile: chooseFile,
                     OnSection: selectSection,
                     OnLanguage: setLanguage,

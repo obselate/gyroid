@@ -24,6 +24,7 @@ open class AppSettings {
     var AutoLockMinutes int32
     var Background string = "glyphs"
     var ReduceMotion bool
+    var UiScalePercent int32 = 100
     var StartInTray bool
     var LockOnMinimize bool
     var LoadError string = ""
@@ -43,6 +44,9 @@ open class AppSettings {
         }
         if Background != "gyroid" && Background != "glyphs" && Background != "off" {
             throw WalletException("Background must be gyroid, glyphs or off")
+        }
+        if UiScalePercent < 100 || UiScalePercent > 200 || UiScalePercent % 25 != 0 {
+            throw WalletException("UI scale must be 100, 125, 150, 175 or 200 percent")
         }
         if !ValidEndpoint(Endpoint) {
             throw WalletException("API endpoint must be a loopback HTTP origin")
@@ -174,6 +178,11 @@ open class AppSettings {
                     }
                     settings.Background = Text(root, "background", "glyphs")
                     settings.ReduceMotion = Flag(root, "reduce_motion")
+                    if root.TryGetProperty("ui_scale_percent", out let scale) &&
+                        scale.ValueKind == JsonValueKind.Number &&
+                        scale.TryGetInt32(out let percent) && percent >= 100 && percent <= 200 && percent % 25 == 0 {
+                        settings.UiScalePercent = percent
+                    }
                     settings.StartInTray = Flag(root, "start_in_tray")
                     settings.LockOnMinimize = Flag(root, "lock_on_minimize")
                     if settings.Network != "mainnet" && settings.Network != "testnet" {
@@ -285,6 +294,7 @@ open class AppSettings {
                     writer.WriteNumber("auto_lock_minutes", settings.AutoLockMinutes)
                     writer.WriteString("background", settings.Background)
                     writer.WriteBoolean("reduce_motion", settings.ReduceMotion)
+                    writer.WriteNumber("ui_scale_percent", settings.UiScalePercent)
                     writer.WriteBoolean("start_in_tray", settings.StartInTray)
                     writer.WriteBoolean("lock_on_minimize", settings.LockOnMinimize)
                     writer.WriteEndObject()

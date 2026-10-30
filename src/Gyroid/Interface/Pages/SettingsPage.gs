@@ -35,6 +35,7 @@ data struct SettingsPageInput {
     var Clipboard[]char
     var Width float64
     var Height float64
+    var MaximumScalePercent int32
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnSection Action[string]
     var OnLanguage Action[string]
@@ -205,7 +206,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             pane
         }
         if input.Height > 640 {
-            root.Height = section == "advanced" ? Math.Clamp(input.Height * 0.65, 430.0, 740.0): Length.Auto
+            root.Height = Math.Clamp(input.Height * 0.65, 430.0, 740.0)
         }
         if applyPending {
             root.Add(ConfirmApply(input))
@@ -253,6 +254,27 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                                     value.Background = id
                                 }
                             )
+                        )
+                    }
+                ),
+                Line(
+                    ui,
+                    "UI scale",
+                    []Blob{
+                        Segment(
+                            input,
+                            "UI scale",
+                            []string{"100", "125", "150", "175", "200"},
+                            []string{"100% (system)", "125%", "150%", "175%", "200%"},
+                            settings.UiScalePercent.ToString(CultureInfo.InvariantCulture),
+                            false,
+                            id -> Prefer(
+                                input,
+                                value -> {
+                                    value.UiScalePercent = Int32.Parse(id, CultureInfo.InvariantCulture)
+                                }
+                            ),
+                            (input.MaximumScalePercent - 100) / 25 + 1
                         )
                     }
                 ),
@@ -1802,7 +1824,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         names[]string,
         selected string,
         disabled bool,
-        chosen Action[string]
+        chosen Action[string],
+        enabledCount int32 = Int32.MaxValue
     ) Blob {
         let ui = input.Ui
         let group = Container{
@@ -1828,7 +1851,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 BackgroundColor: on ? Color.Parse("#1a1a1a"): Color.Transparent,
                 Hover: Style{BackgroundColor: ui.Rule},
                 Focus: Theme.Read().FocusStyle,
-                Disabled: disabled || input.Busy,
+                Disabled: disabled || input.Busy || index >= enabledCount,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Radio,
                     Name: ui.Strings.Get(names[index]),

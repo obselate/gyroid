@@ -41,6 +41,7 @@ partial class App {
         let settings = wallet.Settings
         reduceMotion = settings.ReduceMotion
         backgroundMode = settings.Background
+        UpdateScale()
     }
 
     private func PlaybackActive() bool ->
