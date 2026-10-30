@@ -2,25 +2,12 @@ package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
-import Goo.Widgets.Data
-import Goo.Widgets.Feedback
-import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
-import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
 import Gyroid.Contacts
-import Gyroid.History
-import Gyroid.Node
 import Gyroid.Platform
-import Gyroid.Send
-import Gyroid.Settings
 import Gyroid.Wallet
-import Net.Codecrete.QrCodeGenerator
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
-import System.Diagnostics
-import System.Globalization
 import System.IO
 import System.Linq
 import System.Numerics
@@ -135,14 +122,16 @@ partial class App : Cell {
         ui = Presentation(
             wallet.Settings.Language,
             wallet.Settings.Privacy,
-            () -> Rebuild(),
-            PlaybackActive,
-            Touch,
-            message -> {
-                error = message
-            },
-            (task, done, secret, extra) -> Run(task, done, secret, extra),
-            action -> workers.Writer.TryWrite(WindowWork(action))
+            UiService(
+                () -> Rebuild(),
+                PlaybackActive,
+                Touch,
+                message -> {
+                    error = message
+                },
+                (task, done, secret, extra) -> Run(task, done, secret, extra),
+                action -> workers.Writer.TryWrite(WindowWork(action))
+            )
         )
         navigate = target -> Navigate(target)
         togglePrivacy = () -> TogglePrivacy()
@@ -239,11 +228,11 @@ partial class App : Cell {
         tray = nil
         refreshTimer?.Dispose()
         statusTimer?.Dispose()
-        ui.DecodeTimer?.Dispose()
-        ui.DecodeTimer = nil
+        ui.Actions.DecodeTimer?.Dispose()
+        ui.Actions.DecodeTimer = nil
         frameTimer?.Dispose()
         frameTimer = nil
-        ui.ReleaseClipboard()
+        ui.Actions.ReleaseClipboard()
         ClearSeed()
         sendRows.Clear()
         wallet.Changed = nil
@@ -296,7 +285,7 @@ partial class App : Cell {
             ClearSeed()
             upgradeShown = false
             screen = AppPage.None
-            ui.Decode("page")
+            ui.Actions.Decode("page")
             lastState = snapshot.State
         }
         let heights = if let value = snapshot.Balance {
@@ -306,7 +295,7 @@ partial class App : Cell {
         }
         if heights != shownHeight {
             shownHeight = heights
-            ui.Decode("sync")
+            ui.Actions.Decode("sync")
         }
         UpdateTray()
         Rebuild()
@@ -369,7 +358,7 @@ partial class App : Cell {
     }
 
     private func ClearSeed() {
-        ui.ReleaseClipboard()
+        ui.Actions.ReleaseClipboard()
         if let password = seedPassword {
             Array.Clear(password)
         }
@@ -409,7 +398,7 @@ partial class App : Cell {
         if target == AppPage.Contacts {
             LoadContacts()
         }
-        ui.Decode("page")
+        ui.Actions.Decode("page")
         Rebuild()
     }
 
@@ -418,7 +407,7 @@ partial class App : Cell {
         ClearSeed()
         error = ""
         screen = AppPage.None
-        ui.Decode("page")
+        ui.Actions.Decode("page")
         Rebuild()
     }
 
@@ -448,7 +437,7 @@ partial class App : Cell {
             throw failure
         } catch (failure Exception) {
             Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
-            window?.TryPost(() -> ui.Report("Window background task failed"))
+            window?.TryPost(() -> ui.Actions.Report("Window background task failed"))
         }
     }
 
@@ -606,7 +595,7 @@ partial class App : Cell {
 
     private async func SetLanguage(language string) {
         ui.Strings.Language = language
-        ui.Decoding.Clear()
+        ui.Actions.Decoding.Clear()
         tray?.Update(TraySettings())
         Rebuild()
         try {
@@ -631,7 +620,7 @@ partial class App : Cell {
             Tip: wallet.Node.Status.Height,
             Privacy: ui.Privacy,
             Language: ui.Strings.Language,
-            Decode: ui.Progress("page"),
+            Decode: ui.Actions.Progress("page"),
             Width: width,
             OnReceive: openReceive
         }
@@ -731,7 +720,7 @@ partial class App : Cell {
                     Privacy: ui.Privacy,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
-                    Clipboard: ui.ClipboardText,
+                    Clipboard: ui.Actions.ClipboardText,
                     Height: height,
                     ChooseFile: chooseFile,
                     Request: receiveRequest
@@ -745,7 +734,7 @@ partial class App : Cell {
                     Session: wallet,
                     Window: window,
                     History: miningHistory,
-                    Wallet: ui.WalletName(wallet.Settings.ActiveWallet),
+                    Wallet: WalletName(wallet.Settings.ActiveWallet),
                     Language: ui.Strings.Language,
                     Busy: ui.Working(),
                     Height: height
@@ -803,7 +792,7 @@ partial class App : Cell {
                     Privacy: ui.Privacy,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
-                    Decode: ui.Progress("page"),
+                    Decode: ui.Actions.Progress("page"),
                     Width: width,
                     Height: height,
                     OnNavigate: navigate,
@@ -839,7 +828,7 @@ partial class App : Cell {
                     Privacy: ui.Privacy,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
-                    Clipboard: ui.ClipboardText,
+                    Clipboard: ui.Actions.ClipboardText,
                     Width: width,
                     Height: height,
                     MaximumScalePercent: maximumScalePercent,

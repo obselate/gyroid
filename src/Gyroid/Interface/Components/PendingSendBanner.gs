@@ -1,25 +1,12 @@
 package Gyroid.Interface
 
 import Goo
-import Goo.Widgets
-import Goo.Widgets.Actions
-import Goo.Widgets.Data
-import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
-import Gyroid.History
-import Gyroid.Node
-import Gyroid.Platform
-import Gyroid.Send
-import Gyroid.Wallet
-import Net.Codecrete.QrCodeGenerator
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import System
-import System.Collections.Generic
-import System.Globalization
 import System.Linq
-import System.Text
-import System.Threading.Tasks
 
 partial class App {
     private var confirmPendingSend bool
@@ -34,7 +21,7 @@ partial class App {
         let pending = wallet.Send.Pending
         let content = WalletParts.Card(ui, gap: 10)
         content.FlexShrink = 0
-        content.Add(ui.Label(ui.Strings.Get("Pending send"), 14, ui.Orange))
+        content.Add(Label(ui, ui.Strings.Get("Pending send"), 14, ui.Orange))
         let outcome = wallet.Send.Outcome
         let message = if wallet.Send.Error.Length > 0 {
             ui.Strings.Explain(wallet.Send.Error)
@@ -47,9 +34,10 @@ partial class App {
         }
         content.Add(Text{Content: message, FontFamily: ui.Font, FontSize: 13, Color: ui.Ink, TextWrap: TextWrap.Wrap})
         content.Add(
-            ui.ActionRow(
+            ActionRow(
                 []Blob{
-                    ui.Button(
+                    Button(
+                        ui,
                         if wallet.Send.Error.Length == 0 && pending?.Retryable == true {
                             "Resubmit"
                         } else {
@@ -77,7 +65,7 @@ partial class App {
             "pending-send",
             ModalDialog{
                 Open: true,
-                CreateRoot: ui.DialogRoot,
+                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Pending send"),
                 Width: Math.Min(width - 48, 600),

@@ -1,18 +1,11 @@
 package Gyroid.Interface
 
 import Goo
-import Goo.Widgets
-import Goo.Widgets.Actions
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
-import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
+import Gyroid.Interface.TextParts
 import Gyroid.Node
-import Gyroid.Settings
-import Gyroid.Wallet
 import System
-import System.Collections.Generic
 import System.IO
 import System.Linq
 
@@ -86,7 +79,7 @@ partial class App {
                     SpinnerInput{Size: size, Color: ui.Lime, Label: PhaseName()}
                 )
             )
-            row.Add(ui.Label(PhaseName(), fontSize, ui.Body, ""))
+            row.Add(Label(ui, PhaseName(), fontSize, ui.Body, ""))
             return row
         }
         let stroke = Math.Max(2.0, size / 10)
@@ -136,8 +129,8 @@ partial class App {
                 )
             }
         )
-        row.Add(ui.Label(PhaseName(), fontSize, ui.Body, ""))
-        row.Add(ui.Label((percent.ToString() + "%").PadLeft(4), fontSize, ui.Lime, ""))
+        row.Add(Label(ui, PhaseName(), fontSize, ui.Body, ""))
+        row.Add(Label(ui, (percent.ToString() + "%").PadLeft(4), fontSize, ui.Lime, ""))
         return row
     }
 }

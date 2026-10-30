@@ -2,14 +2,17 @@ package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Gyroid.History
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Platform
 import Gyroid.Send
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Linq
@@ -68,7 +71,8 @@ class SendPage : Cell[SendPageInput] {
         for row in rows {
             let atoms = Atoms(row.Amount)
             total = Add(total, atoms ?? uint64(0))
-            ready = ready && atoms != nil && Kind(input, row.Address).Length > 0 && ui.MemoIssue(row.Memo).Length == 0
+            ready = ready && atoms != nil && Kind(input, row.Address).Length > 0 && WalletValidation.MemoIssue(row.Memo)
+                .Length == 0
         }
         let over = total > spendable
         form = WalletForm(ui, ready && !over && total > 0, () -> Review(input), []string{})
@@ -83,9 +87,9 @@ class SendPage : Cell[SendPageInput] {
                 JustifyContent: JustifyContent.SpaceBetween,
                 Gap: 12,
                 FlexShrink: 0,
-                ui.Label(ui.Strings.Get("send"), 17, ui.Ink, ""),
+                Label(ui, ui.Strings.Get("send"), 17, ui.Ink, ""),
                 if input.Snapshot.Balance?.Spendable != nil {
-                    ui.Figure("Spendable", ui.Amount(spendable), ui.Ink, 14, "")
+                    Figure(ui, "Spendable", WalletText.Amount(ui.Privacy, spendable), ui.Ink, 14, "")
                 } else {
                     Container{}
                 }
@@ -93,8 +97,8 @@ class SendPage : Cell[SendPageInput] {
         )
         if multi {
             let size = Math.Clamp(input.Height * 0.05, 28.0, 64.0)
-            let sum = ui.Hidden(WalletAmount.Format(total))
-            card.Add(Hero(input, ui.Label(sum, size, ui.Lime, ""), sum.Length, size))
+            let sum = Hidden(ui.Privacy, WalletAmount.Format(total))
+            card.Add(Hero(input, Label(ui, sum, size, ui.Lime, ""), sum.Length, size))
             let list = Container{Gap: 8, MinHeight: 0, FlexShrink: 1, OverflowY: Overflow.Scroll}
             for index in 0 ... rows.Count {
                 list.Add(Recipient(input, index))
@@ -111,12 +115,13 @@ class SendPage : Cell[SendPageInput] {
                 FlexDirection: FlexDirection.Row,
                 JustifyContent: JustifyContent.FlexEnd,
                 FlexShrink: 0,
-                ui.Figure(
+                Figure(
+                    ui,
                     "Remaining",
                     if over {
-                        "−" + ui.Amount(total - spendable)
+                        "−" + WalletText.Amount(ui.Privacy, total - spendable)
                     } else {
-                        ui.Amount(spendable - total)
+                        WalletText.Amount(ui.Privacy, spendable - total)
                     },
                     over ? ui.Pink: ui.Ink,
                     14,
@@ -124,7 +129,7 @@ class SendPage : Cell[SendPageInput] {
                 )
             }
         )
-        let review = ui.Button("Review", form.Submit, !form.CanSubmit, true, reviewFocus)
+        let review = Button(ui, "Review", form.Submit, !form.CanSubmit, true, reviewFocus)
         reviewFocus = false
         review.MinWidth = 140
         let addRecipient = Goo
@@ -144,7 +149,7 @@ class SendPage : Cell[SendPageInput] {
                 Rebuild()
             },
             MaterialIcons.Create("add", 16, ui.Lime),
-            ui.Label(ui.Strings.Get("recipient"), 14, ui.Lime, "")
+            Label(ui, ui.Strings.Get("recipient"), 14, ui.Lime, "")
         }
         WidgetKeyBindings.BindActivation(addRecipient)
         card.Add(
@@ -204,7 +209,7 @@ class SendPage : Cell[SendPageInput] {
                     Left: Percent(50),
                     Bottom: size * 0.25,
                     Margin: Edges{Left: Math.Max(1, digits) * size * 0.3 + 12},
-                    ui.Label("BNT", 15, ui.Dim, "")
+                    Label(ui, "BNT", 15, ui.Dim, "")
                 }
             }
         }
@@ -271,7 +276,10 @@ class SendPage : Cell[SendPageInput] {
             input.Snapshot.Address
         }
         var amount uint64
-        input.Ui.Run(
+        input
+            .Ui
+            .Actions
+            .Run(
             async (ct) -> {
                 amount = await input.Session.Send.MaximumAsync([]WalletRecipient{}, address, row.Memo, ct)
             },
@@ -295,7 +303,7 @@ class SendPage : Cell[SendPageInput] {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
-            ui.Label(ui.Strings.Get(label), 12, ui.Body, "")
+            Label(ui, ui.Strings.Get(label), 12, ui.Body, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -318,9 +326,9 @@ class SendPage : Cell[SendPageInput] {
                     Height: 38,
                     AlignItems: AlignItems.Center,
                     JustifyContent: JustifyContent.Center,
-                    ui.Label((index + 1).ToString(), 12, ui.Dim, "")
+                    Label(ui, (index + 1).ToString(), 12, ui.Dim, "")
                 },
-                ui.Grow(AddressField(input, row)),
+                Grow(AddressField(input, row)),
                 Container{
                     Width: 150,
                     TextAlign: TextAlign.Right,
@@ -332,8 +340,8 @@ class SendPage : Cell[SendPageInput] {
                             Controlled: true,
                             Password: input.Privacy,
                             Disabled: input.Busy,
-                            Invalid: ui.AmountIssue(row.Amount).Length > 0,
-                            Trailing: ui.Label("BNT", 12, ui.Dim, ""),
+                            Invalid: WalletValidation.AmountIssue(row.Amount).Length > 0,
+                            Trailing: Label(ui, "BNT", 12, ui.Dim, ""),
                             OnChange: value -> {
                                 row.Amount = value.Trim()
                                 Rebuild()
@@ -344,7 +352,7 @@ class SendPage : Cell[SendPageInput] {
                 Icon(
                     input,
                     if memoUsed > 0 {
-                        ui.Meter(memoUsed, WalletValidation.MemoLimit, false)
+                        Meter(ui, memoUsed, WalletValidation.MemoLimit, false)
                     } else {
                         MaterialIcons.Create("notes", 16, ui.Dim)
                     },
@@ -406,7 +414,7 @@ class SendPage : Cell[SendPageInput] {
         let kind = Kind(input, text)
         let trailing = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, MinWidth: 0}
         if kind == "contact" {
-            trailing.Add(ui.Label(ui.Hidden(ui.Short(input.Contacts[text])), 14, ui.Dim, ""))
+            trailing.Add(Label(ui, Hidden(ui.Privacy, Short(input.Contacts[text])), 14, ui.Dim, ""))
         }
         if issue.Length > 0 {
             trailing.Add(MaterialIcons.Create("warning", 16, ui.Pink))
@@ -492,7 +500,7 @@ class SendPage : Cell[SendPageInput] {
                     Rebuild()
                 },
                 MaterialIcons.Create("person", 14, ui.Dim),
-                ui.Grow(
+                Grow(
                     Text{
                         Content: name,
                         StyleRanges: []TextStyleRange{TextStyleRange(TextRange(0, text.Length), Style{Color: ui.Lime})},
@@ -503,7 +511,7 @@ class SendPage : Cell[SendPageInput] {
                         TextTrimming: TextTrimming.Ellipsis
                     }
                 ),
-                ui.Label(ui.Short(destination), 13, ui.Dim, "")
+                Label(ui, Short(destination), 13, ui.Dim, "")
             }
             WidgetKeyBindings.BindActivation(button)
             list.Add(button)
@@ -533,7 +541,7 @@ class SendPage : Cell[SendPageInput] {
 
     private func MemoField(input SendPageInput, row SendRow) Blob {
         let ui = input.Ui
-        let issue = ui.MemoIssue(row.Memo)
+        let issue = WalletValidation.MemoIssue(row.Memo)
         return form.Entry(
             TextField{
                 AccessibilityName: ui.Strings.Get("Memo"),
@@ -551,14 +559,14 @@ class SendPage : Cell[SendPageInput] {
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 6,
-                    ui.Label(ui.Strings.Get("Memo"), 12, ui.Body, ""),
-                    ui.Label(ui.Strings.Get("(optional)"), 12, ui.Dim, "")
+                    Label(ui, ui.Strings.Get("Memo"), 12, ui.Body, ""),
+                    Label(ui, ui.Strings.Get("(optional)"), 12, ui.Dim, "")
                 },
                 Trailing: Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 6,
-                    ui.Meter(Encoding.UTF8.GetByteCount(row.Memo), WalletValidation.MemoLimit, true),
+                    Meter(ui, Encoding.UTF8.GetByteCount(row.Memo), WalletValidation.MemoLimit, true),
                     Cell.Mount[InfoTipInput, InfoTip](
                         "memo-info",
                         InfoTipInput{
@@ -614,8 +622,8 @@ class SendPage : Cell[SendPageInput] {
                         FlexDirection: FlexDirection.Row,
                         JustifyContent: JustifyContent.SpaceBetween,
                         Gap: 24,
-                        ui.Label(Name(input, rows[other].Address), 12.5, other == index ? ui.Ink: ui.Dim, ""),
-                        ui.Label(WalletAmount.Format(amounts[other]), 12.5, other == index ? ui.Ink: ui.Dim, "")
+                        Label(ui, Name(input, rows[other].Address), 12.5, other == index ? ui.Ink: ui.Dim, ""),
+                        Label(ui, WalletAmount.Format(amounts[other]), 12.5, other == index ? ui.Ink: ui.Dim, "")
                     }
                 )
             }
@@ -678,13 +686,19 @@ class SendPage : Cell[SendPageInput] {
             Container{
                 Gap: 6,
                 FlexShrink: 0,
-                ui.Label(ui.Strings.Get("send"), 14, ui.Dim, ""),
+                Label(ui, ui.Strings.Get("send"), 14, ui.Dim, ""),
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Baseline,
                     Gap: 10,
-                    ui.Label(ui.Amount(pending.Total), Math.Clamp(input.Height * 0.05, 28.0, 40.0), ui.Lime, ""),
-                    ui.Label("BNT", 14, ui.Dim, "")
+                    Label(
+                        ui,
+                        WalletText.Amount(ui.Privacy, pending.Total),
+                        Math.Clamp(input.Height * 0.05, 28.0, 40.0),
+                        ui.Lime,
+                        ""
+                    ),
+                    Label(ui, "BNT", 14, ui.Dim, "")
                 }
             },
             list,
@@ -700,12 +714,12 @@ class SendPage : Cell[SendPageInput] {
                 AlignItems: AlignItems.Center,
                 Gap: 24,
                 FlexShrink: 0,
-                ui.Figure("Fee", ui.Amount(pending.Fee), ui.Orange, 14, ""),
+                Figure(ui, "Fee", WalletText.Amount(ui.Privacy, pending.Fee), ui.Orange, 14, ""),
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 2,
-                    ui.Figure("Change", ui.Amount(pending.Change), ui.Mint, 14, ""),
+                    Figure(ui, "Change", WalletText.Amount(ui.Privacy, pending.Change), ui.Mint, 14, ""),
                     Cell.Mount[InfoTipInput, InfoTip](
                         "change",
                         InfoTipInput{
@@ -718,14 +732,14 @@ class SendPage : Cell[SendPageInput] {
                     )
                 },
                 Container{FlexGrow: 1},
-                ui.Figure("Remaining", ui.Amount(remaining), ui.Ink, 14, "")
+                Figure(ui, "Remaining", WalletText.Amount(ui.Privacy, remaining), ui.Ink, 14, "")
             }
         }
         return Cell.Mount[ModalDialog, ModalDialogHost](
             "confirm-send",
             ModalDialog{
                 Open: true,
-                CreateRoot: ui.DialogRoot,
+                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Confirm send"),
                 Width: 640,
@@ -754,16 +768,24 @@ class SendPage : Cell[SendPageInput] {
         let typed = rows[index].Address.Trim()
         let head = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 10, MinWidth: 0}
         if input.Contacts.ContainsKey(typed) {
-            head.Add(ui.Label(ui.Hidden(typed), 14, ui.Ink, ""))
+            head.Add(Label(ui, Hidden(ui.Privacy, typed), 14, ui.Ink, ""))
         }
         if handle.Length > 0 {
-            head.Add(ui.Label(ui.Hidden(handle), 14, ui.Blue, ""))
+            head.Add(Label(ui, Hidden(ui.Privacy, handle), 14, ui.Blue, ""))
             head.Add(MaterialIcons.Create("check", 14, ui.Mint))
         }
         head.Add(
-            ui.Grow(ui.Label(ui.Hidden(ui.Short(recipient.Address)), 14, head.Children.Count > 0 ? ui.Dim: ui.Ink, ""))
+            Grow(
+                Label(
+                    ui,
+                    Hidden(ui.Privacy, Short(recipient.Address)),
+                    14,
+                    head.Children.Count > 0 ? ui.Dim: ui.Ink,
+                    ""
+                )
+            )
         )
-        head.Add(ui.Label(ui.Amount(recipient.Amount), 15, ui.Ink, ""))
+        head.Add(Label(ui, WalletText.Amount(ui.Privacy, recipient.Amount), 15, ui.Ink, ""))
         head.Add(MaterialIcons.Create(expanded ? "expand_less": "expand_more", 14, ui.Dim))
         let entry = Goo
             .Button{
@@ -797,9 +819,9 @@ class SendPage : Cell[SendPageInput] {
                     Gap: 8,
                     MinWidth: 0,
                     MaterialIcons.Create("notes", 13, ui.Dim),
-                    ui.Grow(
+                    Grow(
                         Text{
-                            Content: ui.Hidden(recipient.Memo),
+                            Content: Hidden(ui.Privacy, recipient.Memo),
                             FontFamily: ui.Font,
                             FontSize: 12.5,
                             Color: ui.Dim,
@@ -811,12 +833,12 @@ class SendPage : Cell[SendPageInput] {
             )
         }
         if expanded {
-            let grouped = ui.Grouped(recipient.Address)
+            let grouped = Grouped(recipient.Address)
             let first = grouped.IndexOf(' ')
             let last = grouped.LastIndexOf(' ')
             entry.Add(
                 Text{
-                    Content: ui.Hidden(grouped),
+                    Content: Hidden(ui.Privacy, grouped),
                     StyleRanges: if input.Privacy || first < 0 {
                         []TextStyleRange{}
                     } else {
@@ -829,7 +851,7 @@ class SendPage : Cell[SendPageInput] {
                 }
             )
             if handle.Length > 0 {
-                entry.Add(ui.Status(ui.Strings.Get("signed by blocknet.id"), ui.Mint, "check"))
+                entry.Add(Status(ui, ui.Strings.Get("signed by blocknet.id"), ui.Mint, "check"))
             }
         }
         return entry
@@ -840,7 +862,7 @@ class SendPage : Cell[SendPageInput] {
         return if input.Contacts.ContainsKey(text) || text.StartsWith("$", StringComparison.Ordinal) {
             text
         } else {
-            input.Ui.Short(text)
+            Short(text)
         }
     }
 
@@ -865,7 +887,7 @@ class SendPage : Cell[SendPageInput] {
         }
         try {
             if text.StartsWith("$", StringComparison.Ordinal) {
-                BlocknetId.Normalize(text)
+                BlocknetIdService.Normalize(text)
                 return ""
             }
             return if text.Length < 64 {
@@ -906,7 +928,10 @@ class SendPage : Cell[SendPageInput] {
         )
             .ToArray()
         var task Task[SendEstimate]
-        input.Ui.Run(
+        input
+            .Ui
+            .Actions
+            .Run(
             ct -> {
                 task = input.Session.Send.EstimateAsync(requests, ct)
                 return task
@@ -928,7 +953,10 @@ class SendPage : Cell[SendPageInput] {
         estimate = nil
         openRow = -1
         var task Task[SendResult]
-        input.Ui.Run(
+        input
+            .Ui
+            .Actions
+            .Run(
             ct -> {
                 task = input.Session.Send.SubmitAsync(pending, ct)
                 return task

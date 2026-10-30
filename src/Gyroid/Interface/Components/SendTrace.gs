@@ -1,11 +1,14 @@
 package Gyroid.Interface
 
 import Goo
-import Goo.Widgets
 import Goo.Widgets.Actions
 import Goo.Widgets.Icons
 import Gyroid.History
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Send
+import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Text
@@ -62,7 +65,10 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         traced = input.Result
         compact = false
         timer?.Dispose()
-        timer = input.Ui.Delay(
+        timer = input
+            .Ui
+            .Actions
+            .Delay(
             6000,
             () -> {
                 compact = true
@@ -122,7 +128,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         if confirmations >= 10 {
             return Container{}
         }
-        let status = ui.ChainState(state, confirmations)
+        let status = ChainState(ui, state, confirmations)
         let filled = int32(confirmations)
         let ticks = Text{
             Content: String('●', filled) + String('○', 10 - filled),
@@ -132,7 +138,8 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             Color: ui.Dim,
             TextWrap: TextWrap.NoWrap
         }
-        let chain = ui.Label(
+        let chain = Label(
+            ui,
             status,
             12,
             if state == "confirmed" {
@@ -142,7 +149,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             },
             ""
         )
-        let txid = ui.Label(ui.Hidden(result.TxId.Substring(0, 8)), 12, ui.Ink, "")
+        let txid = Label(ui, Hidden(ui.Privacy, result.TxId.Substring(0, 8)), 12, ui.Ink, "")
         let close = IconButton{
             Icon: MaterialIcons.Create("close", 16, ui.Body),
             AccessibilityName: ui.Strings.Get("Close"),
@@ -163,21 +170,22 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             BorderColor: ui.Rule,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Status,
-                Name: ui.Strings.Get("sent") + " " + ui.Amount(estimate.Amount) + " BNT " + status
+                Name: ui.Strings.Get("sent") + " " + Amount(ui.Privacy, estimate.Amount) + " BNT " + status
             }
         }
         if compact {
-            strip.Add(ui.Label("◆", 14, ui.Lime, ""))
+            strip.Add(Label(ui, "◆", 14, ui.Lime, ""))
             strip.Add(txid)
-            strip.Add(ui.Label("-" + ui.Amount(estimate.Amount), 12, ui.Pink, ""))
+            strip.Add(Label(ui, "-" + Amount(ui.Privacy, estimate.Amount), 12, ui.Pink, ""))
             strip.Add(chain)
-            strip.Add(ui.Grow(ticks))
+            strip.Add(Grow(ticks))
             strip.Add(close)
             return strip
         }
         let inputCount = result.InputCount
         let inputs = Math.Min(inputCount, 6)
-        let coins = ui.Label(
+        let coins = Label(
+            ui,
             String('◉', inputs) + if inputCount > inputs {
                 " +" + (inputCount - inputs).ToString()
             } else {
@@ -211,16 +219,16 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             )
         }
         if inputCount > 3 {
-            ring.Add(ui.Label("+" + (inputCount - 3).ToString(), 11, ui.Dim, ""))
+            ring.Add(Label(ui, "+" + (inputCount - 3).ToString(), 11, ui.Dim, ""))
         }
-        let outputs = Container{Gap: 2, ui.Label("▶ " + ui.Amount(estimate.Amount), 12, ui.Pink, "")}
+        let outputs = Container{Gap: 2, Label(ui, "▶ " + Amount(ui.Privacy, estimate.Amount), 12, ui.Pink, "")}
         if result.Change > 0 {
             outputs.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     Gap: 6,
-                    ui.Label("▶ " + ui.Amount(result.Change), 12, ui.Mint, ""),
-                    ui.Label(ui.Strings.Get("change"), 11, ui.Dim, "")
+                    Label(ui, "▶ " + Amount(ui.Privacy, result.Change), 12, ui.Mint, ""),
+                    Label(ui, ui.Strings.Get("change"), 11, ui.Dim, "")
                 }
             )
         }
@@ -230,8 +238,8 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
                 Gap: 6,
                 OpacityAnim: fades[3],
                 TranslateAnim: shifts[3],
-                ui.Label("↘ " + ui.Amount(result.Fee), 12, ui.Orange, ""),
-                ui.Label(ui.Strings.Get("Fee"), 11, ui.Dim, "")
+                Label(ui, "↘ " + Amount(ui.Privacy, result.Fee), 12, ui.Orange, ""),
+                Label(ui, ui.Strings.Get("Fee"), 11, ui.Dim, "")
             }
         )
         let ringStage = Stage(ui, "ring ×16", 1, ring)
@@ -247,7 +255,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
                 Container{
                     Gap: 2,
                     coins,
-                    ui.Label(ui.Amount(estimate.Amount + result.Fee + result.Change), 12, ui.Body, "")
+                    Label(ui, Amount(ui.Privacy, estimate.Amount + result.Fee + result.Change), 12, ui.Body, "")
                 }
             ),
             ringStage,
@@ -260,13 +268,13 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 6,
-                    Container{ScaleAnim: seal, ui.Label("◆", 16, ui.Lime, "")},
+                    Container{ScaleAnim: seal, Label(ui, "◆", 16, ui.Lime, "")},
                     txid
                 }
             ),
             Stage(ui, "broadcast", 5, Container{Gap: 2, chain, ticks})
         }
-        strip.Add(ui.Grow(stages))
+        strip.Add(Grow(stages))
         strip.Add(close)
         return strip
     }
@@ -276,7 +284,8 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         FlexShrink: 0,
         OpacityAnim: fades[stage],
         TranslateAnim: shifts[stage],
-        ui.Label(
+        Label(
+            ui,
             if stage > 0 {
                 "→ " + ui.Strings.Get(label)
             } else {

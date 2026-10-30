@@ -8,8 +8,12 @@ import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Gyroid.History
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Platform
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Globalization
@@ -169,7 +173,7 @@ class HistoryPage : Cell[HistoryInput] {
                     BorderWidth: 1,
                     BorderColor: ui.Edge,
                     BorderRadius: 4,
-                    ui.Label(ui.Count(from) + " – " + ui.Count(to), 12, ui.Ink, ""),
+                    Label(ui, Count(from) + " – " + Count(to), 12, ui.Ink, ""),
                     IconButton{
                         Icon: MaterialIcons.Create("close", 12, ui.Dim),
                         AccessibilityName: ui.Strings.Get("clear range"),
@@ -199,8 +203,8 @@ class HistoryPage : Cell[HistoryInput] {
                     AlignItems: AlignItems.Center,
                     JustifyContent: JustifyContent.Center,
                     Gap: 14,
-                    ui.Label(ui.Strings.Get("No transactions yet"), 15, ui.Ink),
-                    ui.Button("receive", input.OnReceive, false, true)
+                    Label(ui, ui.Strings.Get("No transactions yet"), 15, ui.Ink),
+                    Button(ui, "receive", input.OnReceive, false, true)
                 }
             )
             return panel
@@ -228,7 +232,7 @@ class HistoryPage : Cell[HistoryInput] {
                         Session: input.Session,
                         Ui: ui,
                         Send: input.Snapshot.Sends.First((send WalletSend) -> send.TxId == observed),
-                        Recipient: ui.Short(row.Recipients.FirstOrDefault()?.Address ?? "") +
+                        Recipient: WalletText.Short(row.Recipients.FirstOrDefault()?.Address ?? "") +
                             (row.Recipients.Length > 1 ? " +" + (row.Recipients.Length - 1).ToString(): ""),
                         Privacy: input.Privacy,
                         Language: input.Language,
@@ -525,7 +529,8 @@ class HistoryPage : Cell[HistoryInput] {
                         Width: 80,
                         Top: 3,
                         AlignItems: AlignItems.Center,
-                        ui.Label(
+                        Label(
+                            ui,
                             time.ToString(days <= 1 ? "HH:mm": "MM-dd", CultureInfo.InvariantCulture),
                             11,
                             ui.Dim,
@@ -535,7 +540,7 @@ class HistoryPage : Cell[HistoryInput] {
                 )
             }
         }
-        axis.Add(Container{Position: PositionType.Absolute, Right: 0, Top: 3, ui.Label(ui.Count(tip), 11, ui.Body, "")})
+        axis.Add(Container{Position: PositionType.Absolute, Right: 0, Top: 3, Label(ui, Count(tip), 11, ui.Body, "")})
         return Container{
             FlexShrink: 0,
             Padding: Edges{Top: 8, Left: 12, Right: 12},
@@ -622,17 +627,23 @@ class HistoryPage : Cell[HistoryInput] {
             BorderRadius: 4,
             ZIndex: 3,
             HitTestSelf: false,
-            ui.Label(start == end ? ui.Count(start): ui.Count(start) + " – " + ui.Count(end), 12, ui.Ink, "")
+            Label(ui, start == end ? Count(start): Count(start) + " – " + Count(end), 12, ui.Ink, "")
         }
         if inside.Length > 0 && inside[0].Time > 0 {
-            tip.Add(ui.Label(Moment(inside[0].Time), 12, ui.Dim, ""))
+            tip.Add(Label(ui, Moment(inside[0].Time), 12, ui.Dim, ""))
         }
         for category in[]HistoryRowKind{HistoryRowKind.Received, HistoryRowKind.Mined, HistoryRowKind.Sent} {
             let rows = inside.Where((row HistoryRow) -> row.Kind == category).ToArray()
             if rows.Length > 0 {
                 let total = rows.Aggregate(0UL, (sum uint64, row HistoryRow) -> sum + row.Amount)
                 tip.Add(
-                    ui.Label((category == HistoryRowKind.Sent ? "−": "+") + ui.Amount(total), 12, Tint(category), "")
+                    Label(
+                        ui,
+                        (category == HistoryRowKind.Sent ? "−": "+") + Amount(ui.Privacy, total),
+                        12,
+                        Tint(category),
+                        ""
+                    )
                 )
             }
         }
@@ -663,17 +674,17 @@ class HistoryPage : Cell[HistoryInput] {
         }
         let gain = received + mined
         let loss = sent + fees
-        let net = (gain >= loss ? "+": "−") + ui.Amount(gain >= loss ? gain - loss: loss - gain)
+        let net = (gain >= loss ? "+": "−") + Amount(ui.Privacy, gain >= loss ? gain - loss: loss - gain)
         return Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
             Gap: input.Width < 1000 ? 14.0: 22.0,
             FlexShrink: 0,
             Padding: Edges{Top: 2, Left: 2, Right: 2},
-            Figure("in", received > 0 ? "+" + ui.Amount(received): "0", ui.Mint, 14),
-            Figure("out", sent > 0 ? "−" + ui.Amount(sent): "0", ui.Pink, 14),
-            Figure("fees", fees > 0 ? ui.Amount(fees): "0", ui.Body, 14),
-            Figure("mined", mined > 0 ? "+" + ui.Amount(mined): "0", ui.Lime, 14),
+            Figure("in", received > 0 ? "+" + Amount(ui.Privacy, received): "0", ui.Mint, 14),
+            Figure("out", sent > 0 ? "−" + Amount(ui.Privacy, sent): "0", ui.Pink, 14),
+            Figure("fees", fees > 0 ? Amount(ui.Privacy, fees): "0", ui.Body, 14),
+            Figure("mined", mined > 0 ? "+" + Amount(ui.Privacy, mined): "0", ui.Lime, 14),
             Figure("net", net, ui.Ink, input.Width < 1000 ? 16.0: 18.0)
         }
     }
@@ -686,8 +697,8 @@ class HistoryPage : Cell[HistoryInput] {
             Gap: 7,
             FlexShrink: 0,
             Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-            ui.Label(ui.Strings.Get(label), 12, ui.Dim, ""),
-            ui.Label(value, size, color)
+            Label(ui, ui.Strings.Get(label), 12, ui.Dim, ""),
+            Label(ui, value, size, color)
         }
     }
 
@@ -727,7 +738,7 @@ class HistoryPage : Cell[HistoryInput] {
         let depth = if pending {
             ui.Strings.Get(row.State == "not_found" ? "not found": "pending")
         } else if mature {
-            row.Depth >= 10000 ? (row.Depth / 1000).ToString() + "k": ui.Count(row.Depth)
+            row.Depth >= 10000 ? (row.Depth / 1000).ToString() + "k": Count(row.Depth)
         } else {
             row.Depth.ToString() + "/" + row.Need.ToString()
         }
@@ -742,10 +753,10 @@ class HistoryPage : Cell[HistoryInput] {
             Padding: Edges{Left: 6},
             FlexDirection: FlexDirection.Row,
             Gap: 6,
-            ui.Label(ui.Hidden(note), 12, row.Memo.Length > 0 ? ui.Ink: ui.Dim, "")
+            Label(ui, Hidden(ui.Privacy, note), 12, row.Memo.Length > 0 ? ui.Ink: ui.Dim, "")
         }
         if row.Recipients.Length > 1 {
-            notes.Add(ui.Label("+" + (row.Recipients.Length - 1).ToString(), 12, ui.Dim, ""))
+            notes.Add(Label(ui, "+" + (row.Recipients.Length - 1).ToString(), 12, ui.Dim, ""))
         }
         let line = Goo
             .Button{
@@ -771,7 +782,11 @@ class HistoryPage : Cell[HistoryInput] {
                 ) +
                     " " +
                     sign +
-                    ui.Amount(row.Amount) + " " + ui.Hidden(note) + " " + depth,
+                    Amount(ui.Privacy, row.Amount) +
+                    " " +
+                    Hidden(ui.Privacy, note) +
+                    " " +
+                    depth,
                 Expanded: row.Open
             },
             OnClick: () -> {
@@ -806,14 +821,15 @@ class HistoryPage : Cell[HistoryInput] {
                 Width: compact ? 112.0: 128.0,
                 FlexShrink: 0,
                 AlignItems: AlignItems.FlexEnd,
-                ui.Label(
-                    sign + ui.Amount(row.Amount),
+                Label(
+                    ui,
+                    sign + Amount(ui.Privacy, row.Amount),
                     14,
                     row.Kind == HistoryRowKind.Pending ? ui.Pink: Tint(row.Kind),
                     ""
                 )
             },
-            ui.Grow(notes),
+            Grow(notes),
             Container{
                 Width: compact ? 170.0: 212.0,
                 FlexShrink: 0,
@@ -821,7 +837,7 @@ class HistoryPage : Cell[HistoryInput] {
                 AlignItems: AlignItems.Center,
                 Gap: 8,
                 segments,
-                Container{Width: 52, ui.Label(depth, 12, mature ? ui.Body: ui.Orange, "")}
+                Container{Width: 52, Label(ui, depth, 12, mature ? ui.Body: ui.Orange, "")}
             }
         }
         WidgetKeyBindings.BindActivation(line)
@@ -831,7 +847,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Width: 64,
                     FlexShrink: 0,
                     AlignItems: AlignItems.FlexEnd,
-                    ui.Label(pending ? "": ui.Count(row.Height), 12, ui.Body, "")
+                    Label(ui, pending ? "": Count(row.Height), 12, ui.Body, "")
                 }
             )
         }
@@ -840,7 +856,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Width: compact ? 84.0: 88.0,
                 FlexShrink: 0,
                 AlignItems: AlignItems.FlexEnd,
-                ui.Label(row.Time > 0 ? Moment(row.Time): "", 12, ui.Body, "")
+                Label(ui, row.Time > 0 ? Moment(row.Time): "", 12, ui.Body, "")
             }
         )
         line.Children.Add(
@@ -933,11 +949,11 @@ class HistoryPage : Cell[HistoryInput] {
                     Block(
                         "proof key",
                         proofFor == row.TxId ? proofKey: "",
-                        ui.Grouped(proofFor == row.TxId ? proofKey: ""),
+                        Grouped(proofFor == row.TxId ? proofKey: ""),
                         ui.Ink
                     )
                 )
-                panel.Add(Block("transaction", row.TxId, ui.Grouped(row.TxId), ui.Body))
+                panel.Add(Block("transaction", row.TxId, Grouped(row.TxId), ui.Body))
                 panel.Add(Block("recipient", recipient?.Address ?? "", Spaced(recipient?.Address ?? "", 10), ui.Body))
                 let ready = proofFor == row.TxId && proofKey.Length > 0
                 let actions = Container{
@@ -945,7 +961,8 @@ class HistoryPage : Cell[HistoryInput] {
                     AlignItems: AlignItems.Center,
                     Gap: 10,
                     if ready {
-                        ui.Status(
+                        Status(
+                            ui,
                             ui.Strings.Get(proofValid ? "valid": "invalid"),
                             proofValid ? ui.Lime: ui.Pink,
                             proofValid ? "check": "close"
@@ -953,10 +970,10 @@ class HistoryPage : Cell[HistoryInput] {
                     } else {
                         Container{}
                     },
-                    Figure("amount", ui.Amount(recipient?.Amount ?? 0UL) + " BNT", ui.Ink, 14),
+                    Figure("amount", Amount(ui.Privacy, recipient?.Amount ?? 0UL) + " BNT", ui.Ink, 14),
                     Container{FlexGrow: 1},
-                    ui.Button("save", () -> SaveProof(row), !ready),
-                    ui.Button("copy proof", () -> ui.Copy(ProofText(row), 120000), !ready, true)
+                    Button(ui, "save", () -> SaveProof(row), !ready),
+                    Button(ui, "copy proof", () -> ui.Actions.Copy(ProofText(row), 120000), !ready, true)
                 }
                 panel.Add(actions)
                 return panel
@@ -966,22 +983,23 @@ class HistoryPage : Cell[HistoryInput] {
         values.Add(
             Figure(
                 "height",
-                row.Height > 0 ? ui.Count(row.Height): ui.Strings.Get("pending"),
+                row.Height > 0 ? Count(row.Height): ui.Strings.Get("pending"),
                 row.Height > 0 ? ui.Ink: ui.Orange,
                 13
             )
         )
         if row.Time > 0 {
-            values.Add(Figure("time", ui.Time(row.Time), ui.Ink, 13))
+            values.Add(Figure("time", Time(row.Time), ui.Ink, 13))
         }
         if row.Kind == HistoryRowKind.Sent || row.Kind == HistoryRowKind.Pending {
-            values.Add(Figure("fee", ui.Amount(row.Fee), ui.Ink, 13))
+            values.Add(Figure("fee", Amount(ui.Privacy, row.Fee), ui.Ink, 13))
             if row.Recipients.Length == 1 {
                 let address = row.Recipients[0].Address
                 values.Add(
                     Figure(
                         "recipient",
-                        ui.Hidden(
+                        Hidden(
+                            ui.Privacy,
                             address.Length > 14 ? address.Substring(0, 8) + "…" + address.Substring(
                                 address.Length - 6
                             ): address
@@ -993,13 +1011,13 @@ class HistoryPage : Cell[HistoryInput] {
             }
         }
         if row.Kind == HistoryRowKind.Mined && row.Depth < 60 {
-            values.Add(Figure("spendable at", ui.Count(row.Height + 60), ui.Orange, 13))
+            values.Add(Figure("spendable at", Count(row.Height + 60), ui.Orange, 13))
         }
         if row.Kind == HistoryRowKind.Received {
             values.Add(Figure("output", "#" + row.Index.ToString(), ui.Ink, 13))
         }
         if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
-            values.Add(Figure("memo", ui.Hidden(row.Memo), ui.Ink, 13))
+            values.Add(Figure("memo", Hidden(ui.Privacy, row.Memo), ui.Ink, 13))
         }
         panel.Add(values)
         if row.Recipients.Length > 1 {
@@ -1007,15 +1025,15 @@ class HistoryPage : Cell[HistoryInput] {
                 let details = Container{
                     Gap: 4,
                     Block("recipient", entry.Address, Spaced(entry.Address, 10), ui.Body),
-                    Figure("amount", ui.Amount(entry.Amount) + " BNT", ui.Ink, 13)
+                    Figure("amount", Amount(ui.Privacy, entry.Amount) + " BNT", ui.Ink, 13)
                 }
                 if entry.Memo.Length > 0 {
-                    details.Add(Figure("memo", ui.Hidden(entry.Memo), ui.Ink, 13))
+                    details.Add(Figure("memo", Hidden(ui.Privacy, entry.Memo), ui.Ink, 13))
                 }
                 panel.Add(details)
             }
         }
-        panel.Add(Block("transaction", row.TxId, ui.Grouped(row.TxId), ui.Body))
+        panel.Add(Block("transaction", row.TxId, Grouped(row.TxId), ui.Body))
         return panel
     }
 
@@ -1027,16 +1045,16 @@ class HistoryPage : Cell[HistoryInput] {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 Gap: 6,
-                ui.Label(ui.Strings.Get(label), 12, ui.Dim, ""),
+                Label(ui, ui.Strings.Get(label), 12, ui.Dim, ""),
                 IconButton{
                     Icon: MaterialIcons.Create("content_copy", 14, ui.Dim),
                     AccessibilityName: ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
                     Disabled: value.Length == 0,
-                    OnClick: () -> ui.Copy(value, 120000)
+                    OnClick: () -> ui.Actions.Copy(value, 120000)
                 }.Build()
             },
             Text{
-                Content: ui.Hidden(text),
+                Content: Hidden(ui.Privacy, text),
                 FontFamily: ui.Font,
                 FontSize: 13,
                 LineHeight: 1.5,
@@ -1083,7 +1101,7 @@ class HistoryPage : Cell[HistoryInput] {
                     button.Color = active ? ui.Black: ui.Body
                     button.Hover = Style{BackgroundColor: active ? ui.Lime: ui.Rule}
                     button.Children.Clear()
-                    button.Children.Add(ui.Label(ui.Strings.Get(item.Id), 12, active ? ui.Black: ui.Body, ""))
+                    button.Children.Add(Label(ui, ui.Strings.Get(item.Id), 12, active ? ui.Black: ui.Body, ""))
                     return button
                 },
                 OnChange: ids -> {
@@ -1129,18 +1147,18 @@ class HistoryPage : Cell[HistoryInput] {
                 Rebuild()
             },
             MaterialIcons.Create("download", 16, ui.Ink),
-            ui.Label(ui.Strings.Get("export"), 12, ui.Ink, "")
+            Label(ui, ui.Strings.Get("export"), 12, ui.Ink, "")
         }
         WidgetKeyBindings.BindActivation(button)
-        let shownRange = to > 0 ? ui.Count(from) + " – " + ui.Count(to): ui.Strings.Get(period)
+        let shownRange = to > 0 ? Count(from) + " – " + Count(to): ui.Strings.Get(period)
         let content = Container{
             Gap: 12,
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 Gap: 8,
-                ui.Label(ui.Strings.Get("export"), 14, ui.Ink, ""),
-                ui.Label(shownRange, 12, ui.Dim, ""),
+                Label(ui, ui.Strings.Get("export"), 14, ui.Ink, ""),
+                Label(ui, shownRange, 12, ui.Dim, ""),
                 Container{FlexGrow: 1},
                 Info(
                     "export",
@@ -1152,7 +1170,7 @@ class HistoryPage : Cell[HistoryInput] {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                ui.Label(ui.Strings.Get("format"), 12, ui.Dim, ""),
+                Label(ui, ui.Strings.Get("format"), 12, ui.Dim, ""),
                 Segments(
                     "format",
                     "format",
@@ -1180,7 +1198,7 @@ class HistoryPage : Cell[HistoryInput] {
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
                 Figure("rows", shown.Length.ToString(), ui.Ink, 14),
-                ui.Button("save", () -> SaveExport(input), shown.Length == 0, true)
+                Button(ui, "save", () -> SaveExport(input), shown.Length == 0, true)
             }
         }
         return Container{
@@ -1232,7 +1250,7 @@ class HistoryPage : Cell[HistoryInput] {
             requested.Add(height)
         }
         fetching = true
-        current.Ui.Background(ct -> FetchTimes(window, current.Session.History, current.Snapshot, missing, ct))
+        current.Ui.Actions.Background(ct -> FetchTimes(window, current.Session.History, current.Snapshot, missing, ct))
     }
 
     private async func FetchTimes(
@@ -1275,7 +1293,7 @@ class HistoryPage : Cell[HistoryInput] {
         }
         loading = true
         let history = current.Session.History
-        current.Ui.Background(ct -> LoadMoreAsync(window, history, ct))
+        current.Ui.Actions.Background(ct -> LoadMoreAsync(window, history, ct))
     }
 
     private async func LoadMoreAsync(window Window, history HistoryService, ct CancellationToken) {
@@ -1316,7 +1334,10 @@ class HistoryPage : Cell[HistoryInput] {
         proofFor = row.TxId
         proofKey = ""
         proofValid = false
-        current.Ui.Run(
+        current
+            .Ui
+            .Actions
+            .Run(
             ct -> {
                 prove = proofs.ProveAsync(row.TxId, ct)
                 return prove
@@ -1326,7 +1347,10 @@ class HistoryPage : Cell[HistoryInput] {
                     return
                 }
                 var verify Task[bool]
-                current.Ui.Run(
+                current
+                    .Ui
+                    .Actions
+                    .Run(
                     ct -> {
                         verify = proofs.VerifyProofAsync(row.TxId, prove.Result, recipient.Address, amount, ct)
                         return verify
@@ -1363,7 +1387,7 @@ class HistoryPage : Cell[HistoryInput] {
         if let window = current.Window {
             let choice = Choose(window, "proof-" + row.TxId.Substring(0, 8) + ".txt")
             let text = ProofText(row)
-            current.Ui.Run(ct -> WriteText(choice, text, ct))
+            current.Ui.Actions.Run(ct -> WriteText(choice, text, ct))
         }
     }
 
@@ -1372,7 +1396,10 @@ class HistoryPage : Cell[HistoryInput] {
         Rebuild()
         if let window = input.Window {
             let choice = Choose(window, "history." + format)
-            input.Ui.Run(
+            input
+                .Ui
+                .Actions
+                .Run(
                 ct -> WriteExport(choice, input.Session, shown, Dictionary[uint64, int64](times), memos, format, ct)
             )
         }

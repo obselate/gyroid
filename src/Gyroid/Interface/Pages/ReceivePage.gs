@@ -2,17 +2,19 @@ package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Gyroid.History
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic
 import System.IO
 import System.Text
-import System.Threading.Tasks
 
 class ReceiveRequest {
     var Amount string = ""
@@ -63,8 +65,8 @@ class ReceivePage : Cell[ReceivePageInput] {
         } else {
             request.Reference
         }
-        let amountIssue = ui.AmountIssue(request.Amount)
-        let memoIssue = ui.MemoIssue(full)
+        let amountIssue = WalletValidation.AmountIssue(request.Amount)
+        let memoIssue = WalletValidation.MemoIssue(full)
         let shown = if empty && request.Format == "link" {
             "address"
         } else {
@@ -109,13 +111,13 @@ class ReceivePage : Cell[ReceivePageInput] {
         if let output = paid {
             let confirmations = Confirmations(input, output)
             status.Add(MaterialIcons.Create("check", 14, ui.Lime))
-            status.Add(ui.Label(ui.Amount(output.Amount), 12.5, ui.Ink, ""))
+            status.Add(Label(ui, Amount(ui.Privacy, output.Amount), 12.5, ui.Ink, ""))
             if confirmations < 10 {
-                status.Add(ui.Label(confirmations.ToString() + "/10", 12.5, ui.Dim, ""))
+                status.Add(Label(ui, confirmations.ToString() + "/10", 12.5, ui.Dim, ""))
             }
         } else if let output = possible {
-            status.Add(ui.Badge(ui.Strings.Get("possible payment"), ui.Orange, "warning"))
-            status.Add(ui.Label(ui.Amount(output.Amount), 14, ui.Ink, ""))
+            status.Add(Badge(ui, ui.Strings.Get("possible payment"), ui.Orange, "warning"))
+            status.Add(Label(ui, Amount(ui.Privacy, output.Amount), 14, ui.Ink, ""))
             status.Add(
                 Cell.Mount[InfoTipInput, InfoTip](
                     "possible",
@@ -214,12 +216,12 @@ class ReceivePage : Cell[ReceivePageInput] {
                     request.Format = id
                     Rebuild()
                 },
-                ui.Label(ui.Strings.Get(label), 13, shown == id ? ui.Ink: ui.Body, "")
+                Label(ui, ui.Strings.Get(label), 13, shown == id ? ui.Ink: ui.Body, "")
             }
             WidgetKeyBindings.BindActivation(button)
             tabs.Add(button)
         }
-        let grouped = ui.Grouped(input.Address)
+        let grouped = Grouped(input.Address)
         let first = grouped.IndexOf(' ')
         let preview = Text{
             Content: if input.Privacy {
@@ -283,7 +285,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 ui.Lime,
                 Color.Parse("#0b1203"),
                 "",
-                () -> ui.Copy(payload, 120000)
+                () -> ui.Actions.Copy(payload, 120000)
             )
         }
         let card = WalletParts.Card(ui, input.Height < 700 ? 18.0: 22.0, radius: 14)
@@ -299,7 +301,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 Gap: 12,
                 MinHeight: 26,
                 FlexShrink: 0,
-                ui.Label(ui.Strings.Get("receive"), 17, ui.Ink, ""),
+                Label(ui, ui.Strings.Get("receive"), 17, ui.Ink, ""),
                 status
             }
         )
@@ -318,7 +320,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                     Margin: -6,
                     code
                 },
-                ui.Grow(
+                Grow(
                     Container{
                         Gap: 18,
                         Container{
@@ -344,7 +346,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                         } else {
                                             nil
                                         },
-                                        Trailing: ui.Label("BNT", 12, ui.Dim, ""),
+                                        Trailing: Label(ui, "BNT", 12, ui.Dim, ""),
                                         OnChange: value -> {
                                             request.Amount = value.Trim()
                                             Rebuild()
@@ -352,7 +354,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                     }
                                 )
                             },
-                            ui.Grow(
+                            Grow(
                                 Container{
                                     MinWidth: 0,
                                     form.Entry(
@@ -374,8 +376,9 @@ class ReceivePage : Cell[ReceivePageInput] {
                                                 FlexDirection: FlexDirection.Row,
                                                 AlignItems: AlignItems.Center,
                                                 Gap: 8,
-                                                ui.Label(ui.Hidden(request.Reference), 14, ui.Dim, ""),
-                                                ui.Meter(
+                                                Label(ui, Hidden(ui.Privacy, request.Reference), 14, ui.Dim, ""),
+                                                Meter(
+                                                    ui,
                                                     Encoding.UTF8.GetByteCount(full),
                                                     WalletValidation.MemoLimit,
                                                     true
@@ -442,18 +445,18 @@ class ReceivePage : Cell[ReceivePageInput] {
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
             MaterialIcons.Create(icon, 16, color),
-            ui.Label(ui.Strings.Get(label), 14, color, "")
+            Label(ui, ui.Strings.Get(label), 14, color, "")
         }
         WidgetKeyBindings.BindActivation(button)
         if note.Length > 0 {
-            button.Add(ui.Label(ui.Strings.Get(note), 14, ui.Dim, ""))
+            button.Add(Label(ui, ui.Strings.Get(note), 14, ui.Dim, ""))
         }
         return button
     }
 
     private func Payment(input ReceivePageInput, reference bool) WalletOutput? {
         let request = input.Request
-        let atoms = if request.Amount.Length > 0 && input.Ui.AmountIssue(request.Amount).Length == 0 {
+        let atoms = if request.Amount.Length > 0 && WalletValidation.AmountIssue(request.Amount).Length == 0 {
             WalletAmount.Parse(request.Amount)
         } else {
             uint64(0)
@@ -496,7 +499,7 @@ class ReceivePage : Cell[ReceivePageInput] {
             FileDialogKind.SaveFile,
             "Save QR image",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "blocknet-request.png"),
-            (path string) -> input.Ui.Run(ct -> File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8), ct))
+            (path string) -> input.Ui.Actions.Run(ct -> File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8), ct))
         )
     }
 

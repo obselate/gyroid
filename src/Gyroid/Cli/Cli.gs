@@ -3,7 +3,6 @@ package Gyroid.Cli
 import Gyroid.History
 import Gyroid.Node
 import Gyroid.Platform
-import Gyroid.Settings
 import Gyroid.Wallet
 import System
 import System.Globalization
@@ -435,7 +434,7 @@ class Cli {
             Console.WriteLine("Endpoint: " + status.Endpoint)
             Console.WriteLine("Data directory: " + status.DataDirectory)
             Console.WriteLine("Executable: " + status.Executable)
-            Console.WriteLine("Progress: " + status.Progress)
+            Console.WriteLine("Progress: " + NodeText.Progress(status))
             if action == "start" && status.Owned {
                 Console.Error.WriteLine("Node runs until this command exits. Press Ctrl+C to stop")
                 stopped.Wait()

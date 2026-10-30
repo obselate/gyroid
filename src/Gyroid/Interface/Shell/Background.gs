@@ -1,26 +1,10 @@
 package Gyroid.Interface
 
 import Goo
-import Goo.Widgets
-import Goo.Widgets.Actions
-import Goo.Widgets.Feedback
-import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
-import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
-import Gyroid.History
-import Gyroid.Node
-import Gyroid.Platform
-import Gyroid.Settings
-import Gyroid.Wallet
 import System
-import System.Collections.Generic
 import System.Diagnostics
-import System.IO
 import System.Linq
 import System.Numerics
-import System.Text
-import System.Threading.Tasks
 
 partial class App {
     private var frameTimer WindowTimer?
@@ -59,9 +43,9 @@ partial class App {
             clock.Stop()
             frameTimer?.Dispose()
             frameTimer = nil
-            ui.DecodeTimer?.Dispose()
-            ui.DecodeTimer = nil
-            ui.Decoding.Clear()
+            ui.Actions.DecodeTimer?.Dispose()
+            ui.Actions.DecodeTimer = nil
+            ui.Actions.Decoding.Clear()
         } else {
             clock.Start()
             frameTimer ??= window?.SetInterval(() -> Tick(), 50)

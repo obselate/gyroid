@@ -2,9 +2,10 @@ package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import System
 
 class WalletParts {
@@ -60,7 +61,7 @@ class WalletParts {
                 Height: height,
                 FlexShrink: 0,
                 BorderColor: Color.Parse("#141414"),
-                ui.Grow(ui.Label(ui.Strings.Get(label), 14, ui.Body, ""))
+                Grow(Label(ui, ui.Strings.Get(label), 14, ui.Body, ""))
             }
             for part in parts {
                 row.Add(part)
@@ -116,7 +117,7 @@ class WalletParts {
             key,
             ModalDialog{
                 Open: true,
-                CreateRoot: ui.DialogRoot,
+                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
                 AccessibilityName: ui.Strings.Get(name),
                 Width: Math.Min(availableWidth - 40, width),
@@ -138,7 +139,7 @@ class WalletParts {
             card.Width = Percent(100)
             card.MaxWidth = maxWidth
             card.MaxHeight = Percent(100)
-            let header = Header(ui.Label(title, 18, ui.Ink), 16)
+            let header = Header(Label(ui, title, 18, ui.Ink), 16)
             header.AlignItems = AlignItems.Baseline
             header.JustifyContent = JustifyContent.SpaceBetween
             if let value = trailing {

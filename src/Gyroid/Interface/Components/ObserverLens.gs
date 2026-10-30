@@ -2,14 +2,16 @@ package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.History
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Tools
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
-import System.Collections.Generic
 import System.Linq
 import System.Threading.Tasks
 
@@ -40,7 +42,7 @@ class ObserverLens : Cell[ObserverLensInput] {
             loading = send.TxId
             view = nil
             var task Task[ObserverView]
-            ui.Run(
+            ui.Actions.Run(
                 ct -> {
                     task = input.Session.Checks.ObserveAsync(send.TxId, ct)
                     return task
@@ -86,17 +88,17 @@ class ObserverLens : Cell[ObserverLensInput] {
             chain.Add(Ring(size, -1, true, compact))
         }
         if rings.Length > 2 {
-            yours.Add(ui.Label("+" + (rings.Length - 2).ToString(), 13, ui.Dim, ""))
-            chain.Add(ui.Label("+" + (rings.Length - 2).ToString(), 13, ui.Dim, ""))
+            yours.Add(Label(ui, "+" + (rings.Length - 2).ToString(), 13, ui.Dim, ""))
+            chain.Add(Label(ui, "+" + (rings.Length - 2).ToString(), 13, ui.Dim, ""))
         }
-        yours.Add(ui.Label(ui.Strings.Get("yours"), 13, ui.Lime, ""))
-        chain.Add(ui.Label(String.Format(ui.Strings.Get("1 of {0}"), size), 13, ui.Mint, ""))
-        let ringRow = Columns(input, side, ui.Label(ui.Strings.Get("inputs"), 12.5, ui.Dim, ""), yours, chain)
+        yours.Add(Label(ui, ui.Strings.Get("yours"), 13, ui.Lime, ""))
+        chain.Add(Label(ui, String.Format(ui.Strings.Get("1 of {0}"), size), 13, ui.Mint, ""))
+        let ringRow = Columns(input, side, Label(ui, ui.Strings.Get("inputs"), 12.5, ui.Dim, ""), yours, chain)
         ringRow.Padding = Edges{Top: 6, Bottom: 10}
         ringRow.BorderWidth = Edges{Bottom: 1}
         ringRow.BorderColor = ui.Rule
         content.Add(ringRow)
-        let fee = ui.Amount(send.Fee) + " BNT"
+        let fee = Amount(ui.Privacy, send.Fee) + " BNT"
         let height = if let value = view {
             value.Height
         } else {
@@ -107,7 +109,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 input,
                 side,
                 "amount",
-                ui.Label("−" + ui.Amount(send.Amount) + " BNT", 14, ui.Ink, ""),
+                Label(ui, "−" + Amount(ui.Privacy, send.Amount) + " BNT", 14, ui.Ink, ""),
                 Hidden(ui, "lock", Short(view?.Commitment ?? ""))
             )
         )
@@ -120,8 +122,8 @@ class ObserverLens : Cell[ObserverLensInput] {
                     FlexDirection: FlexDirection.Row,
                     Gap: 8,
                     MinWidth: 0,
-                    ui.Label(ui.Hidden(input.Recipient), 14, ui.Ink, ""),
-                    ui.Label(ui.Strings.Get("+ change"), 14, ui.Dim, "")
+                    Label(ui, WalletText.Hidden(ui.Privacy, input.Recipient), 14, ui.Ink, ""),
+                    Label(ui, ui.Strings.Get("+ change"), 14, ui.Dim, "")
                 },
                 Hidden(
                     ui,
@@ -140,7 +142,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 input,
                 side,
                 "memo",
-                ui.Label(memo.Length > 0 ? ui.Hidden(memo): "—", 14, ui.Ink, ""),
+                Label(ui, memo.Length > 0 ? WalletText.Hidden(ui.Privacy, memo): "—", 14, ui.Ink, ""),
                 Hidden(
                     ui,
                     "lock",
@@ -152,14 +154,14 @@ class ObserverLens : Cell[ObserverLensInput] {
                 )
             )
         )
-        content.Add(Item(input, side, "fee", ui.Label(fee, 14, ui.Ink, ""), Public(ui, fee, 14)))
+        content.Add(Item(input, side, "fee", Label(ui, fee, 14, ui.Ink, ""), Public(ui, fee, 14)))
         content.Add(
             Item(
                 input,
                 side,
                 "block",
-                ui.Label(height > 0 ? ui.Count(height): "—", 14, ui.Ink, ""),
-                height > 0 ? Public(ui, ui.Count(height), 14): Container{}
+                Label(ui, height > 0 ? Count(height): "—", 14, ui.Ink, ""),
+                height > 0 ? Public(ui, Count(height), 14): Container{}
             )
         )
         let confirmed = send.Status == "confirmed"
@@ -167,16 +169,17 @@ class ObserverLens : Cell[ObserverLensInput] {
             "lens",
             ModalDialog{
                 Open: true,
-                CreateRoot: ui.DialogRoot,
+                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 AccessibilityName: ui.Strings.Get("sent"),
                 Width: Math.Min(input.Width - 40, 780),
                 Header: Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 12,
-                    ui.Label(ui.Strings.Get("sent"), 17, ui.Ink, ""),
-                    ui.Status(
-                        ui.ChainState(send.Status, send.Confirmations),
+                    Label(ui, ui.Strings.Get("sent"), 17, ui.Ink, ""),
+                    Status(
+                        ui,
+                        ChainState(ui, send.Status, send.Confirmations),
                         confirmed ? ui.Mint: ui.Orange,
                         confirmed ? "check": "schedule"
                     ),
@@ -201,10 +204,10 @@ class ObserverLens : Cell[ObserverLensInput] {
                     )
                 },
                 Content: content,
-                Footer: ui.ActionRow(
+                Footer: ActionRow(
                     []Blob{
-                        ui.Button("Prove", input.OnProve, ui.Working() || !confirmed),
-                        ui.Button("Close", input.OnClose)
+                        Button(ui, "Prove", input.OnProve, ui.Working() || !confirmed),
+                        Button(ui, "Close", input.OnClose)
                     }
                 ),
                 OnCancel: input.OnClose,
@@ -224,7 +227,7 @@ class ObserverLens : Cell[ObserverLensInput] {
         AlignItems: AlignItems.Center,
         Gap: 8,
         MaterialIcons.Create(icon, 16, color),
-        ui.Label(ui.Strings.Get(label), 13, color, "")
+        Label(ui, ui.Strings.Get(label), 13, color, "")
     }
 
     private func Hidden(ui Presentation, icon string, value string) Blob -> Container{
@@ -233,7 +236,7 @@ class ObserverLens : Cell[ObserverLensInput] {
         Gap: 6,
         MinWidth: 0,
         MaterialIcons.Create(icon, 14, hidden),
-        ui.Label(value, 14, hidden, "")
+        Label(ui, value, 14, hidden, "")
     }
 
     private func Public(ui Presentation, value string, size float64) Blob -> Container{
@@ -242,7 +245,7 @@ class ObserverLens : Cell[ObserverLensInput] {
         Gap: 6,
         MinWidth: 0,
         Container{Width: 6, Height: 6, BorderRadius: 3, BackgroundColor: ui.Orange},
-        ui.Label(value, size, ui.Orange, "")
+        Label(ui, value, size, ui.Orange, "")
     }
 
     private func Columns(input ObserverLensInput, side float64, label Blob, you Blob, chain Blob) Container {
@@ -275,7 +278,7 @@ class ObserverLens : Cell[ObserverLensInput] {
     }
 
     private func Item(input ObserverLensInput, side float64, label string, you Blob, chain Blob) Blob {
-        let row = Columns(input, side, input.Ui.Label(input.Ui.Strings.Get(label), 12.5, input.Ui.Dim, ""), you, chain)
+        let row = Columns(input, side, Label(input.Ui, input.Ui.Strings.Get(label), 12.5, input.Ui.Dim, ""), you, chain)
         row.MinHeight = input.Width < 1100 ? 36.0: 42.0
         row.BorderWidth = Edges{Bottom: 1}
         row.BorderColor = line

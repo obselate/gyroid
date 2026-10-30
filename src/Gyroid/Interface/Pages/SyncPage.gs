@@ -1,9 +1,12 @@
 package Gyroid.Interface
 
 import Goo
-import Goo.Widgets
 import Goo.Widgets.Icons
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Node
+import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Diagnostics
@@ -92,7 +95,7 @@ class SyncPage : Cell[SyncInput] {
             )
             card.Add(Track(ui, percent / 100.0, 0, ui.Lime))
         } else if step == 2 {
-            mid.Add(ui.Label(ui.Strings.Get("starting"), 18, ui.Body, ""))
+            mid.Add(Label(ui, ui.Strings.Get("starting"), 18, ui.Body, ""))
         } else if step == 3 {
             let limit = Math.Max(node.MaxOutbound, uint64(1))
             mid.Add(
@@ -112,7 +115,7 @@ class SyncPage : Cell[SyncInput] {
                     ui,
                     []string{
                         "Since",
-                        ui.Clock(since.ToUnixTimeSeconds()),
+                        Clock(since.ToUnixTimeSeconds()),
                         "Port",
                         if port.Length > 4 {
                             port[3] + " " + port[4]
@@ -120,7 +123,7 @@ class SyncPage : Cell[SyncInput] {
                             "-"
                         },
                         "Local height",
-                        ui.Count(node.Height)
+                        Count(node.Height)
                     }
                 )
             )
@@ -161,7 +164,7 @@ class SyncPage : Cell[SyncInput] {
                     ui,
                     []string{
                         "Height",
-                        ui.Count(done) + " / " + ui.Count(node.ChainHeight),
+                        Count(done) + " / " + Count(node.ChainHeight),
                         "Speed",
                         String.Format(ui.Strings.Get("{0} blk/s"), Math.Round(rate)),
                         "Remaining",
@@ -204,7 +207,7 @@ class SyncPage : Cell[SyncInput] {
             ): 0.0
             let track = Track(ui, share, checkpoint, color)
             track.Padding = Edges{Bottom: 22}
-            track.Add(Container{Position: PositionType.Absolute, Left: 0, Top: 20, ui.Label("#0", 12, ui.Dim, "")})
+            track.Add(Container{Position: PositionType.Absolute, Left: 0, Top: 20, Label(ui, "#0", 12, ui.Dim, "")})
             if node.CheckpointHeight > 0 {
                 track.Add(
                     Container{
@@ -213,8 +216,8 @@ class SyncPage : Cell[SyncInput] {
                         Top: 20,
                         FlexDirection: FlexDirection.Row,
                         Gap: 6,
-                        ui.Label(ui.Strings.Get("checkpoint"), 12, ui.Body, ""),
-                        ui.Label(ui.Count(node.CheckpointHeight), 12, ui.Blue, "")
+                        Label(ui, ui.Strings.Get("checkpoint"), 12, ui.Body, ""),
+                        Label(ui, Count(node.CheckpointHeight), 12, ui.Blue, "")
                     }
                 )
             }
@@ -222,19 +225,20 @@ class SyncPage : Cell[SyncInput] {
         }
         let foot = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 12}
         foot.Add(
-            ui.Grow(
+            Grow(
                 if stalled {
-                    ui.Label(
+                    Label(
+                        ui,
                         String.Format(
                             ui.Strings.Get("no new blocks since {0}"),
-                            ui.Clock(DateTimeOffset.UtcNow.AddSeconds(heightSince - now).ToUnixTimeSeconds())
+                            Clock(DateTimeOffset.UtcNow.AddSeconds(heightSince - now).ToUnixTimeSeconds())
                         ),
                         12,
                         ui.Orange,
                         ""
                     )
                 } else {
-                    ui.Label(ui.Strings.Get(node.Network), 12, ui.Dim, "")
+                    Label(ui, ui.Strings.Get(node.Network), 12, ui.Dim, "")
                 }
             )
         )
@@ -268,7 +272,7 @@ class SyncPage : Cell[SyncInput] {
             lastHeight = progress
             heightSince = now
             stallTimer?.Dispose()
-            stallTimer = step == 4 ? input.Ui.Delay(60000, () -> Rebuild()): nil
+            stallTimer = step == 4 ? input.Ui.Actions.Delay(60000, () -> Rebuild()): nil
         }
         peerSamples.Add(SyncSample{Seconds: now, Value: float64(node.Peers)})
         peerSamples.RemoveAll(sample -> sample.Seconds < now - 15)
@@ -333,7 +337,8 @@ class SyncPage : Cell[SyncInput] {
             }
             let line = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, marker}
             line.Add(
-                ui.Label(
+                Label(
+                    ui,
                     ui.Strings.Get(StepName(index)),
                     12.5,
                     if index == step {
@@ -360,7 +365,7 @@ class SyncPage : Cell[SyncInput] {
             let value = if !done {
                 ""
             } else if index == 1 && node.CheckpointHeight > 0 {
-                ui.Count(node.CheckpointHeight)
+                Count(node.CheckpointHeight)
             } else if index == 3 {
                 node.Peers.ToString() + " " + ui.Strings.Get("peers")
             } else {
@@ -377,7 +382,7 @@ class SyncPage : Cell[SyncInput] {
                         Name: ui.Strings.Get(StepName(index)) + " " + value
                     },
                     line,
-                    Container{Height: 15, Padding: Edges{Left: 28}, ui.Label(value, 12, ui.Dim, "")}
+                    Container{Height: 15, Padding: Edges{Left: 28}, Label(ui, value, 12, ui.Dim, "")}
                 }
             )
         }
@@ -408,7 +413,7 @@ class SyncPage : Cell[SyncInput] {
                 Ui: ui
             }
         ),
-        ui.Label(unit, Math.Round(size * 0.36), ui.Body, "")
+        Label(ui, unit, Math.Round(size * 0.36), ui.Body, "")
     }
 
     private func Readings(ui Presentation, pairs[]string, stalled bool = false) Blob {
@@ -421,19 +426,19 @@ class SyncPage : Cell[SyncInput] {
                 AlignItems: AlignItems.Baseline,
                 Gap: 22,
                 Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-                Container{Width: 100, FlexShrink: 0, ui.Label(ui.Strings.Get(label), 13, ui.Body, "")}
+                Container{Width: 100, FlexShrink: 0, Label(ui, ui.Strings.Get(label), 13, ui.Body, "")}
             }
             if label == "Height" {
                 let split = value.IndexOf(" / ")
                 row.Add(
                     Container{
                         FlexDirection: FlexDirection.Row,
-                        ui.Label(value.Substring(0, split), 14, ui.Lime, ""),
-                        ui.Label(value.Substring(split), 14, ui.Dim, "")
+                        Label(ui, value.Substring(0, split), 14, ui.Lime, ""),
+                        Label(ui, value.Substring(split), 14, ui.Dim, "")
                     }
                 )
             } else {
-                row.Add(ui.Label(value, 14, stalled && label == "Speed" ? ui.Orange: ui.Ink, ""))
+                row.Add(Label(ui, value, 14, stalled && label == "Speed" ? ui.Orange: ui.Ink, ""))
             }
             grid.Add(row)
         }
@@ -490,7 +495,7 @@ class SyncPage : Cell[SyncInput] {
                 Position: PositionType.Absolute,
                 Left: 0,
                 Top: -4,
-                ui.Label(ui.Strings.Get(label), 11, ui.Dim, "")
+                Label(ui, ui.Strings.Get(label), 11, ui.Dim, "")
             }
         }
         if stretch {
@@ -529,7 +534,8 @@ class SyncPage : Cell[SyncInput] {
                     Position: PositionType.Absolute,
                     Left: plot + 6,
                     Top: lastY - 8,
-                    ui.Label(
+                    Label(
+                        ui,
                         Math.Round(samples[samples.Count - 1].Value).ToString(CultureInfo.InvariantCulture),
                         12,
                         color,
@@ -602,9 +608,9 @@ class SyncPage : Cell[SyncInput] {
             row,
             Container{
                 FlexDirection: FlexDirection.Row,
-                ui.Grow(ui.Label(ui.Strings.Get("outbound slots"), 13, ui.Body, "")),
-                ui.Label(Math.Min(peers, limit).ToString(), 12, ui.Lime, ""),
-                ui.Label(" / " + limit.ToString(), 12, ui.Dim, "")
+                Grow(Label(ui, ui.Strings.Get("outbound slots"), 13, ui.Body, "")),
+                Label(ui, Math.Min(peers, limit).ToString(), 12, ui.Lime, ""),
+                Label(ui, " / " + limit.ToString(), 12, ui.Dim, "")
             }
         }
     }

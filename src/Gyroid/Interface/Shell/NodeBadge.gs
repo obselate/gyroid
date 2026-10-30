@@ -5,7 +5,12 @@ import Goo.Widgets
 import Goo.Widgets.Actions
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Node
+import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Globalization
 
@@ -49,7 +54,7 @@ partial class App {
         let status = wallet.Node.Status
         let state = NodeState()
         let percent = PhasePercent()
-        let height = status.Height > 0 ? ui.Count(status.Height): "-"
+        let height = status.Height > 0 ? Count(status.Height): "-"
         let detail = if state == NodeConnectionState.Offline {
             ui.Strings.Get("offline")
         } else if state == NodeConnectionState.Syncing && percent != nil {
@@ -83,8 +88,8 @@ partial class App {
                 nodeOpen = !nodeOpen
                 Rebuild()
             },
-            ui.Label(height, 11, state == NodeConnectionState.Offline ? ui.Dim: ui.Ink, ""),
-            ui.Label(detail, 10.5, state == NodeConnectionState.Synced ? ui.Dim: NodeColor(state), "")
+            Label(ui, height, 11, state == NodeConnectionState.Offline ? ui.Dim: ui.Ink, ""),
+            Label(ui, detail, 10.5, state == NodeConnectionState.Synced ? ui.Dim: NodeColor(state), "")
         }
         WidgetKeyBindings.BindActivation(badge)
         if state == NodeConnectionState.Syncing && percent != nil {
@@ -119,7 +124,8 @@ partial class App {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                ui.Label(
+                Label(
+                    ui,
                     ui.Strings.Get(
                         switch state {
                             case NodeConnectionState.Offline: "offline"
@@ -132,15 +138,13 @@ partial class App {
                     NodeColor(state),
                     ""
                 ),
-                ui.Label(ui.Strings.Get(status.Network) + version, 14, ui.Dim, "")
+                Label(ui, ui.Strings.Get(status.Network) + version, 14, ui.Dim, "")
             }
         }
         if status.Running {
             let readings = Container{Gap: 10}
             let syncing = state == NodeConnectionState.Syncing
-            readings.Add(
-                NodeReading("Height", ui.Count(status.Height), syncing ? " / " + ui.Count(status.ChainHeight): "")
-            )
+            readings.Add(NodeReading("Height", Count(status.Height), syncing ? " / " + Count(status.ChainHeight): ""))
             if syncing && status.SyncRate > 0 {
                 let minutes = Math.Max(
                     1.0,
@@ -156,7 +160,7 @@ partial class App {
                 readings.Add(
                     NodeReading(
                         "Last block",
-                        ui.Count(status.Height) + " · " + time.ToString("HH:mm", CultureInfo.InvariantCulture)
+                        Count(status.Height) + " · " + time.ToString("HH:mm", CultureInfo.InvariantCulture)
                     )
                 )
             }
@@ -170,11 +174,11 @@ partial class App {
             let upgradeDate = Container{
                 FlexDirection: FlexDirection.Row,
                 JustifyContent: JustifyContent.SpaceBetween,
-                ui.Label(status.UpgradeDate, 14, ui.Ink, "")
+                Label(ui, status.UpgradeDate, 14, ui.Ink, "")
             }
             if !status.Syncing {
                 upgradeDate.Add(
-                    ui.Label(ui.Count(status.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Orange, "")
+                    Label(ui, Count(status.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Orange, "")
                 )
             }
             card.Add(Container{Height: 1, BackgroundColor: ui.Rule})
@@ -185,7 +189,7 @@ partial class App {
                         FlexDirection: FlexDirection.Row,
                         AlignItems: AlignItems.Center,
                         JustifyContent: JustifyContent.SpaceBetween,
-                        ui.Label(ui.Strings.Get("Network upgrade"), 13, ui.Body, ""),
+                        Label(ui, ui.Strings.Get("Network upgrade"), 13, ui.Body, ""),
                         IconButton{
                             Icon: MaterialIcons.Create("info", 16, ui.Body),
                             AccessibilityName: ui.Strings.Get("Network upgrade"),
@@ -196,7 +200,7 @@ partial class App {
                             }
                         }.Build()
                     },
-                    ui.UpgradeTimeline(status, 294),
+                    UpgradeTimeline(ui, status, 294),
                     upgradeDate
                 }
             )
@@ -219,7 +223,7 @@ partial class App {
                 nodeOpen = false
                 Navigate(AppPage.Network)
             },
-            ui.Label(ui.Strings.Get("Network"), 14, ui.Lime, ""),
+            Label(ui, ui.Strings.Get("Network"), 14, ui.Lime, ""),
             MaterialIcons.Create("chevron_right", 16, ui.Lime)
         }
         WidgetKeyBindings.BindActivation(networkButton)
@@ -227,7 +231,8 @@ partial class App {
             Container{
                 FlexDirection: FlexDirection.Row,
                 JustifyContent: JustifyContent.SpaceBetween,
-                ui.Button(
+                Button(
+                    ui,
                     "Node settings",
                     () -> {
                         nodeOpen = false
@@ -289,10 +294,10 @@ partial class App {
     private func NodeReading(label string, value string, total string = "") Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Baseline,
-        ui.Label(ui.Strings.Get(label), 13, ui.Body, ""),
+        Label(ui, ui.Strings.Get(label), 13, ui.Body, ""),
         Container{FlexGrow: 1},
-        ui.Label(value, 14, ui.Ink, ""),
-        ui.Label(total, 14, ui.Dim, "")
+        Label(ui, value, 14, ui.Ink, ""),
+        Label(ui, total, 14, ui.Dim, "")
     }
 
     private func UpgradeDialog() Blob {
@@ -305,15 +310,15 @@ partial class App {
             "upgrade",
             ModalDialog{
                 Open: true,
-                CreateRoot: ui.DialogRoot,
+                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 AccessibilityName: ui.Strings.Get("Network upgrade"),
                 Width: Math.Min(width - 48, 600),
-                Header: ui.Label(ui.Strings.Get("Network upgrade"), 18, ui.Ink, ""),
+                Header: Label(ui, ui.Strings.Get("Network upgrade"), 18, ui.Ink, ""),
                 Content: Container{
                     Gap: 14,
-                    ui.Figure("Date", node.UpgradeDate, ui.Ink),
-                    ui.Figure("Blocks left", ui.Count(node.UpgradeBlocksLeft), ui.Orange),
-                    ui.Figure("Migration deadline", node.UpgradeDeadline, ui.Ink),
+                    Figure(ui, "Date", node.UpgradeDate, ui.Ink),
+                    Figure(ui, "Blocks left", Count(node.UpgradeBlocksLeft), ui.Orange),
+                    Figure(ui, "Migration deadline", node.UpgradeDeadline, ui.Ink),
                     Text{
                         Content: node.UpgradeNotice,
                         FontFamily: ui.Font,
@@ -322,7 +327,7 @@ partial class App {
                         TextWrap: TextWrap.Wrap
                     }
                 },
-                Footer: ui.ActionRow([]Blob{ui.Button("Close", close)}),
+                Footer: ActionRow([]Blob{Button(ui, "Close", close)}),
                 OnCancel: close,
                 OnClose: close
             }

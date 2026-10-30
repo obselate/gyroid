@@ -7,10 +7,14 @@ import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Node
 import Gyroid.Platform
 import Gyroid.Settings
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Diagnostics
@@ -124,7 +128,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let section = sections.Contains(input.Section) ? input.Section: "general"
         if section == "advanced" && !chainLoaded {
             chainLoaded = true
-            ui.Delay(0, () -> ui.Run(ct -> LoadChain(input.Session, ct)))
+            ui.Actions.Delay(0, () -> ui.Actions.Run(ct -> LoadChain(input.Session, ct)))
         }
         let navWidth = input.Width < 1100 ? 132.0: 168.0
         let nav = WalletParts.Card(ui, 8, 2, 14)
@@ -160,14 +164,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     18,
                     selected ? ui.Lime: ui.Body
                 ),
-                ui.Label(ui.Strings.Get(id), 14, selected ? ui.Lime: ui.Body, "")
+                Label(ui, ui.Strings.Get(id), 14, selected ? ui.Lime: ui.Body, "")
             }
             WidgetKeyBindings.BindActivation(button)
             nav.Add(button)
         }
         if !input.Available {
             nav.Add(Container{FlexGrow: 1})
-            nav.Add(ui.Button("Back", input.OnClose, input.Busy))
+            nav.Add(Button(ui, "Back", input.OnClose, input.Busy))
         }
         let header = Container{
             FlexDirection: FlexDirection.Row,
@@ -175,10 +179,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Gap: 10,
             FlexShrink: 0,
             Padding: Edges{Top: 6, Left: 2, Right: 2, Bottom: 2},
-            ui.Label(ui.Strings.Get(section), 17, ui.Ink, "")
+            Label(ui, ui.Strings.Get(section), 17, ui.Ink, "")
         }
         if section == "wallet" && input.Snapshot.ViewOnly {
-            header.Add(ui.Badge(ui.Strings.Get("view-only"), ui.Blue, "key"))
+            header.Add(Badge(ui, ui.Strings.Get("view-only"), ui.Blue, "key"))
         }
         let pane = Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MaxWidth: 820, MinHeight: 0, Gap: 12, header}
         if section == "security" {
@@ -333,7 +337,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         []string{"5m", "15m", "1h", "never"},
                         settings.AutoLockMinutes.ToString(),
                         false,
-                        id -> ui.Run(ct -> input.Session.SaveAutoLockAsync(int32.Parse(id), ct))
+                        id -> ui.Actions.Run(ct -> input.Session.SaveAutoLockAsync(int32.Parse(id), ct))
                     )
                 }
             ),
@@ -365,7 +369,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         input,
                         "hide values on start",
                         settings.Privacy,
-                        () -> ui.Run(ct -> input.Session.SavePrivacyAsync(!settings.Privacy, ct))
+                        () -> ui.Actions.Run(ct -> input.Session.SavePrivacyAsync(!settings.Privacy, ct))
                     )
                 }
             )
@@ -377,8 +381,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     rowHeight,
                     "recovery phrase",
                     []Blob{
-                        ui.Label(ui.Strings.Get("12 words"), 14, ui.Dim, ""),
-                        ui.Button("Show", () -> Open("phrase"), input.Busy),
+                        Label(ui, ui.Strings.Get("12 words"), 14, ui.Dim, ""),
+                        Button(ui, "Show", () -> Open("phrase"), input.Busy),
                         Info(
                             input,
                             "phrase",
@@ -398,37 +402,41 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let automatic = settings.NodeMode == "automatic"
         let height = List[Blob]()
         if status.Running {
-            height.Add(Value(input, "height", "Height", ui.Count(status.Height), 14, ui.Mint))
+            height.Add(Value(input, "height", "Height", Count(status.Height), 14, ui.Mint))
             if status.Syncing {
-                height.Add(ui.Label("/ " + ui.Count(status.ChainHeight), 14, ui.Dim, ""))
+                height.Add(Label(ui, "/ " + Count(status.ChainHeight), 14, ui.Dim, ""))
             }
             height.Add(
-                ui.Label(
-                    ui.Count(status.Peers) + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers"),
+                Label(
+                    ui,
+                    Count(status.Peers) + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers"),
                     14,
                     ui.Dim,
                     ""
                 )
             )
         } else {
-            height.Add(ui.Label(ui.Strings.Get("Stopped"), 14, ui.Dim, ""))
+            height.Add(Label(ui, ui.Strings.Get("Stopped"), 14, ui.Dim, ""))
             if automatic && status.Phase == NodePhase.None {
-                height.Add(ui.Button("Start", () -> ui.Run(ct -> input.Session.StartNodeAsync(ct)), input.Busy))
+                height.Add(
+                    Button(ui, "Start", () -> ui.Actions.Run(ct -> input.Session.StartNodeAsync(ct)), input.Busy)
+                )
             }
         }
-        let core = List[Blob]{ui.Label("blocknet-core", 14, ui.Ink, "")}
+        let core = List[Blob]{Label(ui, "blocknet-core", 14, ui.Ink, "")}
         if status.Owned && automatic {
             core.Add(
-                ui.Button(
+                Button(
+                    ui,
                     "Restart",
-                    () -> ui.Run(ct -> input.Session.RestartNodeAsync(ct)),
+                    () -> ui.Actions.Run(ct -> input.Session.RestartNodeAsync(ct)),
                     input.Busy || input.Snapshot.State != WalletState.Unloaded
                 )
             )
         }
-        let upgrade = List[Blob]{ui.Label(ui.Count(CoreRelease.UpgradeHeight), 14, ui.Orange, "")}
+        let upgrade = List[Blob]{Label(ui, Count(CoreRelease.UpgradeHeight), 14, ui.Orange, "")}
         if status.UpgradeDate.Length > 0 {
-            upgrade.Add(ui.Label(status.UpgradeDate, 14, ui.Dim, ""))
+            upgrade.Add(Label(ui, status.UpgradeDate, 14, ui.Dim, ""))
         }
         if status.UpgradeNotice.Length > 0 {
             upgrade.Add(Info(input, "upgrade", "Network upgrade", status.UpgradeNotice))
@@ -453,7 +461,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                             []string{"automatic", "existing node"},
                             settings.NodeMode,
                             Pinned("NODE_MODE"),
-                            id -> ui.Run(ct -> input.Session.SaveNodeModeAsync(id, ct))
+                            id -> ui.Actions.Run(ct -> input.Session.SaveNodeModeAsync(id, ct))
                         ),
                         Info(
                             input,
@@ -471,10 +479,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     rowHeight,
                     "data folder",
                     []Blob{
-                        ui.Label(Shorten(folder), 14, ui.Dim, ""),
-                        ui.Button(
+                        Label(ui, Shorten(folder), 14, ui.Dim, ""),
+                        Button(
+                            ui,
                             "Open",
-                            () -> ui.Run(
+                            () -> ui.Actions.Run(
                                 ct -> {
                                     let start = ProcessStartInfo(
                                         if OperatingSystem.IsWindows() {
@@ -515,7 +524,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 startupOpen = !startupOpen
                 Rebuild()
             },
-            ui.Grow(ui.Label(ui.Strings.Get("startup"), 14, ui.Body, "")),
+            Grow(Label(ui, ui.Strings.Get("startup"), 14, ui.Body, "")),
             MaterialIcons.Create(startupOpen ? "expand_less": "expand_more", 18, ui.Dim)
         }
         WidgetKeyBindings.BindActivation(startup)
@@ -600,7 +609,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             )
         }
-        fields.Add(ui.ActionRow([]Blob{ui.Button("Save", form.Submit, !form.CanSubmit, true)}))
+        fields.Add(ActionRow([]Blob{Button(ui, "Save", form.Submit, !form.CanSubmit, true)}))
         return fields
     }
 
@@ -608,7 +617,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let scan = List[Blob]()
         if let balance = input.Snapshot.Balance {
-            scan.Add(Value(input, "scan", "scan height", ui.Count(balance.ScanHeight), 14, ui.Ink))
+            scan.Add(Value(input, "scan", "scan height", Count(balance.ScanHeight), 14, ui.Ink))
         }
         if rescan?.IsCompleted == false {
             scan.Add(
@@ -619,10 +628,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             )
         }
         scan.Add(
-            ui.Button(
+            Button(
+                ui,
                 "Sync",
                 () -> {
-                    ui.Run(
+                    ui.Actions.Run(
                         ct -> {
                             let task = input.Session.SyncAsync(ct)
                             rescan = task
@@ -641,7 +651,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 rowHeight,
                 "output health",
                 []Blob{
-                    ui.Button(
+                    Button(
+                        ui,
                         "Check",
                         () -> {
                             input.Tools.Tab = "health"
@@ -664,7 +675,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     ui,
                     rowHeight,
                     "view key",
-                    []Blob{ui.Label("••••••••", 14, ui.Dim, ""), ui.Button("Show", () -> Open("view-key"), input.Busy)}
+                    []Blob{
+                        Label(ui, "••••••••", 14, ui.Dim, ""),
+                        Button(ui, "Show", () -> Open("view-key"), input.Busy)
+                    }
                 )
             )
             rows.Add(
@@ -672,7 +686,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     ui,
                     rowHeight,
                     "keys file",
-                    []Blob{ui.Button("Export…", () -> Open("view-key"), input.Busy)}
+                    []Blob{Button(ui, "Export…", () -> Open("view-key"), input.Busy)}
                 )
             )
             rows.Add(
@@ -681,7 +695,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     rowHeight,
                     "view-only wallet",
                     []Blob{
-                        ui.Button(
+                        Button(
+                            ui,
                             "Create…",
                             () -> {
                                 viewOnlyName = settings
@@ -710,8 +725,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 rowHeight,
                 "wallet file",
                 []Blob{
-                    ui.Label(Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)), 14, ui.Dim, ""),
-                    ui.Button("Switch wallet", () -> ui.Run(ct -> input.Session.UnloadAsync(ct)), input.Busy)
+                    Label(ui, Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)), 14, ui.Dim, ""),
+                    Button(ui, "Switch wallet", () -> ui.Actions.Run(ct -> input.Session.UnloadAsync(ct)), input.Busy)
                 }
             )
         )
@@ -723,7 +738,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             note.FlexShrink = 0
             note.Add(MaterialIcons.Create("warning", 16, ui.Body))
             note.Add(
-                ui.Label(ui.Strings.Get("Balance counts received coins. Spends need the spend key"), 13, ui.Ink, "")
+                Label(ui, ui.Strings.Get("Balance counts received coins. Spends need the spend key"), 13, ui.Ink, "")
             )
             pane.Add(note)
         }
@@ -746,8 +761,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Gap: 12,
                 FlexShrink: 0,
                 Value(input, "size", "chain data", sizeText, figure, ui.Ink),
-                ui.Label(sizeUnit, 15, ui.Body, ""),
-                ui.Label(
+                Label(ui, sizeUnit, 15, ui.Body, ""),
+                Label(
+                    ui,
                     ui.Strings.Get("{0} GB free").Replace("{0}", (freeSpace / 1000000000).ToString()),
                     12.5,
                     ui.Dim,
@@ -767,7 +783,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let purgeRow = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexShrink: 0}
         if dataWallets > 0 {
             purgeRow.Add(
-                ui.Status(
+                Status(
+                    ui,
                     ui
                         .Strings
                         .Get(dataWallets == 1 ? "{0} wallet inside": "{0} wallets inside")
@@ -820,7 +837,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             let clean = result.Violations.Length == 0
             note = Violations(ui, result.Violations.Length)
             verdict.Add(
-                ui.Label(
+                Label(
+                    ui,
                     clean ? ui.Strings.Get("clean"): Violations(ui, result.Violations.Length),
                     wide,
                     clean ? ui.Mint: ui.Pink,
@@ -828,22 +846,23 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             )
             verdict.Add(
-                ui.Label(
-                    ui.Count(result.Height) + " · " + result.Time.ToString("HH:mm", CultureInfo.InvariantCulture),
+                Label(
+                    ui,
+                    Count(result.Height) + " · " + result.Time.ToString("HH:mm", CultureInfo.InvariantCulture),
                     12.5,
                     ui.Dim,
                     ""
                 )
             )
         } else {
-            verdict.Add(ui.Label(ui.Strings.Get("not checked"), wide, ui.Dim, ""))
+            verdict.Add(Label(ui, ui.Strings.Get("not checked"), wide, ui.Dim, ""))
         }
         checks.Add(verdict)
         let checked = certificate?.Height ?? uint64(0)
         checks.Add(
             Grid(
                 input,
-                ui.Strings.Get("certify") + " " + ui.Count(checked),
+                ui.Strings.Get("certify") + " " + Count(checked),
                 3,
                 []string{Short(0), Short(step * 10), Short(step * 20)},
                 index -> {
@@ -868,13 +887,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 AlignItems: AlignItems.Center,
                 Gap: 8,
                 FlexShrink: 0,
-                ui.Label(note, 12.5, ui.Dim, ""),
+                Label(ui, note, 12.5, ui.Dim, ""),
                 Container{FlexGrow: 1},
-                ui.Button(
+                Button(
+                    ui,
                     "Certify",
                     () -> {
                         var task Task[ChainCertificate]
-                        ui.Run(
+                        ui.Actions.Run(
                             ct -> {
                                 task = input.Session.CertifyAsync(ct)
                                 return task
@@ -906,7 +926,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 AlignItems: AlignItems.Center,
                 Gap: 8,
                 FlexShrink: 0,
-                ui.Label(ui.Strings.Get("checkpoint"), 12, ui.Body, ""),
+                Label(ui, ui.Strings.Get("checkpoint"), 12, ui.Body, ""),
                 Container{FlexGrow: 1},
                 Info(
                     input,
@@ -922,13 +942,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 AlignItems: AlignItems.FlexEnd,
                 Gap: 8,
                 FlexShrink: 0,
-                Value(input, "checkpoint", "checkpoint", ui.Count(localCheckpoint), figure, ui.Ink),
+                Value(input, "checkpoint", "checkpoint", Count(localCheckpoint), figure, ui.Ink),
                 Container{FlexGrow: 1},
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: 8,
-                    ui.Label(ui.Strings.Get("auto save"), 12, ui.Body, ""),
+                    Label(ui, ui.Strings.Get("auto save"), 12, ui.Body, ""),
                     Toggle(
                         input,
                         "auto save",
@@ -936,12 +956,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         () -> Checkpoints(input, ct -> input.Session.CheckpointAutoSaveAsync(autoSave != true, ct)),
                         autoSave == nil
                     ),
-                    ui.Button(
+                    Button(
+                        ui,
                         "Save",
                         () -> Checkpoints(input, ct -> input.Session.CheckpointsAsync("save", ct)),
                         input.Busy
                     ),
-                    ui.Button(
+                    Button(
+                        ui,
                         "Load",
                         () -> Checkpoints(input, ct -> input.Session.CheckpointsAsync("load", ct)),
                         input.Busy
@@ -955,7 +977,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Height: 42,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Image,
-                Name: ui.Strings.Get("checkpoint") + " " + ui.Count(localCheckpoint) + " / " + ui.Count(tip)
+                Name: ui.Strings.Get("checkpoint") + " " + Count(localCheckpoint) + " / " + Count(tip)
             }
         }
         let slots = Container{
@@ -998,7 +1020,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     Position: PositionType.Absolute,
                     Bottom: 0,
                     Left: 0,
-                    ui.Label(ui.Strings.Get("trusted") + " " + ui.Count(trustedCheckpoint), 12, ui.Blue, "")
+                    Label(ui, ui.Strings.Get("trusted") + " " + Count(trustedCheckpoint), 12, ui.Blue, "")
                 }
             )
         }
@@ -1007,7 +1029,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Position: PositionType.Absolute,
                 Bottom: 0,
                 Right: 0,
-                ui.Label(ui.Strings.Get("next") + " " + ui.Count(localCheckpoint + 100), 12, ui.Dim, "")
+                Label(ui, ui.Strings.Get("next") + " " + Count(localCheckpoint + 100), 12, ui.Dim, "")
             }
         )
         card.Add(bar)
@@ -1015,7 +1037,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     }
 
     private func Checkpoints(input SettingsPageInput, task Func[CancellationToken, Task]) {
-        input.Ui.Run(
+        input
+            .Ui
+            .Actions
+            .Run(
             task,
             () -> {
                 chainLoaded = false
@@ -1034,7 +1059,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 AlignItems: AlignItems.Center,
                 Gap: 8,
                 FlexShrink: 0,
-                ui.Label(ui.Strings.Get(title), 12, ui.Body, ""),
+                Label(ui, ui.Strings.Get(title), 12, ui.Body, ""),
                 Container{FlexGrow: 1},
                 Info(input, key, topic, line)
             }
@@ -1065,7 +1090,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         Width: 34,
                         AlignItems: AlignItems.FlexEnd,
                         JustifyContent: JustifyContent.Center,
-                        input.Ui.Label(names[row], 11, input.Ui.Dim, "")
+                        Label(input.Ui, names[row], 11, input.Ui.Dim, "")
                     }
                 )
             }
@@ -1186,7 +1211,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "password",
             title,
             420,
-            ui.Label(ui.Strings.Get(title), 17, ui.Ink, ""),
+            Label(ui, ui.Strings.Get(title), 17, ui.Ink, ""),
             form.Field(
                 "Password",
                 password,
@@ -1198,7 +1223,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 true,
                 passwordIssue
             ),
-            ui.ActionRow([]Blob{ui.Button("Cancel", close), ui.Button("Show", form.Submit, !form.CanSubmit, true)}),
+            ActionRow([]Blob{Button(ui, "Cancel", close), Button(ui, "Show", form.Submit, !form.CanSubmit, true)}),
             close
         )
     }
@@ -1212,7 +1237,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             return
         }
         var task Task[WalletViewKeys?]
-        input.Ui.Run(
+        input
+            .Ui
+            .Actions
+            .Run(
             ct -> {
                 task = LoadKeys(input.Session, buffer, ct)
                 return task
@@ -1251,7 +1279,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Gap: 8,
                 Padding: Edges{Top: 4},
                 MaterialIcons.Create("warning", 14, ui.Dim),
-                ui.Label(
+                Label(
+                    ui,
                     ui.Strings.Get("Anyone with these keys sees every payment to this wallet. They cannot spend"),
                     12,
                     ui.Dim,
@@ -1266,13 +1295,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "keys",
             "view keys",
             640,
-            ui.Label(ui.Strings.Get("view keys"), 17, ui.Ink, ""),
+            Label(ui, ui.Strings.Get("view keys"), 17, ui.Ink, ""),
             content,
-            ui.ActionRow(
+            ActionRow(
                 []Blob{
-                    ui.Button(
+                    Button(
+                        ui,
                         "Copy all",
-                        () -> ui.Copy(
+                        () -> ui.Actions.Copy(
                             "spend_public " +
                                 String(keys.SpendPublic) +
                                 "\nview_private " +
@@ -1282,7 +1312,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                             30000
                         )
                     ),
-                    ui.Button(
+                    Button(
+                        ui,
                         "Save…",
                         () -> input.ChooseFile.Invoke(
                             FileDialogKind.SaveFile,
@@ -1296,13 +1327,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                                     input
                                     .Session
                                     .State == WalletState.Unlocked {
-                                    ui.Run(ct -> input.Session.Keys.SaveViewKeysAsync(path, keys, ct))
+                                    ui.Actions.Run(ct -> input.Session.Keys.SaveViewKeysAsync(path, keys, ct))
                                 }
                             }
                         ),
                         input.Busy
                     ),
-                    ui.Button("Done", () -> Close(), false, true)
+                    Button(ui, "Done", () -> Close(), false, true)
                 }
             ),
             () -> Close()
@@ -1313,9 +1344,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let masked = secret && !viewPrivateShown || input.Privacy
         let text = String(key)
-        let name = Container{Width: 130, FlexShrink: 0, Gap: 2, ui.Label(ui.Strings.Get(label), 12.5, ui.Body, "")}
+        let name = Container{Width: 130, FlexShrink: 0, Gap: 2, Label(ui, ui.Strings.Get(label), 12.5, ui.Body, "")}
         if note.Length > 0 {
-            name.Add(ui.Label(ui.Strings.Get(note), 11, ui.Orange, ""))
+            name.Add(Label(ui, ui.Strings.Get(note), 11, ui.Orange, ""))
         }
         let row = Container{
             FlexDirection: FlexDirection.Row,
@@ -1323,7 +1354,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Gap: 10,
             FlexShrink: 0,
             name,
-            ui.Grow(
+            Grow(
                 Container{
                     Height: 34,
                     JustifyContent: JustifyContent.Center,
@@ -1332,7 +1363,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     BorderWidth: 1,
                     BorderColor: Color.Parse("#2a2a2a"),
                     BackgroundColor: Color.Parse("#080808"),
-                    ui.Label(
+                    Label(
+                        ui,
                         if masked {
                             "••••••••"
                         } else if text.Length > 30 {
@@ -1368,7 +1400,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             IconButton{
                 Icon: MaterialIcons.Create(copied ? "check": "content_copy", 14, copied ? ui.Lime: ui.Body),
                 AccessibilityName: ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
-                OnClick: () -> ui.Copy(text, 30000)
+                OnClick: () -> ui.Actions.Copy(text, 30000)
             }.Build()
         )
         return row
@@ -1392,10 +1424,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     AlignItems: AlignItems.Center,
                     Gap: 8,
                     MaterialIcons.Create("check_circle", 18, ui.Lime),
-                    ui.Label(viewOnlyCreated, 15, ui.Ink, "")
+                    Label(ui, viewOnlyCreated, 15, ui.Ink, "")
                 }
             )
-            actions.Add(ui.Button("Done", close, false, true))
+            actions.Add(Button(ui, "Done", close, false, true))
         } else {
             content.Add(
                 Container{
@@ -1443,7 +1475,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             )
             content.Add(
-                form.Labelled("", ui.Label(ui.Strings.Get("Must differ from this wallet's password"), 12, ui.Dim, ""))
+                form.Labelled("", Label(ui, ui.Strings.Get("Must differ from this wallet's password"), 12, ui.Dim, ""))
             )
             content.Add(
                 form.Labelled(
@@ -1469,11 +1501,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     FlexGrow: 1,
                     MinWidth: 0,
                     MaterialIcons.Create("folder", 14, ui.Dim),
-                    ui.Label(Tail(settings.WalletDirectory), 12, ui.Dim, "")
+                    Label(ui, Tail(settings.WalletDirectory), 12, ui.Dim, "")
                 }
             )
-            actions.Add(ui.Button("Cancel", close))
-            actions.Add(ui.Button("Create", form.Submit, !form.CanSubmit, true))
+            actions.Add(Button(ui, "Cancel", close))
+            actions.Add(Button(ui, "Create", form.Submit, !form.CanSubmit, true))
         }
         return WalletParts.Modal(
             ui,
@@ -1482,9 +1514,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "view-only",
             "create view-only wallet",
             620,
-            ui.Label(ui.Strings.Get("create view-only wallet"), 17, ui.Ink, ""),
+            Label(ui, ui.Strings.Get("create view-only wallet"), 17, ui.Ink, ""),
             content,
-            ui.ActionRow(actions.ToArray()),
+            ActionRow(actions.ToArray()),
             close
         )
     }
@@ -1499,7 +1531,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             BorderRadius: 10,
             BorderWidth: 1,
             BorderColor: ui.Rule,
-            ui.Label(ui.Strings.Get(title), 12, ui.Dim, "")
+            Label(ui, ui.Strings.Get(title), 12, ui.Dim, "")
         }
         for item in items {
             box.Add(
@@ -1508,7 +1540,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     AlignItems: AlignItems.Center,
                     Gap: 8,
                     MaterialIcons.Create(allowed ? "check": "close", 14, allowed ? ui.Mint: ui.Pink),
-                    ui.Label(ui.Strings.Get(item), 12.5, ui.Ink, "")
+                    Label(ui, ui.Strings.Get(item), 12.5, ui.Ink, "")
                 }
             )
         }
@@ -1531,7 +1563,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let current = password.ToCharArray()
         let secret = viewOnlyPassword.ToCharArray()
         var task Task[bool]
-        input.Ui.Run(
+        input
+            .Ui
+            .Actions
+            .Run(
             ct -> {
                 task = CreateFile(input.Session, filename, current, secret, ct)
                 return task
@@ -1576,7 +1611,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 "purging",
                 "purging",
                 620,
-                ui.Label(ui.Strings.Get("purging"), 17, ui.Ink, ""),
+                Label(ui, ui.Strings.Get("purging"), 17, ui.Ink, ""),
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
@@ -1585,7 +1620,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         "purging",
                         SpinnerInput{Size: 20, Color: ui.Lime, Label: ui.Strings.Get("purging")}
                     ),
-                    ui.Label(ui.Strings.Get("delete data folder"), 14, ui.Ink, "")
+                    Label(ui, ui.Strings.Get("delete data folder"), 14, ui.Ink, "")
                 },
                 Container{},
                 () -> { }
@@ -1624,8 +1659,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     AlignItems: AlignItems.Center,
                     Gap: 8,
                     MaterialIcons.Create("folder", 14, ui.Dim),
-                    ui.Label(
-                        ui.Strings.Get("wallets move to") + " " + Tail(AppSettings.DefaultWallets(settings.Network)),
+                    Label(
+                        ui,
+                        ui.Strings.Get("wallets move to") + " " + Tail(SettingsStore.DefaultWallets(settings.Network)),
                         12,
                         ui.Dim,
                         ""
@@ -1637,7 +1673,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let confirm Action = () -> {
             if typed && !input.Busy {
                 purging = true
-                ui.Run(ct -> PurgeData(input.Session, ct))
+                ui.Actions.Run(ct -> PurgeData(input.Session, ct))
             }
         }
         let form = WalletForm(ui, typed && !input.Busy, confirm, []string{})
@@ -1645,7 +1681,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: 10,
-            ui.Label(ui.Strings.Get("type purge"), 12.5, ui.Body, ""),
+            Label(ui, ui.Strings.Get("type purge"), 12.5, ui.Body, ""),
             Container{
                 Width: 220,
                 FlexShrink: 1,
@@ -1665,7 +1701,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             footer.Add(MaterialIcons.Create("check", 16, ui.Mint))
         }
         footer.Add(Container{FlexGrow: 1})
-        footer.Add(ui.Button("Cancel", close))
+        footer.Add(Button(ui, "Cancel", close))
         footer.Add(
             (
                 Theme.Read()
@@ -1689,7 +1725,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 AlignItems: AlignItems.Center,
                 Gap: 10,
                 MaterialIcons.Create("warning", 20, ui.Pink),
-                ui.Label(ui.Strings.Get("purge chain data"), 17, ui.Ink, "")
+                Label(ui, ui.Strings.Get("purge chain data"), 17, ui.Ink, "")
             },
             content,
             footer,
@@ -1716,7 +1752,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         BorderRadius: 10,
         BorderWidth: 1,
         BorderColor: ui.Rule,
-        ui.Label(ui.Strings.Get(title), 12, color, "")
+        Label(ui, ui.Strings.Get(title), 12, color, "")
     }
 
     private func Item(ui Presentation, kept bool, label string, note string) Blob -> Container{
@@ -1724,8 +1760,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         AlignItems: AlignItems.Center,
         Gap: 8,
         MaterialIcons.Create(kept ? "check": "close", 14, kept ? ui.Mint: ui.Pink),
-        ui.Grow(ui.Label(ui.Strings.Get(label), 13, ui.Ink, "")),
-        ui.Label(note.Length > 0 ? ui.Strings.Get(note): "", 12, ui.Dim, "")
+        Grow(Label(ui, ui.Strings.Get(label), 13, ui.Ink, "")),
+        Label(ui, note.Length > 0 ? ui.Strings.Get(note): "", 12, ui.Dim, "")
     }
 
     private func SaveSettings(input SettingsPageInput) {
@@ -1750,7 +1786,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             return
         }
         applyPending = false
-        input.Ui.Run(ct -> input.Session.ApplySettingsAsync(value.Copy(), ct), input.OnClose)
+        input.Ui.Actions.Run(ct -> input.Session.ApplySettingsAsync(value.Copy(), ct), input.OnClose)
     }
 
     private func ConfirmApply(input SettingsPageInput) Blob {
@@ -1763,7 +1799,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "apply",
             ModalDialog{
                 Open: true,
-                CreateRoot: ui.DialogRoot,
+                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 KeyBindings: WidgetKeyBindings.Editing(input.Window?.PlatformInput),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Apply settings"),
@@ -1773,8 +1809,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 BorderRadius: 14,
                 Content: Container{
                     Gap: 10,
-                    ui.Label(ui.Strings.Get("Apply settings"), 17, ui.Ink, ""),
-                    ui.Label(ui.Strings.Get("The wallet locks and the node reconnects"), 13, ui.Body, "")
+                    Label(ui, ui.Strings.Get("Apply settings"), 17, ui.Ink, ""),
+                    Label(ui, ui.Strings.Get("The wallet locks and the node reconnects"), 13, ui.Body, "")
                 },
                 ConfirmText: ui.Strings.Get(
                     if input.Snapshot.State == WalletState.Unlocked {
@@ -1793,7 +1829,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     }
 
     private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
-        input.Ui.Run(ct -> input.Session.SavePreferenceAsync(change, ct), input.OnPreference)
+        input.Ui.Actions.Run(ct -> input.Session.SavePreferenceAsync(change, ct), input.OnPreference)
     }
 
     private func Rows(ui Presentation, rows[]Container) Container {
@@ -1855,7 +1891,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         chosen(id)
                     }
                 },
-                ui.Label(ui.Strings.Get(names[index]), 14, on ? ui.Ink: ui.Body, "")
+                Label(ui, ui.Strings.Get(names[index]), 14, on ? ui.Ink: ui.Body, "")
             }
             WidgetKeyBindings.BindActivation(button)
             group.Add(button)

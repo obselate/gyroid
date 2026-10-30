@@ -57,7 +57,7 @@ class WalletLibrary {
                 throw WalletException("Selected wallet file does not exist")
             }
             session.settings.ActiveWallet = filename
-            await WalletSettings.SaveAsync(session.settings, ct)
+            await SettingsStore.SaveAsync(session.settings, ct)
             session.PublishEmpty()
         } finally {
             session.End()
@@ -94,7 +94,7 @@ class WalletLibrary {
                     }
                 }
                 session.settings.ActiveWallet = filename
-                await WalletSettings.SaveAsync(session.settings, ct)
+                await SettingsStore.SaveAsync(session.settings, ct)
                 session.PublishEmpty()
             } catch (error IOException) {
                 throw WalletException("Wallet file could not be imported. Existing files are never replaced")
@@ -144,7 +144,7 @@ class WalletLibrary {
             throw WalletException("Save wallet settings without a wallet folder override before purging")
         }
         let data = Path.GetFullPath(settings.DataDirectory)
-        let destination = Path.GetFullPath(AppSettings.DefaultWallets(settings.Network))
+        let destination = Path.GetFullPath(SettingsStore.DefaultWallets(settings.Network))
         let relative = Path.GetRelativePath(data, destination)
         if !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(
             ".." + Path.DirectorySeparatorChar,
@@ -222,7 +222,7 @@ class WalletLibrary {
             ct,
             method: HttpMethod.Patch
         )
-        await AppSettings.SaveAsync(settings, ct)
+        await SettingsStore.SaveAsync(settings, ct)
         for path in sources {
             File.Delete(path)
         }

@@ -74,8 +74,33 @@ class WalletAmount {
 
 class WalletValidation {
     shared {
+        func AmountIssue(value string, available uint64? = nil) string {
+            if value.Length == 0 {
+                return ""
+            }
+            try {
+                return if WalletAmount.Parse(value) > (available ?? uint64.MaxValue) {
+                    "Exceeds spendable balance"
+                } else {
+                    ""
+                }
+            } catch (error WalletException) {
+                return error.Message
+            }
+        }
+
+        func MemoIssue(value string) string {
+            try {
+                WalletValidation.MemoBytes(value)
+                return ""
+            } catch (error WalletException) {
+                return error.Message
+            }
+        }
+
         let MemoLimit int32 = 124
         private let memoEncoding UTF8Encoding = UTF8Encoding(false, true)
+
         func ValidateMessage(message string) {
             if message.Length == 0 || Encoding.UTF8.GetByteCount(message) > 1024 {
                 throw WalletException("Message must contain 1 to 1024 UTF-8 bytes")
@@ -148,7 +173,7 @@ class WalletValidation {
         func ValidateDestination(address string) string {
             let recipient = address.Trim()
             return if recipient.StartsWith("$", StringComparison.Ordinal) {
-                "$" + BlocknetId.Normalize(recipient)
+                "$" + BlocknetIdService.Normalize(recipient)
             } else {
                 ValidateAddress(recipient)
             }

@@ -6,8 +6,12 @@ import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Gyroid.Contacts
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Platform
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Threading.Tasks
@@ -45,7 +49,7 @@ class ContactsPage : Cell[ContactsInput] {
                 AlignItems: AlignItems.Center,
                 Gap: 8,
                 FlexShrink: 0,
-                ui.Grow(ui.Label(ui.Strings.Get("contacts"), 17, ui.Ink, "")),
+                Grow(Label(ui, ui.Strings.Get("contacts"), 17, ui.Ink, "")),
                 WalletParts.Square(
                     ui,
                     "person_add",
@@ -116,8 +120,8 @@ class ContactsPage : Cell[ContactsInput] {
             BackgroundColor: ui.Surface,
             Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: label},
             MaterialIcons.Create("person", 16, ui.Dim),
-            ui.Grow(ui.Label(label, 14, ui.Ink, "")),
-            Container{FlexShrink: 1, MinWidth: 0, ui.Label(ui.Hidden(ui.Short(destination)), 13, ui.Dim, "")},
+            Grow(Label(ui, label, 14, ui.Ink, "")),
+            Container{FlexShrink: 1, MinWidth: 0, Label(ui, Hidden(ui.Privacy, Short(destination)), 13, ui.Dim, "")},
             WalletParts.Square(
                 ui,
                 "edit",
@@ -177,7 +181,7 @@ class ContactsPage : Cell[ContactsInput] {
                     }
                 )
             },
-            ui.Grow(
+            Grow(
                 Container{
                     MinWidth: 0,
                     form.Entry(
@@ -215,10 +219,10 @@ class ContactsPage : Cell[ContactsInput] {
             BorderColor: ui.Edge,
             BackgroundColor: ui.Raised,
             fields,
-            ui.ActionRow(
+            ActionRow(
                 []Blob{
-                    ui.Button("Cancel", () -> Reset(), input.Busy || input.Contacts.Count == 0),
-                    ui.Button("Save", form.Submit, !form.CanSubmit, true)
+                    Button(ui, "Cancel", () -> Reset(), input.Busy || input.Contacts.Count == 0),
+                    Button(ui, "Save", form.Submit, !form.CanSubmit, true)
                 }
             )
         }
@@ -239,7 +243,10 @@ class ContactsPage : Cell[ContactsInput] {
     }
 
     private func Store(input ContactsInput, next SortedDictionary[string, string], done Action) {
-        input.Ui.Run(
+        input
+            .Ui
+            .Actions
+            .Run(
             ct -> {
                 AddressBook.WriteContacts(next)
                 return Task.CompletedTask
@@ -261,11 +268,11 @@ class ContactsPage : Cell[ContactsInput] {
             "delete-contact",
             ModalDialog{
                 Open: true,
-                CreateRoot: ui.DialogRoot,
+                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Delete"),
                 Width: 420,
-                Content: ui.Label(deleting, 16, ui.Ink, ""),
+                Content: Label(ui, deleting, 16, ui.Ink, ""),
                 ConfirmText: ui.Strings.Get("Delete"),
                 CancelText: ui.Strings.Get("Cancel"),
                 ConfirmDisabled: input.Busy,

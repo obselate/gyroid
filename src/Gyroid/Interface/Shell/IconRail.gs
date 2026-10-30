@@ -2,25 +2,11 @@ package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
-import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
-import Gyroid.History
-import Gyroid.Node
-import Gyroid.Platform
-import Gyroid.Settings
-import Gyroid.Wallet
+import Gyroid.Interface.TextParts
 import System
-import System.Collections.Generic
-import System.Diagnostics
-import System.IO
 import System.Linq
-import System.Numerics
-import System.Text
-import System.Threading.Tasks
 
 partial class App {
     private func RailItem(label string, icon string, selected bool, disabled bool, action Action) Blob {
@@ -56,7 +42,7 @@ partial class App {
             },
             OnClick: action,
             MaterialIcons.Create(icon, 20, color),
-            ui.Label(ui.Strings.Get(label), 11, color, "")
+            Label(ui, ui.Strings.Get(label), 11, color, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button

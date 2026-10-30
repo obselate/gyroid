@@ -6,14 +6,16 @@ import Goo.Widgets.Actions
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.History
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Node
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Globalization
 import System.Linq
 import System.Threading
-import System.Threading.Tasks
 
 data struct OverviewInput {
     var Ui Presentation
@@ -130,7 +132,7 @@ class OverviewPage : Cell[OverviewInput] {
             requested.Add(height)
         }
         fetching = true
-        input.Ui.Background(ct -> FetchTimes(window, input.Session.History, input.Snapshot, missing, ct))
+        input.Ui.Actions.Background(ct -> FetchTimes(window, input.Session.History, input.Snapshot, missing, ct))
     }
 
     private async func FetchTimes(
@@ -231,7 +233,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Kind: output.Coinbase ? "mined": "in",
                     Amount: output.Amount,
                     Source: if output.Coinbase {
-                        ui.Strings.Get("mined") + " · " + ui.Strings.Get("block") + " " + ui.Count(output.BlockHeight)
+                        ui.Strings.Get("mined") + " · " + ui.Strings.Get("block") + " " + Count(output.BlockHeight)
                     } else if output.Memo.Length > 0 {
                         output.Memo
                     } else {
@@ -284,7 +286,7 @@ class OverviewPage : Cell[OverviewInput] {
 
     private func Number(ui Presentation, masked bool, text string, color Color, fraction Color) Blob {
         if masked {
-            return ui.Label("••••••••", 14, fraction, "")
+            return Label(ui, "••••••••", 14, fraction, "")
         }
         let point = text.IndexOf('.')
         return Text{
@@ -308,7 +310,7 @@ class OverviewPage : Cell[OverviewInput] {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get(label)},
             OnClick: action,
-            ui.Label(ui.Strings.Get(label) + " ›", 12, ui.Lime, "")
+            Label(ui, ui.Strings.Get(label) + " ›", 12, ui.Lime, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -322,7 +324,7 @@ class OverviewPage : Cell[OverviewInput] {
         bar.FlexDirection = FlexDirection.Row
         bar.AlignItems = AlignItems.Center
         bar.Height = 40
-        bar.Add(ui.Label(ui.Strings.Get("Network upgrade") + " " + node.UpgradeDate, 12, ui.Body, ""))
+        bar.Add(Label(ui, ui.Strings.Get("Network upgrade") + " " + node.UpgradeDate, 12, ui.Body, ""))
         bar.Add(
             Container{
                 Handle: strip,
@@ -330,14 +332,14 @@ class OverviewPage : Cell[OverviewInput] {
                 FlexBasis: 0,
                 MinWidth: 0,
                 if stripWidth > 0 {
-                    ui.UpgradeTimeline(node, stripWidth)
+                    UpgradeTimeline(ui, node, stripWidth)
                 } else {
                     Container{}
                 }
             }
         )
         if !node.Syncing {
-            bar.Add(ui.Label(ui.Count(node.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Ink, ""))
+            bar.Add(Label(ui, Count(node.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Ink, ""))
         }
         bar.Add(
             IconButton{
@@ -390,7 +392,7 @@ class OverviewPage : Cell[OverviewInput] {
             AlignItems: AlignItems.Center,
             Gap: 10,
             FlexShrink: 0,
-            ui.Grow(ui.Label(ui.Strings.Get("balance"), 12, ui.Body, ""))
+            Grow(Label(ui, ui.Strings.Get("balance"), 12, ui.Body, ""))
         }
         if input.Privacy {
             let press = (event PointerEvent) -> if !event.IsFromInteractiveChild {
@@ -399,7 +401,7 @@ class OverviewPage : Cell[OverviewInput] {
                 Rebuild()
             }
             header.Height = 28
-            header.Add(ui.Label(ui.Strings.Get(peeking ? "release to hide": "hold to show"), 12, ui.Dim, ""))
+            header.Add(Label(ui, ui.Strings.Get(peeking ? "release to hide": "hold to show"), 12, ui.Dim, ""))
             header.Add(
                 Container{
                     Width: 28,
@@ -442,7 +444,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Name: if masked {
                         ui.Strings.Get("Amounts hidden")
                     } else if known {
-                        ui.Strings.Get("balance") + " " + ui.Money(total) + " BNT"
+                        ui.Strings.Get("balance") + " " + WalletAmount.Format(total) + " BNT"
                     } else {
                         value
                     },
@@ -454,7 +456,7 @@ class OverviewPage : Cell[OverviewInput] {
             )
         }
         if known && !masked {
-            figure.Add(ui.Label("BNT", 16, ui.Body, ""))
+            figure.Add(Label(ui, "BNT", 16, ui.Body, ""))
         }
         card.Add(
             Container{
@@ -477,9 +479,11 @@ class OverviewPage : Cell[OverviewInput] {
                 Name: if masked {
                     ui.Strings.Get("Amounts hidden")
                 } else {
-                    ui.Strings.Get("ready") + " " + ui.Money(ready) + ", " + ui.Strings.Get("confirming") +
+                    ui.Strings.Get("ready") + " " + WalletAmount.Format(ready) + ", " + ui.Strings.Get("confirming") +
                         " " +
-                        ui.Money(confirming) + ", " + ui.Strings.Get("in mempool") + " " + ui.Money(unconfirmed)
+                        WalletAmount.Format(confirming) + ", " + ui.Strings.Get("in mempool") +
+                        " " +
+                        WalletAmount.Format(unconfirmed)
                 }
             }
         }
@@ -559,8 +563,8 @@ class OverviewPage : Cell[OverviewInput] {
     private func Reading(ui Presentation, label string, value string) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         Gap: 8,
-        ui.Label(ui.Strings.Get(label), 12, ui.Body, ""),
-        ui.Label(value, 12, ui.Ink, "")
+        Label(ui, ui.Strings.Get(label), 12, ui.Body, ""),
+        Label(ui, value, 12, ui.Ink, "")
     }
 
     private func Legend(
@@ -586,7 +590,7 @@ class OverviewPage : Cell[OverviewInput] {
                 Gap: 8,
                 Height: 18,
                 Container{Width: 8, Height: 8, BorderRadius: 2, BackgroundColor: tint},
-                ui.Label(ui.Strings.Get(label), 12, ui.Body, "")
+                Label(ui, ui.Strings.Get(label), 12, ui.Body, "")
             }
             if label == "confirming" {
                 name.Add(Info(ui))
@@ -607,7 +611,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Name: ui.Strings.Get(label) + " " + if masked {
                         ui.Strings.Get("Amounts hidden")
                     } else {
-                        ui.Money(units)
+                        WalletAmount.Format(units)
                     },
                     Size: wide ? Math.Clamp(input.Height * 0.024, 16, 26): 16,
                     Color: color,
@@ -655,10 +659,10 @@ class OverviewPage : Cell[OverviewInput] {
                 AccessibilityName: ui.Strings.Get("About confirming"),
                 Content: Container{
                     Gap: 4,
-                    ui.Label(ui.Strings.Get("Received: 10 blocks."), 12, ui.Body, ""),
-                    ui.Label(ui.Strings.Get("Mined: 60 blocks."), 12, ui.Body, ""),
-                    ui.Label(ui.Strings.Get("Mempool: change from your send."), 12, ui.Body, ""),
-                    ui.Label(ui.Strings.Get("1 block ≈ 5 min."), 12, ui.Body, "")
+                    Label(ui, ui.Strings.Get("Received: 10 blocks."), 12, ui.Body, ""),
+                    Label(ui, ui.Strings.Get("Mined: 60 blocks."), 12, ui.Body, ""),
+                    Label(ui, ui.Strings.Get("Mempool: change from your send."), 12, ui.Body, ""),
+                    Label(ui, ui.Strings.Get("1 block ≈ 5 min."), 12, ui.Body, "")
                 },
                 OnDismiss: reason -> {
                     infoOpen = false
@@ -674,13 +678,13 @@ class OverviewPage : Cell[OverviewInput] {
         card.Overflow = Overflow.Hidden
         card.FlexShrink = 1
         card.MaxHeight = Percent(62)
-        let header = WalletParts.Header(ui.Label(ui.Strings.Get("incoming"), 12, ui.Body, ""))
+        let header = WalletParts.Header(Label(ui, ui.Strings.Get("incoming"), 12, ui.Body, ""))
         header.Height = 24
         header.Margin = Edges{Bottom: 4}
-        header.Add(ui.Label(arrivals.Count.ToString(), 14, ui.Dim, ""))
+        header.Add(Label(ui, arrivals.Count.ToString(), 14, ui.Dim, ""))
         header.Add(Container{FlexGrow: 1})
-        header.Add(ui.Label(ui.Strings.Get("all ready"), 12, ui.Body, ""))
-        header.Add(ui.Label(Wait(input, arrivals.Max((item Arrival) -> item.Blocks)), 14, ui.Ink, ""))
+        header.Add(Label(ui, ui.Strings.Get("all ready"), 12, ui.Body, ""))
+        header.Add(Label(ui, Wait(input, arrivals.Max((item Arrival) -> item.Blocks)), 14, ui.Ink, ""))
         card.Add(header)
         let rows = Container{FlexShrink: 1, MinHeight: 0, Overflow: Overflow.Scroll, ScrollbarY: Theme.Read().Scrollbar}
         for index in 0 ... arrivals.Count {
@@ -702,8 +706,8 @@ class OverviewPage : Cell[OverviewInput] {
         let key = item.TxId + ":" + item.Height.ToString()
         let unfolded = item.TxId.Length > 0 && expanded == key
         let glyph Blob = switch item.Kind {
-            case "mined": ui.Label("◆", 14, Fade(ui.Violet, faded), "")
-            case "in": ui.Label("↓", 14, Fade(ui.Mint, faded), "")
+            case "mined": Label(ui, "◆", 14, Fade(ui.Violet, faded), "")
+            case "in": Label(ui, "↓", 14, Fade(ui.Mint, faded), "")
             default: MaterialIcons.Create("replay", 14, Fade(ui.Blue, faded))
         }
         let row = Goo
@@ -735,11 +739,11 @@ class OverviewPage : Cell[OverviewInput] {
                 Gap: 12,
                 Container{Width: 16, AlignItems: AlignItems.Center, glyph},
                 Number(ui, input.Privacy, Fixed(item.Amount), Fade(ui.Ink, faded), Fade(ui.Dim, faded)),
-                ui.Grow(ui.Label(item.Source, 13, Fade(ui.Dim, faded), "")),
+                Grow(Label(ui, item.Source, 13, Fade(ui.Dim, faded), "")),
                 Container{
                     Width: 76,
                     AlignItems: AlignItems.FlexEnd,
-                    ui.Label(Wait(input, item.Blocks), 14, Fade(ui.Ink, faded), "")
+                    Label(ui, Wait(input, item.Blocks), 14, Fade(ui.Ink, faded), "")
                 }
             },
             Container{
@@ -747,7 +751,7 @@ class OverviewPage : Cell[OverviewInput] {
                 AlignItems: AlignItems.Center,
                 Gap: 12,
                 Container{Width: 16},
-                ui.Grow(
+                Grow(
                     Container{
                         Height: 4,
                         BorderRadius: 2,
@@ -764,9 +768,10 @@ class OverviewPage : Cell[OverviewInput] {
                     Width: 76,
                     AlignItems: AlignItems.FlexEnd,
                     if item.Kind == "pool" {
-                        ui.Label(ui.Strings.Get("mempool"), 12, Fade(ui.Blue, faded), "")
+                        Label(ui, ui.Strings.Get("mempool"), 12, Fade(ui.Blue, faded), "")
                     } else {
-                        ui.Label(
+                        Label(
+                            ui,
                             item.Confirmations.ToString() + "/" + item.Required.ToString(),
                             12,
                             Fade(ui.Dim, faded),
@@ -790,7 +795,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Gap: 18,
                     RowGap: 6,
                     Padding: Edges{Left: 28, Top: 4},
-                    Detail(ui, ui.Strings.Get("block"), ui.Count(item.Height)),
+                    Detail(ui, ui.Strings.Get("block"), Count(item.Height)),
                     Detail(ui, "tx", Short(item.TxId).Substring(3)),
                     Detail(ui, ui.Strings.Get("ready at"), ready),
                     Container{FlexGrow: 1},
@@ -804,8 +809,8 @@ class OverviewPage : Cell[OverviewInput] {
     private func Detail(ui Presentation, label string, value string) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         Gap: 6,
-        ui.Label(label, 12, ui.Dim, ""),
-        ui.Label(value, 12, ui.Ink, "")
+        Label(ui, label, 12, ui.Dim, ""),
+        Label(ui, value, 12, ui.Ink, "")
     }
 
     private func Activities(input OverviewInput, chain uint64) List[Activity] {
@@ -822,7 +827,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Label: if output.Memo.Length > 0 {
                         output.Memo
                     } else if output.Coinbase {
-                        ui.Strings.Get("block") + " " + ui.Count(output.BlockHeight)
+                        ui.Strings.Get("block") + " " + Count(output.BlockHeight)
                     } else {
                         Short(output.TxId)
                     },
@@ -867,7 +872,7 @@ class OverviewPage : Cell[OverviewInput] {
         card.FlexGrow = 1
         card.FlexBasis = 0
         card.MinWidth = 0
-        let header = WalletParts.Header(ui.Label(ui.Strings.Get("recent"), 12, ui.Body, ""))
+        let header = WalletParts.Header(Label(ui, ui.Strings.Get("recent"), 12, ui.Body, ""))
         header.Height = 24
         header.Margin = Edges{Bottom: 4}
         header.Add(Container{FlexGrow: 1})
@@ -880,7 +885,7 @@ class OverviewPage : Cell[OverviewInput] {
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Height: 40,
-                    ui.Grow(ui.Label(ui.Strings.Get("no transactions yet"), 14, ui.Dim, "")),
+                    Grow(Label(ui, ui.Strings.Get("no transactions yet"), 14, ui.Dim, "")),
                     Link(ui, "receive", () -> input.OnNavigate(AppPage.Receive))
                 }
             )
@@ -890,7 +895,7 @@ class OverviewPage : Cell[OverviewInput] {
         let rows = Container{FlexGrow: 1, MinHeight: 0, Overflow: Overflow.Scroll, ScrollbarY: Theme.Read().Scrollbar}
         for item in activities {
             let outgoing = item.Kind == "out"
-            let shown = input.Privacy ? ui.Strings.Get("Amounts hidden"): ui.Money(item.Amount)
+            let shown = input.Privacy ? ui.Strings.Get("Amounts hidden"): WalletAmount.Format(item.Amount)
             rows.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
@@ -906,7 +911,8 @@ class OverviewPage : Cell[OverviewInput] {
                     Container{
                         Width: 16,
                         AlignItems: AlignItems.Center,
-                        ui.Label(
+                        Label(
+                            ui,
                             outgoing ? "↑": item.Kind == "mined" ? "◆": "↓",
                             14,
                             outgoing ? ui.Pink: item.Kind == "mined" ? ui.Violet: ui.Mint,
@@ -920,8 +926,9 @@ class OverviewPage : Cell[OverviewInput] {
                         outgoing ? ui.Pink: ui.Mint,
                         ui.Dim
                     ),
-                    ui.Grow(ui.Label(item.Label, 13, ui.Dim, "")),
-                    ui.Label(
+                    Grow(Label(ui, item.Label, 13, ui.Dim, "")),
+                    Label(
+                        ui,
                         item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,
                         12,
                         item.Status == "mempool" ? ui.Blue: ui.Orange,
@@ -930,7 +937,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Container{
                         Width: 44,
                         AlignItems: AlignItems.FlexEnd,
-                        ui.Label(item.Timestamp > 0 ? ui.Clock(item.Timestamp): "-", 12, ui.Dim, "")
+                        Label(ui, item.Timestamp > 0 ? Clock(item.Timestamp): "-", 12, ui.Dim, "")
                     }
                 }
             )

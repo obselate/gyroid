@@ -90,7 +90,7 @@ class SendService {
         for index in 0 ... recipients.Length {
             handles[index] = ""
             if recipients[index].Address.StartsWith("$", StringComparison.Ordinal) {
-                let resolved = await BlocknetId.ResolveAsync(recipients[index].Address, ct)
+                let resolved = await BlocknetIdService.ResolveAsync(recipients[index].Address, ct)
                 handles[index] = resolved.Handle
                 recipients[index] = WalletRecipient{
                     ... recipients[index],

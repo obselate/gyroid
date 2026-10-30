@@ -31,8 +31,8 @@ class NodeDiscovery {
                 ""
             }
             var wrapped = false
-            var data = AppSettings.DefaultData(network)
-            var wallets = AppSettings.DefaultWallets(network)
+            var data = SettingsStore.DefaultData(network)
+            var wallets = SettingsStore.DefaultWallets(network)
             var endpoint = "http://127.0.0.1:" + if network == "testnet" {
                 "18332/"
             } else {
@@ -177,7 +177,7 @@ class NodeDiscovery {
                 }
                 if binary.Length == 0 {
                     for candidate in[]string{
-                        Path.Combine(AppSettings.DefaultData(network), executable),
+                        Path.Combine(SettingsStore.DefaultData(network), executable),
                         CoreRelease.InstallationPath()
                     } {
                         if File.Exists(candidate) {
@@ -210,7 +210,7 @@ class NodeDiscovery {
                 } else if Directory.Exists(legacy) && Directory.EnumerateFiles(legacy, "*.dat").Any() {
                     legacy
                 } else {
-                    AppSettings.DefaultWallets(network)
+                    SettingsStore.DefaultWallets(network)
                 }
             }
             if settings.ActiveWallet.Length == 0 && settings.WalletDirectory == wallets {

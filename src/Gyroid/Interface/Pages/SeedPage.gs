@@ -1,8 +1,9 @@
 package Gyroid.Interface
 
 import Goo
-import Goo.Widgets
 import Goo.Widgets.Inputs
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.TextParts
 import Gyroid.Wallet
 import System
 import System.IO
@@ -35,11 +36,11 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         card.Width = Percent(100)
         card.MaxWidth = 760
         card.MaxHeight = Percent(100)
-        card.Add(ui.Label(ui.Strings.Get("recovery phrase"), 17, ui.Ink, ""))
+        card.Add(Label(ui, ui.Strings.Get("recovery phrase"), 17, ui.Ink, ""))
         if input.Words.Length == 0 {
             if input.Issue.Length > 0 {
-                card.Add(ui.Label(ui.Strings.Explain(input.Issue), 13, ui.Pink, ""))
-                card.Add(ui.Button("Retry", input.OnRetry, input.Busy, true))
+                card.Add(Label(ui, ui.Strings.Explain(input.Issue), 13, ui.Pink, ""))
+                card.Add(Button(ui, "Retry", input.OnRetry, input.Busy, true))
             }
             return card
         }
@@ -72,7 +73,8 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         card.Add(grid)
         let actions = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexShrink: 0}
         actions.Add(
-            ui.Button(
+            Button(
+                ui,
                 visible ? "Hide": "Reveal",
                 () -> {
                     visible = !visible
@@ -83,8 +85,8 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                 }
             )
         )
-        actions.Add(ui.Button("Copy", () -> ui.Copy(words, 30000)))
-        actions.Add(ui.Button("Export", () -> Export(input), input.Busy))
+        actions.Add(Button(ui, "Copy", () -> ui.Actions.Copy(words, 30000)))
+        actions.Add(Button(ui, "Export", () -> Export(input), input.Busy))
         actions.Add(Container{FlexGrow: 1})
         if !input.FromWallet {
             actions.Add(
@@ -99,7 +101,8 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             )
         }
         actions.Add(
-            ui.Button(
+            Button(
+                ui,
                 input.FromWallet ? "Done": "Continue",
                 input.OnDone,
                 input.Busy || !input.FromWallet && !saved,
@@ -153,11 +156,11 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                     index.ToString() + " " + ui.Strings.Get("hidden")
                 }
             },
-            ui.Label(index.ToString(), 12, ui.Dim, ""),
+            Label(ui, index.ToString(), 12, ui.Dim, ""),
             if visible {
-                ui.Label(word, 14, ui.Lime, "")
+                Label(ui, word, 14, ui.Lime, "")
             } else {
-                ui.Frame(String('x', length), 0, hold ^ index, Random(hold ^ index), 14, ui.Body)
+                Frame(ui, String('x', length), 0, hold ^ index, Random(hold ^ index), 14, ui.Body)
             }
         }
     }
@@ -169,7 +172,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt"),
             (path string) -> {
                 if let words = shown {
-                    input.Ui.Run(ct -> input.Session.Keys.ExportSeedAsync(path, words, ct))
+                    input.Ui.Actions.Run(ct -> input.Session.Keys.ExportSeedAsync(path, words, ct))
                 }
             }
         )

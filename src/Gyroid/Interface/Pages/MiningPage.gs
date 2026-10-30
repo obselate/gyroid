@@ -4,9 +4,11 @@ import Goo
 import Goo.Widgets
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Mining
-import Gyroid.Node
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Globalization
@@ -71,7 +73,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             Gap: 10,
             MinHeight: 34,
             FlexShrink: 0,
-            ui.Label(ui.Strings.Get("mining"), 17, ui.Ink, ""),
+            Label(ui, ui.Strings.Get("mining"), 17, ui.Ink, ""),
             Container{FlexGrow: 1},
             Cell.Mount[InfoTipInput, InfoTip](
                 "about",
@@ -130,7 +132,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                         Ui: ui
                     }
                 ),
-                Container{Padding: Edges{Bottom: 4}, ui.Label("H/s", 16, ui.Body, "")}
+                Container{Padding: Edges{Bottom: 4}, Label(ui, "H/s", 16, ui.Body, "")}
             }
         )
         card.Add(Chart(input))
@@ -144,8 +146,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         }
         let size = compact ? 14.0: 16.0
         stats.Add(Reading(ui, "threads", status.Threads.ToString(), size))
-        stats.Add(Reading(ui, "hashes", ui.Count(status.Hashes), size))
-        stats.Add(Reading(ui, "blocks found", ui.Count(status.Blocks), size))
+        stats.Add(Reading(ui, "hashes", Count(status.Hashes), size))
+        stats.Add(Reading(ui, "blocks found", Count(status.Blocks), size))
         stats.Add(
             Reading(ui, "since", status.Started.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture), size)
         )
@@ -162,7 +164,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
     }
 
     private func Act(input MiningPageInput, action Func[CancellationToken, Task]) {
-        input.Ui.Run(action, () -> refreshRequested.Writer.TryWrite(true))
+        input.Ui.Actions.Run(action, () -> refreshRequested.Writer.TryWrite(true))
     }
 
     private async func RunWorkerAsync(input MiningPageInput, parentContext Context) {
@@ -172,7 +174,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             }
         } catch (failure OperationCanceledException) when disposed { } catch (failure Exception) {
             Console.Error.WriteLine("Mining background task failed: " + failure.GetType().Name)
-            input.Window?.TryPost(() -> input.Ui.Report("Mining background task failed"))
+            input.Window?.TryPost(() -> input.Ui.Actions.Report("Mining background task failed"))
         }
     }
 
@@ -260,7 +262,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     ui,
                     wide,
                     "pays to",
-                    ui.Label(ui.Strings.Get("this wallet") + " · " + input.Wallet, 13, ui.Ink, "")
+                    Label(ui, ui.Strings.Get("this wallet") + " · " + input.Wallet, 13, ui.Ink, "")
                 ),
                 Row(
                     ui,
@@ -270,12 +272,13 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                         FlexDirection: FlexDirection.Row,
                         AlignItems: AlignItems.Center,
                         Gap: 10,
-                        ui.Grow(ui.Label(String.Format(ui.Strings.Get("{0} cores"), cores), 13, ui.Ink, "")),
+                        Grow(Label(ui, String.Format(ui.Strings.Get("{0} cores"), cores), 13, ui.Ink, "")),
                         Step(input, "chevron_left", "Fewer threads", threads - 1, threads > 1),
                         Container{
                             MinWidth: 22,
                             AlignItems: AlignItems.Center,
-                            ui.Label(
+                            Label(
+                                ui,
                                 if threads > 0 {
                                     threads.ToString()
                                 } else {
@@ -297,7 +300,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                         FlexDirection: FlexDirection.Row,
                         AlignItems: AlignItems.Center,
                         Gap: 10,
-                        ui.Grow(
+                        Grow(
                             Container{
                                 Height: 4,
                                 BorderRadius: 2,
@@ -310,10 +313,10 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                                 }
                             }
                         ),
-                        ui.Label((threads * 2).ToString() + " / " + total.ToString() + " GiB", 12.5, ui.Dim, "")
+                        Label(ui, (threads * 2).ToString() + " / " + total.ToString() + " GiB", 12.5, ui.Dim, "")
                     }
                 ),
-                Row(ui, wide, "miner", ui.Label("blocknet-core", 13, ui.Ink, ""))
+                Row(ui, wide, "miner", Label(ui, "blocknet-core", 13, ui.Ink, ""))
             },
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -335,8 +338,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         AlignItems: AlignItems.Center,
         Gap: 14,
         MinHeight: 26,
-        Container{Width: wide ? 110.0: 90.0, FlexShrink: 0, ui.Label(ui.Strings.Get(label), 12.5, ui.Dim, "")},
-        ui.Grow(value)
+        Container{Width: wide ? 110.0: 90.0, FlexShrink: 0, Label(ui, ui.Strings.Get(label), 12.5, ui.Dim, "")},
+        Grow(value)
     }
 
     private func Step(input MiningPageInput, icon string, label string, threads int32, enabled bool) Blob {
@@ -389,7 +392,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: action,
             MaterialIcons.Create(icon, 14, tint),
-            ui.Label(ui.Strings.Get(label), 13, tint, "")
+            Label(ui, ui.Strings.Get(label), 13, tint, "")
         }
         WidgetKeyBindings.BindActivation(button)
         if input.Busy {
@@ -414,8 +417,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         FlexBasis: 0,
         MinWidth: 0,
         Gap: 4,
-        ui.Label(ui.Strings.Get(label), 12, ui.Dim, ""),
-        ui.Label(value, size, ui.Ink, "")
+        Label(ui, ui.Strings.Get(label), 12, ui.Dim, ""),
+        Label(ui, value, size, ui.Ink, "")
     }
 
     private func Chart(input MiningPageInput) Blob {
@@ -525,7 +528,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     BorderRadius: 8,
                     BorderColor: ui.Edge,
                     BackgroundColor: Color.Parse("#0b0b0b"),
-                    ui.Label(
+                    Label(
+                        ui,
                         sample.Time.ToString(format, CultureInfo.InvariantCulture) + " · " + sample.Rate.ToString(
                             "F1",
                             CultureInfo.InvariantCulture

@@ -11,10 +11,7 @@ import System.Text
 import System.Text.Json
 import System.Threading
 
-class BlocknetId(handle string, address string) {
-    let Handle string = handle
-    let Address string = address
-
+class BlocknetIdService {
     shared {
         private let signingKey PublicKey = PublicKey.Import(
             SignatureAlgorithm.Ed25519,

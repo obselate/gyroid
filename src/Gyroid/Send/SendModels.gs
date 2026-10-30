@@ -57,3 +57,8 @@ class SendOutcome(txId string = "", error string? = nil) {
         ""
     }
 }
+
+class BlocknetId(handle string, address string) {
+    let Handle string = handle
+    let Address string = address
+}

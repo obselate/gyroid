@@ -2,10 +2,10 @@ package Gyroid.Interface
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Feedback
 import Goo.Widgets.Inputs
-import Goo.Widgets.Layout
-import Gyroid.Platform
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Wallet
 import System
 import System.IO
@@ -45,7 +45,7 @@ class WalletForm {
 
     func Bind(field TextField) TextField -> field with{OnSubmit = _ -> Submit()}
 
-    func Entry(field TextField) Blob -> ui.Entry(Bind(field))
+    func Entry(field TextField) Blob -> ControlParts.Entry(ui, Bind(field))
 
     func Bind(entry TextEntry) TextEntry {
         entry.OnSubmit = _ -> Submit()
@@ -90,10 +90,11 @@ class WalletForm {
         issue string = "",
         disabled bool = false
     ) Blob -> FormField{
-        Content: ui.Grow(
+        Content: Grow(
             Container{
                 MinWidth: 0,
-                ui.Entry(
+                ControlParts.Entry(
+                    ui,
                     Bind(
                         TextField{
                             AccessibilityName: ui.Strings.Get(label),
@@ -122,7 +123,7 @@ class WalletForm {
                     Height: 38,
                     FlexShrink: 0,
                     JustifyContent: JustifyContent.Center,
-                    ui.Label(ui.Strings.Get(label), 13, ui.Body, "")
+                    Label(ui, ui.Strings.Get(label), 13, ui.Body, "")
                 }
             )
             return root
@@ -175,8 +176,12 @@ class WalletForm {
         AlignItems: AlignItems.Center,
         Gap: 10,
         FlexShrink: 0,
-        Container{Width: 130, FlexShrink: 0, ui.Label(label.Length > 0 ? ui.Strings.Get(label): "", 12.5, ui.Body, "")},
-        ui.Grow(Container{MinWidth: 0, field})
+        Container{
+            Width: 130,
+            FlexShrink: 0,
+            Label(ui, label.Length > 0 ? ui.Strings.Get(label): "", 12.5, ui.Body, "")
+        },
+        Grow(Container{MinWidth: 0, field})
     }
 
     func PathField(
@@ -191,19 +196,20 @@ class WalletForm {
     ) Blob -> Container{
         Gap: Theme.Read().ControlGap,
         FlexShrink: 0,
-        ui.Label(ui.Strings.Get(label), Theme.Read().LabelFontSize, ui.Body, ""),
+        Label(ui, ui.Strings.Get(label), Theme.Read().LabelFontSize, ui.Body, ""),
         Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.FlexStart,
             Gap: 8,
             FlexShrink: 0,
-            ui.Grow(
+            Grow(
                 Container{
                     MinWidth: 0,
                     Field(label, current, changed, issue: issue, disabled: disabled, labelled: false)
                 }
             ),
-            ui.Button(
+            Button(
+                ui,
                 "Browse",
                 () -> choose.Invoke(
                     kind,

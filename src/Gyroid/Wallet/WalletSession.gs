@@ -54,7 +54,7 @@ class WalletSession : IDisposable {
     prop LockQueued bool -> lockQueued
 
     init() {
-        settings = WalletSettings.Load()
+        settings = NodeLocation.Load()
         Node = NodeSession(settings)
         History = HistoryService(this)
         Send = SendService(this)
@@ -345,7 +345,7 @@ class WalletSession : IDisposable {
             if next.Network != settings.Network {
                 if next.DataDirectory == settings.DataDirectory &&
                     (
-                    next.DataDirectory == WalletSettings.DefaultData(settings.Network) ||
+                    next.DataDirectory == SettingsStore.DefaultData(settings.Network) ||
                         next.DataDirectory == settings.DiscoveredDataDirectory
                 ) {
                     next.DataDirectory = ""
@@ -379,7 +379,7 @@ class WalletSession : IDisposable {
             }
             StopEvents()
             await UnloadCoreAsync(ct)
-            await WalletSettings.SaveAsync(next, ct, settings)
+            await SettingsStore.SaveAsync(next, ct, settings)
             if Node.Supervisor.Owned && next.StartupDiffers(settings) {
                 Node.Supervisor.Stop()
                 next.OwnedProcessId = 0
@@ -408,7 +408,7 @@ class WalletSession : IDisposable {
             let next = settings.Copy()
             next.AutoLockMinutes = minutes
             next.Validate()
-            await WalletSettings.SaveAsync(next, ct, settings)
+            await SettingsStore.SaveAsync(next, ct, settings)
             settings.AutoLockMinutes = minutes
             if minutes == 0 || scheduleLock {
                 WalletLockScheduler.Cancel(settings)
@@ -436,7 +436,7 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.Privacy = value
-            await WalletSettings.SaveAsync(next, ct, settings)
+            await SettingsStore.SaveAsync(next, ct, settings)
             settings.Privacy = value
         } finally {
             End()
@@ -448,7 +448,7 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.Language = value
-            await WalletSettings.SaveAsync(next, ct, settings)
+            await SettingsStore.SaveAsync(next, ct, settings)
             settings.Language = value
         } finally {
             End()
@@ -460,7 +460,7 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             next.NodeMode = value
-            await WalletSettings.SaveAsync(next, ct, settings)
+            await SettingsStore.SaveAsync(next, ct, settings)
             settings.NodeMode = value
         } finally {
             End()
@@ -543,7 +543,7 @@ class WalletSession : IDisposable {
         try {
             let next = settings.Copy()
             change(next)
-            await WalletSettings.SaveAsync(next, ct, settings)
+            await SettingsStore.SaveAsync(next, ct, settings)
             change(settings)
         } finally {
             End()
@@ -671,7 +671,7 @@ class WalletSession : IDisposable {
             Touch()
             settings.ActiveWallet = filename
             PublishEmpty()
-            await WalletSettings.SaveAsync(settings, ct)
+            await SettingsStore.SaveAsync(settings, ct)
         } finally {
             End()
         }
@@ -707,7 +707,7 @@ class WalletSession : IDisposable {
             Touch()
             settings.ActiveWallet = filename
             PublishEmpty()
-            await WalletSettings.SaveAsync(settings, ct)
+            await SettingsStore.SaveAsync(settings, ct)
             await RefreshCoreAsync(ct)
         } finally {
             if let buffer = normalized {
@@ -904,7 +904,7 @@ class WalletSession : IDisposable {
             Touch()
             settings.ActiveWallet = filename
             PublishEmpty()
-            await WalletSettings.SaveAsync(settings, ct)
+            await SettingsStore.SaveAsync(settings, ct)
             await RefreshCoreAsync(ct)
         } finally {
             End()

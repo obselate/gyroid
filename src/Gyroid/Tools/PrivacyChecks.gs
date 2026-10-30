@@ -12,7 +12,6 @@ import System.Text
 import System.Text.Json
 import System.Text.RegularExpressions
 import System.Threading
-import System.Threading.Tasks
 
 class StaleOutput {
     var Height uint64
@@ -48,7 +47,7 @@ class PrivacyChecks {
         this.session = session
     }
 
-    private func PhraseStatePath() string -> AppSettings.ConfigurationPath() + ".phrase-checks.json"
+    private func PhraseStatePath() string -> SettingsStore.ConfigurationPath() + ".phrase-checks.json"
 
     private func WalletKey() string -> session.settings.Network + ":" + Convert.ToHexString(
         SHA256.HashData(Encoding.UTF8.GetBytes(session.Snapshot.Address))

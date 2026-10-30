@@ -22,7 +22,7 @@ class DecodeValue : Cell[DecodeValueInput] {
 
     init() {
         progress = Animate(1.0)
-        progress.Completed += reason -> ui?.SettleMotion()
+        progress.Completed += reason -> ui?.Actions.SettleMotion()
     }
 
     protected override func Build(input DecodeValueInput) Blob {

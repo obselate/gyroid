@@ -6,8 +6,11 @@ import Goo.Widgets.Actions
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Gyroid.History
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Node
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Globalization
 import System.Threading
@@ -85,7 +88,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let figures = WalletParts.Card(ui, Edges{Left: 22, Right: 22, Top: 14, Bottom: 14}, 20, 14)
         figures.FlexDirection = FlexDirection.Row
         figures.FlexShrink = 0
-        figures.Add(Figure(input, "Height", ui.Count(node.Height), ""))
+        figures.Add(Figure(input, "Height", Count(node.Height), ""))
         figures.Add(Figure(input, "Hashrate", Rate(report.Hashrate), Unit(report.Hashrate)))
         figures.Add(
             Figure(
@@ -144,9 +147,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let last = WalletParts.Card(ui, Edges{Left: 18, Right: 18, Top: 14, Bottom: 12}, 8, 14)
         last.FlexGrow = 1.15
         last.FlexBasis = 0
-        last.Add(
-            ChartHeader(input, "Last block", "last", tip.Timestamp > 0 ? ui.Clock(tip.Timestamp): "-", Container{})
-        )
+        last.Add(ChartHeader(input, "Last block", "last", tip.Timestamp > 0 ? Clock(tip.Timestamp): "-", Container{}))
         last.Add(Ribbon(input, tip))
         last.Add(Details(input, shown, tip))
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: 12}
@@ -183,7 +184,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             }
         } catch (failure OperationCanceledException) when disposed { } catch (failure Exception) {
             Console.Error.WriteLine("Network background task failed: " + failure.GetType().Name)
-            window?.TryPost(() -> ui.Report("Network background task failed"))
+            window?.TryPost(() -> ui.Actions.Report("Network background task failed"))
         }
     }
 
@@ -233,7 +234,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             MinWidth: 0,
             Gap: 5,
             Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value + " " + unit},
-            ui.Label(ui.Strings.Get(label), 13, ui.Body, ""),
+            Label(ui, ui.Strings.Get(label), 13, ui.Body, ""),
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Baseline,
@@ -251,7 +252,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Ui: ui
                     }
                 ),
-                ui.Label(unit, 12, ui.Body, "")
+                Label(ui, unit, 12, ui.Body, "")
             }
         }
     }
@@ -259,7 +260,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     private func ChartHeader(input NetworkInput, label string, key string, value string, trailing Blob) Blob {
         let ui = input.Ui
         return WalletParts.Header(
-            ui.Label(ui.Strings.Get(label), 13, ui.Body, ""),
+            Label(ui, ui.Strings.Get(label), 13, ui.Body, ""),
             12,
             trailing,
             Cell.Mount[DecodeValueInput, DecodeValue](
@@ -301,8 +302,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let target = Level(300, extent)
         plot.Add(Rule(2, Level(900, extent), inner, Color.Parse("#141414")))
         plot.Add(Rule(2, Level(600, extent), inner, Color.Parse("#141414")))
-        plot.Add(Place(inner + 10, Level(900, extent) - 7, ui.Label("15:00", 11, ui.Dim, "")))
-        plot.Add(Place(inner + 10, Level(600, extent) - 7, ui.Label("10:00", 11, ui.Dim, "")))
+        plot.Add(Place(inner + 10, Level(900, extent) - 7, Label(ui, "15:00", 11, ui.Dim, "")))
+        plot.Add(Place(inner + 10, Level(600, extent) - 7, Label(ui, "10:00", 11, ui.Dim, "")))
         for index in 0 ... count {
             let block = blocks[index + 1]
             let seconds = Math.Max(0L, block.Timestamp - blocks[index].Timestamp)
@@ -352,14 +353,14 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 Dashes: DashPattern([]float64{4, 3}, 0)
             }
         )
-        plot.Add(Place(inner + 10, target - 8, ui.Label("5:00", 12, ui.Ink, "")))
-        plot.Add(Place(2, height - 14, ui.Label("#" + ui.Count(blocks[0].Height), 11, ui.Dim, "")))
+        plot.Add(Place(inner + 10, target - 8, Label(ui, "5:00", 12, ui.Ink, "")))
+        plot.Add(Place(2, height - 14, Label(ui, "#" + Count(blocks[0].Height), 11, ui.Dim, "")))
         plot.Add(
             Container{
                 Position: PositionType.Absolute,
                 Right: 44,
                 Top: height - 14,
-                ui.Label("#" + ui.Count(blocks[count].Height), 11, ui.Dim, "")
+                Label(ui, "#" + Count(blocks[count].Height), 11, ui.Dim, "")
             }
         )
         return plot
@@ -431,14 +432,14 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             )
         }
         plot.Add(Rule(2, bottom, width, ui.Edge))
-        plot.Add(Place(2, height - 13, ui.Label(ui.Strings.Get("−2h"), 11, ui.Dim, "")))
-        plot.Add(Place(Offset(3600, width) - 12, height - 13, ui.Label(ui.Strings.Get("−1h"), 11, ui.Dim, "")))
+        plot.Add(Place(2, height - 13, Label(ui, ui.Strings.Get("−2h"), 11, ui.Dim, "")))
+        plot.Add(Place(Offset(3600, width) - 12, height - 13, Label(ui, ui.Strings.Get("−1h"), 11, ui.Dim, "")))
         plot.Add(
             Container{
                 Position: PositionType.Absolute,
                 Right: 2,
                 Top: height - 13,
-                ui.Label(ui.Clock(tip.Timestamp), 11, ui.Dim, "")
+                Label(ui, Clock(tip.Timestamp), 11, ui.Dim, "")
             }
         )
         for index in 1 ... blocks.Length {
@@ -516,7 +517,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     }
                 )
                 plot.Add(
-                    Place(Math.Min(right + 5, width - 58), 10, ui.Label(ui.Strings.Get("10 conf"), 11, ui.Orange, ""))
+                    Place(Math.Min(right + 5, width - 58), 10, Label(ui, ui.Strings.Get("10 conf"), 11, ui.Orange, ""))
                 )
             }
         }
@@ -555,34 +556,36 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         }
         let index = Array.FindIndex(report.Blocks, item -> item.Height == block.Height)
         let confirmations = tip.Height - block.Height + 1
-        row.Add(ui.Label("#" + ui.Count(block.Height), 12.5, ui.Lime, ""))
-        row.Add(ui.Label(ui.Clock(block.Timestamp), 12.5, ui.Body, ""))
+        row.Add(Label(ui, "#" + Count(block.Height), 12.5, ui.Lime, ""))
+        row.Add(Label(ui, Clock(block.Timestamp), 12.5, ui.Body, ""))
         if index > 0 {
             row.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     Gap: 6,
-                    ui.Label(ui.Strings.Get("took"), 12.5, ui.Dim, ""),
-                    ui.Label(Duration(block.Timestamp - report.Blocks[index - 1].Timestamp), 12.5, ui.Body, "")
+                    Label(ui, ui.Strings.Get("took"), 12.5, ui.Dim, ""),
+                    Label(ui, Duration(block.Timestamp - report.Blocks[index - 1].Timestamp), 12.5, ui.Body, "")
                 }
             )
         }
-        row.Add(ui.Label(block.Transactions.ToString() + " " + ui.Strings.Get("tx"), 12.5, ui.Body, ""))
+        row.Add(Label(ui, block.Transactions.ToString() + " " + ui.Strings.Get("tx"), 12.5, ui.Body, ""))
         row.Add(
-            ui.Label(
+            Label(
+                ui,
                 confirmations.ToString() + " " + ui.Strings.Get("conf"),
                 12.5,
                 confirmations < 10 ? ui.Orange: ui.Body,
                 ""
             )
         )
-        let copied = String(ui.ClipboardText) == block.Hash
+        let copied = String(ui.Actions.ClipboardText) == block.Hash
         row.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 Gap: 2,
-                ui.Label(
+                Label(
+                    ui,
                     block.Hash.Substring(0, 6) + "…" + block.Hash.Substring(block.Hash.Length - 4),
                     12.5,
                     ui.Dim,
@@ -592,7 +595,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     Icon: MaterialIcons.Create(copied ? "check": "content_copy", 14, copied ? ui.Lime: ui.Dim),
                     AccessibilityName: ui.Strings.Get("copy hash"),
                     OnClick: () -> {
-                        ui.Copy(block.Hash, 120000)
+                        ui.Actions.Copy(block.Hash, 120000)
                         Rebuild()
                     }
                 }.Build()
@@ -686,8 +689,9 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 Padding: Edges{Top: 8},
                 BorderWidth: Edges{Top: 1},
                 BorderColor: ui.Rule,
-                ui.Label(ui.Strings.Get("This node"), 12.5, ui.Body, ""),
-                ui.Label(
+                Label(ui, ui.Strings.Get("This node"), 12.5, ui.Body, ""),
+                Label(
+                    ui,
                     if identity.Length < 10 {
                         identity
                     } else if revealed {
@@ -699,7 +703,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     ui.Ink,
                     ""
                 ),
-                ui.Label(
+                Label(
+                    ui,
                     String.Format(
                         ui.Strings.Get(hours >= 24 ? "identity {0} d": "identity {0} h"),
                         hours >= 24 ? hours / 24: hours
@@ -739,7 +744,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 tab = key
                 Rebuild()
             },
-            ui.Label(ui.Strings.Get(key) + " " + count.ToString(), 14, tab == key ? ui.Ink: ui.Body, "")
+            Label(ui, ui.Strings.Get(key) + " " + count.ToString(), 14, tab == key ? ui.Ink: ui.Body, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -756,8 +761,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             AlignItems: AlignItems.Center,
             Gap: 6,
             mark,
-            ui.Label(ui.Strings.Get(label), 12, ui.Body, ""),
-            ui.Label(count.ToString(), 12, ui.Ink, "")
+            Label(ui, ui.Strings.Get(label), 12, ui.Body, ""),
+            Label(ui, count.ToString(), 12, ui.Ink, "")
         }
     }
 
@@ -869,8 +874,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     private func Tip(ui Presentation, label string, value string, color Color) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         Gap: 14,
-        Container{Width: 60, ui.Label(ui.Strings.Get(label), 12.5, ui.Dim, "")},
-        ui.Label(value, 12.5, color, "")
+        Container{Width: 60, Label(ui, ui.Strings.Get(label), 12.5, ui.Dim, "")},
+        Label(ui, value, 12.5, color, "")
     }
 
     private func Circle(x float64, y float64, radius float64, color Color, dashes DashPattern?) Blob -> Shape{
@@ -941,10 +946,10 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     BackgroundColor: peer.Transport == "quic" ? ui.Mint: ui.Blue
                 }
             },
-            ui.Grow(ui.Label(Short(peer.Id), 12.5, ui.Ink, ""))
+            Grow(Label(ui, Short(peer.Id), 12.5, ui.Ink, ""))
         }
         if input.Width >= 1100 {
-            row.Add(ui.Label(peer.Address, 12.5, ui.Body, ""))
+            row.Add(Label(ui, peer.Address, 12.5, ui.Body, ""))
         }
         return row
     }
@@ -958,13 +963,13 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         Padding: Edges{Left: 8, Right: 8},
         Accessibility: Accessibility{Name: Short(ban.Id) + " " + ban.Reason},
         MaterialIcons.Create("close", 12, ui.Pink),
-        ui.Label(Short(ban.Id), 12.5, ui.Ink, ""),
-        ui.Grow(ui.Label(ban.Reason, 12.5, ui.Body, "")),
-        ui.Label(ban.Count.ToString() + "× · ", 12.5, ui.Dim, ""),
+        Label(ui, Short(ban.Id), 12.5, ui.Ink, ""),
+        Grow(Label(ui, ban.Reason, 12.5, ui.Body, "")),
+        Label(ui, ban.Count.ToString() + "× · ", 12.5, ui.Dim, ""),
         if ban.Permanent {
-            ui.Label(ui.Strings.Get("permanent"), 12.5, ui.Pink, "")
+            Label(ui, ui.Strings.Get("permanent"), 12.5, ui.Pink, "")
         } else {
-            ui.Label(String.Format(ui.Strings.Get("until {0}"), ui.Clock(ban.Expires)), 12.5, ui.Body, "")
+            Label(ui, String.Format(ui.Strings.Get("until {0}"), Clock(ban.Expires)), 12.5, ui.Body, "")
         }
     }
 

@@ -409,7 +409,7 @@ class NodeSupervisor : IDisposable {
 
     private async func SaveCoreSettingsAsync(settings WalletSettings, fullSync bool, ct CancellationToken) {
         let path = Path.Combine(settings.DataDirectory, "settings.json")
-        if path == WalletSettings.ConfigurationPath() {
+        if path == SettingsStore.ConfigurationPath() {
             throw WalletException("Application and core settings must use different files")
         }
         using let original = JsonDocument.Parse(

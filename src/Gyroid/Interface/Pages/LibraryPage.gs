@@ -5,8 +5,12 @@ import Goo.Widgets
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
+import Gyroid.Interface.ControlParts
+import Gyroid.Interface.LayoutParts
+import Gyroid.Interface.TextParts
 import Gyroid.Platform
 import Gyroid.Wallet
+import Gyroid.Wallet.WalletText
 import System
 import System.Collections.Generic
 import System.Globalization
@@ -76,7 +80,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             AlignItems: AlignItems.Center,
             Gap: 8,
             FlexShrink: 0,
-            ui.Grow(ui.Label(ui.Strings.Get("wallets"), 17, ui.Ink, "")),
+            Grow(Label(ui, ui.Strings.Get("wallets"), 17, ui.Ink, "")),
             WalletParts.Square(
                 ui,
                 "settings",
@@ -87,7 +91,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             )
         }
         card.Add(header)
-        card.Add(ui.Label(input.Session.Settings.WalletDirectory, 12, ui.Dim, ""))
+        card.Add(Label(ui, input.Session.Settings.WalletDirectory, 12, ui.Dim, ""))
         if wallets.Count == 0 {
             card.Add(
                 Container{
@@ -186,7 +190,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             FileDialogKind.OpenFile,
             "Import wallet",
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            (path string) -> input.Ui.Run(ct -> input.Session.Library.ImportFileAsync(path, ct))
+            (path string) -> input.Ui.Actions.Run(ct -> input.Session.Library.ImportFileAsync(path, ct))
         )
     }
 
@@ -222,7 +226,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
             MaterialIcons.Create(icon, 20, ui.Lime),
-            ui.Label(ui.Strings.Get(label), 14, ui.Ink, "")
+            Label(ui, ui.Strings.Get(label), 14, ui.Ink, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -274,7 +278,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Accessibility: Accessibility{Role: AccessibilityRole.MenuItem, Name: ui.Strings.Get(label)},
             OnClick: click,
             MaterialIcons.Create(icon, 16, ui.Lime),
-            ui.Label(ui.Strings.Get(label), 14, ui.Body, "")
+            Label(ui, ui.Strings.Get(label), 14, ui.Body, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -284,7 +288,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let ui = input.Ui
         let active = loaded && filename == input.ActiveWallet
         let expanded = filename == opened
-        let label = ui.WalletName(filename)
+        let label = WalletName(filename)
         let colors = []Color{ui.Lime, ui.Blue, ui.Orange, ui.Mint, ui.Violet, ui.Pink}
         let button = Goo
             .Button{
@@ -308,7 +312,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                     Rebuild()
                 }
                 if input.Session.State == WalletState.Locked && !active {
-                    ui.Run(ct -> input.Session.UnloadAsync(ct), chooseWallet)
+                    ui.Actions.Run(ct -> input.Session.UnloadAsync(ct), chooseWallet)
                 } else {
                     chooseWallet()
                 }
@@ -320,8 +324,9 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 FlexShrink: 0,
                 BackgroundColor: colors[filename.Sum((c char) -> int32(c)) % colors.Length]
             },
-            ui.Grow(
-                ui.Label(
+            Grow(
+                Label(
+                    ui,
                     label,
                     14,
                     if active {
@@ -334,7 +339,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                     ""
                 )
             ),
-            ui.Label(Used(ui, used), 13, ui.Dim, ""),
+            Label(ui, Used(ui, used), 13, ui.Dim, ""),
             if active {
                 Container{}
             } else {
@@ -348,7 +353,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Gap: 8,
             Height: 48,
             FlexShrink: 0,
-            ui.Grow(button)
+            Grow(button)
         }
         if active {
             head.Add(
@@ -358,7 +363,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                     ui.Strings.Get("Unload"),
                     false,
                     input.Busy,
-                    () -> ui.Run(ct -> input.Session.UnloadAsync(ct))
+                    () -> ui.Actions.Run(ct -> input.Session.UnloadAsync(ct))
                 )
             )
         }
@@ -381,7 +386,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 AlignItems: AlignItems.Center,
                 Gap: 10,
                 Padding: Edges{Bottom: issue.Length > 0 ? 8.0: 12.0},
-                ui.Grow(
+                Grow(
                     Container{
                         MinWidth: 0,
                         unlock.Entry(
@@ -412,7 +417,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                         Rebuild()
                     }
                 ),
-                ui.Button("Unlock", unlock.Submit, !unlock.CanSubmit, true)
+                Button(ui, "Unlock", unlock.Submit, !unlock.CanSubmit, true)
             }
         )
         if issue.Length > 0 {
@@ -441,7 +446,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let secret = password.ToCharArray()
         password = ""
         issue = ""
-        input.Ui.Run(ct -> OpenWallet(input, filename, secret, ct), nil, secret)
+        input.Ui.Actions.Run(ct -> OpenWallet(input, filename, secret, ct), nil, secret)
     }
 
     private async func OpenWallet(
@@ -491,7 +496,8 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                         Rebuild()
                     }
                 ),
-                ui.Label(
+                Label(
+                    ui,
                     ui.Strings.Get(
                         switch form {
                             case "Phrase": "restore wallet"
@@ -569,15 +575,13 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             input.Busy
         )
         card.Add(
-            ui.ActionRow(
-                []Blob{ui.Button(form == "Create" ? "Create": "Import", fields.Submit, !fields.CanSubmit, true)}
-            )
+            ActionRow([]Blob{Button(ui, form == "Create" ? "Create": "Import", fields.Submit, !fields.CanSubmit, true)})
         )
         return card
     }
 
     private func Submit(input LibraryInput) {
-        let filename = input.Ui.WalletFile(name)
+        let filename = WalletFile(name)
         let secret = password.ToCharArray()
         let session = input.Session
         password = ""
@@ -585,10 +589,13 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         if form == "Phrase" {
             let words = phrase.ToCharArray()
             phrase = ""
-            input.Ui.Run(ct -> session.ImportPhraseAsync(filename, words, secret, ct), nil, secret, words)
+            input.Ui.Actions.Run(ct -> session.ImportPhraseAsync(filename, words, secret, ct), nil, secret, words)
         } else if form == "ViewOnly" {
             let key = viewKey.ToCharArray()
-            input.Ui.Run(
+            input
+                .Ui
+                .Actions
+                .Run(
                 ct -> session.ImportViewOnlyAsync(filename, spendKey.ToCharArray(), key, secret, ct),
                 nil,
                 secret,
