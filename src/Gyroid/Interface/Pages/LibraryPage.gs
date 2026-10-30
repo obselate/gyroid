@@ -386,6 +386,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         if !expanded {
             return row
         }
+        let unlock = WalletForm(ui, !input.Busy, () -> Unlock(input, filename), []string{password})
         row.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -395,7 +396,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 ui.Grow(
                     Container{
                         MinWidth: 0,
-                        ui.Entry(
+                        unlock.Entry(
                             TextField{
                                 AccessibilityName: ui.Strings.Get("Password"),
                                 Value: password,
@@ -407,8 +408,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                                     password = value
                                     issue = ""
                                     Rebuild()
-                                },
-                                OnSubmit: _ -> Unlock(input, filename)
+                                }
                             }
                         )
                     }
@@ -424,7 +424,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                         Rebuild()
                     }
                 ),
-                ui.Button("Unlock", () -> Unlock(input, filename), input.Busy || password.Length == 0, true)
+                ui.Button("Unlock", unlock.Submit, !unlock.CanSubmit, true)
             }
         )
         if issue.Length > 0 {
@@ -450,9 +450,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     }
 
     private func Unlock(input LibraryInput, filename string) {
-        if input.Busy || password.Length == 0 {
-            return
-        }
         let secret = password.ToCharArray()
         password = ""
         issue = ""
@@ -480,6 +477,14 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
 
     private func Form(input LibraryInput, card Container) Blob {
         let ui = input.Ui
+        let required = if form == "Phrase" {
+            []string{name.Trim(), phrase.Trim()}
+        } else if form == "ViewOnly" {
+            []string{name.Trim(), spendKey, viewKey}
+        } else {
+            []string{name.Trim()}
+        }
+        let fields = WalletForm(ui, !input.Busy, () -> Submit(input), required)
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -512,127 +517,80 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 )
             }
         )
-        card.Add(Line(input, "Name", name, value -> name = value, false, ""))
-        if form == "Phrase" {
-            card.Add(Line(input, "Recovery phrase", phrase, value -> phrase = value, true, ""))
-        }
-        if form == "ViewOnly" {
-            card.Add(Line(input, "Spend public key", spendKey, value -> spendKey = value.Trim(), false, ""))
-            card.Add(Line(input, "View private key", viewKey, value -> viewKey = value.Trim(), true, ""))
-        }
         card.Add(
-            Line(
-                input,
-                "Password",
-                password,
+            fields.Row(
+                "Name",
+                name,
                 value -> {
-                    password = value
-                    issue = ""
+                    name = value
+                    Rebuild()
                 },
-                true,
-                ""
+                disabled: input.Busy
             )
         )
-        card.Add(
-            Line(
-                input,
-                "Confirm",
-                confirmation,
-                value -> {
-                    confirmation = value
-                    issue = ""
-                },
-                true,
-                issue
+        if form == "Phrase" {
+            card.Add(
+                fields.Row(
+                    "Recovery phrase",
+                    phrase,
+                    value -> {
+                        phrase = value
+                        Rebuild()
+                    },
+                    true,
+                    disabled: input.Busy
+                )
             )
+        }
+        if form == "ViewOnly" {
+            card.Add(
+                fields.Row(
+                    "Spend public key",
+                    spendKey,
+                    value -> {
+                        spendKey = value.Trim()
+                        Rebuild()
+                    },
+                    disabled: input.Busy
+                )
+            )
+            card.Add(
+                fields.Row(
+                    "View private key",
+                    viewKey,
+                    value -> {
+                        viewKey = value.Trim()
+                        Rebuild()
+                    },
+                    true,
+                    disabled: input.Busy
+                )
+            )
+        }
+        fields.PasswordPair(
+            card,
+            password,
+            confirmation,
+            value -> password = value,
+            value -> confirmation = value,
+            issue,
+            value -> {
+                issue = value
+                Rebuild()
+            },
+            input.Busy
         )
         card.Add(
             ui.ActionRow(
-                []Blob{
-                    ui.Button(
-                        form == "Create" ? "Create": "Import",
-                        () -> Submit(input),
-                        input.Busy || Incomplete(),
-                        true
-                    )
-                }
+                []Blob{ui.Button(form == "Create" ? "Create": "Import", fields.Submit, !fields.CanSubmit, true)}
             )
         )
         return card
     }
 
-    private func Line(
-        input LibraryInput,
-        label string,
-        value string,
-        changed Action[string],
-        secret bool,
-        problem string
-    ) Blob {
-        let ui = input.Ui
-        return Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: 12,
-            FlexShrink: 0,
-            Container{
-                Width: 136,
-                Height: 38,
-                FlexShrink: 0,
-                JustifyContent: JustifyContent.Center,
-                ui.Label(ui.Strings.Get(label), 13, ui.Body, "")
-            },
-            ui.Grow(
-                Container{
-                    MinWidth: 0,
-                    ui.Entry(
-                        TextField{
-                            AccessibilityName: ui.Strings.Get(label),
-                            Value: value,
-                            Controlled: true,
-                            Password: secret,
-                            RevealButton: secret,
-                            Invalid: problem.Length > 0,
-                            IssueText: if problem.Length > 0 {
-                                ui.Strings.Explain(problem)
-                            } else {
-                                nil
-                            },
-                            Disabled: input.Busy,
-                            ContentDirection: Direction.LeftToRight,
-                            OnChange: text -> {
-                                changed(text)
-                                Rebuild()
-                            },
-                            OnSubmit: _ -> Submit(input)
-                        }
-                    )
-                }
-            )
-        }
-    }
-
-    private func Incomplete() bool -> name.Trim()
-        .Length == 0 ||
-        password.Length == 0 ||
-        confirmation.Length == 0 ||
-        form == "Phrase" &&
-        phrase
-        .Trim().Length == 0 || form == "ViewOnly" && (spendKey.Length == 0 || viewKey.Length == 0)
-
     private func Submit(input LibraryInput) {
-        if input.Busy || Incomplete() {
-            return
-        }
         let filename = input.Ui.WalletFile(name)
         let secret = password.ToCharArray()
-        let again = confirmation.ToCharArray()
-        issue = WalletValidation.PasswordError(secret, again)
-        Array.Clear(again)
-        if issue.Length > 0 {
-            Array.Clear(secret)
-            Rebuild()
-            return
-        }
         let session = input.Session
         password = ""
         confirmation = ""

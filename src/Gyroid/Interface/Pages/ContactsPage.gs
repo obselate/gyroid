@@ -153,7 +153,7 @@ class ContactsPage : Cell[ContactsInput] {
         let ui = input.Ui
         let label = contactName.Trim()
         let taken = label != original && input.Contacts.ContainsKey(label)
-        let save Action = () -> Save(input)
+        let form = WalletForm(ui, !input.Busy && !taken, () -> Save(input), []string{label, contactAddress})
         let fields = Container{
             FlexDirection: FlexDirection.Row,
             Gap: 10,
@@ -161,7 +161,7 @@ class ContactsPage : Cell[ContactsInput] {
             Container{
                 Width: 180,
                 FlexShrink: 0,
-                ui.Entry(
+                form.Entry(
                     TextField{
                         AccessibilityName: ui.Strings.Get("Name"),
                         Placeholder: ui.Strings.Get("Name"),
@@ -178,15 +178,14 @@ class ContactsPage : Cell[ContactsInput] {
                         OnChange: value -> {
                             contactName = value
                             Rebuild()
-                        },
-                        OnSubmit: _ -> save()
+                        }
                     }
                 )
             },
             ui.Grow(
                 Container{
                     MinWidth: 0,
-                    ui.Entry(
+                    form.Entry(
                         TextField{
                             AccessibilityName: ui.Strings.Get("Address"),
                             Placeholder: ui.Strings.Get("Address"),
@@ -205,8 +204,7 @@ class ContactsPage : Cell[ContactsInput] {
                                 contactAddress = value.Trim()
                                 issue = ""
                                 Rebuild()
-                            },
-                            OnSubmit: _ -> save()
+                            }
                         }
                     )
                 }
@@ -225,12 +223,7 @@ class ContactsPage : Cell[ContactsInput] {
             ui.ActionRow(
                 []Blob{
                     ui.Button("Cancel", () -> Reset(), input.Busy || input.Contacts.Count == 0),
-                    ui.Button(
-                        "Save",
-                        save,
-                        input.Busy || label.Length == 0 || contactAddress.Length == 0 || taken,
-                        true
-                    )
+                    ui.Button("Save", form.Submit, !form.CanSubmit, true)
                 }
             )
         }
@@ -239,15 +232,6 @@ class ContactsPage : Cell[ContactsInput] {
     private func Save(input ContactsInput) {
         let label = contactName.Trim()
         let original = editing ?? ""
-        if input.Busy ||
-            label.Length == 0 ||
-            contactAddress.Length == 0 ||
-            label != original &&
-            input
-            .Contacts
-            .ContainsKey(label) {
-            return
-        }
         try {
             let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
             next.Remove(original)

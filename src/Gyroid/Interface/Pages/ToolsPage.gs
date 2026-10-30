@@ -42,6 +42,7 @@ data struct ToolsInput {
 }
 
 class ToolsPage : Cell[ToolsInput], IDisposable {
+    private var phraseForm WalletForm
     private var message string = ""
     private var signature string = ""
     private var signer string = ""
@@ -754,6 +755,11 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
 
     private func Phrase(input ToolsInput) Blob {
         let ui = input.Ui
+        phraseForm = if step == "show" {
+            WalletForm(ui, !input.Busy, () -> Reveal(input), []string{password})
+        } else {
+            WalletForm(ui, Suggestions().Count > 0, () -> Answer(input, Suggestions()[0]), []string{typed})
+        }
         let compact = input.Width < 1100
         let card = Card(input)
         let stepper = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8}
@@ -810,18 +816,17 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         footer.Add(Container{FlexGrow: 1})
         if step == "show" {
             card.Add(
-                ui.Field(
+                phraseForm.Field(
                     "Password",
                     password,
                     value -> {
                         password = value
                         Rebuild()
                     },
-                    () -> Reveal(input),
                     true
                 )
             )
-            footer.Add(ui.Button("Continue", () -> Reveal(input), input.Busy || password.Length == 0, true))
+            footer.Add(ui.Button("Continue", phraseForm.Submit, !phraseForm.CanSubmit, true))
             card.Add(footer)
             return card
         }
@@ -900,11 +905,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             if step == "done" {
                 ui.Button("Done", () -> EndPhrase(), false, true)
             } else {
-                ui.Button(
-                    "Continue",
-                    () -> Answer(input, suggestions.Count > 0 ? suggestions[0]: typed),
-                    typed.Length == 0 || suggestions.Count == 0
-                )
+                ui.Button("Continue", phraseForm.Submit, !phraseForm.CanSubmit)
             }
         )
         card.Add(footer)
@@ -955,26 +956,24 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         } else if active {
             slot.Add(
                 ui.Grow(
-                    TextEntry{
-                        Key: "word-" + index.ToString(),
-                        Value: typed,
-                        Controlled: true,
-                        AutoFocus: true,
-                        FontSize: size,
-                        Color: invalid ? error: ui.Ink,
-                        Accessibility: Accessibility{
-                            Name: String.Format(ui.Strings.Get("word {0}"), (index + 1).ToString())
-                        },
-                        OnChange: value -> {
-                            typed = value.Trim().ToLowerInvariant()
-                            wrong = false
-                            Rebuild()
-                        },
-                        OnSubmit: value -> {
-                            let suggestions = Suggestions()
-                            Answer(input, suggestions.Count > 0 ? suggestions[0]: typed)
+                    phraseForm.Bind(
+                        TextEntry{
+                            Key: "word-" + index.ToString(),
+                            Value: typed,
+                            Controlled: true,
+                            AutoFocus: true,
+                            FontSize: size,
+                            Color: invalid ? error: ui.Ink,
+                            Accessibility: Accessibility{
+                                Name: String.Format(ui.Strings.Get("word {0}"), (index + 1).ToString())
+                            },
+                            OnChange: value -> {
+                                typed = value.Trim().ToLowerInvariant()
+                                wrong = false
+                                Rebuild()
+                            }
                         }
-                    }
+                    )
                 )
             )
         } else if position < 0 {
@@ -988,6 +987,29 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         let state = input.State
         let viewOnly = input.Snapshot.ViewOnly
         let tab = viewOnly && state.Tab == "sign" ? "verify": state.Tab
+        let required = if tab == "sign" {
+            []string{message}
+        } else if tab == "proof" {
+            []string{proofTx, proofKey, proofAddress, proofAmount}
+        } else {
+            []string{signer, message, signature}
+        }
+        let form = WalletForm(
+            ui,
+            !input.Busy,
+            () -> {
+                if tab == "sign" {
+                    Sign(input)
+                } else {
+                    Verify(input, tab)
+                }
+            },
+            required,
+            () -> {
+                ResetVerdict()
+                Rebuild()
+            }
+        )
         let tabs = Container{
             FlexDirection: FlexDirection.Row,
             Gap: 4,
@@ -1049,39 +1071,31 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             Health(input, card)
         } else if tab == "sign" {
             card.Add(
-                ui.Field(
+                form.Field(
                     "Message",
                     message,
                     value -> {
                         message = value
                         signature = ""
-                        Rebuild()
-                    },
-                    () -> Sign(input)
+                    }
                 )
             )
             if signature.Length > 0 {
                 card.Add(ui.Copyable("Signature", signature, ui.Grouped(signature)))
             }
-            card.Add(
-                ui.ActionRow([]Blob{ui.Button("Sign", () -> Sign(input), input.Busy || message.Length == 0, true)})
-            )
+            card.Add(ui.ActionRow([]Blob{ui.Button("Sign", form.Submit, !form.CanSubmit, true)}))
         } else {
-            let verify Action = () -> Verify(input, tab)
             if tab == "proof" {
-                card.Add(Field(input, "Transaction", proofTx, value -> proofTx = value.Trim(), verify))
-                card.Add(Field(input, "Proof key", proofKey, value -> proofKey = value.Trim(), verify))
-                card.Add(Field(input, "Address", proofAddress, value -> proofAddress = value.Trim(), verify))
-                card.Add(Field(input, "Amount", proofAmount, value -> proofAmount = value.Trim(), verify))
+                card.Add(form.Field("Transaction", proofTx, value -> proofTx = value.Trim(), hidden: input.Privacy))
+                card.Add(form.Field("Proof key", proofKey, value -> proofKey = value.Trim(), hidden: input.Privacy))
+                card.Add(
+                    form.Field("Address", proofAddress, value -> proofAddress = value.Trim(), hidden: input.Privacy)
+                )
+                card.Add(form.Field("Amount", proofAmount, value -> proofAmount = value.Trim(), hidden: input.Privacy))
             } else {
-                card.Add(Field(input, "Address", signer, value -> signer = value.Trim(), verify))
-                card.Add(Field(input, "Message", message, value -> message = value, verify))
-                card.Add(Field(input, "Signature", signature, value -> signature = value.Trim(), verify))
-            }
-            let blank = if tab == "proof" {
-                proofTx.Length == 0 || proofKey.Length == 0 || proofAddress.Length == 0 || proofAmount.Length == 0
-            } else {
-                signer.Length == 0 || message.Length == 0 || signature.Length == 0
+                card.Add(form.Field("Address", signer, value -> signer = value.Trim()))
+                card.Add(form.Field("Message", message, value -> message = value))
+                card.Add(form.Field("Signature", signature, value -> signature = value.Trim()))
             }
             let result = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexGrow: 1}
             if let valid = verdict {
@@ -1089,7 +1103,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 result.Add(MaterialIcons.Create(valid ? "check_circle": "cancel", 18, color))
                 result.Add(ui.Label(ui.Strings.Get(valid ? "Valid": "Invalid"), 14, color, ""))
             }
-            card.Add(ui.ActionRow([]Blob{result, ui.Button("Verify", verify, input.Busy || blank, true)}))
+            card.Add(ui.ActionRow([]Blob{result, ui.Button("Verify", form.Submit, !form.CanSubmit, true)}))
         }
         return card
     }
@@ -1281,23 +1295,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         verdictRun += 1
     }
 
-    private func Field(input ToolsInput, label string, value string, changed Action[string], submit Action) Blob ->
-    input.Ui.Field(
-        label,
-        value,
-        text -> {
-            changed(text)
-            ResetVerdict()
-            Rebuild()
-        },
-        submit,
-        hidden: input.Privacy && input.State.Tab == "proof"
-    )
-
     private func Sign(input ToolsInput) {
-        if input.Busy || message.Length == 0 {
-            return
-        }
         var task Task[string]
         input.Ui.Run(
             ct -> {
@@ -1309,9 +1307,6 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     }
 
     private func Verify(input ToolsInput, tab string) {
-        if input.Busy {
-            return
-        }
         ResetVerdict()
         let run = verdictRun
         var task Task[bool]

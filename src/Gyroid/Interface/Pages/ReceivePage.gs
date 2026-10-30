@@ -287,6 +287,7 @@ class ReceivePage : Cell[ReceivePageInput] {
             )
         }
         let card = ui.Glass()
+        let form = WalletForm(ui, false, nil, []string{})
         card.Width = Percent(100)
         card.MaxWidth = 900
         card.MaxHeight = Percent(100)
@@ -331,7 +332,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                 TextAlign: TextAlign.Right,
                                 FlexBasis: 0,
                                 MinWidth: 0,
-                                ui.Entry(
+                                form.Entry(
                                     TextField{
                                         AccessibilityName: ui.Strings.Get("Amount"),
                                         Placeholder: ui.Strings.Get("amount"),
@@ -356,7 +357,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                             ui.Grow(
                                 Container{
                                     MinWidth: 0,
-                                    ui.Entry(
+                                    form.Entry(
                                         TextField{
                                             AccessibilityName: ui.Strings.Get("Memo"),
                                             Placeholder: ui.Strings.Get("memo"),

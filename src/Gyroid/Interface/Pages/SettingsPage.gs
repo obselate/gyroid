@@ -500,6 +500,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func Startup(input SettingsPageInput, settings WalletSettings, value WalletSettings) Blob {
         let ui = input.Ui
+        let form = WalletForm(
+            ui,
+            !input.Busy && (value.StartupDiffers(settings) || settings.LoadError.Length > 0),
+            () -> SaveSettings(input),
+            []string{},
+            () -> Rebuild()
+        )
         let fields = Container{
             Gap: 14,
             FlexShrink: 0,
@@ -516,33 +523,26 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     Rebuild()
                 }
             ),
-            ui.Field(
-                "Node URL",
-                value.Endpoint,
-                text -> {
-                    value.Endpoint = text
-                    Rebuild()
-                },
-                disabled: Pinned("ENDPOINT")
-            ),
-            PathField(
-                input,
+            form.Field("Node URL", value.Endpoint, text -> value.Endpoint = text, disabled: Pinned("ENDPOINT")),
+            form.PathField(
                 "Data",
                 value.DataDirectory,
                 FileDialogKind.Folder,
                 text -> value.DataDirectory = text,
-                Pinned("DATA_DIR")
+                Pinned("DATA_DIR"),
+                input.ChooseFile,
+                input.Busy
             ),
-            PathField(
-                input,
+            form.PathField(
                 "Wallets",
                 value.WalletDirectory,
                 FileDialogKind.Folder,
                 text -> value.WalletDirectory = text,
-                Pinned("WALLET_DIR")
+                Pinned("WALLET_DIR"),
+                input.ChooseFile,
+                input.Busy
             ),
-            PathField(
-                input,
+            form.PathField(
                 "Node program",
                 value.BinaryPath,
                 FileDialogKind.OpenFile,
@@ -551,36 +551,26 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     programIssue = ""
                 },
                 Pinned("BINARY"),
+                input.ChooseFile,
+                input.Busy,
                 programIssue
             )
         }
         if input.Node.Source != "External" && settings.DataDirectory != settings.DiscoveredDataDirectory {
             fields.Add(
-                ui.Field(
+                form.Field(
                     "P2P address",
                     value.ListenAddress,
                     text -> {
                         value.ListenAddress = text
                         listenIssue = ""
-                        Rebuild()
                     },
                     issue: listenIssue,
                     disabled: Pinned("LISTEN")
                 )
             )
         }
-        fields.Add(
-            ui.ActionRow(
-                []Blob{
-                    ui.Button(
-                        "Save",
-                        () -> SaveSettings(input),
-                        input.Busy || !value.StartupDiffers(settings) && settings.LoadError.Length == 0,
-                        true
-                    )
-                }
-            )
-        )
+        fields.Add(ui.ActionRow([]Blob{ui.Button("Save", form.Submit, !form.CanSubmit, true)}))
         return fields
     }
 
@@ -1147,15 +1137,17 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         if let keys = viewKeys {
             return Keys(input, keys)
         }
-        let submit Action = () -> Reveal(input)
+        let form = WalletForm(ui, !input.Busy, () -> Reveal(input), []string{password})
         let title = dialog == "phrase" ? "recovery phrase": "view keys"
-        return Modal(
-            input,
+        return WalletForm.Modal(
+            ui,
+            input.Window,
+            input.Width,
             "password",
             title,
             420,
             ui.Label(ui.Strings.Get(title), 17, ui.Ink, ""),
-            ui.Field(
+            form.Field(
                 "Password",
                 password,
                 value -> {
@@ -1163,21 +1155,15 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     passwordIssue = ""
                     Rebuild()
                 },
-                submit,
                 true,
                 passwordIssue
             ),
-            ui.ActionRow(
-                []Blob{ui.Button("Cancel", close), ui.Button("Show", submit, input.Busy || password.Length == 0, true)}
-            ),
+            ui.ActionRow([]Blob{ui.Button("Cancel", close), ui.Button("Show", form.Submit, !form.CanSubmit, true)}),
             close
         )
     }
 
     private func Reveal(input SettingsPageInput) {
-        if input.Busy || password.Length == 0 {
-            return
-        }
         let buffer = password.ToCharArray()
         password = ""
         if dialog == "phrase" {
@@ -1233,8 +1219,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             }
         }
-        return Modal(
-            input,
+        return WalletForm.Modal(
+            ui,
+            input.Window,
+            input.Width,
             "keys",
             "view keys",
             640,
@@ -1349,7 +1337,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private func ViewOnly(input SettingsPageInput, settings WalletSettings) Blob {
         let ui = input.Ui
         let close Action = () -> Close()
-        let submit Action = () -> CreateViewOnly(input)
+        let form = WalletForm(
+            ui,
+            !input.Busy,
+            () -> CreateViewOnly(input),
+            []string{viewOnlyName.Trim(), password, viewOnlyPassword}
+        )
         let content = Container{Gap: 14}
         let actions = List[Blob]()
         if viewOnlyCreated.Length > 0 {
@@ -1379,26 +1372,23 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 }
             )
             content.Add(
-                Labelled(
-                    ui,
+                form.Labelled(
                     "file name",
-                    ui.Field(
+                    form.Field(
                         "file name",
                         viewOnlyName,
                         value -> {
                             viewOnlyName = value
                             Rebuild()
                         },
-                        submit,
                         labelled: false
                     )
                 )
             )
             content.Add(
-                Labelled(
-                    ui,
+                form.Labelled(
                     "new password",
-                    ui.Field(
+                    form.Field(
                         "new password",
                         viewOnlyPassword,
                         value -> {
@@ -1406,7 +1396,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                             passwordIssue = ""
                             Rebuild()
                         },
-                        submit,
                         true,
                         passwordIssue,
                         labelled: false
@@ -1414,13 +1403,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             )
             content.Add(
-                Labelled(ui, "", ui.Label(ui.Strings.Get("Must differ from this wallet's password"), 12, ui.Dim, ""))
+                form.Labelled("", ui.Label(ui.Strings.Get("Must differ from this wallet's password"), 12, ui.Dim, ""))
             )
             content.Add(
-                Labelled(
-                    ui,
+                form.Labelled(
                     "this wallet",
-                    ui.Field(
+                    form.Field(
                         "this wallet",
                         password,
                         value -> {
@@ -1428,7 +1416,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                             passwordIssue = ""
                             Rebuild()
                         },
-                        submit,
                         true,
                         labelled: false
                     )
@@ -1446,20 +1433,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 }
             )
             actions.Add(ui.Button("Cancel", close))
-            actions.Add(
-                ui.Button(
-                    "Create",
-                    submit,
-                    input.Busy || viewOnlyName.Trim()
-                        .Length == 0 ||
-                        password.Length == 0 ||
-                        viewOnlyPassword.Length == 0,
-                    true
-                )
-            )
+            actions.Add(ui.Button("Create", form.Submit, !form.CanSubmit, true))
         }
-        return Modal(
-            input,
+        return WalletForm.Modal(
+            ui,
+            input.Window,
+            input.Width,
             "view-only",
             "create view-only wallet",
             620,
@@ -1496,20 +1475,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         return box
     }
 
-    private func Labelled(ui Presentation, label string, field Blob) Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        Gap: 10,
-        FlexShrink: 0,
-        Container{Width: 130, FlexShrink: 0, ui.Label(label.Length > 0 ? ui.Strings.Get(label): "", 12.5, ui.Body, "")},
-        ui.Grow(Container{MinWidth: 0, field})
-    }
-
     private func CreateViewOnly(input SettingsPageInput) {
         let filename = viewOnlyName.Trim()
-        if input.Busy || filename.Length == 0 || password.Length == 0 || viewOnlyPassword.Length == 0 {
-            return
-        }
         let candidate = viewOnlyPassword.ToCharArray()
         passwordIssue = if password == viewOnlyPassword {
             "View-only file password must differ from the wallet password"
@@ -1562,8 +1529,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let close Action = () -> Close()
         if purging {
-            return Modal(
-                input,
+            return WalletForm.Modal(
+                ui,
+                input.Window,
+                input.Width,
                 "purging",
                 "purging",
                 620,
@@ -1631,6 +1600,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 ui.Run(ct -> PurgeData(input.Session, ct))
             }
         }
+        let form = WalletForm(ui, typed && !input.Busy, confirm, []string{})
         let footer = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
@@ -1640,14 +1610,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Width: 220,
                 FlexShrink: 1,
                 MinWidth: 80,
-                ui.Field(
+                form.Field(
                     "type purge",
                     purgeText,
                     value -> {
                         purgeText = value
                         Rebuild()
                     },
-                    confirm,
                     labelled: false
                 )
             }
@@ -1662,14 +1631,16 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Theme.Read()
                     .DangerButton with{
                     Content = ui.Strings.Get("Purge {0}").Replace("{0}", size),
-                    OnClick = confirm,
-                    Disabled = !typed || input.Busy,
+                    OnClick = form.Submit,
+                    Disabled = !form.CanSubmit,
                     FontFamily = ui.Font
                 }
             ).Build()
         )
-        return Modal(
-            input,
+        return WalletForm.Modal(
+            ui,
+            input.Window,
+            input.Width,
             "purge",
             "purge chain data",
             640,
@@ -1780,37 +1751,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             }
         )
     }
-
-    private func Modal(
-        input SettingsPageInput,
-        key string,
-        name string,
-        width float64,
-        header Blob,
-        content Blob,
-        footer Blob,
-        close Action
-    ) Blob -> Cell
-        .Mount[ModalDialog, ModalDialogHost](
-        key,
-        ModalDialog{
-            Open: true,
-            CreateRoot: input.Ui.DialogRoot,
-            KeyBindings: WidgetKeyBindings.Editing(input.Window?.PlatformInput),
-            AccessibilityName: input.Ui.Strings.Get(name),
-            Width: Math.Min(input.Width - 40, width),
-            MaxHeight: Percent(100),
-            Padding: 22,
-            Gap: 14,
-            BackgroundColor: input.Ui.Raised,
-            BorderRadius: 14,
-            Header: header,
-            Content: content,
-            Footer: footer,
-            OnCancel: close,
-            OnClose: close
-        }
-    )
 
     private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
         input.Ui.Run(ct -> input.Session.SavePreferenceAsync(change, ct), input.OnPreference)
@@ -1955,58 +1895,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Ui: input.Ui
         }
     )
-
-    private func PathField(
-        input SettingsPageInput,
-        label string,
-        current string,
-        kind FileDialogKind,
-        changed Action[string],
-        disabled bool,
-        issue string = ""
-    ) Blob {
-        let ui = input.Ui
-        return Container{
-            Gap: Theme.Read().ControlGap,
-            FlexShrink: 0,
-            ui.Label(ui.Strings.Get(label), Theme.Read().LabelFontSize, ui.Body, ""),
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.FlexStart,
-                Gap: 8,
-                FlexShrink: 0,
-                ui.Grow(
-                    Container{
-                        MinWidth: 0,
-                        ui.Field(
-                            label,
-                            current,
-                            text -> {
-                                changed(text)
-                                Rebuild()
-                            },
-                            issue: issue,
-                            disabled: disabled,
-                            labelled: false
-                        )
-                    }
-                ),
-                ui.Button(
-                    "Browse",
-                    () -> input.ChooseFile.Invoke(
-                        kind,
-                        label,
-                        Path.IsPathFullyQualified(current) ? current: Home(),
-                        path -> {
-                            changed(path)
-                            Rebuild()
-                        }
-                    ),
-                    disabled || input.Busy
-                )
-            }
-        }
-    }
 
     private func Pinned(variable string) bool -> Environment.GetEnvironmentVariable("GYROID_" + variable) != nil
 

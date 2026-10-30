@@ -632,45 +632,6 @@ class Presentation {
         }
     }
 
-    func Field(
-        label string,
-        value string,
-        changed Action[string],
-        submit Action? = nil,
-        secret bool = false,
-        issue string = "",
-        disabled bool = false,
-        labelled bool = true,
-        hidden bool = false
-    ) Blob -> TextField{
-        Label: if labelled {
-            Strings.Get(label)
-        } else {
-            nil
-        },
-        AccessibilityName: Strings.Get(label),
-        Value: value,
-        Controlled: true,
-        Password: secret || hidden,
-        RevealButton: secret,
-        IssueText: if issue.Length > 0 {
-            Strings.Explain(issue)
-        } else {
-            nil
-        },
-        Invalid: issue.Length > 0,
-        Disabled: disabled || Working(),
-        Width: Percent(100),
-        FontFamily: Font,
-        ContentDirection: Direction.LeftToRight,
-        OnChange: changed,
-        OnSubmit: _ -> {
-            if !Working() {
-                submit?.Invoke()
-            }
-        }
-    }.Build()
-
     func Entry(field TextField) Blob -> (
         field with{
             Width = Percent(100),

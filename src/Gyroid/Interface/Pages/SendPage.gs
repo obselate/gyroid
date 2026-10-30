@@ -44,7 +44,7 @@ data struct SendPageInput {
 class SendPage : Cell[SendPageInput] {
     private var rows List[SendRow]
     private var reviewFocus bool
-    private var reviewable bool
+    private var form WalletForm
 
     private var estimate SendEstimate?
 
@@ -71,7 +71,7 @@ class SendPage : Cell[SendPageInput] {
             ready = ready && atoms != nil && Kind(input, row.Address).Length > 0 && ui.MemoIssue(row.Memo).Length == 0
         }
         let over = total > spendable
-        reviewable = ready && !over && total > 0
+        form = WalletForm(ui, ready && !over && total > 0, () -> Review(input), []string{})
         let card = ui.Glass()
         card.Width = Percent(100)
         card.MaxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
@@ -127,7 +127,7 @@ class SendPage : Cell[SendPageInput] {
                 )
             }
         )
-        let review = ui.Button("Review", () -> Review(input), !reviewable, true, reviewFocus)
+        let review = ui.Button("Review", form.Submit, !form.CanSubmit, true, reviewFocus)
         reviewFocus = false
         review.MinWidth = 140
         let addRecipient = Goo
@@ -234,7 +234,7 @@ class SendPage : Cell[SendPageInput] {
     private func Amount(input SendPageInput, over bool, size float64) Blob {
         let ui = input.Ui
         let row = rows[0]
-        return (
+        return form.Bind(
             TextField{
                 AccessibilityName: ui.Strings.Get("Amount"),
                 Value: row.Amount,
@@ -254,10 +254,10 @@ class SendPage : Cell[SendPageInput] {
                 OnChange: value -> {
                     row.Amount = value.Trim()
                     Rebuild()
-                },
-                OnSubmit: _ -> Review(input)
+                }
             }
-        ).Build()
+        )
+            .Build()
     }
 
     private func Fill(atoms uint64) {
@@ -328,7 +328,7 @@ class SendPage : Cell[SendPageInput] {
                     Width: 150,
                     TextAlign: TextAlign.Right,
                     FlexShrink: 0,
-                    ui.Entry(
+                    form.Entry(
                         TextField{
                             AccessibilityName: ui.Strings.Get("Amount") + " " + (index + 1).ToString(),
                             Value: row.Amount,
@@ -340,8 +340,7 @@ class SendPage : Cell[SendPageInput] {
                             OnChange: value -> {
                                 row.Amount = value.Trim()
                                 Rebuild()
-                            },
-                            OnSubmit: _ -> Review(input)
+                            }
                         }
                     )
                 },
@@ -433,7 +432,7 @@ class SendPage : Cell[SendPageInput] {
         let field = Container{
             MinWidth: 0,
             Handle: row.Anchor,
-            ui.Entry(
+            form.Entry(
                 TextField{
                     AccessibilityName: ui.Strings.Get("Recipient"),
                     Placeholder: ui.Strings.Get("address, contact or $$id"),
@@ -458,8 +457,7 @@ class SendPage : Cell[SendPageInput] {
                         row.Address = value
                         row.Suggest = true
                         Rebuild()
-                    },
-                    OnSubmit: _ -> Review(input)
+                    }
                 }
             )
         }
@@ -539,7 +537,7 @@ class SendPage : Cell[SendPageInput] {
     private func MemoField(input SendPageInput, row SendRow) Blob {
         let ui = input.Ui
         let issue = ui.MemoIssue(row.Memo)
-        return ui.Entry(
+        return form.Entry(
             TextField{
                 AccessibilityName: ui.Strings.Get("Memo"),
                 Value: row.Memo,
@@ -582,8 +580,7 @@ class SendPage : Cell[SendPageInput] {
                 OnChange: value -> {
                     row.Memo = value
                     Rebuild()
-                },
-                OnSubmit: _ -> Review(input)
+                }
             }
         )
     }
@@ -899,9 +896,6 @@ class SendPage : Cell[SendPageInput] {
     }
 
     private func Review(input SendPageInput) {
-        if !reviewable {
-            return
-        }
         let requests = rows.Select(
             (row SendRow) -> WalletRecipient{
                 Address: if input.Contacts.TryGetValue(row.Address.Trim(), out let destination) {
