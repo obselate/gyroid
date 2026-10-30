@@ -322,15 +322,26 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: 10,
-            Disabled: input.Busy || loaded && !active,
+            Disabled: input.Busy || loaded && input.State != WalletState.Locked && !active,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
             OnClick: () -> {
-                opened = expanded ? "": filename
-                password = ""
-                reveal = false
-                issue = ""
-                Rebuild()
+                if ui.Working() {
+                    return
+                }
+                let chooseWallet = () -> {
+                    state = input.Session.State
+                    opened = expanded ? "": filename
+                    password = ""
+                    reveal = false
+                    issue = ""
+                    Rebuild()
+                }
+                if input.Session.State == WalletState.Locked && !active {
+                    ui.Run(ct -> input.Session.UnloadAsync(ct), chooseWallet)
+                } else {
+                    chooseWallet()
+                }
             },
             Container{
                 Width: 10,
@@ -345,7 +356,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                     14,
                     if active {
                         ui.Mint
-                    } else if loaded {
+                    } else if loaded && input.State != WalletState.Locked {
                         ui.Dim
                     } else {
                         ui.Ink
