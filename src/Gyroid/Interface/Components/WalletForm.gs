@@ -34,11 +34,7 @@ class WalletForm {
             return
         }
         if let value = password {
-            let secret = value.ToCharArray()
-            let again = (confirmation ?? "").ToCharArray()
-            let issue = WalletValidation.PasswordError(secret, again)
-            Array.Clear(secret)
-            Array.Clear(again)
+            let issue = WalletValidation.PasswordError(value.AsSpan(), (confirmation ?? "").AsSpan())
             passwordIssue?.Invoke(issue)
             if issue.Length > 0 {
                 return

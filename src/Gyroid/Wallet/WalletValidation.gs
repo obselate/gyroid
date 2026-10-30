@@ -166,7 +166,7 @@ class WalletValidation {
             return WalletRecipient{Address: destination, Amount: atoms, Memo: memo}
         }
 
-        func PasswordError(password[]char, confirmation[]char) string {
+        func PasswordError(password ReadOnlySpan[char], confirmation ReadOnlySpan[char]) string {
             if password.Length < 3 {
                 return "Password must contain at least 3 characters"
             }
