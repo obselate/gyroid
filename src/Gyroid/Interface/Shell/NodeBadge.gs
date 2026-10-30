@@ -167,6 +167,16 @@ partial class App {
             card.Add(readings)
         }
         if status.UpgradeDate.Length > 0 {
+            let upgradeDate = Container{
+                FlexDirection: FlexDirection.Row,
+                JustifyContent: JustifyContent.SpaceBetween,
+                ui.Label(status.UpgradeDate, 14, ui.Ink, "")
+            }
+            if !status.Syncing {
+                upgradeDate.Add(
+                    ui.Label(ui.Count(status.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Orange, "")
+                )
+            }
             card.Add(Container{Height: 1, BackgroundColor: ui.Rule})
             card.Add(
                 Container{
@@ -187,12 +197,7 @@ partial class App {
                         }.Build()
                     },
                     ui.UpgradeTimeline(status, 294),
-                    Container{
-                        FlexDirection: FlexDirection.Row,
-                        JustifyContent: JustifyContent.SpaceBetween,
-                        ui.Label(status.UpgradeDate, 14, ui.Ink, ""),
-                        ui.Label(ui.Count(status.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Orange, "")
-                    }
+                    upgradeDate
                 }
             )
         }

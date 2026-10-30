@@ -356,7 +356,9 @@ class OverviewPage : Cell[OverviewInput] {
                 }
             }
         )
-        bar.Add(ui.Label(ui.Count(node.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Ink, ""))
+        if !node.Syncing {
+            bar.Add(ui.Label(ui.Count(node.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Ink, ""))
+        }
         bar.Add(
             IconButton{
                 Icon: MaterialIcons.Create("info", 16, ui.Body),
