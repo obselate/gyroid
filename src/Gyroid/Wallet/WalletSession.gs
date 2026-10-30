@@ -642,11 +642,15 @@ class WalletSession : IDisposable {
 
     async func RefreshStatusAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct, false)
+        let previous = snapshot
         let node = Node.Status
         try {
             await Node.RefreshStatusAsync(ct)
+            if state == WalletState.Unlocked && snapshot.Balance?.Scanning == true {
+                await RefreshCoreAsync(ct)
+            }
         } finally {
-            End(!Node.Status.Matches(node))
+            End(!snapshot.Matches(previous) || !Node.Status.Matches(node))
         }
     }
 

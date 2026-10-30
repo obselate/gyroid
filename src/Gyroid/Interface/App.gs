@@ -259,7 +259,7 @@ partial class App : Cell {
             toolsState.Report = nil
             sendRows.Clear()
         }
-        if node.Syncing || node.Running && (node.Peers == 0 || node.Height == 0) {
+        if !node.Running || node.Syncing || node.Peers == 0 || node.Height == 0 || snapshot.Balance?.Scanning == true {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
         } else {
             statusTimer?.Dispose()

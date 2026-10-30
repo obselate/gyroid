@@ -142,8 +142,13 @@ class NodeSession : IDisposable {
                 heightChanged = Stopwatch.GetTimestamp()
             }
             if !current.Syncing && (current.Height != Status.Height || current.LastBlockTime == 0) {
-                using let block = await Api.JsonAsync("block/" + current.Height.ToString(), ct: ct)
-                current.LastBlockTime = int64(NodeJson.Number(block.RootElement, "timestamp"))
+                current.LastBlockTime = 0
+                try {
+                    using let block = await Api.JsonAsync("block/" + current.Height.ToString(), ct: ct)
+                    current.LastBlockTime = int64(NodeJson.Number(block.RootElement, "timestamp"))
+                } catch (error OperationCanceledException) when ct.IsCancellationRequested {
+                    throw error
+                } catch (error Exception) { }
             }
             Status = current
         } catch (error Exception) {
