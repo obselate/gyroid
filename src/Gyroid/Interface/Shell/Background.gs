@@ -25,8 +25,6 @@ import System.Threading.Tasks
 partial class App {
     private var frameTimer WindowTimer?
 
-    private var lastActivity int64 = Stopwatch.GetTimestamp()
-
     private let clock Stopwatch = Stopwatch.StartNew()
 
     private let background ShaderEffect
@@ -47,9 +45,7 @@ partial class App {
 
     private func PlaybackActive() bool ->
     !reduceMotion && !hidden && window?.IsFocused == true && window?.IsVisible == true
-    &&
-        window?.State != WindowState.Minimized &&
-        (ui.Operations > 0 || Stopwatch.GetElapsedTime(lastActivity).TotalSeconds < 10)
+    && window?.State != WindowState.Minimized
 
     private func UpdatePlayback() {
         let active = PlaybackActive()
@@ -71,20 +67,7 @@ partial class App {
         }
     }
 
-    private func ResumePlayback() {
-        lastActivity = Stopwatch.GetTimestamp()
-        if frameTimer == nil {
-            UpdatePlayback()
-            Rebuild()
-        }
-    }
-
     private func Tick() {
-        if ui.Operations == 0 && Stopwatch.GetElapsedTime(lastActivity).TotalSeconds >= 10 {
-            UpdatePlayback()
-            Rebuild()
-            return
-        }
         let now = clock.Elapsed.TotalSeconds
         Scene((now - background.ElapsedSeconds) / 1.2)
         background.ElapsedSeconds = now

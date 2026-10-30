@@ -206,10 +206,7 @@ partial class App : Cell {
             UpdatePlayback()
             Rebuild()
         }
-        owner.FocusChanged += focused -> {
-            if focused {
-                lastActivity = Stopwatch.GetTimestamp()
-            }
+        owner.FocusChanged += _ -> {
             UpdatePlayback()
             Rebuild()
         }
@@ -247,7 +244,6 @@ partial class App : Cell {
 
     private func Touch() {
         wallet.Touch()
-        ResumePlayback()
     }
 
     private func Resize(owner Window) {
@@ -270,7 +266,6 @@ partial class App : Cell {
             statusTimer = nil
         }
         if snapshot.State != lastState {
-            ResumePlayback()
             ClearSeed()
             upgradeShown = false
             screen = AppPage.None
@@ -432,7 +427,6 @@ partial class App : Cell {
 
     private func Run(task Func[CancellationToken, Task], done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
         ui.Operations++
-        UpdatePlayback()
         error = ""
         Rebuild()
         workers.Writer.TryWrite(WindowWork((ct CancellationToken) -> Complete(task, done, secret, extra, ct)))
@@ -469,7 +463,6 @@ partial class App : Cell {
         window?.TryPost(
             () -> {
                 ui.Operations--
-                UpdatePlayback()
                 if unknown {
                     screen = if wallet.Snapshot.State == WalletState.Unlocked {
                         AppPage.Send
