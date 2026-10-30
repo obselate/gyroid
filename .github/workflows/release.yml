@@ -21,10 +21,10 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.401
+          dotnet-version: 10.0.403
           cache: true
           cache-dependency-path: src/Gyroid/packages.lock.json
-      - run: dotnet new globaljson --sdk-version 10.0.401 --roll-forward disable --force
+      - run: dotnet new globaljson --sdk-version 10.0.403 --roll-forward disable --force
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ runner.temp }}/vulkan-sdk
@@ -50,10 +50,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.401
+          dotnet-version: 10.0.403
           cache: true
           cache-dependency-path: src/Gyroid/packages.win-x64.lock.json
-      - run: dotnet new globaljson --sdk-version 10.0.401 --roll-forward disable --force
+      - run: dotnet new globaljson --sdk-version 10.0.403 --roll-forward disable --force
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ runner.temp }}/vulkan-sdk
