@@ -59,7 +59,6 @@ partial class App {
             messagesState.ConversationId = reference.ConversationId
             messagesState.MessageId = reference.MessageId
             messagesState.Request++
-            messageDrawer = false
             messageToast = nil
             Open(AppPage.Messages)
         }
@@ -74,10 +73,7 @@ partial class App {
             Contacts: contacts,
             Width: drawer ? Math.Min(480.0, width - 112): width - 122,
             Drawer: drawer,
-            OnOpen: () -> {
-                messageDrawer = false
-                Open(AppPage.Messages)
-            },
+            OnOpen: () -> Open(AppPage.Messages),
             OnClose: () -> {
                 messageDrawer = false
                 wallet.Messages.ClearSelection()

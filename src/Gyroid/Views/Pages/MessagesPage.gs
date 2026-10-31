@@ -126,7 +126,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             messageKeys.Clear()
             detail = nil
             if let current = conversation {
-                ui.Actions.Background(ct -> Execute(input, token -> service.Select(current, token), nil, ct))
+                ui.Actions.Background(ct -> service.Select(current, ct))
             }
         }
         let root = Container{
@@ -691,12 +691,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         let content = Container{
             Gap: 12,
             Label(ui, message.SentAt.ToLocalTime().ToString("g"), 12, ui.Dim, ""),
-            Figure(
-                ui,
-                "fee",
-                Hidden(ui.Privacy, (message.FeeAtomic / 100000000.0).ToString("0.00000000") + " BNT"),
-                ui.Ink
-            ),
+            Figure(ui, "fee", Amount(ui.Privacy, uint64(message.FeeAtomic)) + " BNT", ui.Ink),
             Figure(ui, "memos", message.Outputs.ToString(), ui.Ink),
             Figure(ui, "Confirmed", message.Confirmations.ToString() + "/10", ui.Ink),
             Label(

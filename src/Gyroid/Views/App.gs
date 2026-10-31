@@ -431,11 +431,11 @@ partial class App : Cell {
 
     private func Open(target AppPage) {
         upgradeShown = false
-        if target != AppPage.Messages && !messageDrawer {
-            wallet.Messages.ClearSelection()
-        }
         if target == AppPage.Messages {
+            messageDrawer = false
             LoadContacts()
+        } else if !messageDrawer {
+            wallet.Messages.ClearSelection()
         }
         if target != AppPage.Seed {
             ClearSeed()
