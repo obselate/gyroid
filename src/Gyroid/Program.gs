@@ -7,6 +7,7 @@ import Gyroid.Services
 import Gyroid.Views
 import System
 import System.Globalization
+import System.Linq
 import System.Reflection
 import System.Runtime.InteropServices
 import System.Threading
@@ -27,7 +28,10 @@ func Main() {
         Environment.ExitCode = WalletLockScheduler.Run()
         return
     }
-    if arguments.Length > 1 && arguments[1] != "--width" && arguments[1] != "--height" && arguments[1] != "--scale" {
+    if arguments.Length > 1 && !arguments[1].StartsWith("blocknet://", StringComparison.OrdinalIgnoreCase) &&
+        arguments[1] != "--width" &&
+        arguments[1] != "--height" &&
+        arguments[1] != "--scale" {
         using let stopped = ManualResetEventSlim(false)
         var wallet WalletSession? = nil
         let nodeStart = arguments.Length == 3 && arguments[1] == "node" && arguments[2] == "start"
@@ -66,6 +70,10 @@ func Main() {
     var index = 1
     while index < arguments.Length {
         let name = arguments[index]
+        if name.StartsWith("blocknet://", StringComparison.OrdinalIgnoreCase) {
+            index += 1
+            continue
+        }
         if (name != "--width" && name != "--height" && name != "--scale") ||
             index +
             1 >= arguments.Length ||
@@ -88,13 +96,12 @@ func Main() {
         (version?.InformationalVersion ?? "unknown").Split('+')[0],
         "dev.gyroid.wallet"
     )
+    PaymentLinkRegistration.Register()
     var activationTarget App? = nil
     Window.ApplicationActivated += request -> {
-        if !request.IsInitial {
-            activationTarget?.Restore()
-        }
+        activationTarget?.Activate(request)
     }
-    let initial = ApplicationActivation{IsInitial: true}
+    let initial = ApplicationActivation{IsInitial: true, Arguments: arguments.Skip(1).ToArray()}
     Window.InitializeApplicationActivation(initial)
     let instance = SingleInstance.AcquireAsync("dev.gyroid.wallet", initial).GetAwaiter().GetResult()
     if instance.Status != SingleInstanceStatus.Primary {

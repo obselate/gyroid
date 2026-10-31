@@ -439,8 +439,16 @@ class SendPage : Cell[SendPageInput] {
                     },
                     Trailing: trailing,
                     OnChange: value -> {
-                        row.Address = value
-                        row.Suggest = true
+                        if let payment = PaymentLink.Parse(value) {
+                            row.Address = payment.Address
+                            row.Amount = payment.Amount
+                            row.Memo = payment.Memo
+                            row.MemoOpen = payment.Memo.Length > 0
+                            row.Suggest = false
+                        } else {
+                            row.Address = value
+                            row.Suggest = true
+                        }
                         Rebuild()
                     }
                 }

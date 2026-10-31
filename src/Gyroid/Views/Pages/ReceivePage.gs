@@ -244,6 +244,12 @@ class ReceivePage : Cell[ReceivePageInput] {
         )
         field.MinHeight = 72
         field.Accessibility = Accessibility{Role: AccessibilityRole.Status}
+        if shown == "link" {
+            field.Accessibility = Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Copy link")}
+            field.Disabled = input.Busy || amountIssue.Length > 0 || memoIssue.Length > 0
+            field.OnClick = () -> ui.Actions.Copy(payload, 120000)
+            WidgetKeyBindings.BindActivation(field)
+        }
         let action = if paid != nil {
             Action(
                 input,

@@ -40,6 +40,8 @@ partial class App : Cell {
 
     private let receiveRequest ReceiveRequest = ReceiveRequest()
     private let sendRows List[SendRow] = List[SendRow]()
+    private var pendingPayment PaymentLink?
+    private var paymentRevision int32
 
     private let miningHistory MiningHistory = MiningHistory()
     private let toolsState ToolsState = ToolsState()
@@ -186,6 +188,46 @@ partial class App : Cell {
         LoadContacts()
     }
 
+    func Activate(request ApplicationActivation) {
+        let values = if let target = request.Target {
+            []string{target.OriginalString}
+        } else {
+            request.Arguments
+        }
+        for value in values {
+            if let payment = PaymentLink.Parse(value) {
+                pendingPayment = payment
+                ApplyPayment()
+                break
+            }
+        }
+        if !request.IsInitial {
+            Restore()
+        }
+    }
+
+    private func ApplyPayment() {
+        if wallet.Snapshot.State != WalletState.Unlocked {
+            return
+        }
+        guard let payment = pendingPayment else {
+            return
+        }
+        sendRows.Clear()
+        sendRows.Add(
+            SendRow{
+                Address: payment.Address,
+                Amount: payment.Amount,
+                Memo: payment.Memo,
+                MemoOpen: payment.Memo.Length > 0
+            }
+        )
+        pendingPayment = nil
+        paymentRevision += 1
+        screen = AppPage.Send
+        Rebuild()
+    }
+
     func Attach(owner Window) {
         window = owner
         ui.Attach(owner)
@@ -329,6 +371,7 @@ partial class App : Cell {
             ui.Actions.Decode("page")
             lastState = snapshot.State
         }
+        ApplyPayment()
         let heights = if let value = snapshot.Balance {
             value.ScanHeight.ToString() + " " + value.ChainHeight.ToString()
         } else {
@@ -754,7 +797,7 @@ partial class App : Cell {
                 PendingSendCard()
             } else {
                 Cell.Mount[SendPageInput, SendPage](
-                    "send",
+                    "send-" + paymentRevision.ToString(),
                     SendPageInput{
                         Session: wallet,
                         Rows: sendRows,
