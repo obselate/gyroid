@@ -18,6 +18,10 @@ class SendService {
 
     prop Pending PendingSend? -> store.Pending
     prop Error string -> store.Error
+    prop CanSplitOutputs bool -> session
+        .Node
+        .Status
+        .Height >= (session.settings.Network == "testnet" ? uint64(375): uint64(6500))
 
     init(session WalletSession) {
         this.session = session
@@ -419,6 +423,9 @@ class SendService {
     }
 
     async func EstimatePreparationAsync(ct CancellationToken) SendEstimate {
+        if !CanSplitOutputs {
+            throw WalletException("Output splitting unavailable")
+        }
         let address = session.Snapshot.Address
         let others = [7]WalletRecipient
         for index in 0 ... others.Length {
@@ -458,6 +465,9 @@ class SendService {
     }
 
     async func SplitChangeAsync(body string, ct CancellationToken) string {
+        if !CanSplitOutputs {
+            return body
+        }
         using let estimate = await EstimateBodyAsync(body, ct)
         let root = estimate.RootElement
         if NodeJson.Number(root, "change") < 400000000 {
