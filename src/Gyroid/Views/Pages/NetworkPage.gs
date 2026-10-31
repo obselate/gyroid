@@ -54,6 +54,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     }
 
     protected override func Build(input NetworkInput) Blob {
+        report = input.Session.Node.Network
         worker ??= RunWorkerAsync(input.Ui, input.Window, Context.FromToken(shutdown.Token))
         let ui = input.Ui
         let node = input.Node
