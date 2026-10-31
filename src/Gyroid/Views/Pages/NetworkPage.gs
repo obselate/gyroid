@@ -56,24 +56,6 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         worker ??= RunWorkerAsync(input.Ui, input.Window, Context.FromToken(shutdown.Token))
         let ui = input.Ui
         let node = input.Node
-        if node.Running && (node.Peers == 0 || node.Syncing && node.ChainHeight > node.Height + 2) {
-            return Container{
-                FlexGrow: 1,
-                FlexBasis: 0,
-                MinHeight: 0,
-                Cell.Mount[SyncInput, SyncPage](
-                    "sync",
-                    SyncInput{
-                        Ui: ui,
-                        Node: node,
-                        Language: input.Language,
-                        Width: input.Width - 126,
-                        Height: input.Height,
-                        Fill: true
-                    }
-                )
-            }
-        }
         if node.Running && loaded != node && !loading {
             loading = true
             loaded = node
@@ -700,18 +682,21 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 BorderWidth: Edges{Top: 1},
                 BorderColor: ui.Rule,
                 Label(ui, ui.Strings.Get("This node"), 12.5, ui.Body, ""),
-                Label(
-                    ui,
-                    if identity.Length < 10 {
-                        identity
-                    } else if revealed {
-                        Short(identity)
-                    } else {
-                        identity.Substring(0, 4) + "…••••••"
-                    },
-                    12.5,
-                    ui.Ink,
-                    ""
+                Grow(
+                    Text{
+                        Content:
+                        if identity.Length < 10 {
+                            identity
+                        } else if revealed {
+                            identity
+                        } else {
+                            identity.Substring(0, 4) + "…••••••"
+                        },
+                        FontFamily: ui.Font,
+                        FontSize: 12.5,
+                        Color: ui.Ink,
+                        TextWrap: TextWrap.Wrap
+                    }
                 ),
                 Label(
                     ui,
@@ -724,6 +709,13 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     ""
                 ),
                 Container{FlexGrow: 1},
+                if revealed {
+                    IconButton{
+                        Icon: MaterialIcons.Create("content_copy", 15, ui.Body),
+                        AccessibilityName: ui.Strings.Get("Copy node ID"),
+                        OnClick: () -> ui.Actions.Copy(identity, 120000)
+                    }.Build()
+                },
                 IconButton{
                     Icon: MaterialIcons.Create(revealed ? "visibility_off": "visibility", 15, ui.Body),
                     AccessibilityName: ui.Strings.Get(revealed ? "Hide node ID": "Show node ID"),
@@ -956,7 +948,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         if ban.Permanent {
             Label(ui, ui.Strings.Get("permanent"), 12.5, ui.Pink, "")
         } else {
-            Label(ui, String.Format(ui.Strings.Get("until {0}"), Clock(ban.Expires)), 12.5, ui.Body, "")
+            Label(ui, String.Format(ui.Strings.Get("until {0}"), Time(ban.Expires)), 12.5, ui.Body, "")
         }
     }
 

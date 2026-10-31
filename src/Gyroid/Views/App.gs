@@ -751,6 +751,8 @@ partial class App : Cell {
                     Wallet: WalletName(wallet.Settings.ActiveWallet),
                     Language: ui.Strings.Language,
                     Busy: ui.Working(),
+                    Visible: !hidden && window?.IsVisible == true && window?.State != WindowState.Minimized,
+                    NodeRunning: wallet.Node.Status.Running,
                     Height: height
                 }
             )

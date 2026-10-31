@@ -19,6 +19,7 @@ class NodeSession : IDisposable {
     private var heightChanged int64
     private var listen string = ""
     private var maxOutbound uint64
+    private var coreVersion string = ""
 
     init(settings WalletSettings) {
         Settings = settings
@@ -43,6 +44,23 @@ class NodeSession : IDisposable {
         Settings = settings
         let endpoint = Settings.Endpoint
         await Supervisor.ConnectAsync(Settings, ct)
+        coreVersion = ""
+        if File.Exists(Supervisor.Executable) {
+            let start = ProcessStartInfo(Supervisor.Executable){
+                UseShellExecute: false,
+                RedirectStandardOutput: true,
+                CreateNoWindow: true
+            }
+            start.ArgumentList.Add("--version")
+            using let version = Process.Start(start)
+            if version != nil {
+                coreVersion = (await version.StandardOutput.ReadToEndAsync(ct)).Trim()
+                await version.WaitForExitAsync(ct)
+                if version.ExitCode != 0 {
+                    coreVersion = ""
+                }
+            }
+        }
         if endpoint != Settings.Endpoint {
             Reconnect()
         }
@@ -90,7 +108,7 @@ class NodeSession : IDisposable {
                 Source: Supervisor.Source,
                 Owned: Supervisor.Owned,
                 Running: true,
-                Version: NodeJson.Text(root, "version"),
+                Version: NodeJson.Text(root, "version") is "" ? coreVersion: NodeJson.Text(root, "version"),
                 Network: Settings.Network,
                 Height: NodeJson.Number(root, "chain_height"),
                 ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),

@@ -36,6 +36,8 @@ data struct MiningPageInput {
     var Language string
     var Busy bool
     var Height float64
+    var Visible bool
+    var NodeRunning bool
 }
 
 class MiningPage : Cell[MiningPageInput], IDisposable {
@@ -48,10 +50,28 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
     private var opened bool
 
     private var disposed bool
+    private var visible bool
+    private var unavailable bool
+    private var running bool
+    private var nodeRunning bool
 
     private var hover int32 = -1
 
     protected override func Build(input MiningPageInput) Blob {
+        let shown = input.Visible
+        let connected = input.NodeRunning
+        if nodeRunning != connected {
+            nodeRunning = connected
+            if opened && connected {
+                refreshRequested.Writer.TryWrite(true)
+            }
+        }
+        if visible != shown {
+            visible = shown
+            if opened && shown {
+                refreshRequested.Writer.TryWrite(true)
+            }
+        }
         if !opened {
             opened = true
             worker = RunWorkerAsync(input, Context.FromToken(shutdown.Token))
@@ -92,6 +112,10 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             )
         }
         card.Add(head)
+        if unavailable || !input.Session.Node.Status.Running {
+            card.Add(Label(ui, ui.Strings.Get("Node unavailable"), 14, ui.Body, ""))
+            return Container{FlexGrow: 1, AlignItems: AlignItems.Center, JustifyContent: JustifyContent.Center, card}
+        }
         if !status.Running {
             card.MaxWidth = 620
             card.Add(Setup(input))
@@ -181,10 +205,18 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
 
     private func Poll(input MiningPageInput, pageContext Context) {
         while !pageContext.IsCancelled {
-            await Load(input, pageContext)
-            select {
-                case <- refreshRequested { }
-                case <- after(TimeSpan.FromSeconds(5)) { }
+            if visible {
+                await Load(input, pageContext)
+            }
+            if visible && running {
+                select {
+                    case <- refreshRequested { }
+                    case <- after(TimeSpan.FromSeconds(5)) { }
+                }
+            } else {
+                select {
+                    case <- refreshRequested { }
+                }
             }
         }
     }
@@ -196,14 +228,20 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         } catch (failure OperationCanceledException) when pageContext.IsCancelled {
             return
         } catch (failure Exception) { }
+        running = status?.Running == true
         input.Window?.TryPost(
             () -> {
                 if disposed {
                     return
                 }
                 guard let value = status else {
+                    unavailable = true
+                    input.History.Samples.Clear()
+                    Rebuild()
                     return
                 }
+                let recovered = unavailable
+                unavailable = false
                 let changed = value.Running ||
                     value.Running != input
                     .History
@@ -214,7 +252,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     .Status
                     .Threads
                 Record(input.History, value)
-                if changed {
+                if changed || recovered {
                     Rebuild()
                 }
             }
