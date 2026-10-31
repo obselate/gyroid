@@ -240,6 +240,7 @@ class SendService {
     async func RecoverAsync(ct CancellationToken, reloadSends bool = true) {
         if !store.Exists {
             store.Pending = nil
+            store.Error = ""
             return
         }
         var lease FileStream? = nil
