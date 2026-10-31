@@ -41,6 +41,7 @@ partial class App : Cell {
     private let receiveRequest ReceiveRequest = ReceiveRequest()
     private let sendRows List[SendRow] = List[SendRow]()
     private var pendingPayment PaymentLink?
+    private var pendingPage AppPage = AppPage.None
     private var paymentActivated bool
     private var paymentRevision int32
 
@@ -198,8 +199,9 @@ partial class App : Cell {
         for value in values {
             if let payment = PaymentLink.Parse(value) {
                 pendingPayment = payment
+                pendingPage = AppPage.Send
                 paymentActivated = true
-                ApplyPayment()
+                ApplyNavigation()
                 break
             }
         }
@@ -208,26 +210,28 @@ partial class App : Cell {
         }
     }
 
-    private func ApplyPayment() {
+    private func ApplyNavigation() {
         if wallet.Snapshot.State != WalletState.Unlocked {
             return
         }
-        guard let payment = pendingPayment else {
-            return
+        if let payment = pendingPayment {
+            sendRows.Clear()
+            sendRows.Add(
+                SendRow{
+                    Address: payment.Address,
+                    Amount: payment.Amount,
+                    Memo: payment.Memo,
+                    MemoOpen: payment.Memo.Length > 0
+                }
+            )
+            pendingPayment = nil
+            paymentRevision += 1
         }
-        sendRows.Clear()
-        sendRows.Add(
-            SendRow{
-                Address: payment.Address,
-                Amount: payment.Amount,
-                Memo: payment.Memo,
-                MemoOpen: payment.Memo.Length > 0
-            }
-        )
-        pendingPayment = nil
-        paymentRevision += 1
-        screen = AppPage.Send
-        Rebuild()
+        if pendingPage != AppPage.None {
+            let target = pendingPage
+            pendingPage = AppPage.None
+            Open(target)
+        }
     }
 
     func Attach(owner Window) {
@@ -373,7 +377,7 @@ partial class App : Cell {
             ui.Actions.Decode("page")
             lastState = snapshot.State
         }
-        ApplyPayment()
+        ApplyNavigation()
         let heights = if let value = snapshot.Balance {
             value.ScanHeight.ToString() + " " + value.ChainHeight.ToString()
         } else {
@@ -672,6 +676,7 @@ partial class App : Cell {
 
     private async func TogglePrivacy() {
         ui.Privacy = !ui.Privacy
+        UpdateTray()
         Rebuild()
         try {
             await wallet.SavePrivacyAsync(ui.Privacy)
@@ -688,7 +693,7 @@ partial class App : Cell {
     private async func SetLanguage(language string) {
         ui.Strings.Language = language
         ui.Actions.Decoding.Clear()
-        tray?.Update(TraySettings())
+        UpdateTray()
         Rebuild()
         try {
             await wallet.SaveLanguageAsync(language)
