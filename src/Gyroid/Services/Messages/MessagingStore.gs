@@ -3,6 +3,7 @@ package Gyroid.Services
 import Gyroid.Models
 import System
 import System.Collections.Concurrent
+import System.Collections.Generic
 import System.IO
 import System.Security.Cryptography
 import System.Text
@@ -11,6 +12,9 @@ import System.Threading.Tasks
 
 class MessagingStore {
     private let path string
+    private let verificationOrder Queue[string] = Queue[string]()
+    private var canSave bool = true
+    var Error string = ""
     let Conversations ConcurrentDictionary[string, Conversation] = ConcurrentDictionary[string, Conversation](
         StringComparer.Ordinal
     )
@@ -32,39 +36,87 @@ class MessagingStore {
         try {
             using let document = JsonDocument.Parse(PrivateFiles.ReadText(path, 4194304))
             let data = document.RootElement
-            for entry in data.GetProperty("conversations").EnumerateArray() {
+            for entry in ReadField(data, "conversations", JsonValueKind.Array).EnumerateArray() {
+                let members = ReadField(entry, "members", JsonValueKind.Array)
                 let conversation = Conversation{
                     Id: NodeJson.Text(entry, "id"),
                     Title: NodeJson.Text(entry, "name"),
                     Handle: NodeJson.Text(entry, "handle"),
                     IsGroup: NodeJson.Flag(entry, "group")
                 }
-                for member in entry.GetProperty("members").EnumerateArray() {
+                for member in members.EnumerateArray() {
+                    if member.ValueKind != JsonValueKind.String {
+                        throw JsonException("Invalid messaging store member")
+                    }
                     let value = member.GetString() ?? ""
-                    Address.Decode(value, network)
+                    try {
+                        Address.Decode(value, network)
+                    } catch (error ArgumentException) {
+                        throw FormatException(error.Message, error)
+                    }
                     conversation.Members.Add(value)
                 }
                 Conversations[conversation.Id] = conversation
             }
-            for entry in data.GetProperty("verified").EnumerateObject() {
-                Verified[entry.Name] = Verification(entry.Value.GetInt32())
+            for entry in ReadField(data, "verified", JsonValueKind.Object).EnumerateObject() {
+                let value = ReadNumber(entry.Value)
+                if value < 0 || value > int64(Verification.Invalid) {
+                    throw FormatException("Invalid messaging verification state")
+                }
+                RecordVerification(entry.Name, Verification(value))
             }
-            for entry in data.GetProperty("read").EnumerateObject() {
-                ReadMarkers[entry.Name] = entry.Value.GetInt64()
+            for entry in ReadField(data, "read", JsonValueKind.Object).EnumerateObject() {
+                ReadMarkers[entry.Name] = ReadNumber(entry.Value)
             }
-            for entry in data.GetProperty("introduced").EnumerateArray() {
+            for entry in ReadField(data, "introduced", JsonValueKind.Array).EnumerateArray() {
+                if entry.ValueKind != JsonValueKind.String {
+                    throw JsonException("Invalid messaging introduction")
+                }
                 Introduced[entry.GetString() ?? ""] = true
             }
-            for entry in data.GetProperty("removed").EnumerateObject() {
-                Removed[entry.Name] = entry.Value.GetInt64()
+            for entry in ReadField(data, "removed", JsonValueKind.Object).EnumerateObject() {
+                Removed[entry.Name] = ReadNumber(entry.Value)
             }
-        } catch (error Exception) {
+        } catch (error Exception) when error is JsonException || error is FormatException {
+            Error = "Messaging store is unreadable: " + error.Message
             Conversations.Clear()
             Verified.Clear()
+            verificationOrder.Clear()
             ReadMarkers.Clear()
             Introduced.Clear()
             Removed.Clear()
-            File.Move(path, path + ".unreadable-" + Guid.NewGuid().ToString("N"))
+            try {
+                File.Move(path, path + ".unreadable-" + Guid.NewGuid().ToString("N"))
+            } catch (moveError IOException) {
+                Error += ". " + moveError.Message
+                canSave = false
+            } catch (moveError UnauthorizedAccessException) {
+                Error += ". " + moveError.Message
+                canSave = false
+            }
+        }
+    }
+
+    private func ReadField(value JsonElement, name string, kind JsonValueKind) JsonElement {
+        if value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(name, out let field) ||
+            field.ValueKind != kind {
+            throw JsonException("Invalid messaging store field: " + name)
+        }
+        return field
+    }
+
+    private func ReadNumber(value JsonElement) int64 {
+        if value.ValueKind != JsonValueKind.Number {
+            throw JsonException("Invalid messaging store number")
+        }
+        return value.GetInt64()
+    }
+
+    func RecordVerification(key string, value Verification) {
+        if Verified.TryAdd(key, value) {
+            verificationOrder.Enqueue(key)
+        } else {
+            Verified[key] = value
         }
     }
 
@@ -77,14 +129,11 @@ class MessagingStore {
     }
 
     func Save() {
-        var excess = Verified.Count - 4096
-        for key in Verified.Keys {
-            if excess <= 0 {
-                break
-            }
-            if Verified.TryRemove(key, out _) {
-                excess--
-            }
+        while verificationOrder.Count > 4096 {
+            Verified.TryRemove(verificationOrder.Dequeue(), out _)
+        }
+        if !canSave {
+            return
         }
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "")
         PrivateFiles
@@ -110,8 +159,8 @@ class MessagingStore {
                 }
                 writer.WriteEndArray()
                 writer.WriteStartObject("verified")
-                for pair in Verified {
-                    writer.WriteNumber(pair.Key, int32(pair.Value))
+                for key in verificationOrder {
+                    writer.WriteNumber(key, int32(Verified[key]))
                 }
                 writer.WriteEndObject()
                 writer.WriteStartObject("read")

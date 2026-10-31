@@ -335,9 +335,10 @@ class Cli {
                     wallet.RefreshAsync().GetAwaiter().GetResult()
                     if command == "history" {
                         wallet.RequireUnlocked()
-                        wallet.Messages.RefreshAsync().GetAwaiter().GetResult()
-                        if wallet.Messages.Error.Length > 0 {
-                            throw WalletException(wallet.Messages.Error)
+                        try {
+                            wallet.Messages.RefreshAsync().GetAwaiter().GetResult()
+                        } catch (error Exception) {
+                            wallet.Messages.Error = error.Message
                         }
                     }
                     let privacy = wallet.Settings.Privacy
@@ -403,6 +404,9 @@ class Cli {
                             count = count + 1
                         }
                     }
+                }
+                if command == "history" && wallet.Messages.Error.Length > 0 {
+                    throw WalletException(wallet.Messages.Error)
                 }
                 if (command == "status" || command == "balance") && wallet.Send.Error.Length > 0 {
                     Console.WriteLine(wallet.Send.Error)

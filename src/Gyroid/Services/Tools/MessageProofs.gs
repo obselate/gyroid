@@ -30,14 +30,7 @@ class MessageProofs {
         WalletValidation.ValidateMessage(message)
         await session.BeginAsync(ct)
         try {
-            try {
-                return await VerifyCoreAsync(address, message, signature, ct)
-            } catch (error WalletException) {
-                if error.StatusCode == 400 {
-                    return false
-                }
-                throw error
-            }
+            return await VerifyCoreAsync(address, message, signature, ct)
         } finally {
             session.End()
         }
@@ -60,21 +53,28 @@ class MessageProofs {
     }
 
     async func VerifyCoreAsync(address string, message string, signature string, ct CancellationToken) bool {
-        using let response = await session
-            .Node
-            .Api
-            .JsonAsync(
-            "verify",
-            writer -> {
-                writer.WriteStartObject()
-                writer.WriteString("address", WalletValidation.ValidateAddress(address))
-                writer.WriteString("message", message)
-                writer.WriteString("signature", signature)
-                writer.WriteEndObject()
-            },
-            ct
-        )
-        return NodeJson.Flag(response.RootElement, "valid")
+        try {
+            using let response = await session
+                .Node
+                .Api
+                .JsonAsync(
+                "verify",
+                writer -> {
+                    writer.WriteStartObject()
+                    writer.WriteString("address", WalletValidation.ValidateAddress(address))
+                    writer.WriteString("message", message)
+                    writer.WriteString("signature", signature)
+                    writer.WriteEndObject()
+                },
+                ct
+            )
+            return NodeJson.Flag(response.RootElement, "valid")
+        } catch (error WalletException) {
+            if error.StatusCode == 400 {
+                return false
+            }
+            throw error
+        }
     }
 
     async func ProveAsync(txid string, ct CancellationToken = default(CancellationToken)) string {

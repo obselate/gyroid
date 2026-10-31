@@ -4,6 +4,7 @@ import Gyroid.Models
 import System
 import System.Collections.Generic
 import System.Linq
+import System.Text
 import System.Text.Json
 import System.Threading
 
@@ -11,6 +12,9 @@ class HistoryService {
     let session WalletSession
     var RawReceived[]JsonElement = Array.Empty[JsonElement]()
     var RawSends[]JsonElement = Array.Empty[JsonElement]()
+    var DecodedReceived Dictionary[string, DecodedMemo] = Dictionary[string, DecodedMemo](StringComparer.Ordinal)
+    var DecodedSends Dictionary[string, Dictionary[string, DecodedMemo]] =
+    Dictionary[string, Dictionary[string, DecodedMemo]](StringComparer.Ordinal)
     private var baseOutputs[]WalletOutput = Array.Empty[WalletOutput]()
     private var baseSends[]WalletSend = Array.Empty[WalletSend]()
     private var received List[WalletOutput] = List[WalletOutput]()
@@ -26,6 +30,8 @@ class HistoryService {
     func Reset() {
         RawReceived = Array.Empty[JsonElement]()
         RawSends = Array.Empty[JsonElement]()
+        DecodedReceived = Dictionary[string, DecodedMemo](StringComparer.Ordinal)
+        DecodedSends = Dictionary[string, Dictionary[string, DecodedMemo]](StringComparer.Ordinal)
         baseOutputs = Array.Empty[WalletOutput]()
         baseSends = Array.Empty[WalletSend]()
         received = List[WalletOutput]()
@@ -35,23 +41,29 @@ class HistoryService {
     async func ReloadAsync(ct CancellationToken)[]WalletOutput {
         using let response = await session.Node.Api.JsonAsync("wallet/history", ct: ct)
         RawReceived = response.RootElement.GetProperty("outputs").Clone().EnumerateArray().ToArray()
-        let firstMemos = Dictionary[string, JsonElement](StringComparer.Ordinal)
-        for row in RawReceived {
-            if NodeJson.Text(row, "memo_hex").Length == 0 {
+        let network = session.settings.Network
+        let binaryMemos = HashSet[string](StringComparer.Ordinal)
+        DecodedReceived = Dictionary[string, DecodedMemo](StringComparer.Ordinal)
+        for group in RawReceived.Where(row -> NodeJson.Text(row, "memo_hex").Length > 0).GroupBy(
+            row -> NodeJson.Text(row, "txid")
+        ) {
+            let rows = group.OrderBy(row -> NodeJson.Number(row, "output_index")).ToArray()
+            if !Wire.IsEnvelope(NodeJson.Text(rows[0], "memo_hex")) {
                 continue
             }
-            let txid = NodeJson.Text(row, "txid")
-            if !firstMemos.TryGetValue(txid, out let previous) || NodeJson.Number(
-                row,
-                "output_index"
-            ) < NodeJson.Number(previous, "output_index") {
-                firstMemos[txid] = row
+            binaryMemos.Add(group.Key)
+            let hex = StringBuilder()
+            for row in rows {
+                hex.Append(NodeJson.Text(row, "memo_hex"))
+            }
+            if let envelope = Wire.DecodeMemo(hex.ToString(), network) {
+                DecodedReceived[group.Key] = DecodedMemo(
+                    envelope,
+                    rows.Select(row -> int32(NodeJson.Number(row, "output_index"))).ToArray(),
+                    int64(NodeJson.Number(rows[0], "block_height"))
+                )
             }
         }
-        let binaryMemos = HashSet[string](
-            firstMemos.Where(pair -> Wire.IsEnvelope(NodeJson.Text(pair.Value, "memo_hex"))).Select(pair -> pair.Key),
-            StringComparer.Ordinal
-        )
         let sentTransactions = Dictionary[string, int32](StringComparer.Ordinal)
         for sent in RawSends {
             sentTransactions[NodeJson.Text(sent, "txid")] = sent.GetProperty("recipients").GetArrayLength()
@@ -72,6 +84,10 @@ class HistoryService {
                     BlockHeight: NodeJson.Number(row, "block_height"),
                     Spent: NodeJson.Flag(row, "spent"),
                     Coinbase: NodeJson.Flag(row, "is_coinbase"),
+                    OutputIndices: DecodedReceived.TryGetValue(txid, out let decoded) && decoded.OutputIndices.Contains(
+                        index
+                    ) ?
+                    decoded.OutputIndices: Array.Empty[int32](),
                     Memo: hex.Length > 0 && binaryMemos.Contains(txid) ? "[non-text memo]": NodeJson.Memo(hex)
                 }
             )
@@ -85,8 +101,7 @@ class HistoryService {
         let outputs = List[WalletOutput]()
         let positions = Dictionary[string, int32](StringComparer.Ordinal)
         for output in baseOutputs {
-            let message = session.Messages.HistoryMessage(output.TxId, "", false)
-            if message == nil || !message.OutputIndices.Contains(output.OutputIndex) {
+            if output.OutputIndices.Length == 0 || !output.OutputIndices.Contains(output.OutputIndex) {
                 outputs.Add(output)
                 continue
             }
@@ -98,9 +113,8 @@ class HistoryService {
                 outputs.Add(
                     WalletOutput{
                         ... output,
-                        OutputIndex: message.OutputIndices[0],
-                        Memo: message.Text,
-                        OutputIndices: message.OutputIndices
+                        OutputIndex: output.OutputIndices[0],
+                        Memo: session.Messages.HistoryMessage(output.TxId, "", false)?.Text ?? output.Memo
                     }
                 )
             }
@@ -119,13 +133,19 @@ class HistoryService {
             let recipients = List[WalletRecipient]()
             let grouped = Dictionary[string, WalletRecipient](StringComparer.Ordinal)
             for recipient in sent.Recipients {
-                let message = session.Messages.HistoryMessage(sent.TxId, recipient.Address, true)
-                if message == nil {
+                if !DecodedSends.TryGetValue(sent.TxId, out let decoded) || !decoded.ContainsKey(recipient.Address) {
                     recipients.Add(recipient)
                 } else if grouped.TryGetValue(recipient.Address, out let combined) {
                     combined.Amount += recipient.Amount
                 } else {
-                    let merged = WalletRecipient{... recipient, Memo: message.Text}
+                    let merged = WalletRecipient{
+                        ... recipient,
+                        Memo: session
+                            .Messages
+                            .HistoryMessage(sent.TxId, recipient.Address, true)
+                            ?.Text ??
+                            recipient.Memo
+                    }
                     grouped[recipient.Address] = merged
                     recipients.Add(merged)
                 }
@@ -175,6 +195,8 @@ class HistoryService {
     async func ReadSendsAsync(ct CancellationToken)[]WalletSend {
         let sends = List[WalletSend]()
         let raw = List[JsonElement]()
+        let network = session.settings.Network
+        DecodedSends = Dictionary[string, Dictionary[string, DecodedMemo]](StringComparer.Ordinal)
         var offset int32
         while true {
             using let response = await session
@@ -186,13 +208,26 @@ class HistoryService {
             for row in rows.EnumerateArray() {
                 raw.Add(row)
                 let binary = HashSet[string](StringComparer.Ordinal)
-                let seen = HashSet[string](StringComparer.Ordinal)
-                for recipient in row.GetProperty("recipients").EnumerateArray() {
-                    let address = NodeJson.Text(recipient, "address")
-                    let hex = NodeJson.Text(recipient, "memo_hex")
-                    if hex.Length > 0 && seen.Add(address) && Wire.IsEnvelope(hex) {
-                        binary.Add(address)
+                let decoded = Dictionary[string, DecodedMemo](StringComparer.Ordinal)
+                for group in row
+                    .GetProperty("recipients")
+                    .EnumerateArray()
+                    .Where(recipient -> NodeJson.Text(recipient, "memo_hex").Length > 0)
+                    .GroupBy(recipient -> NodeJson.Text(recipient, "address")) {
+                    if !Wire.IsEnvelope(NodeJson.Text(group.First(), "memo_hex")) {
+                        continue
                     }
+                    binary.Add(group.Key)
+                    let hex = StringBuilder()
+                    for recipient in group {
+                        hex.Append(NodeJson.Text(recipient, "memo_hex"))
+                    }
+                    if let envelope = Wire.DecodeMemo(hex.ToString(), network) {
+                        decoded[group.Key] = DecodedMemo(envelope, Array.Empty[int32](), 0)
+                    }
+                }
+                if decoded.Count > 0 {
+                    DecodedSends[NodeJson.Text(row, "txid")] = decoded
                 }
                 let recipients = List[WalletRecipient]()
                 for recipient in row.GetProperty("recipients").EnumerateArray() {

@@ -56,6 +56,8 @@ class Conversation {
 
 data struct MessageReference(ConversationId string, MessageId string)
 
+data struct DecodedMemo(Envelope Envelope, OutputIndices[]int32, BlockHeight int64)
+
 class MessageEstimate {
     var Outputs int32
     var BytesUsed int32

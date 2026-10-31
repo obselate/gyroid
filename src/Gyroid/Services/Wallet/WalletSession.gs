@@ -987,7 +987,7 @@ class WalletSession : IDisposable {
                 HistoryMore: History.More,
                 Sends: sends
             }
-            Messages.QueueRefresh(History.RawReceived, History.RawSends)
+            Messages.QueueRefresh(History.DecodedReceived, History.RawSends, History.DecodedSends)
         } catch (error WalletException) {
             if error.StatusCode == 403 {
                 state = WalletState.Locked

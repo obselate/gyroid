@@ -4,7 +4,6 @@ import Gyroid.Models
 import System
 import System.Collections.Generic
 import System.Linq
-import System.Text
 import System.Text.Json
 import System.Threading
 import System.Threading.Tasks
@@ -71,8 +70,9 @@ partial class MessagingService {
         var version int64
         var currentRevision int64
         var local MessagingStore?
-        var received[]JsonElement
+        var received Dictionary[string, DecodedMemo]
         var sent[]JsonElement
+        var decodedSent Dictionary[string, Dictionary[string, DecodedMemo]]
         lock sending {
             if ownAddress.Length == 0 || appliedRevision == revision {
                 return
@@ -84,6 +84,7 @@ partial class MessagingService {
             local = store
             received = receivedRows
             sent = sentRows
+            decodedSent = sentMemos
         }
         try {
             await Synchronize(
@@ -94,6 +95,7 @@ partial class MessagingService {
                 local ?? throw WalletException("Messaging store is unavailable"),
                 received,
                 sent,
+                decodedSent,
                 ct
             )
         } catch (error Exception) {
@@ -113,8 +115,9 @@ partial class MessagingService {
         version int64,
         currentRevision int64,
         local MessagingStore,
-        received[]JsonElement,
+        received Dictionary[string, DecodedMemo],
         sent[]JsonElement,
+        decodedSent Dictionary[string, Dictionary[string, DecodedMemo]],
         ct CancellationToken
     ) {
         let client = session.Node.Api
@@ -146,69 +149,44 @@ partial class MessagingService {
         }
         let acceptedReceived = Dictionary[string, Message](StringComparer.Ordinal)
         let acceptedSent = Dictionary[string, Message](StringComparer.Ordinal)
-        for group in received.Where(row -> NodeJson.Text(row, "memo_hex").Length > 0).GroupBy(
-            row -> NodeJson.Text(row, "txid")
-        ) {
+        for pair in received {
             if generation != version {
                 return
             }
-            let outputs = group.OrderBy(row -> NodeJson.Number(row, "output_index")).ToArray()
-            let hex = StringBuilder()
-            for output in outputs {
-                hex.Append(NodeJson.Text(output, "memo_hex"))
-            }
-            let envelope = Wire.DecodeMemo(hex.ToString(), network)
-            if envelope == nil {
-                continue
-            }
-            let mined = int64(NodeJson.Number(outputs[0], "block_height"))
+            let decoded = pair.Value
+            let mined = decoded.BlockHeight
             let message = await AddEnvelope(
                 client,
                 local,
                 known,
                 network,
                 updated,
-                envelope,
-                group.Key,
+                decoded.Envelope,
+                pair.Key,
                 own,
                 false,
                 "confirmed",
                 height - mined + 1,
                 mined,
                 0,
-                outputs.Length,
+                decoded.OutputIndices.Length,
                 average,
                 own,
                 ct
             )
             if message != nil {
-                message.OutputIndices = outputs.Select(row -> int32(NodeJson.Number(row, "output_index"))).ToArray()
-                acceptedReceived[group.Key] = message
+                message.OutputIndices = decoded.OutputIndices
+                acceptedReceived[pair.Key] = message
             }
         }
         for entry in sent {
             if generation != version {
                 return
             }
-            let recipients = entry
-                .GetProperty("recipients")
-                .EnumerateArray()
-                .Where(row -> NodeJson.Text(row, "memo_hex").Length > 0)
-                .GroupBy(row -> NodeJson.Text(row, "address"))
-            let decoded = Dictionary[string, Envelope](StringComparer.Ordinal)
-            for group in recipients {
-                let hex = StringBuilder()
-                for output in group {
-                    hex.Append(NodeJson.Text(output, "memo_hex"))
-                }
-                if let envelope = Wire.DecodeMemo(hex.ToString(), network) {
-                    decoded[group.Key] = envelope
-                }
-            }
-            if decoded.Count == 0 {
+            let txid = NodeJson.Text(entry, "txid")
+            if !decodedSent.TryGetValue(txid, out let decoded) || decoded.Count == 0 {
                 continue
             }
-            let txid = NodeJson.Text(entry, "txid")
             let chainState = NodeJson.Text(entry, "chain_state")
             var mined int64
             let cacheKey = network + ":" + txid
@@ -224,7 +202,7 @@ partial class MessagingService {
                     known,
                     network,
                     updated,
-                    pair.Value,
+                    pair.Value.Envelope,
                     txid,
                     pair.Key,
                     true,
@@ -318,7 +296,7 @@ partial class MessagingService {
                 TipHeight = height
                 TipTime = tip
                 AverageBlockSeconds = average
-                Error = ""
+                Error = local.Error
             }
             session.History.ApplyMessages()
         } finally {
@@ -406,7 +384,7 @@ partial class MessagingService {
                     ct
                 )
                 verification = valid ? Verification.Verified: Verification.Invalid
-                local.Verified[cacheKey] = verification
+                local.RecordVerification(cacheKey, verification)
             }
         }
         let id = if envelope.Kind >= 2 {

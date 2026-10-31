@@ -15,8 +15,10 @@ partial class MessagingService {
     private var store MessagingStore?
     private var conversations List[Conversation] = List[Conversation]()
     private let sending Dictionary[Message, string] = Dictionary[Message, string]()
-    private var receivedRows[]JsonElement = Array.Empty[JsonElement]()
+    private var receivedRows Dictionary[string, DecodedMemo] = Dictionary[string, DecodedMemo](StringComparer.Ordinal)
     private var sentRows[]JsonElement = Array.Empty[JsonElement]()
+    private var sentMemos Dictionary[string, Dictionary[string, DecodedMemo]] =
+    Dictionary[string, Dictionary[string, DecodedMemo]](StringComparer.Ordinal)
     private var ownAddress string = ""
     private var selected string = ""
     private var viewOnly bool
@@ -81,15 +83,21 @@ partial class MessagingService {
             lock sending {
                 store = local
                 ownAddress = own
+                Error = local.Error
             }
         }
         viewOnly = NodeJson.Flag(address, "view_only")
     }
 
-    func QueueRefresh(received[]JsonElement, sent[]JsonElement) {
+    func QueueRefresh(
+        received Dictionary[string, DecodedMemo],
+        sent[]JsonElement,
+        decodedSent Dictionary[string, Dictionary[string, DecodedMemo]]
+    ) {
         lock sending {
             receivedRows = received
             sentRows = sent
+            sentMemos = decodedSent
             revision++
         }
         refreshRequested.Writer.TryWrite(true)
@@ -97,7 +105,7 @@ partial class MessagingService {
 
     func Sync(sessionContext Context) {
         while !sessionContext.IsCancelled {
-            let changed = <-refreshRequested
+            <-refreshRequested
             try {
                 await RefreshAsync(sessionContext.Token)
             } catch (error OperationCanceledException) when sessionContext.IsCancelled {
@@ -133,7 +141,9 @@ partial class MessagingService {
             SentAt: DateTimeOffset.UtcNow,
             State: MessageState.InProgress
         }
+        var version int64
         lock sending {
+            version = generation
             sending[message] = conversation.Id
             let current = conversations.Find(item -> item.Id == conversation.Id) ??
                 Conversation{
@@ -153,25 +163,27 @@ partial class MessagingService {
             }
         }
         session.Changed?.Invoke()
-        await Dispatch(conversation, message, ct)
+        await Dispatch(conversation, message, version, ct)
     }
 
     async func Resend(conversation Conversation, message Message, ct CancellationToken = default(CancellationToken)) {
+        var version int64
         lock sending {
             if !sending.TryGetValue(message, out let id) ||
                 id != conversation.Id ||
                 message.State != MessageState.Failed {
                 throw WalletException("Message is not available for retry")
             }
+            version = generation
             message.State = MessageState.InProgress
         }
         session.Changed?.Invoke()
-        await Dispatch(conversation, message, ct)
+        await Dispatch(conversation, message, version, ct)
     }
 
-    private async func Dispatch(conversation Conversation, message Message, ct CancellationToken) {
+    private async func Dispatch(conversation Conversation, message Message, version int64, ct CancellationToken) {
         try {
-            await Transmit(conversation, message.Text, false, message, ct)
+            await Transmit(conversation, message.Text, false, message, version, ct)
         } catch (error Exception) {
             message.State = MessageState.Failed
             session.Changed?.Invoke()
@@ -281,7 +293,7 @@ partial class MessagingService {
         if conversation.Members.Count == 0 {
             throw WalletException("A group requires another member")
         }
-        await Transmit(conversation, "", true, nil, ct)
+        await Transmit(conversation, "", true, nil, generation, ct)
     }
 
     async func Select(conversation Conversation, ct CancellationToken = default(CancellationToken)) {
@@ -341,8 +353,9 @@ partial class MessagingService {
             conversations = List[Conversation]()
             receivedMessages = Dictionary[string, Message](StringComparer.Ordinal)
             sentMessages = Dictionary[string, Message](StringComparer.Ordinal)
-            receivedRows = Array.Empty[JsonElement]()
+            receivedRows = Dictionary[string, DecodedMemo](StringComparer.Ordinal)
             sentRows = Array.Empty[JsonElement]()
+            sentMemos = Dictionary[string, Dictionary[string, DecodedMemo]](StringComparer.Ordinal)
             ownAddress = ""
             selected = ""
             store = nil

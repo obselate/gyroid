@@ -128,11 +128,21 @@ partial class MessagingService {
         writer.WriteEndObject()
     }
 
+    private func IsCurrent(message Message?, version int64) bool {
+        lock sending {
+            if version != generation {
+                throw OperationCanceledException("The wallet session changed")
+            }
+            return message == nil || sending.ContainsKey(message)
+        }
+    }
+
     private async func Transmit(
         conversation Conversation,
         text string,
         invite bool,
         message Message?,
+        version int64,
         ct CancellationToken
     ) {
         if !invite && string.IsNullOrWhiteSpace(text) {
@@ -141,10 +151,8 @@ partial class MessagingService {
         let account = OwnAddress
         await session.BeginAsync(ct, false)
         try {
-            lock sending {
-                if message != nil && !sending.ContainsKey(message) {
-                    return
-                }
+            if !IsCurrent(message, version) {
+                return
             }
             if account != OwnAddress || (message != nil && message.SenderAddress != OwnAddress) {
                 throw WalletException("The wallet changed before the message was sent")
@@ -156,7 +164,7 @@ partial class MessagingService {
                 target = await ResolveConversation(conversation.Title, conversation.Id, ct)
                 lock sending {
                     if message != nil {
-                        if !sending.ContainsKey(message) {
+                        if !IsCurrent(message, version) {
                             return
                         }
                         sending[message] = target.Id
@@ -194,10 +202,8 @@ partial class MessagingService {
                 }
             }
             await WaitSend(ct)
-            lock sending {
-                if message != nil && !sending.ContainsKey(message) {
-                    return
-                }
+            if !IsCurrent(message, version) {
+                return
             }
             using let sent = await client.JsonAsync(
                 "wallet/send",
