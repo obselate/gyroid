@@ -2,6 +2,7 @@ package Gyroid
 
 import Goo
 import Goo.Widgets.Layout
+import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Views
 import System
@@ -153,6 +154,13 @@ func Main() {
     view.UpdateScale()
     view.Start()
     window.Run()
+    if wallet.State == WalletState.Unlocked || wallet.State == WalletState.Unknown {
+        try {
+            wallet.LockAsync().GetAwaiter().GetResult()
+        } catch (error WalletException) {
+            Console.Error.WriteLine(error.Message)
+        }
+    }
 }
 
 func Option(arguments[]string, name string, fallback float64) float64 {

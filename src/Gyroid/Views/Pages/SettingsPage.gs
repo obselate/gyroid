@@ -621,7 +621,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         if rescan?.IsCompleted == false {
             scan.Add(
                 Cell.Mount[SpinnerInput, Spinner](
-                    "rescan",
+                    "rescan-spinner",
                     SpinnerInput{Size: 16, Color: ui.Lime, Label: ui.Strings.Get("Syncing")}
                 )
             )

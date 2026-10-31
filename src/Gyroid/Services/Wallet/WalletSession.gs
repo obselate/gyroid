@@ -281,7 +281,7 @@ class WalletSession : IDisposable {
             if !connected {
                 Node.Supervisor.ReportProgress(NodePhase.Detecting, nil)
             }
-            await Node.ConnectAsync(settings, ct)
+            let walletFile = await Node.ConnectAsync(settings, ct)
             try {
                 using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
                 if state != WalletState.Unlocked {
@@ -300,6 +300,12 @@ class WalletSession : IDisposable {
             if state == WalletState.Unloaded {
                 managed = false
             } else {
+                let filename = Path.GetFileName(walletFile)
+                Library.WalletPath(filename)
+                if settings.ActiveWallet != filename {
+                    settings.ActiveWallet = filename
+                    await SettingsStore.SaveAsync(settings, ct)
+                }
                 managed = true
             }
             connected = true
@@ -331,11 +337,13 @@ class WalletSession : IDisposable {
     async func ApplySettingsAsync(value WalletSettings, ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            let next = value.Copy()
-            next.Privacy = settings.Privacy
-            next.Language = settings.Language
-            next.NodeMode = settings.NodeMode
-            next.UiScalePercent = settings.UiScalePercent
+            let next = settings.Copy()
+            next.Network = value.Network
+            next.Endpoint = value.Endpoint
+            next.DataDirectory = value.DataDirectory
+            next.WalletDirectory = value.WalletDirectory
+            next.BinaryPath = value.BinaryPath
+            next.ListenAddress = value.ListenAddress
             if next.Network != settings.Network {
                 if next.DataDirectory == settings.DataDirectory &&
                     (
