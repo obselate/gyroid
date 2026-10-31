@@ -446,7 +446,7 @@ class SendPage : Cell[SendPageInput] {
                 }
             )
         }
-        if input.Privacy || !row.Suggest || kind.Length > 0 || issue.Length > 0 {
+        if input.Privacy || !row.Suggest || kind.Length > 0 {
             return field
         }
         let matches = input

@@ -1231,7 +1231,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let buffer = password.ToCharArray()
         password = ""
         if dialog == "phrase" {
-            dialog = ""
             input.OnRevealSeed.Invoke(buffer)
             return
         }
