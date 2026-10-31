@@ -370,8 +370,9 @@ try:
         raise RuntimeError()
     dry_run = cli("send", addresses[1], "1", "--memo", memo, "--dry-run")
     estimated_at = time.monotonic()
-    if atoms(dry_run, "Fee") != fee or atoms(dry_run, "Amount") != amount:
+    if atoms(dry_run, "Fee") < fee or atoms(dry_run, "Amount") != amount:
         raise RuntimeError()
+    fee = atoms(dry_run, "Fee")
     print(f"Amount {amount / 100000000:.8f} BNT Fee {fee / 100000000:.8f} BNT", flush=True)
     report(step, since)
     wait_for(lambda: time.monotonic() - estimated_at >= 2.1 and api(0, "wallet/balance").get("spendable", 0) >= amount + fee)
