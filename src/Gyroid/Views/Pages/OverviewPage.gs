@@ -112,6 +112,10 @@ class OverviewPage : Cell[OverviewInput] {
     }
 
     private func RequestNetwork(input OverviewInput) {
+        let blocks = input.Session.Node.Network.Blocks
+        if blocks.Length > 0 && blocks[blocks.Length - 1].Hash == input.Node.BestHash {
+            return
+        }
         if networkLoading || !input.Node.Running || networkLoaded == input.Node {
             return
         }
@@ -125,7 +129,7 @@ class OverviewPage : Cell[OverviewInput] {
 
     private async func LoadNetwork(input OverviewInput, window Window, ct CancellationToken) {
         try {
-            await input.Session.Node.ReadOverviewNetworkAsync(ct)
+            await input.Session.Node.ReadNetworkSummaryAsync(ct)
         } catch (error Exception) { } finally {
             window.TryPost(
                 () -> {

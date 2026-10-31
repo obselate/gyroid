@@ -22,6 +22,7 @@ class NodeSession : IDisposable {
     private var maxOutbound uint64
     private var coreVersion string = ""
     private var versionExecutable string = ""
+    private let networkGate SemaphoreSlim = SemaphoreSlim(1, 1)
 
     init(settings WalletSettings) {
         Settings = settings
@@ -212,27 +213,37 @@ class NodeSession : IDisposable {
         }
     }
 
-    async func ReadOverviewNetworkAsync(ct CancellationToken) NetworkReport {
-        let status = Status
-        let previous = Network
-        if previous.Blocks.Length > 0 && previous.Blocks[previous.Blocks.Length - 1].Hash == status.BestHash {
-            return previous
+    async func ReadNetworkSummaryAsync(ct CancellationToken, count int32 = 31) NetworkReport {
+        await networkGate.WaitAsync(ct)
+        try {
+            let status = Status
+            let previous = Network
+            let current = previous
+                .Blocks
+                .Length > 0 &&
+                previous
+                .Blocks[previous.Blocks.Length - 1]
+                .Hash == status.BestHash
+            if current && (previous.Blocks.Length >= count || previous.Blocks[0].Height == 0) {
+                return previous
+            }
+            let blocks = await ReadBlocksAsync(status, previous, Math.Max(count, previous.Blocks.Length), ct)
+            let report = NetworkReport{... previous, Blocks: blocks}
+            if !current {
+                using let stats = await Api.JsonAsync("stats", ct: ct)
+                report.Hashrate = stats.RootElement.GetProperty("network_hashrate").GetDouble()
+                report.Difficulty = NodeJson.Number(stats.RootElement, "difficulty")
+                report.Emitted = stats.RootElement.GetProperty("pct_emitted").GetDouble()
+            }
+            Network = report
+            return report
+        } finally {
+            networkGate.Release()
         }
-        using let stats = await Api.JsonAsync("stats", ct: ct)
-        let blocks = await ReadBlocksAsync(status, previous, 31, ct)
-        Network = NetworkReport{
-            ... previous,
-            Hashrate: stats.RootElement.GetProperty("network_hashrate").GetDouble(),
-            Difficulty: NodeJson.Number(stats.RootElement, "difficulty"),
-            Emitted: stats.RootElement.GetProperty("pct_emitted").GetDouble(),
-            Blocks: blocks
-        }
-        return Network
     }
 
     async func ReadNetworkAsync(ct CancellationToken) NetworkReport {
-        let status = Status
-        let previous = await ReadOverviewNetworkAsync(ct)
+        await ReadNetworkSummaryAsync(ct, 61)
         using let peers = await Api.JsonAsync("peers", ct: ct)
         using let bans = await Api.JsonAsync("peers/banned", ct: ct)
         let connected = List[NetworkPeer]()
@@ -281,8 +292,7 @@ class NodeSession : IDisposable {
                 }
             )
         }
-        let blocks = await ReadBlocksAsync(status, previous, 61, ct)
-        Network = NetworkReport{... previous, Peers: connected.ToArray(), Banned: banned.ToArray(), Blocks: blocks}
+        Network = NetworkReport{... Network, Peers: connected.ToArray(), Banned: banned.ToArray()}
         return Network
     }
 
@@ -336,5 +346,6 @@ class NodeSession : IDisposable {
     func Dispose() {
         Api.Dispose()
         Supervisor.Dispose()
+        networkGate.Dispose()
     }
 }
