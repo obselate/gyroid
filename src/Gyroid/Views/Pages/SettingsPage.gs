@@ -1287,15 +1287,18 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Gap: 8,
                 Padding: Edges{Top: 4},
                 MaterialIcons.Create("warning", 14, ui.Dim),
-                Label(
-                    ui,
-                    ui.Strings.Get(
+                Text{
+                    Content: ui.Strings.Get(
                         "Anyone with these keys sees every payment and message to this wallet. They cannot spend"
                     ),
-                    12,
-                    ui.Dim,
-                    ""
-                )
+                    FontFamily: ui.Font,
+                    FontSize: 12,
+                    Color: ui.Dim,
+                    TextWrap: TextWrap.Wrap,
+                    FlexGrow: 1,
+                    FlexBasis: 0,
+                    MinWidth: 0
+                }
             }
         }
         return WalletParts.Modal(
