@@ -112,13 +112,12 @@ partial class App {
     }
 
     private func TrayMenu()[]NativeMenuItem {
-        let items = List[NativeMenuItem]{
-            NativeMenuItem{Id: "show", Text: ui.Strings.Get("Show")},
-            NativeMenuItem{Separator: true},
-            NativeMenuItem{Text: trayStatus, Enabled: false}
-        }
+        let items = List[NativeMenuItem](13)
+        items.Add(NativeMenuItem{Id: "show", Text: ui.Strings.Get("Show")})
+        items.Add(NativeMenuItem{Separator: true})
+        items.Add(NativeMenuItem{Id: "status", Text: trayStatus, Enabled: false})
         if trayBalance.Length > 0 {
-            items.Add(NativeMenuItem{Text: trayBalance, Enabled: false})
+            items.Add(NativeMenuItem{Id: "balance", Text: trayBalance, Enabled: false})
         }
         items.Add(NativeMenuItem{Separator: true})
         items.Add(NativeMenuItem{Id: "send", Text: ui.Strings.Get("Send")})
