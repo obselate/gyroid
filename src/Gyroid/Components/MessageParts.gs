@@ -413,7 +413,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 ring,
                 Label(
                     ui,
-                    estimate.Outputs.ToString() + " " + ui.Strings.Get("memos"),
+                    estimate.Outputs.ToString() + " " + ui.Strings.Get(estimate.Outputs == 1 ? "memo": "memos"),
                     11,
                     estimate.Fits ? ui.Dim: ui.Pink,
                     ""
