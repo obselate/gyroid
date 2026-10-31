@@ -21,6 +21,7 @@ class HistoryService {
     private var loaded int32
     private let blockTimes Dictionary[uint64, int64] = Dictionary[uint64, int64]()
     private var blockHash string = ""
+    private var blockHeight uint64
 
     prop Total uint64 -> uint64(received.Count)
     prop More bool -> loaded < received.Count
@@ -208,14 +209,25 @@ class HistoryService {
         await session.BeginAsync(ct, false)
         try {
             session.RequireUnlocked()
-            if blockHash != session.Node.Status.BestHash {
-                let tip = session.Node.Status.Height
-                for entry in blockTimes {
-                    if entry.Key > tip {
-                        blockTimes.Remove(entry.Key)
+            let status = session.Node.Status
+            if blockHash != status.BestHash {
+                var extends = false
+                if blockHash.Length > 0 && status.Height == blockHeight + 1 {
+                    using let block = await session.Node.Api.JsonAsync("block/" + status.Height.ToString(), ct: ct)
+                    extends = NodeJson.Text(block.RootElement, "prev_hash").StartsWith(
+                        blockHash,
+                        StringComparison.Ordinal
+                    )
+                }
+                if !extends {
+                    for entry in blockTimes {
+                        if entry.Key > status.Height || status.Height - entry.Key < 100 {
+                            blockTimes.Remove(entry.Key)
+                        }
                     }
                 }
-                blockHash = session.Node.Status.BestHash
+                blockHash = status.BestHash
+                blockHeight = status.Height
             }
             let times = Dictionary[uint64, int64]()
             for height in heights {
