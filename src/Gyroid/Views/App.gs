@@ -252,33 +252,26 @@ partial class App : Cell {
         wallet.Touch()
     }
 
+    private func InBackground(owner Window) bool ->
+    hidden ||
+        !owner.IsFocused ||
+        !owner.IsVisible ||
+        owner.State == WindowState.Minimized ||
+        owner.Occlusion == WindowOcclusion.Occluded
+
     private func UpdateBackgroundLock() {
         guard let owner = window else {
             return
         }
         let minutes = wallet.Settings.BackgroundLockMinutes
-        if minutes == 0 ||
-            !hidden &&
-            owner.IsFocused &&
-            owner.IsVisible &&
-            owner.State != WindowState.Minimized &&
-            owner.Occlusion != WindowOcclusion.Occluded {
+        if minutes == 0 || !InBackground(owner) {
             backgroundLockTimer?.Dispose()
             backgroundLockTimer = nil
         } else {
             backgroundLockTimer ??= owner.SetTimeout(
                 () -> {
                     backgroundLockTimer = nil
-                    if wallet
-                        .Snapshot
-                        .State == WalletState.Unlocked &&
-                        (
-                        hidden ||
-                            !owner.IsFocused ||
-                            !owner.IsVisible ||
-                            owner.State == WindowState.Minimized ||
-                            owner.Occlusion == WindowOcclusion.Occluded
-                    ) {
+                    if wallet.Snapshot.State == WalletState.Unlocked && InBackground(owner) {
                         Lock()
                     }
                 },
