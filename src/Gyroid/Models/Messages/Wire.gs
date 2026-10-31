@@ -17,6 +17,10 @@ class Envelope {
     var GroupName string = ""
     var Members List[string] = List[string]()
 
+    prop DisplayText string -> Kind == 3 ? "Group invitation: " + GroupName: Text
+    prop HeaderLength int32 -> 9 + (Kind >= 2 ? 8: 0) + (Kind == 1 || Kind == 3 ? 68: 0)
+    prop EncodedLength int32 -> HeaderLength + 64 + Body.Length
+
     func Header()[]uint8 {
         using let stream = MemoryStream()
         using let writer = BinaryWriter(stream)
@@ -63,6 +67,23 @@ class Envelope {
 
 class Wire {
     shared {
+        func IsEnvelope(hex string) bool -> hex.Length >= 148 && hex[0] == '1' && hex[1] >= '0' && hex[1] <= '3'
+
+        func DecodeMemo(hex string, network string) Envelope? {
+            if !IsEnvelope(hex) {
+                return nil
+            }
+            try {
+                return Decode(Convert.FromHexString(hex), network)
+            } catch (error FormatException) {
+                return nil
+            } catch (error ArgumentException) {
+                return nil
+            } catch (error EndOfStreamException) {
+                return nil
+            }
+        }
+
         func Decode(bytes[]uint8, network string) Envelope {
             if bytes.Length < 74 || bytes.Length > 31620 || (bytes[0] >> 4) != 1 || (bytes[0] & 15) > 3 {
                 throw FormatException("Not a Whisper v1 message")

@@ -4,8 +4,11 @@ import Gyroid.Models
 
 import System
 import System.Collections.Generic
+import System.IO
+import System.Linq
 import System.Text.Json
 import System.Threading
+import System.Threading.Tasks
 
 class PreparedSend {
     let Addresses List[string] = List[string]()
@@ -14,6 +17,16 @@ class PreparedSend {
 }
 
 partial class MessagingService {
+    private var lastSend DateTimeOffset
+
+    private async func WaitSend(ct CancellationToken) {
+        let remaining = 2100.0 - (DateTimeOffset.UtcNow - lastSend).TotalMilliseconds
+        if remaining > 0 {
+            await Task.Delay(TimeSpan.FromMilliseconds(remaining), ct)
+        }
+        lastSend = DateTimeOffset.UtcNow
+    }
+
     private func RequireSend() NodeApi {
         if Mode != MessengerMode.Send {
             throw InvalidOperationException("Sending requires an unlocked spend wallet")
@@ -74,14 +87,14 @@ partial class MessagingService {
             if kind >= 2 {
                 envelope.GroupId = Convert.FromHexString(conversation.Id)
             }
-            let headerBytes = 9 + (kind >= 2 ? 8: 0) + (kind == 1 || kind == 3 ? 68: 0)
+            let headerBytes = envelope.HeaderLength
             if headerBytes + body.Length + (kind < 2 ? 68: 0) > 512 {
                 prepared.Estimate.Fits = false
                 if enforce {
                     throw ArgumentException("Message exceeds the core signing limit")
                 }
             }
-            let size = headerBytes + 64 + body.Length
+            let size = envelope.EncodedLength
             prepared.Addresses.Add(recipient)
             prepared.Envelopes.Add(envelope)
             prepared.Estimate.BytesUsed += size
@@ -125,68 +138,106 @@ partial class MessagingService {
         if !invite && string.IsNullOrWhiteSpace(text) {
             throw ArgumentException("Message is empty")
         }
+        let account = OwnAddress
         await session.BeginAsync(ct, false)
         try {
+            lock sending {
+                if message != nil && !sending.ContainsKey(message) {
+                    return
+                }
+            }
+            if account != OwnAddress || (message != nil && message.SenderAddress != OwnAddress) {
+                throw WalletException("The wallet changed before the message was sent")
+            }
             let client = RequireSend()
-            let prepared = Prepare(conversation, text, invite)
-            for i in 0 ... prepared.Envelopes.Count {
-                let envelope = prepared.Envelopes[i]
-                let signing = envelope.SigningString(Address.Decode(prepared.Addresses[i], Network))
-                using let signed = await client.JsonAsync(
-                    "wallet/sign",
-                    writer -> {
-                        writer.WriteStartObject()
-                        writer.WriteString("message", signing)
-                        writer.WriteEndObject()
-                    },
-                    ct
-                )
-                envelope.Signature = Convert.FromHexString(NodeJson.Text(signed.RootElement, "signature"))
-                if envelope.Signature.Length != 64 {
-                    throw FormatException("Core returned an invalid signature")
+            session.Touch()
+            var target = conversation
+            if conversation.Id.StartsWith("$", StringComparison.Ordinal) {
+                target = await ResolveConversation(conversation.Title, conversation.Id, ct)
+                lock sending {
+                    if message != nil {
+                        if !sending.ContainsKey(message) {
+                            return
+                        }
+                        sending[message] = target.Id
+                        message.ConversationId = target.Id
+                    }
+                    target.Messages = conversations.Find(item -> item.Id == conversation.Id)
+                        ?.Messages ??
+                        List[Message]()
+                    conversations = conversations.Where(item -> item.Id != conversation.Id).ToList()
+                }
+            }
+            store?.Removed.TryRemove(target.Id, out _)
+            if !invite {
+                SaveConversation(target)
+            }
+            var payload = message?.SendPayload ?? Array.Empty[uint8]()
+            if payload.Length == 0 {
+                let prepared = Prepare(target, text, invite)
+                for i in 0 ... prepared.Envelopes.Count {
+                    let envelope = prepared.Envelopes[i]
+                    let signing = envelope.SigningString(Address.Decode(prepared.Addresses[i], Network))
+                    let signature = await session.Proofs.SignCoreAsync(signing, ct)
+                    envelope.Signature = Convert.FromHexString(signature)
+                    if envelope.Signature.Length != 64 {
+                        throw FormatException("Core returned an invalid signature")
+                    }
+                }
+                using let stream = MemoryStream()
+                using let writer = Utf8JsonWriter(stream)
+                WriteRecipients(writer, prepared)
+                writer.Flush()
+                payload = stream.ToArray()
+                if message != nil {
+                    message.SendPayload = payload
+                }
+            }
+            await WaitSend(ct)
+            lock sending {
+                if message != nil && !sending.ContainsKey(message) {
+                    return
                 }
             }
             using let sent = await client.JsonAsync(
                 "wallet/send",
-                writer -> WriteRecipients(writer, prepared),
+                writer -> writer.WriteRawValue(ReadOnlySpan[uint8](payload), true),
                 ct,
-                Guid.NewGuid().ToString("N"),
+                message?.IdempotencyKey ?? Guid.NewGuid().ToString("N"),
                 true
             )
-            if let item = message {
-                item.Txid = NodeJson.Text(sent.RootElement, "txid")
-                item.State = MessageState.Pending
-                item.EtaSeconds = AverageBlockSeconds
-                lock sending {
-                    sending.Remove(item)
-                }
+            if message != nil {
+                message.Txid = NodeJson.Text(sent.RootElement, "txid")
+                message.State = MessageState.Pending
+                message.EtaSeconds = AverageBlockSeconds
             }
             if invite {
-                SaveConversation(conversation)
-                store?.Save()
-            }
-            try {
-                using let address = await client.JsonAsync("wallet/address", ct: ct)
-                await RefreshCoreAsync(address.RootElement, ct)
-            } catch (error Exception) {
-                Error = error.Message
+                SaveConversation(target)
             }
         } finally {
             session.End()
+        }
+        try {
+            await session.RefreshAsync(ct)
+        } catch (error Exception) {
+            Error = error.Message
+            session.Changed?.Invoke()
         }
     }
 
     private func SaveConversation(conversation Conversation) {
         let local = store ?? throw WalletException("Load a wallet first")
-        let current = conversations.Find(item -> item.Id == conversation.Id)
-        if current != nil && conversation.Messages.Count == 0 {
-            conversation.Messages = current.Messages
-            conversation.Unread = current.Unread
+        lock sending {
+            let current = conversations.Find(item -> item.Id == conversation.Id)
+            if current != nil {
+                conversation.Messages = current.Messages
+                conversation.Unread = current.Unread
+            }
+            local.Conversations[conversation.Id] = conversation
+            let list = List[Conversation](conversations)
+            list.RemoveAll(item -> item.Id == conversation.Id)
+            list.Add(conversation)
+            conversations = list
         }
-        local.SaveContact(conversation)
-        let list = List[Conversation](conversations)
-        list.RemoveAll(item -> item.Id == conversation.Id)
-        list.Add(conversation)
-        conversations = list
     }
 }

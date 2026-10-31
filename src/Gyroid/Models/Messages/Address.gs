@@ -73,12 +73,6 @@ class Address {
             return System.String(characters)
         }
 
-        func Short(text string) string -> if text.Length > 14 {
-            text.Substring(0, 4) + "..." + text.Substring(text.Length - 7)
-        } else {
-            text
-        }
-
         func Tag(payload[]uint8)[]uint8 {
             let digest = SHA3_256.HashData(payload)
             let tag = [4]uint8

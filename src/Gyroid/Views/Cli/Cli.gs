@@ -5,6 +5,7 @@ import Gyroid.Services
 import System
 import System.Globalization
 import System.IO
+import System.Linq
 import System.Reflection
 import System.Threading
 
@@ -239,14 +240,28 @@ class Cli {
                     return RunViewOnly(wallet, arguments)
                 } else if command == "message" {
                     wallet.RefreshAsync().GetAwaiter().GetResult()
+                    wallet.RequireUnlocked()
+                    wallet.Messages.RefreshAsync().GetAwaiter().GetResult()
+                    if wallet.Messages.Error.Length > 0 {
+                        throw WalletException(wallet.Messages.Error)
+                    }
+                    let privacy = wallet.Settings.Privacy
                     if arguments[2] == "send" {
                         RequireTerminal()
                         Console.Error.Write("Type send to submit: ")
                         if Console.ReadLine() != "send" {
                             throw WalletException("Send cancelled")
                         }
-                        let conversation = wallet.Messages.AddContact("", arguments[3]).GetAwaiter().GetResult()
+                        let conversation = Conversation{
+                            Id: arguments[3].Trim(),
+                            Title: WalletText.Short(arguments[3].Trim())
+                        }
+                        conversation.Members.Add(conversation.Id)
                         wallet.Messages.Send(conversation, arguments[4]).GetAwaiter().GetResult()
+                        wallet.Messages.RefreshAsync().GetAwaiter().GetResult()
+                        if wallet.Messages.Error.Length > 0 {
+                            throw WalletException(wallet.Messages.Error)
+                        }
                     } else {
                         for conversation in wallet.Messages.Conversations {
                             for message in wallet.Messages.Thread(conversation.Id) {
@@ -255,7 +270,9 @@ class Cli {
                                         " " +
                                         message
                                         .Verification
-                                        .ToString() + " " + message.Text.Replace('\r', ' ').Replace('\n', ' ')
+                                        .ToString() + " " + WalletText.SafeText(
+                                        WalletText.Hidden(privacy, message.Text)
+                                    )
                                 )
                             }
                         }
@@ -316,6 +333,14 @@ class Cli {
                     }
                 } else {
                     wallet.RefreshAsync().GetAwaiter().GetResult()
+                    if command == "history" {
+                        wallet.RequireUnlocked()
+                        wallet.Messages.RefreshAsync().GetAwaiter().GetResult()
+                        if wallet.Messages.Error.Length > 0 {
+                            throw WalletException(wallet.Messages.Error)
+                        }
+                    }
+                    let privacy = wallet.Settings.Privacy
                     var snapshot = wallet.Snapshot
                     if command == "address" || command == "history" {
                         wallet.RequireUnlocked()
@@ -337,21 +362,22 @@ class Cli {
                             if count >= limit {
                                 break
                             }
+                            let memoText = string.Join(
+                                " ",
+                                send
+                                    .Recipients
+                                    .Select(recipient -> recipient.Memo)
+                                    .Where(value -> value.Length > 0)
+                                    .Distinct(StringComparer.Ordinal)
+                            )
                             Console.WriteLine(
                                 "Sent " + send.TxId + " " + WalletAmount.Format(send.Amount) +
                                     " BNT " +
                                     send.Status +
-                                    " " +
-                                    string
-                                    .Join(
-                                    " ",
-                                    System
-                                        .Linq
-                                        .Enumerable
-                                        .Select(
-                                        send.Recipients,
-                                        recipient -> recipient.Memo.Replace('\r', ' ').Replace('\n', ' ')
-                                    )
+                                    (
+                                    memoText.Length > 0 ? " " + WalletText.SafeText(
+                                        WalletText.Hidden(privacy, memoText)
+                                    ): ""
                                 )
                             )
                             count = count + 1
@@ -368,11 +394,11 @@ class Cli {
                                     WalletAmount.Format(output.Amount) + " BNT height " + output.BlockHeight.ToString(
                                     CultureInfo.InvariantCulture
                                 ) +
-                                    " " +
-                                    output
-                                    .Memo
-                                    .Replace('\r', ' ')
-                                    .Replace('\n', ' ')
+                                    (
+                                    output.Memo.Length > 0 ? " " + WalletText.SafeText(
+                                        WalletText.Hidden(privacy, output.Memo)
+                                    ): ""
+                                )
                             )
                             count = count + 1
                         }
@@ -383,7 +409,7 @@ class Cli {
                 }
                 return 0
             } catch (error Exception) {
-                Console.Error.WriteLine(error.Message.Replace('\r', ' ').Replace('\n', ' '))
+                Console.Error.WriteLine(WalletText.SafeText(error.Message))
                 return 1
             }
         }

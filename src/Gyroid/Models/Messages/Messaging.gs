@@ -25,7 +25,10 @@ enum Verification {
 
 class Message {
     var Key string = ""
+    var ConversationId string = ""
     var Txid string = ""
+    var IdempotencyKey string = ""
+    var SendPayload[]uint8 = Array.Empty[uint8]()
     var Outgoing bool
     var SenderName string = ""
     var SenderAddress string = ""
@@ -38,6 +41,7 @@ class Message {
     var Verification Verification
     var FeeAtomic int64
     var Outputs int32
+    var OutputIndices[]int32 = Array.Empty[int32]()
 }
 
 class Conversation {

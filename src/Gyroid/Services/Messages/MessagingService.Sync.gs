@@ -1,256 +1,348 @@
 package Gyroid.Services
 
 import Gyroid.Models
-
 import System
 import System.Collections.Generic
-import System.IO
 import System.Linq
+import System.Text
 import System.Text.Json
 import System.Threading
 import System.Threading.Tasks
 
 partial class MessagingService {
-    private let blockTimes Dictionary[int64, DateTimeOffset] = Dictionary[int64, DateTimeOffset]()
+    private let blockTimes Dictionary[string, DateTimeOffset] = Dictionary[string, DateTimeOffset](
+        StringComparer.Ordinal
+    )
     private let minedHeights Dictionary[string, int64] = Dictionary[string, int64](StringComparer.Ordinal)
     private var lastVerify DateTimeOffset
-    private var historyMemos Dictionary[string, string] = Dictionary[string, string](StringComparer.Ordinal)
+    private var receivedMessages Dictionary[string, Message] = Dictionary[string, Message](StringComparer.Ordinal)
+    private var sentMessages Dictionary[string, Message] = Dictionary[string, Message](StringComparer.Ordinal)
 
-    func HistoryMemo(txid string, index int32, fallback string) string -> historyMemos.TryGetValue(
-        txid + ":" + index.ToString(),
-        out let memo
-    ) ? memo: fallback
-
-    async func RefreshCoreAsync(address JsonElement, ct CancellationToken) {
-        let client = session.Node.Api
-        let own = NodeJson.Text(address, "address")
-        Address.Decode(own, Network)
-        if own != OwnAddress || store == nil {
-            store = MessagingStore(Network, own)
-            blockTimes.Clear()
-            minedHeights.Clear()
-            lock sending {
-                sending.Clear()
+    func HistoryMessage(txid string, recipient string, outgoing bool) Message? {
+        var message Message? = nil
+        if outgoing {
+            if sentMessages.TryGetValue(txid + ":" + recipient, out let sent) {
+                message = sent
             }
+        } else if receivedMessages.TryGetValue(txid, out let received) {
+            message = received
         }
-        ownAddress = own
-        viewOnly = NodeJson.Flag(address, "view_only")
-        let local = store ?? throw WalletException("Messaging store is unavailable")
-        local.ReloadContacts(Network)
-        let memos = Dictionary[string, string](StringComparer.Ordinal)
+        let local = store
+        if message != nil && local != nil && local.Removed.TryGetValue(message.ConversationId, out let removedAt) &&
+            message
+            .SentAt
+            .ToUnixTimeSeconds() <= removedAt {
+            return nil
+        }
+        return message
+    }
+
+    private func KnownConversations(local MessagingStore, network string) Dictionary[string, Conversation] {
+        let known = Dictionary[string, Conversation](local.Conversations, StringComparer.Ordinal)
+        try {
+            for entry in AddressBook.ReadContacts(_ -> { }) {
+                var address = entry.Value
+                var handle = ""
+                if address.StartsWith("$", StringComparison.Ordinal) {
+                    handle = address
+                    let saved = known.Values.FirstOrDefault(item -> item.Handle == handle)
+                    if saved != nil {
+                        address = saved.Id
+                    }
+                }
+                if !address.StartsWith("$", StringComparison.Ordinal) {
+                    try {
+                        Address.Decode(address, network)
+                    } catch (error ArgumentException) {
+                        continue
+                    }
+                }
+                let conversation = Conversation{Id: address, Title: entry.Key, Handle: handle}
+                conversation.Members.Add(address)
+                known[address] = conversation
+            }
+        } catch (error WalletException) { }
+        return known
+    }
+
+    private async func RefreshCoreAsync(ct CancellationToken) {
+        var own string
+        var network string
+        var version int64
+        var currentRevision int64
+        var local MessagingStore?
+        var received[]JsonElement
+        var sent[]JsonElement
+        lock sending {
+            if ownAddress.Length == 0 || appliedRevision == revision {
+                return
+            }
+            own = ownAddress
+            network = Network
+            version = generation
+            currentRevision = revision
+            local = store
+            received = receivedRows
+            sent = sentRows
+        }
+        try {
+            await Synchronize(
+                own,
+                network,
+                version,
+                currentRevision,
+                local ?? throw WalletException("Messaging store is unavailable"),
+                received,
+                sent,
+                ct
+            )
+        } catch (error Exception) {
+            lock sending {
+                if generation == version {
+                    Error = error.Message
+                }
+            }
+            session.Changed?.Invoke()
+            throw error
+        }
+    }
+
+    private async func Synchronize(
+        own string,
+        network string,
+        version int64,
+        currentRevision int64,
+        local MessagingStore,
+        received[]JsonElement,
+        sent[]JsonElement,
+        ct CancellationToken
+    ) {
+        let client = session.Node.Api
         using let status = await client.JsonAsync("status", ct: ct)
         using let stats = await client.JsonAsync("stats", ct: ct)
-        let height = NodeJson.Integer(status.RootElement, "chain_height")
-        let tip = await BlockTime(client, height, ct)
+        let height = int64(NodeJson.Number(status.RootElement, "chain_height"))
+        let tip = await BlockTime(client, network, height, ct)
         var average = 300.0
-        var averageField JsonElement
-        if stats.RootElement.TryGetProperty("avg_block_time", out averageField) &&
-            averageField.ValueKind == JsonValueKind.Number {
-            average = averageField.GetDouble()
-            if !double.IsFinite(average) || average <= 0 {
-                average = 300.0
+        if stats.RootElement.TryGetProperty("avg_block_time", out let field) &&
+            field.ValueKind == JsonValueKind.Number {
+            let value = field.GetDouble()
+            if double.IsFinite(value) && value > 0 {
+                average = value
             }
         }
+        let known = KnownConversations(local, network)
         let updated = Dictionary[string, Conversation](StringComparer.Ordinal)
-        for pair in local.Contacts {
+        for pair in known {
             let saved = pair.Value
-            updated[saved.Id] = Conversation{
-                Id: saved.Id,
-                Title: saved.Title,
-                Handle: saved.Handle,
-                IsGroup: saved.IsGroup,
-                Members: List[string](saved.Members)
+            if !local.Removed.ContainsKey(saved.Id) {
+                updated[saved.Id] = Conversation{
+                    Id: saved.Id,
+                    Title: saved.Title,
+                    Handle: saved.Handle,
+                    IsGroup: saved.IsGroup,
+                    Members: List[string](saved.Members)
+                }
             }
         }
-        using let history = await client.JsonAsync("wallet/history", ct: ct)
-        let incoming = Dictionary[string, List[JsonElement]](StringComparer.Ordinal)
-        for output in history.RootElement.GetProperty("outputs").EnumerateArray() {
-            if NodeJson.Text(output, "memo_hex").Length == 0 {
-                continue
+        let acceptedReceived = Dictionary[string, Message](StringComparer.Ordinal)
+        let acceptedSent = Dictionary[string, Message](StringComparer.Ordinal)
+        for group in received.Where(row -> NodeJson.Text(row, "memo_hex").Length > 0).GroupBy(
+            row -> NodeJson.Text(row, "txid")
+        ) {
+            if generation != version {
+                return
             }
-            let txid = NodeJson.Text(output, "txid")
-            if !incoming.ContainsKey(txid) {
-                incoming[txid] = List[JsonElement]()
-            }
-            incoming[txid].Add(output)
-        }
-        for pair in incoming {
-            let outputs = pair.Value
-            outputs.Sort(
-                (left, right) -> NodeJson.Integer(left, "output_index").CompareTo(
-                    NodeJson.Integer(right, "output_index")
-                )
-            )
-            using let stream = MemoryStream()
+            let outputs = group.OrderBy(row -> NodeJson.Number(row, "output_index")).ToArray()
+            let hex = StringBuilder()
             for output in outputs {
-                stream.Write(Convert.FromHexString(NodeJson.Text(output, "memo_hex")))
+                hex.Append(NodeJson.Text(output, "memo_hex"))
             }
-            let decoded = DecodeWhisper(stream.ToArray(), Network)
-            if decoded == nil {
+            let envelope = Wire.DecodeMemo(hex.ToString(), network)
+            if envelope == nil {
                 continue
             }
-            for index in 0 ... outputs.Count {
-                memos[
-                    pair.Key + ":" + NodeJson.Integer(outputs[index], "output_index").ToString()
-                ] = index == 0 ? decoded.Kind == 3 ? "Group invitation: " +
-                    decoded.GroupName: decoded.Text: ""
-            }
-            await AddEnvelope(
+            let mined = int64(NodeJson.Number(outputs[0], "block_height"))
+            let message = await AddEnvelope(
                 client,
                 local,
+                known,
+                network,
                 updated,
-                decoded,
-                pair.Key,
+                envelope,
+                group.Key,
                 own,
                 false,
                 "confirmed",
-                height - NodeJson.Integer(outputs[0], "block_height") + 1,
-                NodeJson.Integer(outputs[0], "block_height"),
+                height - mined + 1,
+                mined,
                 0,
-                outputs.Count,
+                outputs.Length,
                 average,
                 own,
                 ct
             )
+            if message != nil {
+                message.OutputIndices = outputs.Select(row -> int32(NodeJson.Number(row, "output_index"))).ToArray()
+                acceptedReceived[group.Key] = message
+            }
         }
-        var offset = 0
-        while true {
-            using let sends = await client.JsonAsync(
-                "wallet/sends?limit=500&offset=" + offset.ToString() + "&order=asc",
-                ct: ct
-            )
-            let entries = sends.RootElement.GetProperty("sends")
-            for sent in entries.EnumerateArray() {
-                let recipients = Dictionary[string, MemoryStream](StringComparer.Ordinal)
-                try {
-                    for output in sent.GetProperty("recipients").EnumerateArray() {
-                        let memo = NodeJson.Text(output, "memo_hex")
-                        if memo.Length == 0 {
-                            continue
-                        }
-                        let recipient = NodeJson.Text(output, "address")
-                        if !recipients.ContainsKey(recipient) {
-                            recipients[recipient] = MemoryStream()
-                        }
-                        recipients[recipient].Write(Convert.FromHexString(memo))
-                    }
-                    let txid = NodeJson.Text(sent, "txid")
-                    let state = NodeJson.Text(sent, "chain_state")
-                    var mined int64
-                    if state == "confirmed" && !minedHeights.TryGetValue(txid, out mined) {
-                        using let transaction = await client.JsonAsync("tx/" + txid, ct: ct)
-                        mined = NodeJson.Integer(transaction.RootElement, "block_height")
-                        minedHeights[txid] = mined
-                    }
-                    let groups = HashSet[string](StringComparer.Ordinal)
-                    for pair in recipients {
-                        let envelope = DecodeWhisper(pair.Value.ToArray(), Network)
-                        if envelope == nil {
-                            continue
-                        }
-                        if envelope.Kind >= 2 && !groups.Add(Convert.ToHexStringLower(envelope.GroupId)) {
-                            continue
-                        }
-                        await AddEnvelope(
-                            client,
-                            local,
-                            updated,
-                            envelope,
-                            txid,
-                            pair.Key,
-                            true,
-                            state,
-                            NodeJson.Integer(sent, "confirmations"),
-                            mined,
-                            NodeJson.Integer(sent, "fee"),
-                            int32(NodeJson.Integer(sent, "total_amount")),
-                            average,
-                            own,
-                            ct
-                        )
-                    }
-                } finally {
-                    for pair in recipients {
-                        pair.Value.Dispose()
-                    }
+        for entry in sent {
+            if generation != version {
+                return
+            }
+            let recipients = entry
+                .GetProperty("recipients")
+                .EnumerateArray()
+                .Where(row -> NodeJson.Text(row, "memo_hex").Length > 0)
+                .GroupBy(row -> NodeJson.Text(row, "address"))
+            let decoded = Dictionary[string, Envelope](StringComparer.Ordinal)
+            for group in recipients {
+                let hex = StringBuilder()
+                for output in group {
+                    hex.Append(NodeJson.Text(output, "memo_hex"))
+                }
+                if let envelope = Wire.DecodeMemo(hex.ToString(), network) {
+                    decoded[group.Key] = envelope
                 }
             }
-            offset += entries.GetArrayLength()
-            if entries.GetArrayLength() == 0 || int64(offset) >= NodeJson.Integer(sends.RootElement, "total") {
-                break
+            if decoded.Count == 0 {
+                continue
+            }
+            let txid = NodeJson.Text(entry, "txid")
+            let chainState = NodeJson.Text(entry, "chain_state")
+            var mined int64
+            let cacheKey = network + ":" + txid
+            if chainState == "confirmed" && !minedHeights.TryGetValue(cacheKey, out mined) {
+                using let transaction = await client.JsonAsync("tx/" + txid, ct: ct)
+                mined = int64(NodeJson.Number(transaction.RootElement, "block_height"))
+                minedHeights[cacheKey] = mined
+            }
+            for pair in decoded {
+                let message = await AddEnvelope(
+                    client,
+                    local,
+                    known,
+                    network,
+                    updated,
+                    pair.Value,
+                    txid,
+                    pair.Key,
+                    true,
+                    chainState,
+                    int64(NodeJson.Number(entry, "confirmations")),
+                    mined,
+                    int64(NodeJson.Number(entry, "fee")),
+                    entry.GetProperty("recipients").GetArrayLength(),
+                    average,
+                    own,
+                    ct
+                )
+                if message != nil {
+                    acceptedSent[txid + ":" + pair.Key] = message
+                }
             }
         }
         let result = List[Conversation](updated.Values)
         for conversation in result {
             conversation.Messages.Sort((left, right) -> left.SentAt.CompareTo(right.SentAt))
-            var read int64
-            local.ReadMarkers.TryGetValue(conversation.Id, out read)
-            for message in conversation.Messages {
-                if !message.Outgoing && message.SentAt.ToUnixTimeSeconds() > read {
-                    conversation.Unread++
-                }
+            if conversation.Id == selected {
+                conversation.Unread = 0
+                local.MarkRead(conversation)
             }
         }
         result.Sort((left, right) -> string.Compare(left.Title, right.Title, StringComparison.OrdinalIgnoreCase))
+        if generation != version {
+            return
+        }
         local.Save()
-        TipHeight = height
-        TipTime = tip
-        AverageBlockSeconds = average
-        historyMemos = memos
-        lock sending {
-            for pair in sending {
-                var conversation = result.Find(item -> item.Id == pair.Value)
-                if conversation == nil {
-                    conversation = this.conversations.Find(item -> item.Id == pair.Value)
-                    if conversation != nil {
-                        let saved = Conversation{
-                            Id: conversation.Id,
-                            Title: conversation.Title,
-                            Handle: conversation.Handle,
-                            IsGroup: conversation.IsGroup,
-                            Members: List[string](conversation.Members)
+        await session.gate.WaitAsync(ct)
+        try {
+            if generation != version || session.State != WalletState.Unlocked || session.disposed {
+                return
+            }
+            lock sending {
+                result.RemoveAll(
+                    conversation -> {
+                        if local.Removed.TryGetValue(conversation.Id, out let removedAt) {
+                            conversation.Messages.RemoveAll(message -> message.SentAt.ToUnixTimeSeconds() <= removedAt)
+                            return conversation.Messages.Count == 0
                         }
-                        result.Add(saved)
-                        conversation = saved
+                        return false
+                    }
+                )
+                for saved in local.Conversations.Values {
+                    if !local.Removed.ContainsKey(saved.Id) && !result.Any(item -> item.Id == saved.Id) {
+                        result.Add(
+                            Conversation{
+                                Id: saved.Id,
+                                Title: saved.Title,
+                                Handle: saved.Handle,
+                                IsGroup: saved.IsGroup,
+                                Members: List[string](saved.Members)
+                            }
+                        )
                     }
                 }
-                conversation?.Messages.Add(pair.Key)
+                for pair in sending.ToArray() {
+                    let conversation = result.Find(item -> item.Id == pair.Value)
+                    if pair.Key.Txid.Length > 0 && conversation?.Messages.Any(
+                        item -> item.Txid == pair.Key.Txid && item.Outgoing
+                    ) == true {
+                        sending.Remove(pair.Key)
+                        continue
+                    }
+                    if conversation != nil {
+                        conversation.Messages.Add(pair.Key)
+                    } else if let previous = conversations.Find(item -> item.Id == pair.Value) {
+                        let saved = Conversation{
+                            Id: previous.Id,
+                            Title: previous.Title,
+                            Handle: previous.Handle,
+                            IsGroup: previous.IsGroup,
+                            Members: List[string](previous.Members)
+                        }
+                        saved.Messages.Add(pair.Key)
+                        result.Add(saved)
+                    }
+                }
+                for conversation in result {
+                    local.ReadMarkers.TryGetValue(conversation.Id, out let read)
+                    conversation.Unread = conversation.Messages.Count(
+                        message -> !message.Outgoing && message.SentAt.ToUnixTimeSeconds() > read
+                    )
+                }
+                conversations = result
+                receivedMessages = acceptedReceived
+                sentMessages = acceptedSent
+                appliedRevision = currentRevision
+                TipHeight = height
+                TipTime = tip
+                AverageBlockSeconds = average
+                Error = ""
             }
-            this.conversations = result
+            session.History.ApplyMessages()
+        } finally {
+            session.gate.Release()
         }
-        if let current = result.Find(item -> item.Id == selected) {
-            current.Unread = 0
-            local.MarkRead(current)
-            local.Save()
-        }
-        Error = ""
+        session.Changed?.Invoke()
     }
 
-    private func DecodeWhisper(bytes[]uint8, network string) Envelope? {
-        try {
-            return Wire.Decode(bytes, network)
-        } catch (error FormatException) {
-            return nil
-        } catch (error ArgumentException) {
-            return nil
-        } catch (error EndOfStreamException) {
-            return nil
-        }
-    }
-
-    private async func BlockTime(client NodeApi, height int64, ct CancellationToken) DateTimeOffset {
-        if blockTimes.ContainsKey(height) {
-            return blockTimes[height]
+    private async func BlockTime(client NodeApi, network string, height int64, ct CancellationToken) DateTimeOffset {
+        let key = network + ":" + height.ToString()
+        if blockTimes.TryGetValue(key, out let cached) {
+            return cached
         }
         using let block = await client.JsonAsync("block/" + height.ToString(), ct: ct)
-        let timestamp = DateTimeOffset.FromUnixTimeSeconds(NodeJson.Integer(block.RootElement, "timestamp"))
-        blockTimes[height] = timestamp
+        let timestamp = DateTimeOffset.FromUnixTimeSeconds(NodeJson.Signed(block.RootElement, "timestamp"))
+        blockTimes[key] = timestamp
         return timestamp
     }
 
     private async func AddEnvelope(
         client NodeApi,
         local MessagingStore,
+        known Dictionary[string, Conversation],
+        network string,
         conversations Dictionary[string, Conversation],
         envelope Envelope,
         txid string,
@@ -264,7 +356,7 @@ partial class MessagingService {
         average float64,
         own string,
         ct CancellationToken
-    ) {
+    ) Message? {
         var sender = ""
         if outgoing {
             sender = own
@@ -272,18 +364,18 @@ partial class MessagingService {
             sender = Address.Encode(envelope.Sender)
         } else {
             let candidates = HashSet[string](StringComparer.Ordinal)
-            for pair in local.Contacts {
+            for pair in known {
                 for member in pair.Value.Members {
                     if member.StartsWith("$", StringComparison.Ordinal) {
                         continue
                     }
-                    if Enumerable.SequenceEqual(Address.Tag(Address.Decode(member, Network)), envelope.Tag) {
+                    if Enumerable.SequenceEqual(Address.Tag(Address.Decode(member, network)), envelope.Tag) {
                         candidates.Add(member)
                     }
                 }
             }
             for id in local.Removed.Keys {
-                if id.Length >= 68 && Enumerable.SequenceEqual(Address.Tag(Address.Decode(id, Network)), envelope.Tag) {
+                if id.Length >= 68 && Enumerable.SequenceEqual(Address.Tag(Address.Decode(id, network)), envelope.Tag) {
                     candidates.Add(id)
                 }
             }
@@ -294,7 +386,7 @@ partial class MessagingService {
         var verification = Verification.Unverified
         let cacheKey = txid + ":" + recipient
         let signing = if sender.Length > 0 {
-            envelope.SigningString(Address.Decode(recipient, Network))
+            envelope.SigningString(Address.Decode(recipient, network))
         } else {
             ""
         }
@@ -307,22 +399,13 @@ partial class MessagingService {
                     await Task.Delay(TimeSpan.FromMilliseconds(wait), ct)
                 }
                 lastVerify = DateTimeOffset.UtcNow
-                using let verified = await client.JsonAsync(
-                    "verify",
-                    writer -> {
-                        writer.WriteStartObject()
-                        writer.WriteString("address", sender)
-                        writer.WriteString("message", signing)
-                        writer.WriteString("signature", Convert.ToHexStringLower(envelope.Signature))
-                        writer.WriteEndObject()
-                    },
+                let valid = await session.Proofs.VerifyCoreAsync(
+                    sender,
+                    signing,
+                    Convert.ToHexStringLower(envelope.Signature),
                     ct
                 )
-                verification = if NodeJson.Flag(verified.RootElement, "valid") {
-                    Verification.Verified
-                } else {
-                    Verification.Invalid
-                }
+                verification = valid ? Verification.Verified: Verification.Invalid
                 local.Verified[cacheKey] = verification
             }
         }
@@ -336,31 +419,32 @@ partial class MessagingService {
             "unknown:" + Convert.ToHexStringLower(envelope.Tag)
         }
         let arrived = if chainState == "confirmed" {
-            await BlockTime(client, height, ct)
+            await BlockTime(client, network, height, ct)
         } else {
             DateTimeOffset.UtcNow
         }
         let sentAt = Math.Min(int64(envelope.SentAt), arrived.ToUnixTimeSeconds())
         if local.Removed.TryGetValue(id, out let removedAt) && sentAt <= removedAt {
-            return
+            return nil
         }
-        if envelope.Kind == 2 && !outgoing && local.Contacts.ContainsKey(id) {
-            if !local.Contacts[id].Members.Contains(sender) {
+        if envelope.Kind == 2 && !outgoing && known.ContainsKey(id) {
+            if !known[id].Members.Contains(sender) {
                 verification = Verification.Invalid
             }
         }
         if verification == Verification.Invalid && !outgoing {
-            return
+            return nil
         }
         if outgoing && envelope.Kind == 1 && chainState == "confirmed" {
             local.Introduced[recipient] = true
         }
-        if envelope.Kind == 3 && verification == Verification.Verified && !local.Contacts.ContainsKey(id) {
+        if envelope.Kind == 3 && verification == Verification.Verified && !known.ContainsKey(id) {
             if !envelope.Members.Contains(recipient) || !envelope.Members.Contains(sender) {
-                return
+                return nil
             }
             let group = Conversation{Id: id, Title: envelope.GroupName, IsGroup: true, Members: envelope.Members}
-            local.SaveContact(group)
+            local.Conversations[id] = group
+            known[id] = group
             if conversations.ContainsKey(id) {
                 group.Messages = conversations[id].Messages
             }
@@ -370,9 +454,9 @@ partial class MessagingService {
             let conversation = Conversation{
                 Id: id,
                 Title: if outgoing {
-                    Address.Short(recipient)
+                    WalletText.Short(recipient)
                 } else if sender.Length > 0 {
-                    Address.Short(sender)
+                    WalletText.Short(sender)
                 } else {
                     "Unknown sender"
                 },
@@ -388,31 +472,29 @@ partial class MessagingService {
                 )
             }
             conversations[id] = conversation
-            if verification == Verification.Verified && envelope.Kind == 1 {
-                local.SaveContact(conversation)
+            if envelope.Kind < 2 {
+                local.Conversations[id] = conversation
+                known[id] = conversation
             }
         }
         var senderName = if outgoing {
             "You"
         } else if sender.Length > 0 {
-            Address.Short(sender)
+            WalletText.Short(sender)
         } else {
             "Unknown sender"
         }
-        if local.Contacts.ContainsKey(sender) {
-            senderName = local.Contacts[sender].Title
+        if known.ContainsKey(sender) {
+            senderName = known[sender].Title
         }
         let message = Message{
             Key: txid + ":" + id,
+            ConversationId: id,
             Txid: txid,
             Outgoing: outgoing,
             SenderAddress: sender,
             SenderName: senderName,
-            Text: if envelope.Kind == 3 {
-                "Group invitation: " + envelope.GroupName
-            } else {
-                envelope.Text
-            },
+            Text: envelope.DisplayText,
             SentAt: DateTimeOffset.FromUnixTimeSeconds(sentAt),
             State: if chainState == "mempool" {
                 MessageState.Pending
@@ -430,6 +512,9 @@ partial class MessagingService {
         if chainState == "confirmed" {
             message.ArrivedAt = arrived
         }
-        conversations[id].Messages.Add(message)
+        if !conversations[id].Messages.Any(item -> item.Key == message.Key) {
+            conversations[id].Messages.Add(message)
+        }
+        return message
     }
 }

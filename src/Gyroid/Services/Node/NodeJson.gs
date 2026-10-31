@@ -1,8 +1,6 @@
 package Gyroid.Services
 
-import Gyroid.Models
 import System
-import System.IO
 import System.Text
 import System.Text.Json
 
@@ -39,30 +37,9 @@ class NodeJson {
             throw WalletException("Daemon response omitted a required timestamp")
         }
 
-        func Integer(value JsonElement, name string) int64 -> value.TryGetProperty(name, out let found) &&
-            found.TryGetInt64(out let number) ? number: 0
-
-        func MessageMemo(hex string, network string) string? {
-            try {
-                let envelope = Wire.Decode(Convert.FromHexString(hex), network)
-                return envelope.Kind == 3 ? "Group invitation: " + envelope.GroupName: envelope.Text
-            } catch (error FormatException) {
-                return nil
-            } catch (error ArgumentException) {
-                return nil
-            } catch (error EndOfStreamException) {
-                return nil
-            }
-        }
-
-        func Memo(hex string, network string = "") string {
+        func Memo(hex string) string {
             if hex.Length == 0 {
                 return ""
-            }
-            if network.Length > 0 {
-                if let message = MessageMemo(hex, network) {
-                    return message
-                }
             }
             try {
                 return UTF8Encoding(false, true).GetString(Convert.FromHexString(hex))

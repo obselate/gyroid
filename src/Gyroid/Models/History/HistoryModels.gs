@@ -8,6 +8,7 @@ data class WalletOutput {
     var Spent bool
     var Coinbase bool
     var Memo string = ""
+    var OutputIndices[]int32 = System.Array.Empty[int32]()
 }
 
 data class WalletRecipient {

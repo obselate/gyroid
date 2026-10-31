@@ -711,7 +711,7 @@ class OverviewPage : Cell[OverviewInput] {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
-                Name: item.Source + " " + Wait(input, item.Blocks),
+                Name: Hidden(input.Privacy, SafeText(item.Source, 512)) + " " + Wait(input, item.Blocks),
                 Expanded: item.TxId.Length > 0 ? unfolded: nil
             },
             OnClick: () -> {
@@ -726,7 +726,7 @@ class OverviewPage : Cell[OverviewInput] {
                 Gap: 12,
                 Container{Width: 16, AlignItems: AlignItems.Center, glyph},
                 Number(ui, input.Privacy, Fixed(item.Amount), Fade(ui.Ink, faded), Fade(ui.Dim, faded)),
-                Grow(Label(ui, item.Source.Replace('\r', ' ').Replace('\n', ' '), 13, Fade(ui.Dim, faded), "")),
+                Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Source, 512)), 13, Fade(ui.Dim, faded), "")),
                 Container{
                     Width: 76,
                     AlignItems: AlignItems.FlexEnd,
@@ -888,7 +888,11 @@ class OverviewPage : Cell[OverviewInput] {
                     BorderWidth: Edges{Bottom: 1},
                     BorderColor: ui.Rule,
                     Accessibility: Accessibility{
-                        Name: ui.Strings.Get(outgoing ? "sent": "received") + " " + shown + " " + item.Label
+                        Name: ui.Strings.Get(outgoing ? "sent": "received") +
+                            " " +
+                            shown +
+                            " " +
+                            Hidden(input.Privacy, SafeText(item.Label, 512))
                     },
                     Container{
                         Width: 16,
@@ -908,7 +912,7 @@ class OverviewPage : Cell[OverviewInput] {
                         outgoing ? ui.Pink: ui.Mint,
                         ui.Dim
                     ),
-                    Grow(Label(ui, item.Label.Replace('\r', ' ').Replace('\n', ' '), 13, ui.Dim, "")),
+                    Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Label, 512)), 13, ui.Dim, "")),
                     Label(
                         ui,
                         item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,

@@ -369,15 +369,17 @@ try:
     if fee != estimate["fee"] or fee <= 0:
         raise RuntimeError()
     dry_run = cli("send", addresses[1], "1", "--memo", memo, "--dry-run")
+    estimated_at = time.monotonic()
     if atoms(dry_run, "Fee") != fee or atoms(dry_run, "Amount") != amount:
         raise RuntimeError()
     print(f"Amount {amount / 100000000:.8f} BNT Fee {fee / 100000000:.8f} BNT", flush=True)
     report(step, since)
-    time.sleep(4)
+    wait_for(lambda: time.monotonic() - estimated_at >= 2.1 and api(0, "wallet/balance").get("spendable", 0) >= amount + fee)
     step = "Send"
     since = time.monotonic()
     submitted = cli("send", addresses[1], "1", "--memo", memo,
                     reply="send", prompt=b"Type send to submit:")
+    submitted_at = time.monotonic()
     transaction = re.search(r"Submitted: ([0-9a-f]{64})", submitted)
     if not transaction or atoms(submitted, "Fee") != fee:
         cli_error(submitted.encode())
@@ -403,16 +405,26 @@ try:
     step = "Message"
     since = time.monotonic()
     message = "Gyroid verified message round trip across Blocknet testnet memos"
-    time.sleep(4)
+    wait_for(lambda: time.monotonic() - submitted_at >= 2.1 and api(0, "wallet/balance").get("spendable", 0) > 0)
     cli("message", "send", addresses[1], message, reply="send", prompt=b"Type send to submit:")
+    if (root / "contacts.json").exists():
+        raise RuntimeError()
     api(0, "mining/start", {})
+    environment.update(GYROID_ENDPOINT=f"http://127.0.0.1:{ports[1]}",
+                       GYROID_DATA_DIR=str(root / "node1"), GYROID_WALLET_DIR=str(root / "node1"))
     def received_message():
-        environment.update(GYROID_ENDPOINT=f"http://127.0.0.1:{ports[1]}",
-                           GYROID_DATA_DIR=str(root / "node1"), GYROID_WALLET_DIR=str(root / "node1"))
         return "Confirmed Verified " + message in cli("message", "list")
     wait_for(received_message, seconds=300)
     history = cli("history")
     if history.count(message) != 1 or "[non-text memo]" in history:
+        raise RuntimeError()
+    message_row = next(line for line in cli("message", "list").splitlines() if message in line)
+    message_txid = message_row.split()[0]
+    received_rows = [line for line in history.splitlines() if line.startswith("Received " + message_txid + ":")]
+    total = sum(row["amount"] for row in api(1, "wallet/history")["outputs"] if row["txid"] == message_txid)
+    if len(received_rows) != 1 or f" {decimal.Decimal(total) / 100000000:f} BNT height" not in received_rows[0]:
+        raise RuntimeError()
+    if (root / "contacts.json").exists():
         raise RuntimeError()
     api(0, "mining/stop", {})
     report(step, since)

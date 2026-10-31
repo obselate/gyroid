@@ -52,6 +52,7 @@ data struct HistoryRow {
     var Amount uint64
     var Fee uint64
     var Memo string
+    var Outputs string
     var Height uint64
     var Depth uint64
     var Need uint64
@@ -268,6 +269,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Kind = output.Coinbase ? HistoryRowKind.Mined: HistoryRowKind.Received,
                     TxId = output.TxId,
                     Index = output.OutputIndex,
+                    Outputs = String.Join(", ", output.OutputIndices.Select(index -> "#" + index.ToString())),
                     Amount = output.Amount,
                     Memo = output.Memo,
                     Height = output.BlockHeight,
@@ -300,6 +302,7 @@ class HistoryPage : Cell[HistoryInput] {
                             .Recipients
                             .Select((entry WalletRecipient) -> entry.Memo)
                             .Where((memo string) -> memo.Length > 0)
+                            .Distinct(StringComparer.Ordinal)
                     ),
                     Height = height,
                     Depth = confirmed ? send.Confirmations - 1: 0,
@@ -326,6 +329,7 @@ class HistoryPage : Cell[HistoryInput] {
         Key: key,
         TxId: "",
         Memo: "",
+        Outputs: "",
         State: "",
         Recipients: Array.Empty[WalletRecipient](),
         Open: key == expanded,
@@ -734,7 +738,8 @@ class HistoryPage : Cell[HistoryInput] {
             .Memo
             .Length > 0 ? row.Memo: row
             .Recipients
-            .Length > 0 ? Short(recipient?.Address ?? ""): Short(row.TxId)
+            .Length > 1 ? Short(recipient?.Address ?? ""): Short(row.TxId)
+        let preview = Hidden(ui.Privacy, SafeText(note, 512))
         let sign = row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "+": "−"
         let notes = Container{
             Padding: Edges{Left: 6},
@@ -742,15 +747,7 @@ class HistoryPage : Cell[HistoryInput] {
             MinWidth: 0,
             Overflow: Overflow.Hidden,
             Gap: 6,
-            Grow(
-                Label(
-                    ui,
-                    row.Memo.Length > 0 ? note.Replace('\r', ' ').Replace('\n', ' '): Hidden(ui.Privacy, note),
-                    12,
-                    row.Memo.Length > 0 ? ui.Ink: ui.Dim,
-                    ""
-                )
-            )
+            Grow(Label(ui, preview, 12, row.Memo.Length > 0 ? ui.Ink: ui.Dim, ""))
         }
         if row.Recipients.Length > 1 {
             notes.Add(Label(ui, "+" + (row.Recipients.Length - 1).ToString(), 12, ui.Dim, ""))
@@ -781,7 +778,7 @@ class HistoryPage : Cell[HistoryInput] {
                     sign +
                     Amount(ui.Privacy, row.Amount) +
                     " " +
-                    Hidden(ui.Privacy, note) +
+                    preview +
                     " " +
                     depth,
                 Expanded: row.Open
@@ -1022,7 +1019,16 @@ class HistoryPage : Cell[HistoryInput] {
             values.Add(Figure(ui, "spendable at", Count(row.Height + 60), ui.Orange, 13, compact: true))
         }
         if row.Kind == HistoryRowKind.Received {
-            values.Add(Figure(ui, "output", "#" + row.Index.ToString(), ui.Ink, 13, compact: true))
+            values.Add(
+                Figure(
+                    ui,
+                    "output",
+                    row.Outputs.Length > 0 ? row.Outputs: "#" + row.Index.ToString(),
+                    ui.Ink,
+                    13,
+                    compact: true
+                )
+            )
         }
         panel.Add(values)
         if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
@@ -1032,7 +1038,7 @@ class HistoryPage : Cell[HistoryInput] {
                     MinWidth: 0,
                     Overflow: Overflow.Hidden,
                     Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, ""),
-                    Label(ui, row.Memo.Replace('\r', ' ').Replace('\n', ' '), 13, ui.Ink, "")
+                    Label(ui, Hidden(ui.Privacy, SafeText(row.Memo, 512)), 13, ui.Ink, "")
                 }
             )
         }
@@ -1050,7 +1056,7 @@ class HistoryPage : Cell[HistoryInput] {
                             MinWidth: 0,
                             Overflow: Overflow.Hidden,
                             Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, ""),
-                            Label(ui, entry.Memo.Replace('\r', ' ').Replace('\n', ' '), 13, ui.Ink, "")
+                            Label(ui, Hidden(ui.Privacy, SafeText(entry.Memo, 512)), 13, ui.Ink, "")
                         }
                     )
                 }

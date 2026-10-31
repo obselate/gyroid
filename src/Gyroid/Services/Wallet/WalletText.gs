@@ -4,6 +4,7 @@ import Gyroid.Models
 import System
 import System.Collections.Generic
 import System.Globalization
+import System.Text
 
 class WalletText {
     shared {
@@ -19,6 +20,31 @@ class WalletText {
             "••••••••"
         } else {
             value
+        }
+
+        func SafeText(value string, limit int32 = 0) string {
+            let count = limit > 0 ? Math.Min(value.Length, limit): value.Length
+            let result = StringBuilder(count + 1)
+            for index in 0 ... count {
+                let character = value[index]
+                result.Append(
+                    char.IsControl(character) ||
+                        character == '\u2028' ||
+                        character == '\u2029' ||
+                        character == '\u061c' ||
+                        character == '\u200e' ||
+                        character == '\u200f' ||
+                        (character >= '\u202a' && character <= '\u202e') ||
+                        (character >= '\u2066' && character <= '\u2069') ? ' ': character
+                )
+            }
+            if count < value.Length {
+                if count > 0 && char.IsHighSurrogate(result[result.Length - 1]) {
+                    result.Length--
+                }
+                result.Append('…')
+            }
+            return result.ToString()
         }
 
         func Amount(privacy bool, value uint64) string -> Hidden(privacy, WalletAmount.Format(value))

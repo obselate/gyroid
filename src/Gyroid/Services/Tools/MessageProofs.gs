@@ -15,19 +15,7 @@ class MessageProofs {
         try {
             session.RequireUnlocked()
             session.Touch()
-            using let response = await session
-                .Node
-                .Api
-                .JsonAsync(
-                "wallet/sign",
-                writer -> {
-                    writer.WriteStartObject()
-                    writer.WriteString("message", message)
-                    writer.WriteEndObject()
-                },
-                ct
-            )
-            return NodeJson.Text(response.RootElement, "signature")
+            return await SignCoreAsync(message, ct)
         } finally {
             session.End()
         }
@@ -43,21 +31,7 @@ class MessageProofs {
         await session.BeginAsync(ct)
         try {
             try {
-                using let response = await session
-                    .Node
-                    .Api
-                    .JsonAsync(
-                    "verify",
-                    writer -> {
-                        writer.WriteStartObject()
-                        writer.WriteString("address", WalletValidation.ValidateAddress(address))
-                        writer.WriteString("message", message)
-                        writer.WriteString("signature", signature)
-                        writer.WriteEndObject()
-                    },
-                    ct
-                )
-                return NodeJson.Flag(response.RootElement, "valid")
+                return await VerifyCoreAsync(address, message, signature, ct)
             } catch (error WalletException) {
                 if error.StatusCode == 400 {
                     return false
@@ -67,6 +41,40 @@ class MessageProofs {
         } finally {
             session.End()
         }
+    }
+
+    async func SignCoreAsync(message string, ct CancellationToken) string {
+        using let response = await session
+            .Node
+            .Api
+            .JsonAsync(
+            "wallet/sign",
+            writer -> {
+                writer.WriteStartObject()
+                writer.WriteString("message", message)
+                writer.WriteEndObject()
+            },
+            ct
+        )
+        return NodeJson.Text(response.RootElement, "signature")
+    }
+
+    async func VerifyCoreAsync(address string, message string, signature string, ct CancellationToken) bool {
+        using let response = await session
+            .Node
+            .Api
+            .JsonAsync(
+            "verify",
+            writer -> {
+                writer.WriteStartObject()
+                writer.WriteString("address", WalletValidation.ValidateAddress(address))
+                writer.WriteString("message", message)
+                writer.WriteString("signature", signature)
+                writer.WriteEndObject()
+            },
+            ct
+        )
+        return NodeJson.Flag(response.RootElement, "valid")
     }
 
     async func ProveAsync(txid string, ct CancellationToken = default(CancellationToken)) string {

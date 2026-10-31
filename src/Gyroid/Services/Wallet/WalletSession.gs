@@ -112,6 +112,7 @@ class WalletSession : IDisposable {
                 go AutoLock(ctx)
                 go RestartOwned(ctx)
                 go ManageEvents(ctx)
+                go Messages.Sync(ctx)
             }
         } catch (error OperationCanceledException) when shutdown.IsCancellationRequested { } catch (error Exception) {
             ReportBackgroundFailure(error)
@@ -797,6 +798,7 @@ class WalletSession : IDisposable {
         lockQueued = false
         RequireManaged()
         Send.InvalidateConfirmation()
+        Messages.Reset()
         state = WalletState.Unknown
         PublishEmpty()
         Changed?.Invoke()
@@ -955,9 +957,7 @@ class WalletSession : IDisposable {
             using let balance = await Node.Api.JsonAsync("wallet/balance", ct: ct)
             using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
             try {
-                await Messages.RefreshCoreAsync(address.RootElement, ct)
-            } catch (error OperationCanceledException) {
-                throw error
+                Messages.UpdateWallet(address.RootElement)
             } catch (error Exception) {
                 Messages.Error = error.Message
             }
@@ -975,7 +975,7 @@ class WalletSession : IDisposable {
                 Outputs: NodeJson.OptionalNumber(root, "outputs_total") ?? uint64(0),
                 MemoErrors: NodeJson.OptionalNumber(root, "memo_decrypt_failures") ?? uint64(0)
             }
-            let outputs = await History.ReloadAsync(sends, ct)
+            let outputs = await History.ReloadAsync(ct)
             snapshot = WalletSnapshot{
                 State: state,
                 Connected: connected,
@@ -987,6 +987,7 @@ class WalletSession : IDisposable {
                 HistoryMore: History.More,
                 Sends: sends
             }
+            Messages.QueueRefresh(History.RawReceived, History.RawSends)
         } catch (error WalletException) {
             if error.StatusCode == 403 {
                 state = WalletState.Locked
@@ -1046,7 +1047,9 @@ class WalletSession : IDisposable {
 
     func PublishEmpty() {
         History.Reset()
-        Messages.Reset()
+        if state == WalletState.Locked || state == WalletState.Unloaded {
+            Messages.Reset()
+        }
         snapshot = WalletSnapshot{State: state, Connected: connected}
     }
 

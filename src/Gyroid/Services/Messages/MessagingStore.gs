@@ -3,15 +3,15 @@ package Gyroid.Services
 import Gyroid.Models
 import System
 import System.Collections.Concurrent
-import System.Collections.Generic
 import System.IO
+import System.Security.Cryptography
+import System.Text
 import System.Text.Json
 import System.Threading.Tasks
 
 class MessagingStore {
     private let path string
-    private let account string
-    let Contacts ConcurrentDictionary[string, Conversation] = ConcurrentDictionary[string, Conversation](
+    let Conversations ConcurrentDictionary[string, Conversation] = ConcurrentDictionary[string, Conversation](
         StringComparer.Ordinal
     )
     let Verified ConcurrentDictionary[string, Verification] = ConcurrentDictionary[string, Verification](
@@ -20,114 +20,52 @@ class MessagingStore {
     let ReadMarkers ConcurrentDictionary[string, int64] = ConcurrentDictionary[string, int64](StringComparer.Ordinal)
     let Introduced ConcurrentDictionary[string, bool] = ConcurrentDictionary[string, bool](StringComparer.Ordinal)
     let Removed ConcurrentDictionary[string, int64] = ConcurrentDictionary[string, int64](StringComparer.Ordinal)
-    let Handles ConcurrentDictionary[string, string] = ConcurrentDictionary[string, string](StringComparer.Ordinal)
 
     init(network string, address string) {
         let directory = Path.GetDirectoryName(SettingsStore.ConfigurationPath()) ??
             throw WalletException("Settings file must have a parent directory")
-        path = Path.Combine(directory, "messages.json")
-        account = network + ":" + address
-        if File.Exists(path) {
-            using let document = JsonDocument.Parse(PrivateFiles.ReadText(path, 1048576))
-            if document.RootElement.TryGetProperty(account, out let data) {
-                for entry in data.GetProperty("groups").EnumerateArray() {
-                    let group = Conversation{
-                        Id: NodeJson.Text(entry, "id"),
-                        Title: NodeJson.Text(entry, "name"),
-                        IsGroup: true
-                    }
-                    for member in entry.GetProperty("members").EnumerateArray() {
-                        let value = member.GetString() ?? ""
-                        Address.Decode(value, network)
-                        group.Members.Add(value)
-                    }
-                    Contacts[group.Id] = group
-                }
-                for entry in data.GetProperty("verified").EnumerateObject() {
-                    Verified[entry.Name] = Verification(entry.Value.GetInt32())
-                }
-                for entry in data.GetProperty("read").EnumerateObject() {
-                    ReadMarkers[entry.Name] = entry.Value.GetInt64()
-                }
-                for entry in data.GetProperty("introduced").EnumerateArray() {
-                    Introduced[entry.GetString() ?? ""] = true
-                }
-                for entry in data.GetProperty("removed").EnumerateObject() {
-                    Removed[entry.Name] = entry.Value.GetInt64()
-                }
-                for entry in data.GetProperty("handles").EnumerateObject() {
-                    Handles[entry.Name] = entry.Value.GetString() ?? ""
-                }
-            }
-        }
-        ReloadContacts(network)
-    }
-
-    func ReloadContacts(network string) {
-        for pair in Contacts {
-            if !pair.Value.IsGroup {
-                Contacts.TryRemove(pair.Key, out _)
-            }
-        }
-        for entry in AddressBook.ReadContacts(
-            message -> {
-                throw WalletException(message)
-            }
-        ) {
-            let unresolved = entry.Value.StartsWith("$", StringComparison.Ordinal)
-            if !unresolved {
-                if WalletValidation.AddressIssue(entry.Value, network).Length > 0 {
-                    continue
-                }
-                Address.Decode(entry.Value, network)
-            }
-            Handles.TryGetValue(entry.Value, out let handle)
-            let contact = Conversation{
-                Id: entry.Value,
-                Title: entry.Key,
-                Handle: unresolved ? entry.Value: handle ?? ""
-            }
-            contact.Members.Add(entry.Value)
-            Contacts[contact.Id] = contact
-        }
-    }
-
-    func SaveContact(conversation Conversation) {
-        if conversation.IsGroup {
-            Contacts[conversation.Id] = conversation
+        let account = Convert.ToHexStringLower(SHA3_256.HashData(Encoding.UTF8.GetBytes(address)))
+        path = Path.Combine(directory, "messages-" + network + "-" + account + ".json")
+        if !File.Exists(path) {
             return
         }
-        let contacts = AddressBook.ReadContacts(
-            message -> {
-                throw WalletException(message)
-            }
-        )
-        if conversation.Handle.Length > 0 {
-            for entry in contacts {
-                if string.Equals(entry.Value, conversation.Handle, StringComparison.OrdinalIgnoreCase) {
-                    contacts[entry.Key] = conversation.Id
-                    conversation.Title = entry.Key
-                    AddressBook.WriteContacts(contacts)
-                    Contacts.TryRemove(entry.Value, out _)
-                    break
+        try {
+            using let document = JsonDocument.Parse(PrivateFiles.ReadText(path, 4194304))
+            let data = document.RootElement
+            for entry in data.GetProperty("conversations").EnumerateArray() {
+                let conversation = Conversation{
+                    Id: NodeJson.Text(entry, "id"),
+                    Title: NodeJson.Text(entry, "name"),
+                    Handle: NodeJson.Text(entry, "handle"),
+                    IsGroup: NodeJson.Flag(entry, "group")
                 }
+                for member in entry.GetProperty("members").EnumerateArray() {
+                    let value = member.GetString() ?? ""
+                    Address.Decode(value, network)
+                    conversation.Members.Add(value)
+                }
+                Conversations[conversation.Id] = conversation
             }
-        }
-        if !contacts.ContainsValue(conversation.Id) {
-            var title = conversation.Title
-            var suffix = 2
-            while contacts.ContainsKey(title) && contacts[title] != conversation.Id {
-                title = conversation.Title + " " + suffix.ToString()
-                suffix++
+            for entry in data.GetProperty("verified").EnumerateObject() {
+                Verified[entry.Name] = Verification(entry.Value.GetInt32())
             }
-            conversation.Title = title
-            contacts[title] = conversation.Id
-            AddressBook.WriteContacts(contacts)
+            for entry in data.GetProperty("read").EnumerateObject() {
+                ReadMarkers[entry.Name] = entry.Value.GetInt64()
+            }
+            for entry in data.GetProperty("introduced").EnumerateArray() {
+                Introduced[entry.GetString() ?? ""] = true
+            }
+            for entry in data.GetProperty("removed").EnumerateObject() {
+                Removed[entry.Name] = entry.Value.GetInt64()
+            }
+        } catch (error Exception) {
+            Conversations.Clear()
+            Verified.Clear()
+            ReadMarkers.Clear()
+            Introduced.Clear()
+            Removed.Clear()
+            File.Move(path, path + ".unreadable-" + Guid.NewGuid().ToString("N"))
         }
-        if conversation.Handle.Length > 0 {
-            Handles[conversation.Id] = conversation.Handle
-        }
-        Contacts[conversation.Id] = conversation
     }
 
     func MarkRead(conversation Conversation) {
@@ -139,10 +77,14 @@ class MessagingStore {
     }
 
     func Save() {
-        using let previous = if File.Exists(path) {
-            JsonDocument.Parse(PrivateFiles.ReadText(path, 1048576))
-        } else {
-            JsonDocument.Parse("{}")
+        var excess = Verified.Count - 4096
+        for key in Verified.Keys {
+            if excess <= 0 {
+                break
+            }
+            if Verified.TryRemove(key, out _) {
+                excess--
+            }
         }
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "")
         PrivateFiles
@@ -151,21 +93,14 @@ class MessagingStore {
             stream -> {
                 using let writer = Utf8JsonWriter(stream)
                 writer.WriteStartObject()
-                for entry in previous.RootElement.EnumerateObject() {
-                    if entry.Name != account {
-                        entry.WriteTo(writer)
-                    }
-                }
-                writer.WriteStartObject(account)
-                writer.WriteStartArray("groups")
-                for pair in Contacts {
+                writer.WriteStartArray("conversations")
+                for pair in Conversations {
                     let conversation = pair.Value
-                    if !conversation.IsGroup {
-                        continue
-                    }
                     writer.WriteStartObject()
                     writer.WriteString("id", conversation.Id)
                     writer.WriteString("name", conversation.Title)
+                    writer.WriteString("handle", conversation.Handle)
+                    writer.WriteBoolean("group", conversation.IsGroup)
                     writer.WriteStartArray("members")
                     for member in conversation.Members {
                         writer.WriteStringValue(member)
@@ -179,11 +114,6 @@ class MessagingStore {
                     writer.WriteNumber(pair.Key, int32(pair.Value))
                 }
                 writer.WriteEndObject()
-                writer.WriteStartObject("removed")
-                for pair in Removed {
-                    writer.WriteNumber(pair.Key, pair.Value)
-                }
-                writer.WriteEndObject()
                 writer.WriteStartObject("read")
                 for pair in ReadMarkers {
                     writer.WriteNumber(pair.Key, pair.Value)
@@ -194,11 +124,10 @@ class MessagingStore {
                     writer.WriteStringValue(pair.Key)
                 }
                 writer.WriteEndArray()
-                writer.WriteStartObject("handles")
-                for pair in Handles {
-                    writer.WriteString(pair.Key, pair.Value)
+                writer.WriteStartObject("removed")
+                for pair in Removed {
+                    writer.WriteNumber(pair.Key, pair.Value)
                 }
-                writer.WriteEndObject()
                 writer.WriteEndObject()
                 writer.WriteEndObject()
                 writer.Flush()
