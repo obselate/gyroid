@@ -110,6 +110,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         let ui = input.Ui
         let service = input.Session.Messages
         let conversations = service.Conversations
+        let listWidth = Math.Clamp(input.Width * 0.25, 200.0, 300.0)
+        let threadWidth = input.Drawer ? input.Width: input.Width - listWidth
         var conversation = conversations.FirstOrDefault(item -> item.Id == input.State.ConversationId) ??
             input
             .State
@@ -138,7 +140,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             Gap: 12
         }
         if !input.Drawer {
-            root.Add(Conversations(input, conversations))
+            root.Add(Conversations(input, conversations, listWidth))
         }
         let thread = WalletParts.Card(ui, 0, 0, 6)
         thread.FlexGrow = 1
@@ -207,11 +209,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                             Animate: added && newTransaction && !changed && ui.Actions.playbackActive(),
                             Highlight: highlight == message.Key,
                             CanRetry: service.Mode == MessengerMode.Send && !busy,
-                            Width: input.Drawer ? input.Width: input.Width - Math.Clamp(
-                                input.Width * 0.25,
-                                200.0,
-                                300.0
-                            ),
+                            Width: threadWidth,
                             Handle: handles[message.Key],
                             OnOpen: () -> {
                                 detail = message
@@ -251,7 +249,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                         Session: input.Session,
                         Conversation: current,
                         Draft: draft,
-                        Width: input.Drawer ? input.Width: input.Width - Math.Clamp(input.Width * 0.25, 200.0, 300.0),
+                        Width: threadWidth,
                         OnDraft: value -> {
                             input.State.Drafts[current.Id] = value
                             Rebuild()
@@ -323,10 +321,10 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         Rebuild()
     }
 
-    private func Conversations(input MessagesInput, conversations IReadOnlyList[Conversation]) Blob {
+    private func Conversations(input MessagesInput, conversations IReadOnlyList[Conversation], width float64) Blob {
         let ui = input.Ui
         let panel = WalletParts.Card(ui, 10, 8, 6)
-        panel.Width = Math.Clamp(input.Width * 0.25, 200.0, 300.0)
+        panel.Width = width
         panel.FlexShrink = 0
         panel.MinHeight = 0
         panel.Add(
@@ -682,12 +680,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             detail = nil
             Rebuild()
         }
-        let verification = switch message.Verification {
-            case Verification.Checking: "Checking"
-            case Verification.Verified: "Verified"
-            case Verification.Unverified: "Unverified"
-            case Verification.Invalid: "Invalid"
-        }
+        let verification = message.Verification.ToString()
         let content = Container{
             Gap: 12,
             Label(ui, message.SentAt.ToLocalTime().ToString("g"), 12, ui.Dim, ""),

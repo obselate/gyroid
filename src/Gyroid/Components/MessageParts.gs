@@ -81,12 +81,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             shift.Snap(Point{X: 0, Y: 0})
         }
         let invalid = message.Verification == Verification.Invalid
-        let verification = switch message.Verification {
-            case Verification.Checking: "Checking"
-            case Verification.Unverified: "Unverified"
-            case Verification.Invalid: "Invalid"
-            case Verification.Verified: "Verified"
-        }
+        let verification = message.Verification.ToString()
         let color = invalid ? ui.Pink: message.Verification == Verification.Unverified ? ui.Orange: ui.Dim
         let column = Container{
             Handle: input.Handle,

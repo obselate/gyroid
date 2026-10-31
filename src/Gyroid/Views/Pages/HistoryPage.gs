@@ -1060,8 +1060,6 @@ class HistoryPage : Cell[HistoryInput] {
 
     private func MemoSection(row HistoryRow, memo string) Blob {
         let ui = current.Ui
-        let preview = Hidden(ui.Privacy, MessagesPage.Preview(SafeText(memo, 512)))
-        let label = Label(ui, preview, 13, ui.Ink, "")
         let section = Container{
             Gap: 3,
             MinWidth: 0,
@@ -1069,6 +1067,8 @@ class HistoryPage : Cell[HistoryInput] {
             Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, "")
         }
         if current.Session.Messages.Lookup(row.TxId) != nil {
+            let preview = Hidden(ui.Privacy, MessagesPage.Preview(SafeText(memo, 512)))
+            let label = Label(ui, preview, 13, ui.Ink, "")
             let button = Goo
                 .Button{
                 MinWidth: 0,
