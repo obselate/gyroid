@@ -83,7 +83,10 @@ partial class App {
                 wallet.Messages.ClearSelection()
                 Rebuild()
             },
-            OnContacts: () -> LoadContacts()
+            OnContacts: () -> {
+                LoadContacts()
+                Rebuild()
+            }
         }
     )
 

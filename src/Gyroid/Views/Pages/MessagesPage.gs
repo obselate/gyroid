@@ -692,6 +692,47 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             case Verification.Unverified: "Unverified"
             case Verification.Invalid: "Invalid"
         }
+        let content = Container{
+            Gap: 12,
+            Label(ui, message.SentAt.ToLocalTime().ToString("g"), 12, ui.Dim, ""),
+            Figure(
+                ui,
+                "fee",
+                Hidden(ui.Privacy, (message.FeeAtomic / 100000000.0).ToString("0.00000000") + " BNT"),
+                ui.Ink
+            ),
+            Figure(ui, "memos", message.Outputs.ToString(), ui.Ink),
+            Figure(ui, "Confirmed", message.Confirmations.ToString() + "/10", ui.Ink),
+            Label(
+                ui,
+                ui.Strings.Get(verification),
+                12,
+                message.Verification == Verification.Invalid ? ui.Pink: ui.Dim,
+                ""
+            ),
+            Copyable(ui, "transaction", message.Txid, Hidden(ui.Privacy, Short(message.Txid)))
+        }
+        if !message.Outgoing &&
+            message
+            .SenderAddress
+            .Length > 0 &&
+            !input
+            .Contacts
+            .Values
+            .Contains(message.SenderAddress) {
+            content.Add(
+                Button(
+                    ui,
+                    "Add contact",
+                    () -> {
+                        detail = nil
+                        Begin("contact")
+                        address = message.SenderAddress
+                    }
+                )
+            )
+        }
+        content.Add(Button(ui, "Close", close))
         return WalletParts.Modal(
             ui,
             "message-details",
@@ -699,27 +740,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 Open: true,
                 AccessibilityName: ui.Strings.Get("Message details"),
                 Width: 460,
-                Content: Container{
-                    Gap: 12,
-                    Label(ui, message.SentAt.ToLocalTime().ToString("g"), 12, ui.Dim, ""),
-                    Figure(
-                        ui,
-                        "fee",
-                        Hidden(ui.Privacy, (message.FeeAtomic / 100000000.0).ToString("0.00000000") + " BNT"),
-                        ui.Ink
-                    ),
-                    Figure(ui, "memos", message.Outputs.ToString(), ui.Ink),
-                    Figure(ui, "Confirmed", message.Confirmations.ToString() + "/10", ui.Ink),
-                    Label(
-                        ui,
-                        ui.Strings.Get(verification),
-                        12,
-                        message.Verification == Verification.Invalid ? ui.Pink: ui.Dim,
-                        ""
-                    ),
-                    Copyable(ui, "transaction", message.Txid, Hidden(ui.Privacy, Short(message.Txid))),
-                    Button(ui, "Close", close)
-                },
+                Content: content,
                 OnClose: close
             }
         )
