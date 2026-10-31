@@ -152,7 +152,13 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         thread.MinHeight = 0
         thread.Overflow = Overflow.Hidden
         let balance = input.Session.Snapshot.Balance
-        if !input.Drawer && service.Mode == MessengerMode.Send && (balance?.ReadyOutputs ?? uint64(0)) < 4 {
+        if !input.Drawer &&
+            service.Mode == MessengerMode.Send &&
+            input
+            .Session
+            .Send
+            .CanSplitOutputs &&
+            (balance?.ReadyOutputs ?? uint64(0)) < 4 {
             let readiness = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
