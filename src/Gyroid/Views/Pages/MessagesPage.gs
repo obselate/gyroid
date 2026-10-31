@@ -56,6 +56,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     private var issue string = ""
     private var busy bool
     private let members List[string] = List[string]()
+    private var preparation SendEstimate?
+    private var preparationFee uint64?
 
     func Dispose() {
         scrollTimer?.Dispose()
@@ -148,6 +150,42 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         thread.MinWidth = 0
         thread.MinHeight = 0
         thread.Overflow = Overflow.Hidden
+        let balance = input.Session.Snapshot.Balance
+        if !input.Drawer && service.Mode == MessengerMode.Send && (balance?.ReadyOutputs ?? uint64(0)) < 4 {
+            let readiness = Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 12,
+                Padding: 16,
+                FlexShrink: 0,
+                Grow(Figure(ui, "Ready outputs", (balance?.ReadyOutputs ?? uint64(0)).ToString(), ui.Ink))
+            }
+            if let fee = preparationFee {
+                readiness.Add(Figure(ui, "fee", Amount(ui.Privacy, fee) + " BNT", ui.Ink))
+            }
+            if (balance?.Spendable ?? uint64(0)) > 0 &&
+                !input
+                .Session
+                .Snapshot
+                .ScanBehind(input.Session.Node.Status.Height) {
+                readiness.Add(
+                    Button(
+                        ui,
+                        "Prepare",
+                        () -> Run(
+                            input,
+                            ct -> EstimatePreparation(input, ct),
+                            () -> {
+                                dialog = "prepare"
+                                Rebuild()
+                            }
+                        ),
+                        busy || input.Session.Send.Pending != nil
+                    )
+                )
+            }
+            thread.Add(readiness)
+        }
         if let current = conversation {
             thread.Add(Header(input, current))
             let rows = Container{
@@ -287,7 +325,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         }
         root.Add(thread)
         if dialog.Length > 0 {
-            root.Add(Dialog(input, conversation))
+            root.Add(dialog == "prepare" ? PreparationDialog(input): Dialog(input, conversation))
         }
         if let message = detail {
             root.Add(Details(input, message))
@@ -672,6 +710,60 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     private async func CreateGroup(input MessagesInput, ct CancellationToken) {
         let conversation = await input.Session.Messages.CreateGroup(name, members, ct)
         input.Ui.Actions.window?.TryPost(() -> Select(input, conversation))
+    }
+
+    private async func EstimatePreparation(input MessagesInput, ct CancellationToken) {
+        let estimate = await input.Session.Send.EstimatePreparationAsync(ct)
+        preparation = estimate
+    }
+
+    private async func SubmitPreparation(input MessagesInput, estimate SendEstimate, ct CancellationToken) {
+        let result = await input.Session.Send.SubmitAsync(estimate, ct)
+        preparationFee = result.Fee
+        await input.Session.RefreshAsync(ct)
+    }
+
+    private func PreparationDialog(input MessagesInput) Blob {
+        let ui = input.Ui
+        let close Action = () -> {
+            dialog = ""
+            preparation = nil
+            input.Session.Send.InvalidateConfirmation()
+            Rebuild()
+        }
+        let estimate = preparation
+        let content = Container{
+            Gap: 12,
+            Label(ui, ui.Strings.Get("Prepare for messaging"), 17, ui.Ink, ""),
+            Figure(ui, "outputs", "8", ui.Ink),
+            Figure(ui, "amount", Amount(ui.Privacy, estimate?.Amount ?? uint64(0)) + " BNT", ui.Ink),
+            Figure(ui, "fee", Amount(ui.Privacy, estimate?.Fee ?? uint64(0)) + " BNT", ui.Ink),
+            Figure(ui, "Confirmed", "0/10", ui.Ink)
+        }
+        if issue.Length > 0 {
+            content.Add(Label(ui, ui.Strings.Explain(issue), 12, ui.Pink, ""))
+        }
+        return WalletParts.Modal(
+            ui,
+            "prepare-messaging-dialog",
+            ModalDialog{
+                Open: true,
+                Preset: ModalDialogPreset.Confirm,
+                AccessibilityName: ui.Strings.Get("Prepare for messaging"),
+                Width: 440,
+                Content: content,
+                ConfirmText: ui.Strings.Get("Prepare"),
+                CancelText: ui.Strings.Get("Cancel"),
+                ConfirmDisabled: busy || estimate == nil,
+                OnConfirm: () -> {
+                    if let confirmed = preparation {
+                        Run(input, ct -> SubmitPreparation(input, confirmed, ct), close)
+                    }
+                },
+                OnCancel: close,
+                OnClose: close
+            }
+        )
     }
 
     private func Details(input MessagesInput, message Message) Blob {
