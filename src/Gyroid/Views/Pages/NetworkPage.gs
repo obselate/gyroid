@@ -688,14 +688,15 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         if identity.Length < 10 {
                             identity
                         } else if revealed {
-                            identity
+                            Grouped(identity)
                         } else {
                             identity.Substring(0, 4) + "…••••••"
                         },
                         FontFamily: ui.Font,
                         FontSize: 12.5,
                         Color: ui.Ink,
-                        TextWrap: TextWrap.Wrap
+                        TextWrap: TextWrap.Wrap,
+                        Accessibility: Accessibility{Name: revealed ? identity: ""}
                     }
                 ),
                 Label(
@@ -715,6 +716,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         AccessibilityName: ui.Strings.Get("Copy node ID"),
                         OnClick: () -> ui.Actions.Copy(identity, 120000)
                     }.Build()
+                } else {
+                    Container{}
                 },
                 IconButton{
                     Icon: MaterialIcons.Create(revealed ? "visibility_off": "visibility", 15, ui.Body),

@@ -320,13 +320,7 @@ partial class App {
                     Figure(ui, "Blocks left", Count(node.UpgradeBlocksLeft), ui.Orange),
                     Figure(ui, "Migration deadline", node.UpgradeDeadline, ui.Ink),
                     Text{
-                        Content: String.Format(
-                            ui.Strings.Get(
-                                "Blocknet plans a network upgrade around {0}. After it, you will have 1 year to move your coins to the new format, until about {1}. Coins not moved by then cannot be spent. The wallet will guide you."
-                            ),
-                            node.UpgradeDate,
-                            node.UpgradeDeadline
-                        ),
+                        Content: ui.Strings.UpgradeInstructions(node.UpgradeDate, node.UpgradeDeadline),
                         FontFamily: ui.Font,
                         FontSize: 13,
                         Color: ui.Body,

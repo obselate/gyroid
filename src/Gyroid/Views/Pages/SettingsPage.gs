@@ -438,7 +438,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             upgrade.Add(Label(ui, status.UpgradeDate, 14, ui.Dim, ""))
         }
         if status.UpgradeNotice.Length > 0 {
-            upgrade.Add(Info(input, "upgrade", "Network upgrade", status.UpgradeNotice))
+            upgrade.Add(
+                Info(
+                    input,
+                    "upgrade",
+                    "Network upgrade",
+                    ui.Strings.UpgradeInstructions(status.UpgradeDate, status.UpgradeDeadline)
+                )
+            )
         }
         let folder = if status.DataDirectory.Length > 0 {
             status.DataDirectory

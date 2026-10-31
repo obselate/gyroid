@@ -46,7 +46,8 @@ class NodeSession : IDisposable {
         await Supervisor.ConnectAsync(Settings, ct)
         coreVersion = ""
         if File.Exists(Supervisor.Executable) {
-            let start = ProcessStartInfo(Supervisor.Executable){
+            let start = ProcessStartInfo{
+                FileName: Supervisor.Executable,
                 UseShellExecute: false,
                 RedirectStandardOutput: true,
                 CreateNoWindow: true
@@ -104,11 +105,12 @@ class NodeSession : IDisposable {
         try {
             using let status = await Api.JsonAsync("status", ct: ct)
             let root = status.RootElement
+            let version = NodeJson.Text(root, "version")
             let current = NodeStatus{
                 Source: Supervisor.Source,
                 Owned: Supervisor.Owned,
                 Running: true,
-                Version: NodeJson.Text(root, "version") is "" ? coreVersion: NodeJson.Text(root, "version"),
+                Version: version.Length > 0 ? version: coreVersion,
                 Network: Settings.Network,
                 Height: NodeJson.Number(root, "chain_height"),
                 ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),

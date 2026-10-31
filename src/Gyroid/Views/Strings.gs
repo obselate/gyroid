@@ -10,6 +10,14 @@ class Strings {
         Language = Resolve(language)
     }
 
+    func UpgradeInstructions(date string, deadline string) string -> String.Format(
+        Get(
+            "Blocknet plans a network upgrade around {0}. After it, you will have 1 year to move your coins to the new format, until about {1}. Coins not moved by then cannot be spent. The wallet will guide you."
+        ),
+        date,
+        deadline
+    )
+
     func Explain(message string) string -> Get(
         switch message {
             case "Recovery phrase must contain English BIP39 words": "Recovery phrase must use English words"
