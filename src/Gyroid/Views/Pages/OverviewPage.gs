@@ -963,7 +963,13 @@ class OverviewPage : Cell[OverviewInput] {
             return card
         }
         let height = 48.0
-        let rows = Container{FlexGrow: 1, MinHeight: 0, Overflow: Overflow.Scroll, ScrollbarY: Theme.Read().Scrollbar}
+        let rows = Container{
+            FlexGrow: 1,
+            FlexBasis: 0,
+            MinHeight: 0,
+            Overflow: Overflow.Scroll,
+            ScrollbarY: Theme.Read().Scrollbar
+        }
         for item in arrivals {
             rows.Add(Arrive(input, item))
         }
