@@ -146,8 +146,13 @@ partial class App {
             let percent = PhasePercent()
             return ui.Strings.Get("syncing") + (percent == nil ? "": " " + percent.ToString() + "%")
         }
-        return ui.Strings.Get("Synced") + " · " + ui.Strings.Get("block") + " " + Count(status.Height) + " · " +
-            status.Peers.ToString() + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers")
+        return ui.Strings.Get("Synced") + " · " + ui.Strings.Get("block") +
+            " " +
+            Count(status.Height) +
+            " · " +
+            status
+            .Peers
+            .ToString() + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers")
     }
 
     private func UpdateTray() {
@@ -155,7 +160,8 @@ partial class App {
         let status = TrayStatusText()
         let balance = if wallet.Snapshot.State == WalletState.Unlocked && !ui.Privacy {
             if let value = wallet.Snapshot.Balance?.Spendable {
-                ui.Strings.Get("Spendable") + ": " + (value / 100000000).ToString(CultureInfo.InvariantCulture) + "." +
+                ui.Strings.Get("Spendable") + ": " + (value / 100000000).ToString(CultureInfo.InvariantCulture) +
+                    "." +
                     (value % 100000000 / 10000).ToString("D4", CultureInfo.InvariantCulture) + " BNT"
             } else {
                 ""
