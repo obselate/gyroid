@@ -67,6 +67,11 @@ class Cli {
                 if arguments.Length != 4 || (arguments[2] != "create" && arguments[2] != "import") {
                     return Usage(Console.Error)
                 }
+            } else if command == "message" {
+                if !(arguments.Length == 3 && arguments[2] == "list") &&
+                    !(arguments.Length == 5 && arguments[2] == "send") {
+                    return Usage(Console.Error)
+                }
             } else if command == "history" {
                 if arguments.Length != 2 &&
                     (
@@ -232,6 +237,29 @@ class Cli {
                     }
                 } else if command == "viewkeys" || command == "view-only" {
                     return RunViewOnly(wallet, arguments)
+                } else if command == "message" {
+                    wallet.RefreshAsync().GetAwaiter().GetResult()
+                    if arguments[2] == "send" {
+                        RequireTerminal()
+                        Console.Error.Write("Type send to submit: ")
+                        if Console.ReadLine() != "send" {
+                            throw WalletException("Send cancelled")
+                        }
+                        let conversation = wallet.Messages.AddContact("", arguments[3]).GetAwaiter().GetResult()
+                        wallet.Messages.Send(conversation, arguments[4]).GetAwaiter().GetResult()
+                    } else {
+                        for conversation in wallet.Messages.Conversations {
+                            for message in wallet.Messages.Thread(conversation.Id) {
+                                Console.WriteLine(
+                                    message.Txid + " " + message.State.ToString() +
+                                        " " +
+                                        message
+                                        .Verification
+                                        .ToString() + " " + message.Text.Replace('\r', ' ').Replace('\n', ' ')
+                                )
+                            }
+                        }
+                    }
                 } else if command == "send" {
                     if resume {
                         if wallet.Send.Pending == nil {
@@ -310,7 +338,21 @@ class Cli {
                                 break
                             }
                             Console.WriteLine(
-                                "Sent " + send.TxId + " " + WalletAmount.Format(send.Amount) + " BNT " + send.Status
+                                "Sent " + send.TxId + " " + WalletAmount.Format(send.Amount) +
+                                    " BNT " +
+                                    send.Status +
+                                    " " +
+                                    string
+                                    .Join(
+                                    " ",
+                                    System
+                                        .Linq
+                                        .Enumerable
+                                        .Select(
+                                        send.Recipients,
+                                        recipient -> recipient.Memo.Replace('\r', ' ').Replace('\n', ' ')
+                                    )
+                                )
                             )
                             count = count + 1
                         }
@@ -325,7 +367,12 @@ class Cli {
                                     " " +
                                     WalletAmount.Format(output.Amount) + " BNT height " + output.BlockHeight.ToString(
                                     CultureInfo.InvariantCulture
-                                )
+                                ) +
+                                    " " +
+                                    output
+                                    .Memo
+                                    .Replace('\r', ' ')
+                                    .Replace('\n', ' ')
                             )
                             count = count + 1
                         }
@@ -512,6 +559,7 @@ class Cli {
                     case "view-only create": "view-only create <filename.wallet.dat>"
                     case "view-only import": "view-only import <filename.dat>"
                     case "history": "history [--limit N]"
+                    case "message": "message list | send <address> <text>"
                     case "send": "send <address> <amount> [--memo TEXT] [--dry-run] | send --resume"
                     case "load": "load <filename.dat>"
                     case "sign": "sign [--] <message>"
@@ -529,6 +577,7 @@ class Cli {
             writer.WriteLine("       gyroid --help | --version | status | balance | address | unlock | lock")
             writer.WriteLine("       gyroid node status | start | stop | purge")
             writer.WriteLine("       gyroid history [--limit N]")
+            writer.WriteLine("       gyroid message list | send <address> <text>")
             writer.WriteLine("       gyroid send <address> <amount> [--memo TEXT] [--dry-run]")
             writer.WriteLine("       gyroid send --resume")
             writer.WriteLine("       gyroid sync | unload | load <filename.dat>")

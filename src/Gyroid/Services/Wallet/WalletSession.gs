@@ -28,6 +28,7 @@ class WalletSession : IDisposable {
     var snapshot WalletSnapshot = WalletSnapshot()
     let Send SendService
     let History HistoryService
+    let Messages MessagingService
     var state WalletState = WalletState.Unloaded
     var connected bool
     var managed bool
@@ -52,6 +53,7 @@ class WalletSession : IDisposable {
         Node = NodeSession(settings)
         History = HistoryService(this)
         Send = SendService(this)
+        Messages = MessagingService(this)
         Library = WalletLibrary(this)
         Keys = WalletKeys(this)
         Proofs = MessageProofs(this)
@@ -952,6 +954,13 @@ class WalletSession : IDisposable {
         try {
             using let balance = await Node.Api.JsonAsync("wallet/balance", ct: ct)
             using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
+            try {
+                await Messages.RefreshCoreAsync(address.RootElement, ct)
+            } catch (error OperationCanceledException) {
+                throw error
+            } catch (error Exception) {
+                Messages.Error = error.Message
+            }
             let sends = await History.ReadSendsAsync(ct)
             let root = balance.RootElement
             let change = NodeJson.OptionalNumber(root, "pending_unconfirmed") ?? uint64(0)
@@ -1037,6 +1046,7 @@ class WalletSession : IDisposable {
 
     func PublishEmpty() {
         History.Reset()
+        Messages.Reset()
         snapshot = WalletSnapshot{State: state, Connected: connected}
     }
 

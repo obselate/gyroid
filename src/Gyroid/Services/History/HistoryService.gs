@@ -82,7 +82,11 @@ class HistoryService {
                 BlockHeight: NodeJson.Number(row, "block_height"),
                 Spent: NodeJson.Flag(row, "spent"),
                 Coinbase: NodeJson.Flag(row, "is_coinbase"),
-                Memo: NodeJson.Memo(hex)
+                Memo: session.Messages.HistoryMemo(
+                    NodeJson.Text(row, "txid"),
+                    int32(NodeJson.Number(row, "output_index")),
+                    NodeJson.Memo(hex, session.Settings.Network)
+                )
             }
             if (
                 !sentTransactions.TryGetValue(output.TxId, out let recipientCount) ||
@@ -143,13 +147,27 @@ class HistoryService {
             let rows = root.GetProperty("sends")
             for row in rows.EnumerateArray() {
                 let recipients = List[WalletRecipient]()
+                let memos = Dictionary[string, string](StringComparer.Ordinal)
+                for recipient in row.GetProperty("recipients").EnumerateArray() {
+                    let address = NodeJson.Text(recipient, "address")
+                    memos.TryGetValue(address, out let previous)
+                    memos[address] = (previous ?? "") + NodeJson.Text(recipient, "memo_hex")
+                }
+                let displayed = HashSet[string](StringComparer.Ordinal)
                 for recipient in row.GetProperty("recipients").EnumerateArray() {
                     let hex = NodeJson.Text(recipient, "memo_hex")
                     recipients.Add(
                         WalletRecipient{
                             Address: NodeJson.Text(recipient, "address"),
                             Amount: NodeJson.Number(recipient, "amount"),
-                            Memo: NodeJson.Memo(hex)
+                            Memo: if let message = NodeJson.MessageMemo(
+                                memos[NodeJson.Text(recipient, "address")],
+                                session.Settings.Network
+                            ) {
+                                displayed.Add(NodeJson.Text(recipient, "address")) ? message: ""
+                            } else {
+                                NodeJson.Memo(hex, session.Settings.Network)
+                            }
                         }
                     )
                 }

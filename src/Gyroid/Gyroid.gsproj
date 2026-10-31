@@ -17,6 +17,8 @@
     <EmbeddedResource Include="assets/checkpoints-mainnet.dat" LogicalName="Gyroid.Checkpoints.Mainnet" />
     <EmbeddedResource Include="assets/fonts/JetBrainsMono-Regular.ttf" LogicalName="Gyroid.Font.Regular.ttf" />
     <EmbeddedResource Include="assets/fonts/JetBrainsMono-Bold.ttf" LogicalName="Gyroid.Font.Bold.ttf" />
+    <EmbeddedResource Include="assets/oasst1/text-model.bin" LogicalName="Gyroid.TextModel.bin" />
+    <None Include="assets/oasst1/LICENSE;assets/oasst1/NOTICE" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/oasst1/%(Filename)%(Extension)" />
     <GooShaderEffect Include="assets/background.slang" SourceIndependent="true" />
     <EmbeddedResource Include="$(GooShaderEffectIntermediateRoot)/$([MSBuild]::StableStringHash($([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', 'assets', 'background.slang')), 'Sha256'))/true/background.goo-effect" LogicalName="Gyroid.Background.goo-effect" />
     <PackageReference Include="Goo" Version="[0.23.4]" />

@@ -192,16 +192,20 @@ class OverviewPage : Cell[OverviewInput] {
         guard let value = send else {
             return ""
         }
+        let memo = value
+            .Recipients
+            .Select((recipient WalletRecipient) -> recipient.Memo)
+            .FirstOrDefault((text string) -> text.Length > 0) ??
+            ""
+        if input.Session.Messages.Lookup(value.TxId) != nil {
+            return memo
+        }
         for (name, destination) in input.Contacts {
             if value.Recipients.Any((recipient WalletRecipient) -> recipient.Address == destination) {
                 return name
             }
         }
-        return value
-            .Recipients
-            .Select((recipient WalletRecipient) -> recipient.Memo)
-            .FirstOrDefault((memo string) -> memo.Length > 0) ??
-            ""
+        return memo
     }
 
     private func Change(input OverviewInput, send WalletSend?) string {
@@ -722,7 +726,7 @@ class OverviewPage : Cell[OverviewInput] {
                 Gap: 12,
                 Container{Width: 16, AlignItems: AlignItems.Center, glyph},
                 Number(ui, input.Privacy, Fixed(item.Amount), Fade(ui.Ink, faded), Fade(ui.Dim, faded)),
-                Grow(Label(ui, item.Source, 13, Fade(ui.Dim, faded), "")),
+                Grow(Label(ui, item.Source.Replace('\r', ' ').Replace('\n', ' '), 13, Fade(ui.Dim, faded), "")),
                 Container{
                     Width: 76,
                     AlignItems: AlignItems.FlexEnd,
@@ -879,6 +883,8 @@ class OverviewPage : Cell[OverviewInput] {
                     Gap: 12,
                     Height: height,
                     FlexShrink: 0,
+                    MinWidth: 0,
+                    Overflow: Overflow.Hidden,
                     BorderWidth: Edges{Bottom: 1},
                     BorderColor: ui.Rule,
                     Accessibility: Accessibility{
@@ -902,7 +908,7 @@ class OverviewPage : Cell[OverviewInput] {
                         outgoing ? ui.Pink: ui.Mint,
                         ui.Dim
                     ),
-                    Grow(Label(ui, item.Label, 13, ui.Dim, "")),
+                    Grow(Label(ui, item.Label.Replace('\r', ' ').Replace('\n', ' '), 13, ui.Dim, "")),
                     Label(
                         ui,
                         item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,

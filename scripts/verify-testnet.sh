@@ -400,6 +400,22 @@ try:
     if recipient["amount"] != amount or recipient.get("memo_hex") != memo.encode().hex():
         raise RuntimeError()
     report(step, since)
+    step = "Message"
+    since = time.monotonic()
+    message = "Gyroid verified message round trip across Blocknet testnet memos"
+    time.sleep(4)
+    cli("message", "send", addresses[1], message, reply="send", prompt=b"Type send to submit:")
+    api(0, "mining/start", {})
+    def received_message():
+        environment.update(GYROID_ENDPOINT=f"http://127.0.0.1:{ports[1]}",
+                           GYROID_DATA_DIR=str(root / "node1"), GYROID_WALLET_DIR=str(root / "node1"))
+        return "Confirmed Verified " + message in cli("message", "list")
+    wait_for(received_message, seconds=300)
+    history = cli("history")
+    if history.count(message) != 1 or "[non-text memo]" in history:
+        raise RuntimeError()
+    api(0, "mining/stop", {})
+    report(step, since)
 except (Exception, KeyboardInterrupt):
     print(f"{step} {time.monotonic() - since:.2f}s FAIL", flush=True)
     sys.exit(1)

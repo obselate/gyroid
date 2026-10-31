@@ -20,11 +20,13 @@ find "$bundle" -type f \( -name '*.dbg' -o -name '*.pdb' -o -name '*.xml' \) -de
 [[ -x "$bundle/Gyroid" && -f "$bundle/libsodium.so" ]]
 cp LICENSE "$bundle/LICENSE"
 cp src/Gyroid/assets/fonts/OFL.txt "$bundle/OFL.txt"
+mkdir -p "$bundle/licenses/oasst1"
+cp src/Gyroid/assets/oasst1/LICENSE src/Gyroid/assets/oasst1/NOTICE "$bundle/licenses/oasst1/"
 python3 - "$bundle/Gyroid" <<'PY'
 from pathlib import Path
 import sys
 binary = Path(sys.argv[1]).read_bytes()
-for name in ("gyroid.png", "gyroid-tray.rgba", "checkpoints-mainnet.dat", "fonts/JetBrainsMono-Regular.ttf", "fonts/JetBrainsMono-Bold.ttf"):
+for name in ("gyroid.png", "gyroid-tray.rgba", "checkpoints-mainnet.dat", "fonts/JetBrainsMono-Regular.ttf", "fonts/JetBrainsMono-Bold.ttf", "oasst1/text-model.bin"):
     assert Path("src/Gyroid/assets", name).read_bytes() in binary, f"Missing embedded asset: {name}"
 assert b"Gyroid.Background.goo-effect" in binary, "Missing embedded shader"
 print("Embedded assets: verified")

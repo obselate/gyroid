@@ -731,16 +731,26 @@ class HistoryPage : Cell[HistoryInput] {
         }
         let recipient = row.Recipients.FirstOrDefault()
         let note = row
-            .Recipients
-            .Length > 1 ? Short(recipient?.Address ?? ""): row
             .Memo
-            .Length > 0 ? row.Memo: Short(row.TxId)
+            .Length > 0 ? row.Memo: row
+            .Recipients
+            .Length > 0 ? Short(recipient?.Address ?? ""): Short(row.TxId)
         let sign = row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "+": "−"
         let notes = Container{
             Padding: Edges{Left: 6},
             FlexDirection: FlexDirection.Row,
+            MinWidth: 0,
+            Overflow: Overflow.Hidden,
             Gap: 6,
-            Label(ui, Hidden(ui.Privacy, note), 12, row.Memo.Length > 0 ? ui.Ink: ui.Dim, "")
+            Grow(
+                Label(
+                    ui,
+                    row.Memo.Length > 0 ? note.Replace('\r', ' ').Replace('\n', ' '): Hidden(ui.Privacy, note),
+                    12,
+                    row.Memo.Length > 0 ? ui.Ink: ui.Dim,
+                    ""
+                )
+            )
         }
         if row.Recipients.Length > 1 {
             notes.Add(Label(ui, "+" + (row.Recipients.Length - 1).ToString(), 12, ui.Dim, ""))
@@ -1014,10 +1024,10 @@ class HistoryPage : Cell[HistoryInput] {
         if row.Kind == HistoryRowKind.Received {
             values.Add(Figure(ui, "output", "#" + row.Index.ToString(), ui.Ink, 13, compact: true))
         }
-        if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
-            values.Add(Figure(ui, "memo", Hidden(ui.Privacy, row.Memo), ui.Ink, 13, compact: true))
-        }
         panel.Add(values)
+        if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
+            panel.Add(Figure(ui, "memo", row.Memo.Replace('\r', ' ').Replace('\n', ' '), ui.Ink, 13, channel: ""))
+        }
         if row.Recipients.Length > 1 {
             for entry in row.Recipients {
                 let details = Container{
@@ -1026,7 +1036,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Figure(ui, "amount", Amount(ui.Privacy, entry.Amount) + " BNT", ui.Ink, 13, compact: true)
                 }
                 if entry.Memo.Length > 0 {
-                    details.Add(Figure(ui, "memo", Hidden(ui.Privacy, entry.Memo), ui.Ink, 13, compact: true))
+                    details.Add(Figure(ui, "memo", entry.Memo.Replace('\r', ' ').Replace('\n', ' '), ui.Ink, 13, channel: ""))
                 }
                 panel.Add(details)
             }
@@ -1039,6 +1049,7 @@ class HistoryPage : Cell[HistoryInput] {
         let ui = current.Ui
         return Container{
             Gap: 3,
+            MinWidth: 0,
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,

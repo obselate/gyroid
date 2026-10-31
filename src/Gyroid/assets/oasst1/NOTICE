@@ -1,0 +1,9 @@
+Whisper text model (text-model.bin)
+
+The model is derived from the OpenAssistant Conversations Dataset (oasst1),
+2023-04-12 ready export, https://huggingface.co/datasets/OpenAssistant/oasst1
+Copyright OpenAssistant contributors.
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+Changes: English human-written messages were reduced to order-3 byte
+frequency tables. The model contains no message text.

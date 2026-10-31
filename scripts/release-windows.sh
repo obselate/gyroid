@@ -11,13 +11,15 @@ bundle="$work/$name"
 bash scripts/publish-windows.sh "$bundle"
 cp LICENSE "$bundle/LICENSE"
 cp src/Gyroid/assets/fonts/OFL.txt "$bundle/OFL.txt"
+mkdir -p "$bundle/licenses/oasst1"
+cp src/Gyroid/assets/oasst1/LICENSE src/Gyroid/assets/oasst1/NOTICE "$bundle/licenses/oasst1/"
 python3 - "$work" "$name" "$output/$name.zip" <<'PY'
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 import sys
 work, name, archive = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 binary = (work / name / "Gyroid.exe").read_bytes()
-for asset in ("gyroid.png", "gyroid-tray.rgba", "checkpoints-mainnet.dat", "fonts/JetBrainsMono-Regular.ttf", "fonts/JetBrainsMono-Bold.ttf"):
+for asset in ("gyroid.png", "gyroid-tray.rgba", "checkpoints-mainnet.dat", "fonts/JetBrainsMono-Regular.ttf", "fonts/JetBrainsMono-Bold.ttf", "oasst1/text-model.bin"):
     assert Path("src/Gyroid/assets", asset).read_bytes() in binary, f"Missing embedded asset: {asset}"
 assert b"Gyroid.Background.goo-effect" in binary, "Missing embedded shader"
 with ZipFile(archive, "w", ZIP_DEFLATED) as package:

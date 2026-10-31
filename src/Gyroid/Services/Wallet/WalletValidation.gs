@@ -4,7 +4,6 @@ import Gyroid.Models
 import System
 import System.Globalization
 import System.IO
-import System.Numerics
 import System.Security.Cryptography
 import System.Text
 
@@ -119,36 +118,20 @@ class WalletValidation {
         }
 
         func AddressIssue(address string, network string) string {
-            let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-            var value = BigInteger.Zero
-            for character in address {
-                value = value * 58 + alphabet.IndexOf(character)
-            }
-            let digits = value.ToByteArray(true, true)
-            let decoded = [address.Length - address.TrimStart('1').Length + digits.Length]uint8
-            digits.CopyTo(decoded, decoded.Length - digits.Length)
+            let decoded = Address.DecodeBytes(address)
             if decoded.Length != 68 || !SHA3_256.IsSupported {
                 return ""
             }
             let other = network == "testnet" ? "mainnet": "testnet"
-            return if Checksummed(decoded, network) {
+            return if Address.Checksummed(decoded, network) {
                 ""
-            } else if !Checksummed(decoded, other) {
+            } else if !Address.Checksummed(decoded, other) {
                 "Checksum does not match. Check for a typo"
             } else if other == "testnet" {
                 "Testnet address. This wallet is on mainnet"
             } else {
                 "Mainnet address. This wallet is on testnet"
             }
-        }
-
-        private func Checksummed(decoded[]uint8, network string) bool {
-            let tag = Encoding.ASCII.GetBytes("blocknet_stealth_address_checksumblocknet_" + network)
-            let input = [tag.Length + 64]uint8
-            tag.CopyTo(input, 0)
-            Array.Copy(decoded, 0, input, tag.Length, 64)
-            let sum = SHA3_256.HashData(input)
-            return sum[0] == decoded[64] && sum[1] == decoded[65] && sum[2] == decoded[66] && sum[3] == decoded[67]
         }
 
         func MemoBytes(memo string) int32 {
