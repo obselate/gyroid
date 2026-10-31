@@ -716,7 +716,6 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 )
             )
         }
-        content.Add(Button(ui, "Close", close))
         return WalletParts.Modal(
             ui,
             "message-details",
@@ -725,6 +724,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 AccessibilityName: ui.Strings.Get("Message details"),
                 Width: 460,
                 Content: content,
+                Footer: Button(ui, "Close", close),
+                OnCancel: close,
                 OnClose: close
             }
         )
