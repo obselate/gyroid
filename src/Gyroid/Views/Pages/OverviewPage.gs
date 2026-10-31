@@ -203,7 +203,7 @@ class OverviewPage : Cell[OverviewInput] {
         card.Add(second)
         card.Add(NetworkParts.TimeChart(ui, report.Blocks, networkPlot, 0, _ -> { }, true, !online))
         let blocks = report.Blocks
-        let count = Math.Min(30, blocks.Length - 1)
+        let count = blocks.Length - 1
         let average = count > 0 ? Duration(
             (blocks[blocks.Length - 1].Timestamp - blocks[blocks.Length - count - 1].Timestamp) / count
         ): "-"
