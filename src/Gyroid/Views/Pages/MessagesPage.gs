@@ -29,6 +29,8 @@ class MessagesViewState {
 data struct MessagesInput {
     var Ui Presentation
     var Session WalletSession
+    var Snapshot WalletSnapshot
+    var Height uint64
     var Wallet string
     var Network string
     var Address string
@@ -60,12 +62,14 @@ class MessagesPage : Cell, IDisposable {
     private let configureThread Action[MessageThread]
     private let configureList Action[MessageConversationList]
     private let configureComposer Action[MessageComposer]
+    private let configurePreparation Action[MessagePreparation]
     private let measureDraft Func[string, MessageEstimate]
     private var threadWidth float64
     private var listWidth float64
     private var projection MessagesProjection
 
     init() {
+        configurePreparation = child -> child.Accept(input)
         projection = MessagesProjection{Conversations: []ConversationView{}, Thread: []MessageThreadRow{}}
         measureDraft = text -> input
             .Session
@@ -369,6 +373,9 @@ class MessagesPage : Cell, IDisposable {
         thread.MinWidth = 0
         thread.MinHeight = 0
         thread.Overflow = Overflow.Hidden
+        if !input.Drawer && input.Mode == MessengerMode.Send && input.Session.Send.CanSplitOutputs {
+            thread.Add(Cell.Mount[MessagePreparation]("preparation", configurePreparation))
+        }
         if let current = conversation {
             thread.Add(Header(input, current))
             thread.Add(Cell.Mount[MessageThread]("thread:" + current.Id, configureThread))
@@ -1291,5 +1298,214 @@ class MessageDetails : Cell[MessageDetailsInput] {
                 OnClose: close
             }
         )
+    }
+}
+
+class MessagePreparation : Cell, IDisposable {
+    private var input MessagesInput
+    private var request CancellationTokenSource?
+    private var operation CancellationTokenSource?
+    private var generation int64
+    private var operationGeneration int64
+    private var status PreparationStatus?
+    private var estimate SendEstimate?
+    private var fee uint64?
+    private var transaction string = ""
+    private var issue string = ""
+    private var busy bool
+
+    func Accept(next MessagesInput) {
+        if next == input {
+            return
+        }
+        let reset = input.Wallet != next.Wallet || input.Network != next.Network || input.Address != next.Address
+        let changed = reset || input.Snapshot != next.Snapshot || input.Height != next.Height
+        input = next
+        if reset {
+            operationGeneration++
+            operation?.Cancel()
+            estimate = nil
+            fee = nil
+            transaction = ""
+            busy = false
+        }
+        if changed {
+            request?.Cancel()
+            request?.Dispose()
+            let active = CancellationTokenSource.CreateLinkedTokenSource(
+                next.Ui.Actions.window?.Closed ?? CancellationToken.None
+            )
+            request = active
+            generation++
+            let version = generation
+            let token = active.Token
+            let txid = transaction
+            go Read(next, txid, version, token)
+        }
+        Rebuild()
+    }
+
+    private async func Read(source MessagesInput, txid string, version int64, token CancellationToken) {
+        try {
+            let result = await source.Session.Send.ReadPreparationAsync(txid, token)
+            source
+                .Ui
+                .Actions
+                .window
+                ?.TryPost(
+                () -> {
+                    if version == generation && !token.IsCancellationRequested {
+                        status = result
+                        issue = ""
+                        Rebuild()
+                    }
+                }
+            )
+        } catch (error OperationCanceledException) when token.IsCancellationRequested { } catch (error Exception) {
+            let message = error.Message
+            source
+                .Ui
+                .Actions
+                .window
+                ?.TryPost(
+                () -> {
+                    if version == generation && !token.IsCancellationRequested {
+                        issue = message
+                        Rebuild()
+                    }
+                }
+            )
+        }
+    }
+
+    private func Prepare(confirmed SendEstimate? = nil) {
+        busy = true
+        issue = ""
+        operation?.Cancel()
+        operation?.Dispose()
+        let active = CancellationTokenSource.CreateLinkedTokenSource(
+            input.Ui.Actions.window?.Closed ?? CancellationToken.None
+        )
+        operation = active
+        operationGeneration++
+        let version = operationGeneration
+        let token = active.Token
+        let source = input
+        go Execute(source, confirmed, version, token)
+    }
+
+    private async func Execute(source MessagesInput, confirmed SendEstimate?, version int64, token CancellationToken) {
+        var prepared SendEstimate?
+        var sent SendResult?
+        var message = ""
+        try {
+            if let value = confirmed {
+                sent = await source.Session.Send.SubmitAsync(value, token)
+                await source.Session.RefreshAsync(token)
+            } else {
+                prepared = await source.Session.Send.EstimatePreparationAsync(token)
+            }
+        } catch (error OperationCanceledException) when token.IsCancellationRequested { } catch (error Exception) {
+            message = error.Message
+        }
+        source
+            .Ui
+            .Actions
+            .window
+            ?.TryPost(
+            () -> {
+                if version != operationGeneration || token.IsCancellationRequested {
+                    return
+                }
+                busy = false
+                issue = message
+                if let result = sent {
+                    fee = result.Fee
+                    transaction = result.TxId
+                    estimate = nil
+                    let current = input
+                    generation++
+                    let revision = generation
+                    let txid = transaction
+                    go Read(current, txid, revision, token)
+                } else if let result = prepared {
+                    estimate = result
+                }
+                Rebuild()
+            }
+        )
+    }
+
+    private func Close() {
+        if !busy {
+            estimate = nil
+            input.Session.Send.InvalidateConfirmation()
+            Rebuild()
+        }
+    }
+
+    override func Build() Blob {
+        let ui = input.Ui
+        let root = Container{FlexShrink: 0}
+        if let ready = status {
+            if ready.Ready < 4 {
+                let row = Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: AppTheme.Space12,
+                    Padding: AppTheme.Space16,
+                    Grow(Figure(ui, "Ready outputs", ready.Ready.ToString(), AppTheme.Ink))
+                }
+                if let actual = fee {
+                    row.Add(Figure(ui, "fee", Amount(ui.Privacy, actual) + " BNT", AppTheme.Ink))
+                    row.Add(Figure(ui, "Maturing", ready.Confirmations.ToString() + "/10", AppTheme.Ink))
+                }
+                if (input.Snapshot.Balance?.Spendable ?? uint64(0)) > 0 && !input.Snapshot.ScanBehind(input.Height) {
+                    row.Add(Button(ui, "Prepare", () -> Prepare(), busy || input.Session.Send.Pending != nil))
+                }
+                root.Add(row)
+            }
+        }
+        if issue.Length > 0 {
+            root.Add(Label(ui, ui.Strings.Explain(issue), AppTheme.Type12, AppTheme.Pink, ""))
+        }
+        if let value = estimate {
+            root.Add(
+                WalletParts.Modal(
+                    ui,
+                    "prepare-messaging-dialog",
+                    ModalDialog{
+                        Open: true,
+                        Preset: ModalDialogPreset.Confirm,
+                        AccessibilityName: ui.Strings.Get("Prepare for messaging"),
+                        Width: 440,
+                        Content: Container{
+                            Gap: AppTheme.Space12,
+                            Label(ui, ui.Strings.Get("Prepare for messaging"), AppTheme.Type17, AppTheme.Ink, ""),
+                            Figure(ui, "outputs", "8", AppTheme.Ink),
+                            Figure(ui, "amount", Amount(ui.Privacy, value.Amount) + " BNT", AppTheme.Ink),
+                            Figure(ui, "fee", Amount(ui.Privacy, value.Fee) + " BNT", AppTheme.Ink),
+                            Figure(ui, "Confirmed", "0/10", AppTheme.Ink)
+                        },
+                        ConfirmText: ui.Strings.Get("Prepare"),
+                        CancelText: ui.Strings.Get("Cancel"),
+                        ConfirmDisabled: busy,
+                        OnConfirm: () -> Prepare(value),
+                        OnCancel: () -> Close(),
+                        OnClose: () -> Close()
+                    }
+                )
+            )
+        }
+        return root
+    }
+
+    func Dispose() {
+        generation++
+        operationGeneration++
+        request?.Cancel()
+        request?.Dispose()
+        operation?.Cancel()
+        operation?.Dispose()
     }
 }

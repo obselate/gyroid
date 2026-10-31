@@ -45,6 +45,8 @@ partial class App {
     private func MessagesPageInput() MessagesInput -> MessagesInput{
         Ui: ui,
         Session: wallet,
+        Snapshot: wallet.Snapshot,
+        Height: wallet.Node.Status.Height,
         Wallet: wallet.Settings.ActiveWallet,
         Network: wallet.Messages.Network,
         Address: wallet.Messages.OwnAddress,
