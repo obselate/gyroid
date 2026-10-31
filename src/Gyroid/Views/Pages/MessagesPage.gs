@@ -58,6 +58,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     private let members List[string] = List[string]()
     private var preparation SendEstimate?
     private var preparationFee uint64?
+    private var preparationTransaction string = ""
 
     func Dispose() {
         scrollTimer?.Dispose()
@@ -162,6 +163,15 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             }
             if let fee = preparationFee {
                 readiness.Add(Figure(ui, "fee", Amount(ui.Privacy, fee) + " BNT", ui.Ink))
+                var confirmations uint64 = 0
+                let height = balance?.ChainHeight ?? uint64(0)
+                for output in input.Session.History.Outputs {
+                    if output.TxId == preparationTransaction && height >= output.BlockHeight {
+                        confirmations = Math.Min(uint64(10), height - output.BlockHeight)
+                        break
+                    }
+                }
+                readiness.Add(Figure(ui, "Maturing", confirmations.ToString() + "/10", ui.Ink))
             }
             if (balance?.Spendable ?? uint64(0)) > 0 &&
                 !input
@@ -720,6 +730,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     private async func SubmitPreparation(input MessagesInput, estimate SendEstimate, ct CancellationToken) {
         let result = await input.Session.Send.SubmitAsync(estimate, ct)
         preparationFee = result.Fee
+        preparationTransaction = result.TxId
         await input.Session.RefreshAsync(ct)
     }
 
