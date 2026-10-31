@@ -19,6 +19,8 @@ class HistoryService {
     private var baseSends[]WalletSend = Array.Empty[WalletSend]()
     private var received List[WalletOutput] = List[WalletOutput]()
     private var loaded int32
+    private let blockTimes Dictionary[uint64, int64] = Dictionary[uint64, int64]()
+    private var blockHash string = ""
 
     prop Total uint64 -> uint64(received.Count)
     prop More bool -> loaded < received.Count
@@ -37,6 +39,7 @@ class HistoryService {
         baseSends = Array.Empty[WalletSend]()
         received = List[WalletOutput]()
         loaded = 0
+        blockTimes.Clear()
     }
 
     async func ReloadAsync(ct CancellationToken)[]WalletOutput {
@@ -205,10 +208,17 @@ class HistoryService {
         await session.BeginAsync(ct, false)
         try {
             session.RequireUnlocked()
+            if blockHash != session.Node.Status.BestHash {
+                blockTimes.Clear()
+                blockHash = session.Node.Status.BestHash
+            }
             let times = Dictionary[uint64, int64]()
             for height in heights {
-                using let block = await session.Node.Api.JsonAsync("block/" + height.ToString(), ct: ct)
-                times[height] = NodeJson.Signed(block.RootElement, "timestamp")
+                if !blockTimes.ContainsKey(height) {
+                    using let block = await session.Node.Api.JsonAsync("block/" + height.ToString(), ct: ct)
+                    blockTimes[height] = NodeJson.Signed(block.RootElement, "timestamp")
+                }
+                times[height] = blockTimes[height]
             }
             return times
         } finally {

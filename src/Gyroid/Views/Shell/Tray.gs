@@ -23,7 +23,7 @@ partial class App {
         }
         wallet.EnableEvents()
         Run(ct -> wallet.ConnectAsync(ct))
-        refreshTimer = host.SetInterval(() -> Refresh(), 60000)
+        refreshTimer = host.SetInterval(() -> Refresh(true), 60000)
         UpdatePlayback()
         trayLockable = Lockable()
         tray = TrayIcon.Create(host, TraySettings()).Icon

@@ -23,6 +23,8 @@ class PendingSendStore {
         "gyroid-pending-send." + session.settings.ActiveWallet + ".json"
     )
 
+    prop Exists bool -> session.settings.ActiveWallet.Length > 0 && Path.Exists(PendingPath())
+
     func AcquireLease() FileStream {
         let options = FileStreamOptions{
             Mode: FileMode.OpenOrCreate,

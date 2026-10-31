@@ -47,8 +47,14 @@ partial class App {
             ui.Actions.DecodeTimer = nil
             ui.Actions.Decoding.Clear()
         } else {
-            clock.Start()
-            frameTimer ??= window?.SetInterval(() -> Tick(), 50)
+            if backgroundMode != "off" {
+                clock.Start()
+                frameTimer ??= window?.SetInterval(() -> Tick(), 50)
+            } else {
+                clock.Stop()
+                frameTimer?.Dispose()
+                frameTimer = nil
+            }
         }
     }
 

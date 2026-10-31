@@ -237,7 +237,11 @@ class SendService {
         }
     }
 
-    async func RecoverAsync(ct CancellationToken) {
+    async func RecoverAsync(ct CancellationToken, reloadSends bool = true) {
+        if !store.Exists {
+            store.Pending = nil
+            return
+        }
         var lease FileStream? = nil
         try {
             try {
@@ -246,13 +250,13 @@ class SendService {
                 store.Error = error.Message
                 return
             }
-            await RecoverCoreAsync(ct)
+            await RecoverCoreAsync(ct, reloadSends)
         } finally {
             lease?.Dispose()
         }
     }
 
-    private async func RecoverCoreAsync(ct CancellationToken) {
+    private async func RecoverCoreAsync(ct CancellationToken, reloadSends bool = true) {
         store.Load()
         guard let pending = store.Pending else {
             return
@@ -264,7 +268,7 @@ class SendService {
                 .JsonAsync("wallet/send/status?idempotency_key=" + Uri.EscapeDataString(pending.Key), ct: ct)
             let root = response.RootElement
             let status = NodeJson.Text(root, "state")
-            if session.State == WalletState.Unlocked {
+            if reloadSends && session.State == WalletState.Unlocked {
                 let sends = await session.History.ReadSendsAsync(ct)
                 session.PublishSends(sends)
             }

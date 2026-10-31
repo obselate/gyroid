@@ -39,6 +39,7 @@ class WalletSession : IDisposable {
     let shutdown CancellationTokenSource = CancellationTokenSource()
     var events Context? = nil
     var eventsEnabled bool
+    var eventsHealthy bool
     var nextRestart DateTimeOffset
     var lastActivity int64 = WalletLockScheduler.Now()
 
@@ -137,7 +138,7 @@ class WalletSession : IDisposable {
             if remaining > 0 {
                 select {
                     case <- autoLockChanged { }
-                    case <- after(TimeSpan.FromMilliseconds(Math.Min(remaining, 250))) { }
+                    case <- after(TimeSpan.FromMilliseconds(remaining)) { }
                 }
                 continue
             }
@@ -160,6 +161,7 @@ class WalletSession : IDisposable {
     }
 
     private func StopEvents() {
+        eventsHealthy = false
         events?.TryCancel()
         eventsChanged.Writer.TryWrite(true)
     }
@@ -202,6 +204,17 @@ class WalletSession : IDisposable {
                 try {
                     await Node.Api.EventsAsync(_ -> RefreshEventAsync(ct), ct)
                 } catch (error HttpRequestException) { } catch (error IOException) { } catch (error WalletException) { }
+                await gate.WaitAsync(ct)
+                try {
+                    eventsHealthy = false
+                    if Node.Status.Running || snapshot.Connected {
+                        Node.Status = NodeStatus{... Node.Status, Running: false}
+                        snapshot = WalletSnapshot{... snapshot, Connected: false}
+                        Changed?.Invoke()
+                    }
+                } finally {
+                    gate.Release()
+                }
                 await Task.Delay(2000, ct)
             }
         } catch (error OperationCanceledException) when listenerContext.IsCancelled { }
@@ -216,6 +229,7 @@ class WalletSession : IDisposable {
         let sendError = Send.Error
         try {
             ct.ThrowIfCancellationRequested()
+            eventsHealthy = true
             await Node.RefreshStatusAsync(ct)
             if state == WalletState.Unlocked {
                 await RefreshCoreAsync(ct)
@@ -652,7 +666,7 @@ class WalletSession : IDisposable {
         let node = Node.Status
         try {
             await Node.RefreshStatusAsync(ct)
-            if state == WalletState.Unlocked && snapshot.ScanBehind(Node.Status.Height) {
+            if state == WalletState.Unlocked && (!eventsHealthy || snapshot.ScanBehind(Node.Status.Height)) {
                 await RefreshCoreAsync(ct)
             }
         } finally {
@@ -952,14 +966,21 @@ class WalletSession : IDisposable {
 
     private async func RefreshCoreAsync(ct CancellationToken) {
         RequireUnlocked()
-        await Send.RecoverAsync(ct)
+        await Send.RecoverAsync(ct, false)
         try {
             using let balance = await Node.Api.JsonAsync("wallet/balance", ct: ct)
-            using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
-            try {
-                Messages.UpdateWallet(address.RootElement)
-            } catch (error Exception) {
-                Messages.Error = error.Message
+            if snapshot.Address.Length == 0 {
+                using let address = await Node.Api.JsonAsync("wallet/address", ct: ct)
+                snapshot = WalletSnapshot{
+                    ... snapshot,
+                    Address: NodeJson.Text(address.RootElement, "address"),
+                    ViewOnly: NodeJson.Flag(address.RootElement, "view_only")
+                }
+                try {
+                    Messages.UpdateWallet(address.RootElement)
+                } catch (error Exception) {
+                    Messages.Error = error.Message
+                }
             }
             let sends = await History.ReadSendsAsync(ct)
             let root = balance.RootElement
@@ -979,8 +1000,8 @@ class WalletSession : IDisposable {
             snapshot = WalletSnapshot{
                 State: state,
                 Connected: connected,
-                Address: NodeJson.Text(address.RootElement, "address"),
-                ViewOnly: NodeJson.Flag(address.RootElement, "view_only"),
+                Address: snapshot.Address,
+                ViewOnly: snapshot.ViewOnly,
                 Balance: amounts,
                 History: outputs,
                 HistoryTotal: History.Total,
