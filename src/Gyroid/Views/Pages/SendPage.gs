@@ -853,7 +853,11 @@ class SendPage : Cell[SendPageInput] {
     }
 
     private func Issue(input SendPageInput, text string) string {
-        if text.Length == 0 {
+        if text.Length == 0 || !input.Contacts.ContainsKey(text) &&
+            input
+            .Contacts
+            .Keys
+            .Any((name string) -> name.StartsWith(text, StringComparison.OrdinalIgnoreCase)) {
             return ""
         }
         let destination = input.Contacts.TryGetValue(text, out let address) ? address: text
