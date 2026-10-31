@@ -87,6 +87,7 @@ class Strings {
             case "Prepare for messaging": "准备消息输出"
             case "Prepare": "准备"
             case "Ready outputs": "可用输出"
+            case "Maturing": "待成熟"
             case "outputs": "输出"
             case "Remove conversation": "移除会话"
             case "Remove": "移除"
