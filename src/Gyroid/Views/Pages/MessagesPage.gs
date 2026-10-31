@@ -506,7 +506,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         let group = dialog == "group"
         let remove = dialog == "remove"
         let contact = dialog == "contact"
-        let cap = Math.Max(0, Wire.MaxMembers(name) - 1)
+        let maximum = Math.Max(0, Wire.MaxMembers(name))
+        let cap = Math.Max(0, maximum - 1)
         let title = group ? "New group": remove ? "Remove conversation": contact ? "Add contact": "New conversation"
         let content = Container{Gap: 12, MinHeight: 0}
         let close Action = () -> {
@@ -589,9 +590,9 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 content.Add(
                     Label(
                         ui,
-                        (members.Count + 1).ToString() + "/" + (cap + 1).ToString() + " " + ui.Strings.Get("members"),
+                        (members.Count + 1).ToString() + "/" + maximum.ToString() + " " + ui.Strings.Get("members"),
                         12,
-                        members.Count > cap ? ui.Pink: ui.Dim,
+                        members.Count + 1 > maximum ? ui.Pink: ui.Dim,
                         ""
                     )
                 )
