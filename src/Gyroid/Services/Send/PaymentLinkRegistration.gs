@@ -31,9 +31,12 @@ class PaymentLinkRegistration {
                         .Replace("`", "\\`")
                         .Replace("$", "\\$")
                         .Replace("%", "%%")
-                    let content = "[Desktop Entry]\nType=Application\nName=Gyroid\nExec=\"" +
+                    let command = executable.IndexOfAny(" \t\n\"'\\><~|&;$*?#()`".ToCharArray()) < 0 ? escaped: "\"" +
                         escaped +
-                        "\" %u\nTerminal=false\nStartupWMClass=dev.gyroid.wallet\nCategories=Finance;\nMimeType=x-scheme-handler/blocknet;\n"
+                        "\""
+                    let content = "[Desktop Entry]\nType=Application\nName=Gyroid\nExec=" +
+                        command +
+                        " %u\nTerminal=false\nStartupWMClass=dev.gyroid.wallet\nCategories=Finance;\nMimeType=x-scheme-handler/blocknet;\n"
                     if !File.Exists(entry) || File.ReadAllText(entry) != content {
                         Directory.CreateDirectory(applications)
                         File.WriteAllText(entry, content)
@@ -44,7 +47,7 @@ class PaymentLinkRegistration {
                         Run("xdg-mime", []string{"default", "dev.gyroid.wallet.desktop", "x-scheme-handler/blocknet"})
                     }
                 } else if OperatingSystem.IsWindows() {
-                    using let existing = Registry.CurrentUser.OpenSubKey("Software\\Classes\\blocknet")
+                    using let existing = Registry.ClassesRoot.OpenSubKey("blocknet")
                     if existing != nil {
                         using let command = existing.OpenSubKey("shell\\open\\command")
                         let value = command?.GetValue("") as string ?? ""
