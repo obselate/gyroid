@@ -16,6 +16,6 @@ open class AppSettings {
     var ReduceMotion bool
     var UiScalePercent int32 = 100
     var StartInTray bool
-    var LockOnMinimize bool
+    var BackgroundLockMinutes int32
     var LoadError string = ""
 }

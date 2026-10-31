@@ -82,6 +82,8 @@ partial class App : Cell {
 
     private var statusTimer WindowTimer?
 
+    private var backgroundLockTimer WindowTimer?
+
     private let navigate Action[AppPage]
 
     private var shownHeight string = ""
@@ -156,6 +158,9 @@ partial class App : Cell {
         setLanguage = language -> SetLanguage(language)
         preferenceChanged = () -> {
             ApplyPreferences()
+            backgroundLockTimer?.Dispose()
+            backgroundLockTimer = nil
+            UpdateBackgroundLock()
             UpdatePlayback()
             Rebuild()
         }
@@ -195,27 +200,22 @@ partial class App : Cell {
             Rebuild()
         }
         owner.StateChanged += _ -> {
-            if (owner.State == WindowState.Minimized || owner.Occlusion == WindowOcclusion.Occluded) &&
-                wallet
-                .Settings
-                .LockOnMinimize {
-                Lock()
-            }
+            UpdateBackgroundLock()
             UpdatePlayback()
             Rebuild()
         }
         owner.OcclusionChanged += _ -> {
-            if owner.Occlusion == WindowOcclusion.Occluded && wallet.Settings.LockOnMinimize {
-                Lock()
-            }
+            UpdateBackgroundLock()
             UpdatePlayback()
             Rebuild()
         }
         owner.FocusChanged += _ -> {
+            UpdateBackgroundLock()
             UpdatePlayback()
             Rebuild()
         }
         owner.VisibilityChanged += _ -> {
+            UpdateBackgroundLock()
             UpdatePlayback()
             Rebuild()
         }
@@ -237,6 +237,7 @@ partial class App : Cell {
         tray = nil
         refreshTimer?.Dispose()
         statusTimer?.Dispose()
+        backgroundLockTimer?.Dispose()
         ui.Actions.DecodeTimer?.Dispose()
         ui.Actions.DecodeTimer = nil
         frameTimer?.Dispose()
@@ -249,6 +250,41 @@ partial class App : Cell {
 
     private func Touch() {
         wallet.Touch()
+    }
+
+    private func UpdateBackgroundLock() {
+        guard let owner = window else {
+            return
+        }
+        let minutes = wallet.Settings.BackgroundLockMinutes
+        if minutes == 0 ||
+            !hidden &&
+            owner.IsFocused &&
+            owner.IsVisible &&
+            owner.State != WindowState.Minimized &&
+            owner.Occlusion != WindowOcclusion.Occluded {
+            backgroundLockTimer?.Dispose()
+            backgroundLockTimer = nil
+        } else {
+            backgroundLockTimer ??= owner.SetTimeout(
+                () -> {
+                    backgroundLockTimer = nil
+                    if wallet
+                        .Snapshot
+                        .State == WalletState.Unlocked &&
+                        (
+                        hidden ||
+                            !owner.IsFocused ||
+                            !owner.IsVisible ||
+                            owner.State == WindowState.Minimized ||
+                            owner.Occlusion == WindowOcclusion.Occluded
+                    ) {
+                        Lock()
+                    }
+                },
+                float64(minutes) * 60000
+            )
+        }
     }
 
     private func Resize(owner Window) {

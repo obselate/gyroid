@@ -23,7 +23,7 @@ class WalletSettings : AppSettings {
         ReduceMotion: ReduceMotion,
         UiScalePercent: UiScalePercent,
         StartInTray: StartInTray,
-        LockOnMinimize: LockOnMinimize,
+        BackgroundLockMinutes: BackgroundLockMinutes,
         DiscoveredDataDirectory: DiscoveredDataDirectory,
         DiscoveredEndpoint: DiscoveredEndpoint,
         DiscoveredBinaryPath: DiscoveredBinaryPath,

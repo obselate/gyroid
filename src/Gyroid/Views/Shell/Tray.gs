@@ -48,6 +48,7 @@ partial class App {
                 conceal = false
                 hidden = true
                 host.Hide()
+                UpdateBackgroundLock()
                 UpdatePlayback()
             }
         }
@@ -72,6 +73,7 @@ partial class App {
         } else {
             host.State = WindowState.Minimized
         }
+        UpdateBackgroundLock()
         UpdatePlayback()
         Rebuild()
         return false
@@ -105,6 +107,7 @@ partial class App {
         hidden = false
         window?.Show(true)
         window?.RequestActivation()
+        UpdateBackgroundLock()
         UpdatePlayback()
         Rebuild()
     }

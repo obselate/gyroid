@@ -343,16 +343,19 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             WalletParts.Line(
                 ui,
                 rowHeight,
-                "lock on minimize",
+                "lock in background after",
                 []Blob{
-                    Toggle(
-                        input,
-                        "lock on minimize",
-                        settings.LockOnMinimize,
-                        () -> Prefer(
+                    Segment(
+                        ui,
+                        "lock in background after",
+                        []string{"5", "15", "60", "0"},
+                        []string{"5m", "15m", "1h", "never"},
+                        settings.BackgroundLockMinutes.ToString(),
+                        input.Busy,
+                        id -> Prefer(
                             input,
                             value -> {
-                                value.LockOnMinimize = !settings.LockOnMinimize
+                                value.BackgroundLockMinutes = int32.Parse(id)
                             }
                         )
                     )
@@ -1286,7 +1289,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 MaterialIcons.Create("warning", 14, ui.Dim),
                 Label(
                     ui,
-                    ui.Strings.Get("Anyone with these keys sees every payment to this wallet. They cannot spend"),
+                    ui.Strings.Get(
+                        "Anyone with these keys sees every payment and message to this wallet. They cannot spend"
+                    ),
                     12,
                     ui.Dim,
                     ""

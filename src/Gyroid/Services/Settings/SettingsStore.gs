@@ -82,7 +82,14 @@ class SettingsStore {
                         settings.UiScalePercent = percent
                     }
                     settings.StartInTray = Flag(root, "start_in_tray")
-                    settings.LockOnMinimize = Flag(root, "lock_on_minimize")
+                    if root.TryGetProperty("background_lock_minutes", out let backgroundMinutes) {
+                        settings.BackgroundLockMinutes = if backgroundMinutes.ValueKind == JsonValueKind.Number &&
+                            backgroundMinutes.TryGetInt32(out let value) {
+                            Math.Max(0, value)
+                        } else {
+                            0
+                        }
+                    }
                     if settings.Network != "mainnet" && settings.Network != "testnet" {
                         settings.Network = "mainnet"
                     }
@@ -194,7 +201,7 @@ class SettingsStore {
                     writer.WriteBoolean("reduce_motion", settings.ReduceMotion)
                     writer.WriteNumber("ui_scale_percent", settings.UiScalePercent)
                     writer.WriteBoolean("start_in_tray", settings.StartInTray)
-                    writer.WriteBoolean("lock_on_minimize", settings.LockOnMinimize)
+                    writer.WriteNumber("background_lock_minutes", settings.BackgroundLockMinutes)
                     writer.WriteEndObject()
                     await writer.FlushAsync(ct)
                 },

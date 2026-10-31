@@ -22,6 +22,9 @@ class SettingsValidation {
             if settings.AutoLockMinutes < 0 {
                 throw WalletException("Auto-lock minutes must be zero or greater")
             }
+            if settings.BackgroundLockMinutes < 0 {
+                throw WalletException("Background lock minutes must be zero or greater")
+            }
             if settings.Background != "gyroid" && settings.Background != "glyphs" && settings.Background != "off" {
                 throw WalletException("Background must be gyroid, glyphs or off")
             }
