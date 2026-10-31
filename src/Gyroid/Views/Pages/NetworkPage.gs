@@ -672,63 +672,59 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             input.Node.IdentityAge.Substring(0, input.Node.IdentityAge.IndexOf('h')),
             CultureInfo.InvariantCulture
         ): 0
-        card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: 10,
-                FlexShrink: 0,
-                Padding: Edges{Top: 8},
-                BorderWidth: Edges{Top: 1},
-                BorderColor: ui.Rule,
-                Label(ui, ui.Strings.Get("This node"), 12.5, ui.Body, ""),
-                Grow(
-                    Text{
-                        Content:
-                        if identity.Length < 10 {
-                            identity
-                        } else if revealed {
-                            Grouped(identity)
-                        } else {
-                            identity.Substring(0, 4) + "…••••••"
-                        },
-                        FontFamily: ui.Font,
-                        FontSize: 12.5,
-                        Color: ui.Ink,
-                        TextWrap: TextWrap.Wrap,
-                        Accessibility: Accessibility{Name: revealed ? identity: ""}
-                    }
+        let identityRow = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            Label(ui, ui.Strings.Get("This node"), 12.5, ui.Body, ""),
+            Label(
+                ui,
+                String.Format(
+                    ui.Strings.Get(hours >= 24 ? "identity {0} d": "identity {0} h"),
+                    hours >= 24 ? hours / 24: hours
                 ),
-                Label(
-                    ui,
-                    String.Format(
-                        ui.Strings.Get(hours >= 24 ? "identity {0} d": "identity {0} h"),
-                        hours >= 24 ? hours / 24: hours
-                    ),
-                    12.5,
-                    ui.Dim,
-                    ""
-                ),
-                Container{FlexGrow: 1},
-                if revealed {
-                    IconButton{
-                        Icon: MaterialIcons.Create("content_copy", 15, ui.Body),
-                        AccessibilityName: ui.Strings.Get("Copy node ID"),
-                        OnClick: () -> ui.Actions.Copy(identity, 120000)
-                    }.Build()
-                } else {
-                    Container{}
-                },
+                12.5,
+                ui.Dim,
+                ""
+            ),
+            Container{FlexGrow: 1},
+            IconButton{
+                Icon: MaterialIcons.Create(revealed ? "visibility_off": "visibility", 15, ui.Body),
+                AccessibilityName: ui.Strings.Get(revealed ? "Hide node ID": "Show node ID"),
+                OnClick: () -> {
+                    revealed = !revealed
+                    Rebuild()
+                }
+            }.Build()
+        }
+        let identityPanel = Container{
+            Gap: 6,
+            FlexShrink: 0,
+            Padding: Edges{Top: 8},
+            BorderWidth: Edges{Top: 1},
+            BorderColor: ui.Rule,
+            identityRow
+        }
+        if revealed {
+            identityRow.Add(
                 IconButton{
-                    Icon: MaterialIcons.Create(revealed ? "visibility_off": "visibility", 15, ui.Body),
-                    AccessibilityName: ui.Strings.Get(revealed ? "Hide node ID": "Show node ID"),
-                    OnClick: () -> {
-                        revealed = !revealed
-                        Rebuild()
-                    }
+                    Icon: MaterialIcons.Create("content_copy", 15, ui.Body),
+                    AccessibilityName: ui.Strings.Get("Copy node ID"),
+                    OnClick: () -> ui.Actions.Copy(identity, 120000)
                 }.Build()
-            }
-        )
+            )
+            identityPanel.Add(
+                Text{
+                    Content: Grouped(identity),
+                    FontFamily: ui.Font,
+                    FontSize: 12.5,
+                    Color: ui.Ink,
+                    TextWrap: TextWrap.Wrap,
+                    Accessibility: Accessibility{Name: identity}
+                }
+            )
+        }
+        card.Add(identityPanel)
         return card
     }
 
@@ -937,17 +933,20 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     }
 
     private func BanRow(ui Presentation, ban BannedPeer) Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        Gap: 10,
-        Height: 30,
+        Gap: 4,
+        MinHeight: 44,
         FlexShrink: 0,
         Padding: Edges{Left: 8, Right: 8},
         Accessibility: Accessibility{Name: Short(ban.Id) + " " + ban.Reason},
-        MaterialIcons.Create("close", 12, ui.Pink),
-        Label(ui, Short(ban.Id), 12.5, ui.Ink, ""),
-        Grow(Label(ui, ban.Reason, 12.5, ui.Body, "")),
-        Label(ui, ban.Count.ToString() + "× · ", 12.5, ui.Dim, ""),
+        Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: 10,
+            MaterialIcons.Create("close", 12, ui.Pink),
+            Label(ui, Short(ban.Id), 12.5, ui.Ink, ""),
+            Grow(Label(ui, ban.Reason, 12.5, ui.Body, "")),
+            Label(ui, ban.Count.ToString() + "×", 12.5, ui.Dim, "")
+        },
         if ban.Permanent {
             Label(ui, ui.Strings.Get("permanent"), 12.5, ui.Pink, "")
         } else {

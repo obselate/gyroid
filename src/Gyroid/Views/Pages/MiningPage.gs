@@ -113,6 +113,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         }
         card.Add(head)
         if unavailable || !input.Session.Node.Status.Running {
+            card.MaxWidth = 620
             card.Add(Label(ui, ui.Strings.Get("Node unavailable"), 14, ui.Body, ""))
             return Container{FlexGrow: 1, AlignItems: AlignItems.Center, JustifyContent: JustifyContent.Center, card}
         }
