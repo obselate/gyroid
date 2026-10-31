@@ -1065,7 +1065,8 @@ class OverviewPage : Cell[OverviewInput] {
                         Number(
                             ui,
                             input.Privacy,
-                            (outgoing ? "-": "+") + Fixed(item.Amount),
+                            (outgoing ? "-": "+") +
+                                (item.Kind == "self" ? WalletAmount.Format(item.Amount): Fixed(item.Amount)),
                             outgoing ? ui.Pink: ui.Mint,
                             ui.Dim
                         )
