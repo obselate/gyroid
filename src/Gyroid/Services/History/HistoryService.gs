@@ -211,7 +211,7 @@ class HistoryService {
             if blockHash != session.Node.Status.BestHash {
                 let tip = session.Node.Status.Height
                 for entry in blockTimes {
-                    if entry.Key > tip || tip - entry.Key < 100 {
+                    if entry.Key > tip {
                         blockTimes.Remove(entry.Key)
                     }
                 }
