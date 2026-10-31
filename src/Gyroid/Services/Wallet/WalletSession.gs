@@ -666,7 +666,14 @@ class WalletSession : IDisposable {
         let node = Node.Status
         try {
             await Node.RefreshStatusAsync(ct)
-            if state == WalletState.Unlocked && (!eventsHealthy || snapshot.ScanBehind(Node.Status.Height)) {
+            let current = Node.Status
+            if state == WalletState.Unlocked &&
+                (
+                !eventsHealthy || snapshot.ScanBehind(current.Height) ||
+                    current.Mempool != node.Mempool ||
+                    current.MempoolBytes != node.MempoolBytes ||
+                    current.BestHash != node.BestHash
+            ) {
                 await RefreshCoreAsync(ct)
             }
         } finally {
