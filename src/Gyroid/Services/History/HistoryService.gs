@@ -209,7 +209,12 @@ class HistoryService {
         try {
             session.RequireUnlocked()
             if blockHash != session.Node.Status.BestHash {
-                blockTimes.Clear()
+                let tip = session.Node.Status.Height
+                for entry in blockTimes {
+                    if entry.Key > tip || tip - entry.Key < 100 {
+                        blockTimes.Remove(entry.Key)
+                    }
+                }
                 blockHash = session.Node.Status.BestHash
             }
             let times = Dictionary[uint64, int64]()
