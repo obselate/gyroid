@@ -574,19 +574,19 @@ class SendPage : Cell[SendPageInput] {
             total = Add(total, amount)
         }
         if input.Privacy || spendable == 0 {
-            bar.Add(Segment(1, ui.Unallocated))
+            bar.Add(BarSegment(1, ui.Unallocated))
             return bar
         }
         if total > spendable {
-            bar.Add(Segment(float64(spendable), ui.Lime))
-            bar.Add(Segment(float64(total - spendable), ui.Pink))
+            bar.Add(BarSegment(float64(spendable), ui.Lime))
+            bar.Add(BarSegment(float64(total - spendable), ui.Pink))
             return bar
         }
         for index in 0 ... amounts.Length {
             if amounts[index] == 0 {
                 continue
             }
-            let segment = Segment(float64(amounts[index]), ui.Lime)
+            let segment = BarSegment(float64(amounts[index]), ui.Lime)
             if amounts.Length < 2 || input.Window == nil {
                 bar.Add(segment)
                 continue
@@ -617,22 +617,13 @@ class SendPage : Cell[SendPageInput] {
             )
         }
         if fee > 0 {
-            bar.Add(Segment(0, ui.Orange))
+            bar.Add(BarSegment(0, ui.Orange))
         }
         if change > 0 {
-            bar.Add(Segment(float64(change), ui.Mint))
+            bar.Add(BarSegment(float64(change), ui.Mint))
         }
-        bar.Add(Segment(float64(spendable - total), ui.Unallocated))
+        bar.Add(BarSegment(float64(spendable - total), ui.Unallocated))
         return bar
-    }
-
-    private func Segment(share float64, color Color) Blob -> Container{
-        FlexGrow: share,
-        FlexBasis: 0,
-        MinWidth: 3,
-        Height: 8,
-        BorderRadius: 2,
-        BackgroundColor: color
     }
 
     private func Confirm(input SendPageInput, pending SendEstimate, spendable uint64) Blob {
@@ -711,11 +702,11 @@ class SendPage : Cell[SendPageInput] {
                 Figure(ui, "Remaining", WalletText.Amount(ui.Privacy, remaining), ui.Ink, 14, "")
             }
         }
-        return Cell.Mount[ModalDialog, ModalDialogHost](
+        return WalletParts.Modal(
+            ui,
             "confirm-send",
             ModalDialog{
                 Open: true,
-                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Confirm send"),
                 Width: 640,

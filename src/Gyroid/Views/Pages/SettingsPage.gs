@@ -1790,11 +1790,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             applyPending = false
             Rebuild()
         }
-        return Cell.Mount[ModalDialog, ModalDialogHost](
+        return WalletParts.Modal(
+            ui,
             "apply",
             ModalDialog{
                 Open: true,
-                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
                 KeyBindings: WidgetKeyBindings.Editing(input.Window?.PlatformInput),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Apply settings"),

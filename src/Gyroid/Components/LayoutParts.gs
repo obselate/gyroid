@@ -11,6 +11,15 @@ import System.Globalization
 
 class LayoutParts {
     shared {
+        func BarSegment(share float64, color Color, height float64 = 8, minWidth float64 = 3) Container -> Container{
+            FlexGrow: share,
+            FlexBasis: 0,
+            MinWidth: minWidth,
+            Height: height,
+            BorderRadius: 2,
+            BackgroundColor: color
+        }
+
         func Grow(blob Blob) Blob {
             blob.FlexGrow = 1
             blob.FlexBasis = 0

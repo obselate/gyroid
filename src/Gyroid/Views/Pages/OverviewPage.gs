@@ -490,10 +490,10 @@ class OverviewPage : Cell[OverviewInput] {
             bar.Add(Container{FlexGrow: 1, Height: height, BorderRadius: 2, BackgroundColor: ui.Selected})
         } else {
             if ready > 0 {
-                bar.Add(Segment(ready, height, ui.Lime))
+                bar.Add(BarSegment(float64(ready) / 100000000, ui.Lime, height, 14))
             }
             if confirming > 0 {
-                let segment = Segment(confirming, hovering ? height + 6: height, ui.Orange)
+                let segment = BarSegment(float64(confirming) / 100000000, ui.Orange, hovering ? height + 6: height, 14)
                 segment.OnPointerEnter = (event PointerEvent) -> {
                     hovering = true
                     Rebuild()
@@ -511,7 +511,7 @@ class OverviewPage : Cell[OverviewInput] {
                 bar.Add(segment)
             }
             if unconfirmed > 0 {
-                bar.Add(Segment(unconfirmed, height, ui.Blue))
+                bar.Add(BarSegment(float64(unconfirmed) / 100000000, ui.Blue, height, 14))
             }
         }
         let wrap = Container{FlexShrink: 0, Position: PositionType.Relative, bar}
@@ -548,15 +548,6 @@ class OverviewPage : Cell[OverviewInput] {
             peeking = false
             Rebuild()
         }
-    }
-
-    private func Segment(units uint64, height float64, color Color) Container -> Container{
-        FlexGrow: float64(units) / 100000000,
-        FlexBasis: 0,
-        MinWidth: 14,
-        Height: height,
-        BorderRadius: 2,
-        BackgroundColor: color
     }
 
     private func Legend(
