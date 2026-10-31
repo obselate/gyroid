@@ -20,6 +20,7 @@ class NodeSession : IDisposable {
     private var listen string = ""
     private var maxOutbound uint64
     private var coreVersion string = ""
+    private var versionExecutable string = ""
 
     init(settings WalletSettings) {
         Settings = settings
@@ -44,8 +45,9 @@ class NodeSession : IDisposable {
         Settings = settings
         let endpoint = Settings.Endpoint
         await Supervisor.ConnectAsync(Settings, ct)
-        coreVersion = ""
-        if File.Exists(Supervisor.Executable) {
+        if Supervisor.Owned && versionExecutable != Supervisor.Executable && File.Exists(Supervisor.Executable) {
+            versionExecutable = Supervisor.Executable
+            coreVersion = ""
             let start = ProcessStartInfo{
                 FileName: Supervisor.Executable,
                 UseShellExecute: false,
@@ -110,7 +112,8 @@ class NodeSession : IDisposable {
                 Source: Supervisor.Source,
                 Owned: Supervisor.Owned,
                 Running: true,
-                Version: version.Length > 0 ? version: coreVersion,
+                Version: version.Length > 0 ? version: Supervisor.Owned &&
+                    versionExecutable == Supervisor.Executable ? coreVersion: "",
                 Network: Settings.Network,
                 Height: NodeJson.Number(root, "chain_height"),
                 ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),
