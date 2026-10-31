@@ -314,7 +314,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Height = height,
                     Depth = confirmed ? send.Confirmations: 0,
                     Need = 10,
-                    Time = send.Timestamp,
+                    Time = confirmed ? times.GetValueOrDefault(height): send.Timestamp,
                     State = send.Status,
                     Recipients = send.Recipients
                 }
