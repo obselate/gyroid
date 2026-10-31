@@ -8,6 +8,7 @@ import Gyroid.Services
 import Gyroid.Services.WalletText
 import System
 import System.Collections.Generic
+import System.Globalization
 import System.Linq
 
 partial class App {
@@ -121,9 +122,9 @@ partial class App {
         }
         items.Add(NativeMenuItem{Separator: true})
         items.Add(NativeMenuItem{Id: "send", Text: ui.Strings.Get("Send")})
-        items.Add(NativeMenuItem{Id: "receive", Text: ui.Strings.Get("receive")})
-        items.Add(NativeMenuItem{Id: "messages", Text: ui.Strings.Get("messages")})
-        items.Add(NativeMenuItem{Id: "history", Text: ui.Strings.Get("history")})
+        items.Add(NativeMenuItem{Id: "receive", Text: ui.Strings.Get("Receive")})
+        items.Add(NativeMenuItem{Id: "messages", Text: ui.Strings.Get("Messages")})
+        items.Add(NativeMenuItem{Id: "history", Text: ui.Strings.Get("History")})
         items.Add(NativeMenuItem{Separator: true})
         items.Add(
             NativeMenuItem{Id: trayLockable ? "lock": "unlock", Text: ui.Strings.Get(trayLockable ? "Lock": "Unlock")}
@@ -145,9 +146,8 @@ partial class App {
             let percent = PhasePercent()
             return ui.Strings.Get("syncing") + (percent == nil ? "": " " + percent.ToString() + "%")
         }
-        return Count(status.Height) + " · " + status.Peers.ToString() + " " + ui.Strings.Get(
-            status.Peers == 1 ? "peer": "peers"
-        )
+        return ui.Strings.Get("Synced") + " · " + ui.Strings.Get("block") + " " + Count(status.Height) + " · " +
+            status.Peers.ToString() + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers")
     }
 
     private func UpdateTray() {
@@ -155,7 +155,8 @@ partial class App {
         let status = TrayStatusText()
         let balance = if wallet.Snapshot.State == WalletState.Unlocked && !ui.Privacy {
             if let value = wallet.Snapshot.Balance?.Spendable {
-                ui.Strings.Get("Spendable") + ": " + Amount(false, value) + " BNT"
+                ui.Strings.Get("Spendable") + ": " + (value / 100000000).ToString(CultureInfo.InvariantCulture) + "." +
+                    (value % 100000000 / 10000).ToString("D4", CultureInfo.InvariantCulture) + " BNT"
             } else {
                 ""
             }
