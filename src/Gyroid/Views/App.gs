@@ -41,6 +41,7 @@ partial class App : Cell {
     private let receiveRequest ReceiveRequest = ReceiveRequest()
     private let sendRows List[SendRow] = List[SendRow]()
     private var pendingPayment PaymentLink?
+    private var paymentActivated bool
     private var paymentRevision int32
 
     private let miningHistory MiningHistory = MiningHistory()
@@ -197,11 +198,12 @@ partial class App : Cell {
         for value in values {
             if let payment = PaymentLink.Parse(value) {
                 pendingPayment = payment
+                paymentActivated = true
                 ApplyPayment()
                 break
             }
         }
-        if !request.IsInitial {
+        if !request.IsInitial || paymentActivated {
             Restore()
         }
     }

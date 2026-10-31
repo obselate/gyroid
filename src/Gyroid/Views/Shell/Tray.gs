@@ -40,11 +40,11 @@ partial class App {
                 Quit()
             }
         }
-        var conceal = wallet.Settings.StartInTray
+        var conceal = wallet.Settings.StartInTray && !paymentActivated
         let registered Action[TrayStatus] = status -> {
             if hidden && status != TrayStatus.Registered {
                 Restore()
-            } else if conceal && status == TrayStatus.Registered {
+            } else if conceal && !paymentActivated && status == TrayStatus.Registered {
                 conceal = false
                 hidden = true
                 host.Hide()
