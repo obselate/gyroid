@@ -430,7 +430,7 @@ class SendService {
         for index in 0 ... recipients.Length {
             recipients[index] = WalletRecipient{
                 Address: address,
-                Amount: amount / 8 + (index == 0 ? amount % 8: uint64(0))
+                Amount: amount / 8 + (uint64(index) < amount % 8 ? uint64(1): uint64(0))
             }
         }
         return await EstimateAsync(recipients, ct)
