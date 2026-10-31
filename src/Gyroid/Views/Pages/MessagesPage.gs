@@ -441,9 +441,9 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                         ui,
                         Hidden(
                             ui.Privacy,
-                            conversation.IsGroup ? conversation.Members.Count.ToString() + " " + ui.Strings.Get(
-                                "members"
-                            ): conversation.Handle
+                            conversation.IsGroup ? (
+                                conversation.Members.Count(member -> member != input.Session.Messages.OwnAddress) + 1
+                            ).ToString() + " " + ui.Strings.Get("members"): conversation.Handle
                         ),
                         11,
                         ui.Dim,
