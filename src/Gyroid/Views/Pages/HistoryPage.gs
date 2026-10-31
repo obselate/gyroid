@@ -52,6 +52,7 @@ data struct HistoryRow {
     var Index int32
     var Amount uint64
     var Fee uint64
+    var Self bool
     var Memo string
     var Outputs string
     var Height uint64
@@ -270,7 +271,15 @@ class HistoryPage : Cell[HistoryInput] {
         let snapshot = input.Snapshot
         let tip = input.Tip
         let rows = List[HistoryRow]()
+        let selfSends = snapshot
+            .Sends
+            .Where(send -> send.IsSelf(snapshot.Address))
+            .Select(send -> send.TxId)
+            .ToHashSet()
         for output in complete ? input.Session.History.Outputs: input.Snapshot.History {
+            if selfSends.Contains(output.TxId) {
+                continue
+            }
             rows.Add(
                 Item(input, "r:" + output.TxId + ":" + output.OutputIndex.ToString()) with{
                     Kind = output.Coinbase ? HistoryRowKind.Mined: HistoryRowKind.Received,
@@ -286,8 +295,8 @@ class HistoryPage : Cell[HistoryInput] {
                 }
             )
         }
-        let lowest = if !complete && snapshot.HistoryMore && rows.Count > 0 {
-            rows[rows.Count - 1].Height
+        let lowest = if !complete && snapshot.HistoryMore && snapshot.History.Length > 0 {
+            snapshot.History[snapshot.History.Length - 1].BlockHeight
         } else {
             0UL
         }
@@ -301,7 +310,8 @@ class HistoryPage : Cell[HistoryInput] {
                 Item(input, "s:" + send.TxId) with{
                     Kind = confirmed ? HistoryRowKind.Sent: HistoryRowKind.Pending,
                     TxId = send.TxId,
-                    Amount = send.Amount,
+                    Amount = selfSends.Contains(send.TxId) ? send.Fee: send.Amount,
+                    Self = selfSends.Contains(send.TxId),
                     Fee = send.Fee,
                     Memo = String.Join(
                         " ",
@@ -679,7 +689,7 @@ class HistoryPage : Cell[HistoryInput] {
             } else if row.Kind == HistoryRowKind.Mined {
                 mined += row.Amount
             } else {
-                sent += row.Amount
+                sent += row.Self ? 0UL: row.Amount
                 fees += row.Fee
             }
         }
@@ -754,7 +764,15 @@ class HistoryPage : Cell[HistoryInput] {
             MinWidth: 0,
             Overflow: Overflow.Hidden,
             Gap: 6,
-            Grow(Label(ui, preview, 12, row.Memo.Length > 0 ? ui.Ink: ui.Dim, ""))
+            Grow(
+                Label(
+                    ui,
+                    (row.Self ? ui.Strings.Get("To self") + " · ": "") + preview,
+                    12,
+                    row.Memo.Length > 0 ? ui.Ink: ui.Dim,
+                    ""
+                )
+            )
         }
         if row.Recipients.Length > 1 {
             notes.Add(Label(ui, "+" + (row.Recipients.Length - 1).ToString(), 12, ui.Dim, ""))
@@ -774,7 +792,7 @@ class HistoryPage : Cell[HistoryInput] {
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get(
-                    switch row.Kind {
+                    row.Self ? "To self": switch row.Kind {
                         case HistoryRowKind.Received: "received"
                         case HistoryRowKind.Mined: "mined"
                         case HistoryRowKind.Sent: "sent"
@@ -809,7 +827,7 @@ class HistoryPage : Cell[HistoryInput] {
                 }
             },
             MaterialIcons.Create(
-                switch row.Kind {
+                row.Self ? "sync": switch row.Kind {
                     case HistoryRowKind.Received: "south_west"
                     case HistoryRowKind.Mined: "diamond"
                     case HistoryRowKind.Pending: "schedule"
@@ -1041,11 +1059,16 @@ class HistoryPage : Cell[HistoryInput] {
         if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
             panel.Add(MemoSection(row, row.Memo))
         }
-        if row.Recipients.Length > 1 {
-            for entry in row.Recipients {
+        if row.Self || row.Recipients.Length > 1 {
+            for index in 0 ... row.Recipients.Length {
+                let entry = row.Recipients[index]
                 let details = Container{
                     Gap: 4,
-                    Block("recipient", entry.Address, Spaced(entry.Address, 10), ui.Body),
+                    if row.Self {
+                        Figure(ui, "output", "#" + index.ToString(), ui.Ink, 13, compact: true)
+                    } else {
+                        Block("recipient", entry.Address, Spaced(entry.Address, 10), ui.Body)
+                    },
                     Figure(ui, "amount", Amount(ui.Privacy, entry.Amount) + " BNT", ui.Ink, 13, compact: true)
                 }
                 if entry.Memo.Length > 0 {

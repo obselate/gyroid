@@ -273,6 +273,7 @@ class Strings {
             case "Copy link": "复制链接"
             case "received": "已接收"
             case "sent": "已发送"
+            case "To self": "转给自己"
             case "inputs": "输入"
             case "ring ×16": "环 ×16"
             case "outputs": "输出"

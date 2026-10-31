@@ -41,6 +41,7 @@ data struct Arrival {
     var Blocks uint64
     var TxId string
     var Height uint64
+    var Self bool
 }
 
 data struct Activity {
@@ -346,6 +347,10 @@ class OverviewPage : Cell[OverviewInput] {
             arrivals.Add(
                 Arrival{
                     Kind: output.Coinbase ? "mined": "in",
+                    Self: input
+                        .Snapshot
+                        .Sends
+                        .Any(send -> send.TxId == output.TxId && send.IsSelf(input.Snapshot.Address)),
                     Amount: output.Amount,
                     Source: if output.Coinbase {
                         ui.Strings.Get("mined") + " · " + ui.Strings.Get("block") + " " + Count(output.BlockHeight)
@@ -371,6 +376,7 @@ class OverviewPage : Cell[OverviewInput] {
             arrivals.Add(
                 Arrival{
                     Kind: "change",
+                    Self: send.IsSelf(input.Snapshot.Address),
                     Amount: confirming - listed,
                     Source: Change(input, send),
                     Confirmations: send.Confirmations,
@@ -380,15 +386,14 @@ class OverviewPage : Cell[OverviewInput] {
                 }
             )
         }
+        let pending = input.Snapshot.Sends.FirstOrDefault((item WalletSend) -> item.Status == "mempool")
         if balance.Unconfirmed > 0 {
             arrivals.Add(
                 Arrival{
                     Kind: "pool",
+                    Self: pending?.IsSelf(input.Snapshot.Address) ?? false,
                     Amount: balance.Unconfirmed,
-                    Source: Change(
-                        input,
-                        input.Snapshot.Sends.FirstOrDefault((item WalletSend) -> item.Status == "mempool")
-                    ),
+                    Source: Change(input, pending),
                     Required: 10,
                     Blocks: 11,
                     TxId: ""
@@ -914,7 +919,15 @@ class OverviewPage : Cell[OverviewInput] {
         let ui = input.Ui
         let snapshot = input.Snapshot
         let items = List[Activity]()
+        let selfSends = snapshot
+            .Sends
+            .Where(send -> send.IsSelf(snapshot.Address))
+            .Select(send -> send.TxId)
+            .ToHashSet()
         for output in snapshot.History.Take(50) {
+            if selfSends.Contains(output.TxId) {
+                continue
+            }
             let required = output.Coinbase ? uint64(60): uint64(10)
             let confirmations = chain > output.BlockHeight ? chain - output.BlockHeight: uint64(0)
             items.Add(
@@ -941,11 +954,13 @@ class OverviewPage : Cell[OverviewInput] {
         }
         for send in snapshot.Sends.Take(50) {
             let label = Contact(input, send)
+            let self = selfSends.Contains(send.TxId)
             items.Add(
                 Activity{
-                    Kind: "out",
-                    Amount: send.Amount,
-                    Label: label.Length > 0 ? label: Short(send.TxId),
+                    Kind: self ? "self": "out",
+                    Amount: self ? send.Fee: send.Amount,
+                    Label: self ? ui.Strings.Get("To self") +
+                        (label.Length > 0 ? " · " + label: ""): label.Length > 0 ? label: Short(send.TxId),
                     Status: send.Status == "not_found" ? ui.Strings.Get(
                         "not found"
                     ): send.Status == "mempool" ? "mempool": Math
@@ -965,6 +980,7 @@ class OverviewPage : Cell[OverviewInput] {
 
     private func Recent(input OverviewInput, chain uint64, arrivals List[Arrival]) Blob {
         let ui = input.Ui
+        let incoming = arrivals.Where(item -> !item.Self).ToArray()
         let card = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 16, Right: 16}, 0)
         card.Overflow = Overflow.Hidden
         card.FlexGrow = 1
@@ -973,12 +989,12 @@ class OverviewPage : Cell[OverviewInput] {
         let header = WalletParts.Header(Label(ui, ui.Strings.Get("recent"), 12, ui.Body, ""))
         header.Height = 24
         header.Margin = Edges{Bottom: 4}
-        if arrivals.Count > 0 {
-            header.Add(Label(ui, ui.Strings.Get("incoming") + " " + arrivals.Count.ToString(), 11, ui.Body, ""))
+        if incoming.Length > 0 {
+            header.Add(Label(ui, ui.Strings.Get("incoming") + " " + incoming.Length.ToString(), 11, ui.Body, ""))
             header.Add(
                 Label(
                     ui,
-                    ui.Strings.Get("all ready") + " " + Wait(input, arrivals.Max((item Arrival) -> item.Blocks)),
+                    ui.Strings.Get("all ready") + " " + Wait(input, incoming.Max((item Arrival) -> item.Blocks)),
                     11,
                     ui.Dim,
                     ""
@@ -989,7 +1005,7 @@ class OverviewPage : Cell[OverviewInput] {
         header.Add(Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions)))
         card.Add(header)
         let activities = Activities(input, chain)
-        if activities.Count == 0 && arrivals.Count == 0 {
+        if activities.Count == 0 && incoming.Length == 0 {
             card.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
@@ -1008,12 +1024,23 @@ class OverviewPage : Cell[OverviewInput] {
             Overflow: Overflow.Scroll,
             ScrollbarY: Theme.Read().Scrollbar
         }
-        for item in arrivals {
+        for item in incoming {
             rows.Add(Arrive(input, item))
         }
         for item in activities {
-            let outgoing = item.Kind == "out"
+            let outgoing = item.Kind == "out" || item.Kind == "self"
             let shown = input.Privacy ? ui.Strings.Get("Amounts hidden"): WalletAmount.Format(item.Amount)
+            let glyph Blob = if item.Kind == "self" {
+                MaterialIcons.Create("sync", 14, ui.Pink)
+            } else {
+                Label(
+                    ui,
+                    outgoing ? "↑": item.Kind == "mined" ? "◆": "↓",
+                    14,
+                    outgoing ? ui.Pink: item.Kind == "mined" ? ui.Violet: ui.Mint,
+                    ""
+                )
+            }
             rows.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
@@ -1026,23 +1053,13 @@ class OverviewPage : Cell[OverviewInput] {
                     BorderWidth: Edges{Bottom: 1},
                     BorderColor: ui.Rule,
                     Accessibility: Accessibility{
-                        Name: ui.Strings.Get(outgoing ? "sent": "received") +
+                        Name: ui.Strings.Get(item.Kind == "self" ? "To self": outgoing ? "sent": "received") +
                             " " +
                             shown +
                             " " +
                             Hidden(input.Privacy, SafeText(item.Label, 512))
                     },
-                    Container{
-                        Width: 16,
-                        AlignItems: AlignItems.Center,
-                        Label(
-                            ui,
-                            outgoing ? "↑": item.Kind == "mined" ? "◆": "↓",
-                            14,
-                            outgoing ? ui.Pink: item.Kind == "mined" ? ui.Violet: ui.Mint,
-                            ""
-                        )
-                    },
+                    Container{Width: 16, AlignItems: AlignItems.Center, glyph},
                     Container{
                         Width: 120,
                         Number(

@@ -26,4 +26,16 @@ data class WalletSend {
     var Amount uint64
     var Fee uint64
     var Recipients[]WalletRecipient = []WalletRecipient{}
+
+    func IsSelf(address string) bool {
+        if address.Length == 0 || Recipients.Length == 0 {
+            return false
+        }
+        for recipient in Recipients {
+            if recipient.Address != address {
+                return false
+            }
+        }
+        return true
+    }
 }
