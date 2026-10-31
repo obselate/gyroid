@@ -178,7 +178,9 @@ class ReceivePage : Cell[ReceivePageInput] {
         } else {
             code.Add(Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: ui.Black})
         }
-        let copied = ReadOnlySpan[char](input.Clipboard).SequenceEqual(System.MemoryExtensions.AsSpan(payload))
+        let copied = shown != "qr" && ReadOnlySpan[char](input.Clipboard).SequenceEqual(
+            System.MemoryExtensions.AsSpan(payload)
+        )
         let tabs = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("Share as")})
         tabs.FlexShrink = 0
         for (id, label) in[]KeyValuePair[string, string]{
@@ -274,6 +276,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 () -> ui.Actions.Copy(payload, 120000)
             )
         }
+        action.Disabled = input.Busy || shown != "address" && (amountIssue.Length > 0 || memoIssue.Length > 0)
         let card = WalletParts.Card(ui, input.Height < 700 ? 18.0: 22.0, radius: 14)
         let form = WalletForm(ui, false, nil, []string{})
         card.Width = Percent(100)

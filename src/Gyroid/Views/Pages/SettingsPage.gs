@@ -1341,7 +1341,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func Key(input SettingsPageInput, label string, note string, key[]char, secret bool) Blob {
         let ui = input.Ui
-        let masked = secret && !viewPrivateShown || input.Privacy
+        let masked = !viewPrivateShown && (secret || input.Privacy)
         let text = String(key)
         let name = Container{Width: 130, FlexShrink: 0, Gap: 2, Label(ui, ui.Strings.Get(label), 12.5, ui.Body, "")}
         if note.Length > 0 {

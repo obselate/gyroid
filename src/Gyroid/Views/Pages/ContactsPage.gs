@@ -21,6 +21,7 @@ data struct ContactsInput {
     var Privacy bool
     var Busy bool
     var Language string
+    var Network string
     var Height float64
     var OnChange Action[SortedDictionary[string, string]]
 }
@@ -233,7 +234,14 @@ class ContactsPage : Cell[ContactsInput] {
         try {
             let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
             next.Remove(original)
-            next[label] = WalletValidation.ValidateDestination(contactAddress)
+            let destination = WalletValidation.ValidateDestination(contactAddress)
+            if !destination.StartsWith("$", StringComparison.Ordinal) {
+                let addressIssue = WalletValidation.AddressIssue(destination, input.Network)
+                if addressIssue.Length > 0 {
+                    throw WalletException(addressIssue)
+                }
+            }
+            next[label] = destination
             Store(input, next, () -> Reset())
         } catch (failure WalletException) {
             issue = failure.Message

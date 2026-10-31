@@ -106,6 +106,10 @@ class SendPage : Cell[SendPageInput] {
         } else {
             let size = Math.Clamp(input.Height * 0.07, 36.0, 100.0)
             card.Add(Hero(input, Amount(input, over, size), rows[0].Amount.Length, size))
+            let amountIssue = WalletValidation.AmountIssue(rows[0].Amount)
+            if amountIssue.Length > 0 {
+                card.Add(Status(ui, ui.Strings.Get(amountIssue), ui.Pink, "warning"))
+            }
             card.Add(Container{Gap: 10, FlexShrink: 0, AddressField(input, rows[0]), MemoField(input, rows[0])})
         }
         card.Add(Bar(input, rows.Select((row SendRow) -> Atoms(row.Amount) ?? uint64(0)).ToArray(), 0, 0, spendable))
@@ -849,19 +853,16 @@ class SendPage : Cell[SendPageInput] {
     }
 
     private func Issue(input SendPageInput, text string) string {
-        if text.Length == 0 || input.Contacts.ContainsKey(text) {
+        if text.Length == 0 {
             return ""
         }
+        let destination = input.Contacts.TryGetValue(text, out let address) ? address: text
         try {
-            if text.StartsWith("$", StringComparison.Ordinal) {
-                BlocknetIdService.Normalize(text)
+            if destination.StartsWith("$", StringComparison.Ordinal) {
+                BlocknetIdService.Normalize(destination)
                 return ""
             }
-            return if text.Length < 64 {
-                ""
-            } else {
-                WalletValidation.AddressIssue(WalletValidation.ValidateAddress(text), input.Network)
-            }
+            return WalletValidation.AddressIssue(WalletValidation.ValidateAddress(destination), input.Network)
         } catch (error WalletException) {
             return error.Message
         }

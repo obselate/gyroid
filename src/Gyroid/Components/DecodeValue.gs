@@ -31,11 +31,15 @@ class DecodeValue : Cell[DecodeValueInput] {
         if input.Value != target {
             from = target
             target = input.Value
-            if from.Length > 0 && !from.Contains('•') && !target.Contains('•') {
-                Motion.TimeScale = 1.0
+            if Motion.TimeScale > 0 && from.Length > 0 && !from.Contains('•') && !target.Contains('•') {
                 progress.Snap(0)
                 progress.To(1, Motion.Tween(250))
+            } else {
+                progress.Snap(1)
             }
+        }
+        if Motion.TimeScale <= 0 {
+            progress.Snap(1)
         }
         let chars = target.ToCharArray()
         let shift = target.Length - from.Length

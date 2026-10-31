@@ -91,7 +91,9 @@ class ObserverLens : Cell[ObserverLensInput] {
             yours.Add(Label(ui, "+" + (rings.Length - 2).ToString(), 13, ui.Dim, ""))
             chain.Add(Label(ui, "+" + (rings.Length - 2).ToString(), 13, ui.Dim, ""))
         }
-        yours.Add(Label(ui, ui.Strings.Get("yours"), 13, ui.Lime, ""))
+        yours.Add(
+            Label(ui, ui.Strings.Get(rings.Any((index int32) -> index < 0) ? "unknown": "yours"), 13, ui.Lime, "")
+        )
         chain.Add(Label(ui, String.Format(ui.Strings.Get("1 of {0}"), size), 13, ui.Mint, ""))
         let ringRow = Columns(input, side, Label(ui, ui.Strings.Get("inputs"), 12.5, ui.Dim, ""), yours, chain)
         ringRow.Padding = Edges{Top: 6, Bottom: 10}

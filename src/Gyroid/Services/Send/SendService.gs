@@ -38,7 +38,6 @@ class SendService {
         requests[]WalletRecipient,
         ct CancellationToken = default(CancellationToken)
     ) SendEstimate {
-        await Task.Delay(2000, ct)
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()
@@ -186,7 +185,6 @@ class SendService {
     }
 
     async func SubmitAsync(estimate SendEstimate, ct CancellationToken = default(CancellationToken)) SendResult {
-        await Task.Delay(2000, ct)
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()
@@ -362,7 +360,6 @@ class SendService {
     }
 
     async func ResumeAsync(ct CancellationToken = default(CancellationToken)) SendResult {
-        await Task.Delay(2000, ct)
         await session.BeginAsync(ct)
         try {
             session.RequireUnlocked()

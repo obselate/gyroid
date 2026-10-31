@@ -823,6 +823,7 @@ partial class App : Cell {
                     Privacy: ui.Privacy,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
+                    Network: wallet.Settings.Network,
                     Height: height,
                     OnChange: contactsChanged
                 }
@@ -949,19 +950,28 @@ partial class App : Cell {
             Padding: 24
         }
         if let shown = banner {
-            main.Add(Container{FlexShrink: 0, shown})
+            main.Add(Container{Key: "error-banner", FlexShrink: 0, shown})
         }
         if page == AppPage.Overview &&
             (wallet.Send.Pending != nil || wallet.Send.Outcome.TxId.Length > 0 || wallet.Send.Outcome.Error != nil) {
-            main.Add(PendingSendBanner())
+            let pendingBanner = PendingSendBanner()
+            pendingBanner.Key = "pending-send"
+            main.Add(pendingBanner)
         }
         if page == AppPage.Overview ||
             page == AppPage.Transactions ||
             page == AppPage.Mining ||
             page == AppPage.Network {
+            content.Key = "content-stage"
             main.Add(content)
         } else {
-            let stage = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, FlexDirection: FlexDirection.Row}
+            let stage = Container{
+                Key: "content-stage",
+                FlexGrow: 1,
+                FlexBasis: 0,
+                MinHeight: 0,
+                FlexDirection: FlexDirection.Row
+            }
             stage.Add(
                 Container{
                     FlexGrow: 1,
