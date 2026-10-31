@@ -218,17 +218,17 @@ class NodeSession : IDisposable {
         try {
             let status = Status
             let previous = Network
-            let current = previous
-                .Blocks
-                .Length > 0 &&
-                previous
-                .Blocks[previous.Blocks.Length - 1]
-                .Hash == status.BestHash
-            if current && (previous.Blocks.Length >= count || previous.Blocks[0].Height == 0) {
+            let blocks = previous.Blocks
+            let current = blocks.Length > 0 &&
+                blocks[blocks.Length - 1].Height == status.Height &&
+                blocks[blocks.Length - 1]
+                .Hash
+                .StartsWith(status.BestHash, StringComparison.Ordinal)
+            if current && (blocks.Length >= count || blocks[0].Height == 0) {
                 return previous
             }
-            let blocks = await ReadBlocksAsync(status, previous, Math.Max(count, previous.Blocks.Length), ct)
-            let report = NetworkReport{... previous, Blocks: blocks}
+            let updatedBlocks = await ReadBlocksAsync(status, previous, Math.Max(count, blocks.Length), ct)
+            let report = NetworkReport{... previous, Blocks: updatedBlocks}
             if !current {
                 using let stats = await Api.JsonAsync("stats", ct: ct)
                 report.Hashrate = stats.RootElement.GetProperty("network_hashrate").GetDouble()
@@ -328,7 +328,7 @@ class NodeSession : IDisposable {
         cached Dictionary[uint64, NetworkBlock],
         ct CancellationToken
     ) NetworkBlock {
-        if cached.TryGetValue(height, out let known) && known.Hash == hash {
+        if cached.TryGetValue(height, out let known) && known.Hash.StartsWith(hash, StringComparison.Ordinal) {
             return known
         }
         using let response = await Api.JsonAsync("block/" + height.ToString(), ct: ct)
