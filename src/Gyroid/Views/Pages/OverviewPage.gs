@@ -224,7 +224,7 @@ class OverviewPage : Cell[OverviewInput] {
             return arrivals
         }
         var listed uint64 = 0
-        for output in input.Snapshot.History {
+        for output in input.Session.History.Outputs {
             let required = output.Coinbase ? uint64(60): uint64(10)
             let confirmations = chain > output.BlockHeight ? chain - output.BlockHeight: uint64(0)
             if output.Spent || output.BlockHeight == 0 || confirmations >= required {
@@ -242,7 +242,7 @@ class OverviewPage : Cell[OverviewInput] {
                     } else {
                         Short(output.TxId)
                     },
-                    Confirmations: confirmations,
+                    Confirmations: confirmations + 1,
                     Required: required,
                     Blocks: required - confirmations,
                     TxId: output.TxId,
@@ -814,7 +814,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Status: if output.BlockHeight == 0 {
                         "mempool"
                     } else if confirmations < required {
-                        confirmations.ToString() + "/" + required.ToString()
+                        (confirmations + 1).ToString() + "/" + required.ToString()
                     } else {
                         ""
                     },

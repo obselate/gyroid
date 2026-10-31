@@ -7,10 +7,12 @@ import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
 import System
+import System.Collections.Generic
 import System.Linq
 
 partial class App {
     private var confirmPendingSend bool
+    private var resumePendingSend bool
 
     private func PendingSendCard() Blob {
         let card = WalletParts.PageContent(ui, ui.Strings.Get("send"), 640)
@@ -34,30 +36,38 @@ partial class App {
             ui.Strings.Get("Send failed") + ": " + (outcome.Error ?? "")
         }
         content.Add(Text{Content: message, FontFamily: ui.Font, FontSize: 13, Color: ui.Ink, TextWrap: TextWrap.Wrap})
-        content.Add(
-            ActionRow(
-                []Blob{
-                    Button(
-                        ui,
-                        if wallet.Send.Error.Length == 0 && pending?.Retryable == true {
-                            "Resubmit"
-                        } else {
-                            "Dismiss"
-                        },
-                        () -> {
-                            confirmPendingSend = true
-                            Rebuild()
-                        },
-                        ui.Working()
-                    )
-                }
+        let actions = List[Blob]{
+            Button(
+                ui,
+                "Dismiss",
+                () -> {
+                    resumePendingSend = false
+                    confirmPendingSend = true
+                    Rebuild()
+                },
+                ui.Working()
             )
-        )
+        }
+        if wallet.Send.Error.Length == 0 && pending?.Retryable == true {
+            actions.Add(
+                Button(
+                    ui,
+                    "Resubmit",
+                    () -> {
+                        resumePendingSend = true
+                        confirmPendingSend = true
+                        Rebuild()
+                    },
+                    ui.Working()
+                )
+            )
+        }
+        content.Add(ActionRow(actions.ToArray()))
         return content
     }
 
     private func ConfirmPendingSend() Blob {
-        let resume = wallet.Send.Error.Length == 0 && wallet.Send.Pending?.Retryable == true
+        let resume = resumePendingSend && wallet.Send.Error.Length == 0 && wallet.Send.Pending?.Retryable == true
         let close Action = () -> {
             confirmPendingSend = false
             Rebuild()

@@ -123,23 +123,31 @@ class HistoryPage : Cell[HistoryInput] {
         current = input
         let ui = input.Ui
         let compact = input.Width < 1000
-        let all = Collect(input)
+        let all = Collect(input, period != "all" || exporting)
         let tip = input.Tip
-        let oldest = all.Count > 0 && all[all.Count - 1].Height > 0 ? all[all.Count - 1].Height: tip
-        span = switch period {
-            case "1d": 288UL
-            case "7d": 2016UL
-            case "30d": 8640UL
-            default: Math.Max(288UL, tip + 1 - Math.Min(tip, oldest))
+        let cutoff = period == "all" ? 0L: DateTimeOffset.UtcNow.ToUnixTimeSeconds() - switch period {
+            case "1d": 86400L
+            case "7d": 604800L
+            default: 2592000L
         }
-        span = Math.Min(span, Math.Max(1UL, tip))
+        if cutoff > 0 {
+            RequestTimes(
+                all.Where((row HistoryRow) -> row.Height > 0 && row.Time == 0).Select((row HistoryRow) -> row.Height)
+            )
+        }
+        let ranged = all.Where((row HistoryRow) -> cutoff == 0 || row.Height == 0 || row.Time >= cutoff).ToArray()
+        let oldest = ranged
+            .Where((row HistoryRow) -> row.Height > 0)
+            .Select((row HistoryRow) -> row.Height)
+            .DefaultIfEmpty(tip)
+            .Min()
+        span = Math.Max(1UL, tip + 1 - Math.Min(tip, oldest))
         low = tip > span ? tip - span: 0
-        if input.Snapshot.HistoryMore && period != "all" && all.Count > 0 && all[all.Count - 1].Height > low {
-            LoadMore()
-        }
-        let first = to > 0 ? from: low + 1
+        let first = to > 0 ? from: 0UL
         let last = to > 0 ? to: tip
-        shown = all.Where((row HistoryRow) -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last)
+        shown = ranged.Where(
+            (row HistoryRow) -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last
+        )
             .ToArray()
         RequestTimes(shown.Take(50).Select((row HistoryRow) -> row.Height))
         let panel = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 20, Right: 20}, compact ? 8.0: 10.0)
@@ -259,11 +267,11 @@ class HistoryPage : Cell[HistoryInput] {
         return panel
     }
 
-    private func Collect(input HistoryInput) List[HistoryRow] {
+    private func Collect(input HistoryInput, complete bool = false) List[HistoryRow] {
         let snapshot = input.Snapshot
         let tip = input.Tip
         let rows = List[HistoryRow]()
-        for output in snapshot.History {
+        for output in complete ? input.Session.History.Outputs: input.Snapshot.History {
             rows.Add(
                 Item(input, "r:" + output.TxId + ":" + output.OutputIndex.ToString()) with{
                     Kind = output.Coinbase ? HistoryRowKind.Mined: HistoryRowKind.Received,
@@ -273,13 +281,13 @@ class HistoryPage : Cell[HistoryInput] {
                     Amount = output.Amount,
                     Memo = output.Memo,
                     Height = output.BlockHeight,
-                    Depth = output.BlockHeight > 0 && tip >= output.BlockHeight ? tip - output.BlockHeight: 0,
+                    Depth = output.BlockHeight > 0 && tip >= output.BlockHeight ? tip + 1 - output.BlockHeight: 0,
                     Need = output.Coinbase ? 60UL: 10UL,
                     Time = times.GetValueOrDefault(output.BlockHeight)
                 }
             )
         }
-        let lowest = if snapshot.HistoryMore && rows.Count > 0 {
+        let lowest = if !complete && snapshot.HistoryMore && rows.Count > 0 {
             rows[rows.Count - 1].Height
         } else {
             0UL
@@ -305,7 +313,7 @@ class HistoryPage : Cell[HistoryInput] {
                             .Distinct(StringComparer.Ordinal)
                     ),
                     Height = height,
-                    Depth = confirmed ? send.Confirmations - 1: 0,
+                    Depth = confirmed ? send.Confirmations: 0,
                     Need = 10,
                     Time = send.Timestamp,
                     State = send.Status,
@@ -713,8 +721,8 @@ class HistoryPage : Cell[HistoryInput] {
         let ui = current.Ui
         let compact = row.Width < 1000
         let pending = row.Height == 0
-        let mature = !pending && row.Depth >= row.Need
-        let lit = pending ? 0: int32(Math.Min(10UL, row.Depth * 10 / row.Need))
+        let mature = !pending && row.Depth > row.Need
+        let lit = pending ? 0: int32(Math.Min(10UL, (row.Depth - 1) * 10 / row.Need))
         let segments = Container{FlexDirection: FlexDirection.Row, Gap: compact ? 2.0: 3.0}
         for index in 0 ... 10 {
             segments.Add(
@@ -1015,7 +1023,7 @@ class HistoryPage : Cell[HistoryInput] {
                 )
             }
         }
-        if row.Kind == HistoryRowKind.Mined && row.Depth < 60 {
+        if row.Kind == HistoryRowKind.Mined && row.Depth <= 60 {
             values.Add(Figure(ui, "spendable at", Count(row.Height + 60), ui.Orange, 13, compact: true))
         }
         if row.Kind == HistoryRowKind.Received {
@@ -1427,11 +1435,24 @@ class HistoryPage : Cell[HistoryInput] {
         Rebuild()
         if let window = input.Window {
             let choice = Choose(window, "history." + format)
+            let rows = Collect(input, true).ToArray()
             input
                 .Ui
                 .Actions
                 .Run(
-                ct -> WriteExport(choice, input.Session, shown, Dictionary[uint64, int64](times), memos, format, ct)
+                ct -> WriteExport(
+                    choice,
+                    input.Session,
+                    rows,
+                    input.Tip,
+                    Dictionary[uint64, int64](times),
+                    memos,
+                    format,
+                    period,
+                    from,
+                    to,
+                    ct
+                )
             )
         }
     }
@@ -1439,17 +1460,21 @@ class HistoryPage : Cell[HistoryInput] {
     private async func WriteExport(
         choice Task[string],
         session WalletSession,
-        rows[]HistoryRow,
+        all[]HistoryRow,
+        tip uint64,
         known Dictionary[uint64, int64],
         withMemos bool,
         suffix string,
+        selectedPeriod string,
+        selectedFrom uint64,
+        selectedTo uint64,
         ct CancellationToken
     ) {
         let path = await choice.WaitAsync(ct)
         if path.Length == 0 {
             return
         }
-        let missing = rows
+        let missing = all
             .Select((row HistoryRow) -> row.Height)
             .Where((height uint64) -> height > 0 && !known.ContainsKey(height))
             .Distinct()
@@ -1458,6 +1483,24 @@ class HistoryPage : Cell[HistoryInput] {
         for entry in fetched {
             known[entry.Key] = entry.Value
         }
+        let cutoff = selectedPeriod == "all" ? 0L: DateTimeOffset.UtcNow.ToUnixTimeSeconds() - switch selectedPeriod {
+            case "1d": 86400L
+            case "7d": 604800L
+            default: 2592000L
+        }
+        let rows = all.Where(
+            (row HistoryRow) ->
+            (
+                cutoff == 0 ||
+                    row.Height == 0 ||
+                    (row.Kind == HistoryRowKind.Sent ? row.Time: known.GetValueOrDefault(row.Height)) >= cutoff
+            ) &&
+                (
+                selectedTo == 0 ||
+                    (row.Height == 0 ? selectedTo >= tip: row.Height >= selectedFrom && row.Height <= selectedTo)
+            )
+        )
+            .ToArray()
         await Write(path, Table(rows, known, withMemos, suffix == "json"), ct)
     }
 

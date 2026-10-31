@@ -22,6 +22,7 @@ class HistoryService {
 
     prop Total uint64 -> uint64(received.Count)
     prop More bool -> loaded < received.Count
+    prop Outputs IReadOnlyList[WalletOutput] -> received
 
     init(session WalletSession) {
         this.session = session

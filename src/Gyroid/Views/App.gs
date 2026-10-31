@@ -955,7 +955,24 @@ partial class App : Cell {
             main.Add(Container{Key: "error-banner", FlexShrink: 0, shown})
         }
         if page == AppPage.Overview &&
-            (wallet.Send.Pending != nil || wallet.Send.Outcome.TxId.Length > 0 || wallet.Send.Outcome.Error != nil) {
+            (
+            wallet
+                .Send
+                .Pending != nil ||
+                wallet
+                .Send
+                .Error
+                .Length > 0 ||
+                wallet
+                .Send
+                .Outcome
+                .TxId
+                .Length > 0 ||
+                wallet
+                .Send
+                .Outcome
+                .Error != nil
+        ) {
             let pendingBanner = PendingSendBanner()
             pendingBanner.Key = "pending-send"
             main.Add(pendingBanner)
