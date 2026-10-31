@@ -30,7 +30,7 @@ partial class App {
 
     private func PlaybackActive() bool ->
     !reduceMotion && !hidden && window?.IsFocused == true && window?.IsVisible == true
-    && window?.State != WindowState.Minimized
+    && window?.State != WindowState.Minimized && window?.Occlusion != WindowOcclusion.Occluded
 
     private func UpdatePlayback() {
         let active = PlaybackActive()

@@ -21,11 +21,11 @@
       },
       "Goo.Widgets": {
         "type": "Direct",
-        "requested": "[0.16.3, 0.16.3]",
-        "resolved": "0.16.3",
-        "contentHash": "GAj7ScpNQwhf12Vl36kzJzPucjkfkpJwxIzAy78MLCDj9RcXv0rxWds0654tMgetqrBlFpI+daCXgO8RCT4NZQ==",
+        "requested": "[0.17.0, 0.17.0]",
+        "resolved": "0.17.0",
+        "contentHash": "a4ZUwIO+3zDPM8A1GbYQruIaEeVXl1woF2Dwp6KT0MmONGi7y2I+5LEy/naFb27f1vhR+OnwyGo62Yz0nLPD/g==",
         "dependencies": {
-          "Goo": "0.23.3"
+          "Goo": "0.24.2"
         }
       },
       "Microsoft.DotNet.ILCompiler": {

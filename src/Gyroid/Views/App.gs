@@ -195,7 +195,17 @@ partial class App : Cell {
             Rebuild()
         }
         owner.StateChanged += _ -> {
-            if owner.State == WindowState.Minimized && wallet.Settings.LockOnMinimize {
+            if (owner.State == WindowState.Minimized || owner.Occlusion == WindowOcclusion.Occluded) &&
+                wallet
+                .Settings
+                .LockOnMinimize {
+                Lock()
+            }
+            UpdatePlayback()
+            Rebuild()
+        }
+        owner.OcclusionChanged += _ -> {
+            if owner.Occlusion == WindowOcclusion.Occluded && wallet.Settings.LockOnMinimize {
                 Lock()
             }
             UpdatePlayback()
@@ -640,7 +650,6 @@ partial class App : Cell {
             Overflow: Overflow.Hidden,
             FontFamily: ui.Font,
             Color: ui.Ink,
-            KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
             OnPointerDown: (event PointerEvent) -> Touch(),
             OnWheel: (event WheelEvent) -> Touch(),
             Container{
@@ -751,7 +760,10 @@ partial class App : Cell {
                     Wallet: WalletName(wallet.Settings.ActiveWallet),
                     Language: ui.Strings.Language,
                     Busy: ui.Working(),
-                    Visible: !hidden && window?.IsVisible == true && window?.State != WindowState.Minimized,
+                    Visible: !hidden &&
+                        window?.IsVisible == true &&
+                        window?.State != WindowState.Minimized &&
+                        window?.Occlusion != WindowOcclusion.Occluded,
                     NodeRunning: wallet.Node.Status.Running,
                     Height: height
                 }

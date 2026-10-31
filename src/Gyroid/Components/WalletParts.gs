@@ -144,7 +144,6 @@ class WalletParts {
             key,
             ModalDialog{
                 Open: true,
-                KeyBindings: WidgetKeyBindings.Editing(window?.PlatformInput),
                 AccessibilityName: ui.Strings.Get(name),
                 Width: Math.Min(availableWidth - 40, width),
                 MaxHeight: Percent(100),

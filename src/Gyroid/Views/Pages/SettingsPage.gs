@@ -1801,7 +1801,6 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "apply",
             ModalDialog{
                 Open: true,
-                KeyBindings: WidgetKeyBindings.Editing(input.Window?.PlatformInput),
                 Preset: ModalDialogPreset.Confirm,
                 AccessibilityName: ui.Strings.Get("Apply settings"),
                 Width: Math.Min(input.Width - 48, 440),
