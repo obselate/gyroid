@@ -23,6 +23,11 @@ class SendService {
         .Status
         .Height >= (session.settings.Network == "testnet" ? uint64(375): uint64(6500))
 
+    async func ReadReadyOutputCountAsync(ct CancellationToken) uint64 {
+        using let response = await session.Node.Api.JsonAsync("wallet/outputs", ct: ct)
+        return NodeJson.Number(response.RootElement, "unspent")
+    }
+
     init(session WalletSession) {
         this.session = session
         store = PendingSendStore(session)

@@ -29,6 +29,7 @@ class MessagesViewState {
 data struct MessagesInput {
     var Ui Presentation
     var Session WalletSession
+    var Snapshot WalletSnapshot
     var State MessagesViewState
     var Contacts SortedDictionary[string, string]
     var Width float64
@@ -59,10 +60,44 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     private var preparation SendEstimate?
     private var preparationFee uint64?
     private var preparationTransaction string = ""
+    private var readySnapshot WalletSnapshot?
+    private var readyRequest CancellationTokenSource?
+    private var readyOutputs uint64?
+    private var readyError string = ""
 
     func Dispose() {
+        readyRequest?.Cancel()
+        readyRequest?.Dispose()
         scrollTimer?.Dispose()
         highlightTimer?.Dispose()
+    }
+
+    private async func ReadReadyOutputs(input MessagesInput, pageToken CancellationToken, ct CancellationToken) {
+        using let cancel = CancellationTokenSource.CreateLinkedTokenSource(ct, pageToken)
+        var count uint64? = nil
+        var error = ""
+        try {
+            count = await input.Session.Send.ReadReadyOutputCountAsync(cancel.Token)
+        } catch (failure Exception) {
+            if cancel.IsCancellationRequested {
+                return
+            }
+            error = failure.Message
+        }
+        input
+            .Ui
+            .Actions
+            .window
+            ?.TryPost(
+            () -> {
+                if pageToken.IsCancellationRequested || !Object.ReferenceEquals(readySnapshot, input.Snapshot) {
+                    return
+                }
+                readyOutputs = count
+                readyError = error
+                Rebuild()
+            }
+        )
     }
 
     private func Run(input MessagesInput, action Func[CancellationToken, Task], done Action? = nil) {
@@ -112,6 +147,25 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     protected override func Build(input MessagesInput) Blob {
         let ui = input.Ui
         let service = input.Session.Messages
+        let canPrepare = !input.Drawer && service.Mode == MessengerMode.Send && input.Session.Send.CanSplitOutputs
+        if !canPrepare {
+            readyRequest?.Cancel()
+            readyRequest?.Dispose()
+            readyRequest = nil
+            readySnapshot = nil
+            readyOutputs = nil
+            readyError = ""
+        } else if !Object.ReferenceEquals(readySnapshot, input.Snapshot) {
+            readyRequest?.Cancel()
+            readyRequest?.Dispose()
+            let request = CancellationTokenSource()
+            readyRequest = request
+            let token = request.Token
+            readySnapshot = input.Snapshot
+            readyOutputs = nil
+            readyError = ""
+            ui.Actions.Background(ct -> ReadReadyOutputs(input, token, ct))
+        }
         let conversations = service.Conversations
         let listWidth = Math.Clamp(input.Width * 0.25, 200.0, 300.0)
         let threadWidth = input.Drawer ? input.Width: input.Width - listWidth
@@ -152,20 +206,15 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         thread.MinHeight = 0
         thread.Overflow = Overflow.Hidden
         let balance = input.Session.Snapshot.Balance
-        if !input.Drawer &&
-            service.Mode == MessengerMode.Send &&
-            input
-            .Session
-            .Send
-            .CanSplitOutputs &&
-            (balance?.ReadyOutputs ?? uint64(0)) < 4 {
+        let ready = readyOutputs ?? uint64.MaxValue
+        if canPrepare && ready < 4 {
             let readiness = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 Gap: 12,
                 Padding: 16,
                 FlexShrink: 0,
-                Grow(Figure(ui, "Ready outputs", (balance?.ReadyOutputs ?? uint64(0)).ToString(), ui.Ink))
+                Grow(Figure(ui, "Ready outputs", ready.ToString(), ui.Ink))
             }
             if let fee = preparationFee {
                 readiness.Add(Figure(ui, "fee", Amount(ui.Privacy, fee) + " BNT", ui.Ink))
@@ -323,7 +372,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 }
             )
         }
-        let error = issue.Length > 0 ? issue: service.Error
+        let error = issue.Length > 0 ? issue: readyError.Length > 0 ? readyError: service.Error
         if error.Length > 0 {
             thread.Add(
                 Container{

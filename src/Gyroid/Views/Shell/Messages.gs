@@ -69,6 +69,7 @@ partial class App {
         MessagesInput{
             Ui: ui,
             Session: wallet,
+            Snapshot: wallet.Snapshot,
             State: messagesState,
             Contacts: contacts,
             Width: drawer ? Math.Min(480.0, width - 112): width - 122,
