@@ -1,10 +1,12 @@
 package Gyroid.Services
 
+import Goo
 import Microsoft.Win32
 import System
 import System.ComponentModel
 import System.Diagnostics
 import System.IO
+import System.Linq
 import System.Security
 
 class PaymentLinkRegistration {
@@ -15,15 +17,20 @@ class PaymentLinkRegistration {
             }
             try {
                 if OperatingSystem.IsLinux() {
-                    let data = Environment.GetEnvironmentVariable("XDG_DATA_HOME")
-                    let applications = Path.Combine(
-                        String.IsNullOrEmpty(data) ? Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                            ".local",
-                            "share"
-                        ): data,
-                        "applications"
-                    )
+                    let data = Environment.GetEnvironmentVariable("XDG_DATA_HOME") ?? ""
+                    let home = String.IsNullOrEmpty(data) ? Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        ".local",
+                        "share"
+                    ): data
+                    let applications = Path.Combine(home, "applications")
+                    let icons = Path.Combine(home, "icons", "hicolor", "512x512", "apps")
+                    let icon = Path.Combine(icons, "dev.gyroid.wallet.png")
+                    let png = Resources.Resource("Gyroid.Icon.png")
+                    if !File.Exists(icon) || !File.ReadAllBytes(icon).SequenceEqual(png) {
+                        Directory.CreateDirectory(icons)
+                        File.WriteAllBytes(icon, png)
+                    }
                     let entry = Path.Combine(applications, "dev.gyroid.wallet.desktop")
                     let escaped = executable
                         .Replace("\\", "\\\\")
@@ -36,7 +43,7 @@ class PaymentLinkRegistration {
                         "\""
                     let content = "[Desktop Entry]\nType=Application\nName=Gyroid\nExec=" +
                         command +
-                        " %u\nTerminal=false\nStartupWMClass=dev.gyroid.wallet\nCategories=Finance;\nMimeType=x-scheme-handler/blocknet;\n"
+                        " %u\nIcon=dev.gyroid.wallet\nTerminal=false\nStartupWMClass=dev.gyroid.wallet\nCategories=Finance;\nMimeType=x-scheme-handler/blocknet;\n"
                     if !File.Exists(entry) || File.ReadAllText(entry) != content {
                         Directory.CreateDirectory(applications)
                         File.WriteAllText(entry, content)
