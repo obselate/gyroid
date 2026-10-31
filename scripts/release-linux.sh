@@ -18,6 +18,10 @@ bundle="$work/$name"
 dotnet publish src/Gyroid/Gyroid.gsproj -c Release -r linux-x64 -p:RestoreLockedMode=true -warnaserror -m:1 -nr:false -p:UseSharedCompilation=false -o "$bundle"
 find "$bundle" -type f \( -name '*.dbg' -o -name '*.pdb' -o -name '*.xml' \) -delete
 [[ -x "$bundle/Gyroid" && -f "$bundle/libsodium.so" ]]
+for library in "$bundle"/libgoo-accesskit-*.so; do
+  cp "$library" "$output/$(basename "$library").unstripped"
+  strip --strip-unneeded "$library"
+done
 cp LICENSE "$bundle/LICENSE"
 cp src/Gyroid/assets/fonts/OFL.txt "$bundle/OFL.txt"
 mkdir -p "$bundle/licenses/oasst1"
