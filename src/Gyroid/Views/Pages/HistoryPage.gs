@@ -1056,7 +1056,7 @@ class HistoryPage : Cell[HistoryInput] {
             )
         }
         panel.Add(values)
-        if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
+        if row.Memo.Length > 0 && row.Recipients.Length <= 1 && !row.Self {
             panel.Add(MemoSection(row, row.Memo))
         }
         if row.Self || row.Recipients.Length > 1 {
