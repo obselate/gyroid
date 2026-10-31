@@ -1026,7 +1026,15 @@ class HistoryPage : Cell[HistoryInput] {
         }
         panel.Add(values)
         if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
-            panel.Add(Figure(ui, "memo", row.Memo.Replace('\r', ' ').Replace('\n', ' '), ui.Ink, 13, channel: ""))
+            panel.Add(
+                Container{
+                    Gap: 3,
+                    MinWidth: 0,
+                    Overflow: Overflow.Hidden,
+                    Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, ""),
+                    Label(ui, row.Memo.Replace('\r', ' ').Replace('\n', ' '), 13, ui.Ink, "")
+                }
+            )
         }
         if row.Recipients.Length > 1 {
             for entry in row.Recipients {
@@ -1036,7 +1044,15 @@ class HistoryPage : Cell[HistoryInput] {
                     Figure(ui, "amount", Amount(ui.Privacy, entry.Amount) + " BNT", ui.Ink, 13, compact: true)
                 }
                 if entry.Memo.Length > 0 {
-                    details.Add(Figure(ui, "memo", entry.Memo.Replace('\r', ' ').Replace('\n', ' '), ui.Ink, 13, channel: ""))
+                    details.Add(
+                        Container{
+                            Gap: 3,
+                            MinWidth: 0,
+                            Overflow: Overflow.Hidden,
+                            Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, ""),
+                            Label(ui, entry.Memo.Replace('\r', ' ').Replace('\n', ' '), 13, ui.Ink, "")
+                        }
+                    )
                 }
                 panel.Add(details)
             }
