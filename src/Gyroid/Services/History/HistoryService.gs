@@ -175,6 +175,29 @@ class HistoryService {
         }
     }
 
+    async func PeriodStartAsync(period string, tip uint64, ct CancellationToken) uint64 {
+        if period == "all" {
+            return 0
+        }
+        let cutoff = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - switch period {
+            case "1d": 86400L
+            case "7d": 604800L
+            default: 2592000L
+        }
+        var first = 1UL
+        var last = tip + 1
+        while first < last {
+            let height = first + (last - first) / 2
+            let times = await BlockTimesAsync([]uint64{height}, ct)
+            if times[height] < cutoff {
+                first = height + 1
+            } else {
+                last = height
+            }
+        }
+        return first
+    }
+
     async func BlockTimesAsync(heights[]uint64, ct CancellationToken = default(CancellationToken)) Dictionary[
         uint64,
         int64
