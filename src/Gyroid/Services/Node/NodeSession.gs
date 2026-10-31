@@ -14,6 +14,7 @@ class NodeSession : IDisposable {
     var Api NodeApi
     let Supervisor NodeSupervisor = NodeSupervisor()
     var Status NodeStatus = NodeStatus()
+    var Network NetworkReport = NetworkReport()
     var Changed Action? = nil
     var Exited Action? = nil
     private var heightChanged int64
@@ -38,6 +39,7 @@ class NodeSession : IDisposable {
 
     func Reconnect() {
         Api.Dispose()
+        Network = NetworkReport()
         Api = NodeApi(Settings)
     }
 
@@ -210,9 +212,27 @@ class NodeSession : IDisposable {
         }
     }
 
-    async func ReadNetworkAsync(previous NetworkReport?, ct CancellationToken) NetworkReport {
+    async func ReadOverviewNetworkAsync(ct CancellationToken) NetworkReport {
         let status = Status
+        let previous = Network
+        if previous.Blocks.Length > 0 && previous.Blocks[previous.Blocks.Length - 1].Hash == status.BestHash {
+            return previous
+        }
         using let stats = await Api.JsonAsync("stats", ct: ct)
+        let blocks = await ReadBlocksAsync(status, previous, 31, ct)
+        Network = NetworkReport{
+            ... previous,
+            Hashrate: stats.RootElement.GetProperty("network_hashrate").GetDouble(),
+            Difficulty: NodeJson.Number(stats.RootElement, "difficulty"),
+            Emitted: stats.RootElement.GetProperty("pct_emitted").GetDouble(),
+            Blocks: blocks
+        }
+        return Network
+    }
+
+    async func ReadNetworkAsync(ct CancellationToken) NetworkReport {
+        let status = Status
+        let previous = await ReadOverviewNetworkAsync(ct)
         using let peers = await Api.JsonAsync("peers", ct: ct)
         using let bans = await Api.JsonAsync("peers/banned", ct: ct)
         let connected = List[NetworkPeer]()
@@ -261,14 +281,25 @@ class NodeSession : IDisposable {
                 }
             )
         }
+        let blocks = await ReadBlocksAsync(status, previous, 61, ct)
+        Network = NetworkReport{... previous, Peers: connected.ToArray(), Banned: banned.ToArray(), Blocks: blocks}
+        return Network
+    }
+
+    private async func ReadBlocksAsync(
+        status NodeStatus,
+        previous NetworkReport,
+        count int32,
+        ct CancellationToken
+    )[]NetworkBlock {
         let cached = Dictionary[uint64, NetworkBlock]()
-        for block in previous?.Blocks ?? []NetworkBlock{} {
+        for block in previous.Blocks {
             cached[block.Height] = block
         }
         let blocks = List[NetworkBlock]()
         var hash = status.BestHash
         var height = status.Height
-        while blocks.Count < 61 {
+        while blocks.Count < count {
             let block = await ReadBlockAsync(height, hash, cached, ct)
             blocks.Add(block)
             if height == 0 {
@@ -278,14 +309,7 @@ class NodeSession : IDisposable {
             height--
         }
         blocks.Reverse()
-        return NetworkReport{
-            Hashrate: stats.RootElement.GetProperty("network_hashrate").GetDouble(),
-            Difficulty: NodeJson.Number(stats.RootElement, "difficulty"),
-            Emitted: stats.RootElement.GetProperty("pct_emitted").GetDouble(),
-            Peers: connected.ToArray(),
-            Banned: banned.ToArray(),
-            Blocks: blocks.ToArray()
-        }
+        return blocks.ToArray()
     }
 
     private async func ReadBlockAsync(

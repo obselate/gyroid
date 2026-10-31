@@ -729,6 +729,7 @@ partial class App : Cell {
                     Contacts: contacts,
                     Privacy: ui.Privacy,
                     Height: height,
+                    Width: width,
                     OnNavigate: navigate,
                     OnUpgrade: showUpgrade
                 }

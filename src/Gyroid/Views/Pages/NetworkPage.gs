@@ -8,6 +8,7 @@ import Goo.Widgets.Icons
 import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
+import Gyroid.Components.NetworkParts
 import Gyroid.Components.TextParts
 import Gyroid.Models
 import Gyroid.Services
@@ -121,7 +122,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 )
             )
         )
-        times.Add(TimeChart(ui))
+        times.Add(NetworkParts.TimeChart(ui, report.Blocks, timePlot, selected, Select))
         let shown = if selected > 0 && Array.Exists(blocks, block -> block.Height == selected) {
             Array.Find(blocks, block -> block.Height == selected)
         } else {
@@ -178,11 +179,10 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     }
 
     private async func Load(input NetworkInput, pageContext Context) {
-        let previous = report
         while !pageContext.IsCancelled {
             var result NetworkReport? = nil
             try {
-                result = await input.Session.Node.ReadNetworkAsync(previous, pageContext.Token)
+                result = await input.Session.Node.ReadNetworkAsync(pageContext.Token)
             } catch (failure OperationCanceledException) when pageContext.IsCancelled {
                 return
             } catch (failure Exception) { }
@@ -209,36 +209,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         }
     }
 
-    private func Figure(input NetworkInput, label string, value string, unit string) Blob {
-        let ui = input.Ui
-        return Container{
-            FlexGrow: 1,
-            FlexBasis: 0,
-            MinWidth: 0,
-            Gap: 5,
-            Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value + " " + unit},
-            Label(ui, ui.Strings.Get(label), 13, ui.Body, ""),
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Baseline,
-                Gap: 6,
-                Overflow: Overflow.Hidden,
-                Cell.Mount[DecodeValueInput, DecodeValue](
-                    label,
-                    DecodeValueInput{
-                        Value: value,
-                        Name: ui.Strings.Get(label) + " " + value,
-                        Size: Math.Clamp(input.Height * 0.027, 17, 26),
-                        Color: ui.Ink,
-                        FractionColor: ui.Ink,
-                        Live: AccessibilityLive.Off,
-                        Ui: ui
-                    }
-                ),
-                Label(ui, unit, 12, ui.Body, "")
-            }
-        }
-    }
+    private func Figure(input NetworkInput, label string, value string, unit string) Blob ->
+    NetworkParts.Figure(input.Ui, label, value, unit, Math.Clamp(input.Height * 0.027, 20, 24), input.Ui.Ink)
 
     private func ChartHeader(input NetworkInput, label string, key string, value string, trailing Blob) Blob {
         let ui = input.Ui
@@ -259,113 +231,6 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 }
             )
         )
-    }
-
-    private func TimeChart(ui Presentation) Blob {
-        let blocks = report.Blocks
-        let count = blocks.Length - 1
-        let plot = Container{
-            Handle: timePlot,
-            FlexGrow: 1,
-            MinHeight: 0,
-            Accessibility: Accessibility{
-                Role: AccessibilityRole.Image,
-                Name: String.Format(ui.Strings.Get("last {0} block times, target 5:00"), Math.Max(count, 0))
-            },
-            OnPointerLeave: (event PointerEvent) -> Select(0)
-        }
-        let width = timePlot.BorderBox.Width
-        let height = timePlot.BorderBox.Height
-        if count < 1 || width <= 50 || height <= 30 {
-            return plot
-        }
-        let inner = width - 46
-        let extent = height - 22
-        let step = inner / 60
-        let target = Level(300, extent)
-        plot.Add(Rule(2, Level(900, extent), inner, ui.FaintRule))
-        plot.Add(Rule(2, Level(600, extent), inner, ui.FaintRule))
-        plot.Add(Place(inner + 10, Level(900, extent) - 7, Label(ui, "15:00", 11, ui.Dim, "")))
-        plot.Add(Place(inner + 10, Level(600, extent) - 7, Label(ui, "10:00", 11, ui.Dim, "")))
-        for index in 0 ... count {
-            let block = blocks[index + 1]
-            let seconds = Math.Max(0L, block.Timestamp - blocks[index].Timestamp)
-            let level = Level(float64(seconds), extent)
-            let left = 2 + (60 - count + index) * step
-            let slow = seconds > 300
-            let chosen = block.Height == selected
-            plot.Add(
-                Container{
-                    Position: PositionType.Absolute,
-                    Left: left + step * 0.18,
-                    Top: Math.Min(level, target),
-                    Width: Math.Max(2.0, step * 0.64),
-                    Height: Math.Max(1.5, Math.Abs(level - target)),
-                    BorderRadius: 1,
-                    BorderWidth: chosen ? 1.2: 0.0,
-                    BorderColor: ui.Ink,
-                    BackgroundColor: if slow {
-                        chosen ? ui.Orange: Color.Parse("#9e6900")
-                    } else {
-                        chosen ? ui.Blue: Color.Parse("#00699e")
-                    }
-                }
-            )
-            plot.Add(
-                Container{
-                    Position: PositionType.Absolute,
-                    Left: left,
-                    Top: 0,
-                    Width: step,
-                    Height: height,
-                    OnPointerEnter: (event PointerEvent) -> Select(block.Height)
-                }
-            )
-        }
-        plot.Add(
-            Shape{
-                Position: PositionType.Absolute,
-                Left: 2,
-                Top: target,
-                Width: inner,
-                Height: 1,
-                Path: PathBuilder(0, 0, inner, 1).MoveTo(0, 0.5).LineTo(inner, 0.5).Build(),
-                Fit: ShapeFit.Fill,
-                BorderWidth: 1,
-                BorderColor: Color.Parse("#b5b5b5"),
-                Dashes: DashPattern([]float64{4, 3}, 0)
-            }
-        )
-        plot.Add(Place(inner + 10, target - 8, Label(ui, "5:00", 12, ui.Ink, "")))
-        plot.Add(Place(2, height - 14, Label(ui, "#" + Count(blocks[0].Height), 11, ui.Dim, "")))
-        plot.Add(
-            Container{
-                Position: PositionType.Absolute,
-                Right: 44,
-                Top: height - 14,
-                Label(ui, "#" + Count(blocks[count].Height), 11, ui.Dim, "")
-            }
-        )
-        return plot
-    }
-
-    private func Level(seconds float64, extent float64) float64 -> 6 + extent * (1 - Math.Min(seconds, 900) / 900)
-
-    private func Rule(left float64, top float64, width float64, color Color) Blob -> Container{
-        Position: PositionType.Absolute,
-        Left: left,
-        Top: top,
-        Width: width,
-        Height: 1,
-        BackgroundColor: color
-    }
-
-    private func Place(left float64, top float64, content Blob) Blob -> Container{
-        Position: PositionType.Absolute,
-        Left: left,
-        Top: top,
-        HitTestSelf: false,
-        content
     }
 
     private func Select(height uint64) {
@@ -958,32 +823,5 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         id.Substring(0, 4) + "…" + id.Substring(id.Length - 6)
     } else {
         id
-    }
-
-    private func Duration(seconds int64) string -> (seconds / 60).ToString(CultureInfo.InvariantCulture) +
-        ":" +
-        (seconds % 60).ToString("00", CultureInfo.InvariantCulture)
-
-    private func Rate(hashes float64) string -> (
-        hashes / Math.Pow(1000, Math.Clamp(Math.Floor(Math.Log10(Math.Max(hashes, 1)) / 3), 0, 3))
-    ).ToString("0.00", CultureInfo.InvariantCulture)
-
-    private func Unit(hashes float64) string -> switch int32(
-        Math.Clamp(Math.Floor(Math.Log10(Math.Max(hashes, 1)) / 3), 0, 3)
-    ) {
-        case 0: "H/s"
-        case 1: "kH/s"
-        case 2: "MH/s"
-        default: "GH/s"
-    }
-
-    private func Compact(value uint64) string -> if value >= 1000000000 {
-        (value / 1e9).ToString("0.00", CultureInfo.InvariantCulture) + " G"
-    } else if value >= 1000000 {
-        (value / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + " M"
-    } else if value >= 1000 {
-        (value / 1e3).ToString("0.00", CultureInfo.InvariantCulture) + " K"
-    } else {
-        value.ToString(CultureInfo.InvariantCulture)
     }
 }

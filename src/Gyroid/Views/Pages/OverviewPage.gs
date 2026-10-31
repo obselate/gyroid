@@ -7,6 +7,7 @@ import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.Components
 import Gyroid.Components.LayoutParts
+import Gyroid.Components.NetworkParts
 import Gyroid.Components.TextParts
 import Gyroid.Models
 import Gyroid.Services
@@ -26,6 +27,7 @@ data struct OverviewInput {
     var Contacts SortedDictionary[string, string]
     var Privacy bool
     var Height float64
+    var Width float64
     var OnNavigate Action[AppPage]
     var OnUpgrade Action
 }
@@ -46,6 +48,7 @@ data struct Activity {
     var Amount uint64
     var Label string
     var Status string
+    var Ready bool
     var Order uint64
     var Timestamp int64
 }
@@ -66,6 +69,9 @@ class OverviewPage : Cell[OverviewInput] {
     private var fetching bool
     private var failedSnapshot WalletSnapshot? = nil
 
+    private let networkPlot ElementHandle = ElementHandle()
+    private var networkLoaded NodeStatus? = nil
+    private var networkLoading bool
     init() {
         hero.MetricsChanged += _ -> if hero.BorderBox.Width != heroWidth {
             Rebuild()
@@ -73,36 +79,132 @@ class OverviewPage : Cell[OverviewInput] {
         strip.MetricsChanged += _ -> if strip.BorderBox.Width != stripWidth {
             Rebuild()
         }
+        networkPlot.MetricsChanged += _ -> Rebuild()
     }
 
     protected override func Build(input OverviewInput) Blob {
         heroWidth = hero.BorderBox.Width
         stripWidth = strip.BorderBox.Width
-        let ui = input.Ui
         let snapshot = input.Snapshot
         let chain = snapshot.Balance?.ChainHeight ?? input.Node.Height
         RequestTimes(input)
+        RequestNetwork(input)
         let arrivals = Arrivals(input, chain)
-        let left = Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MinHeight: 0, Gap: 12, Hero(input, arrivals)}
-        if arrivals.Count > 0 {
-            left.Add(Incoming(input, arrivals))
-        }
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Gap: 12}
         if input.Node.UpgradeDate.Length > 0 {
             page.Add(Upgrade(input))
         }
-        page.Add(
-            Container{
-                FlexGrow: 1,
-                FlexBasis: 0,
-                MinHeight: 0,
-                FlexDirection: FlexDirection.Row,
-                Gap: 12,
-                left,
-                Recent(input, chain)
-            }
-        )
+        let top = Container{
+            Height: Math.Clamp(Math.Min(input.Height * 0.32, input.Width * 0.09 + 151), 260, 372),
+            FlexShrink: 0,
+            FlexDirection: FlexDirection.Row,
+            Gap: 16
+        }
+        let balance = Hero(input, arrivals)
+        balance.Width = input.Width < 1200 ? 400.0: Percent(39)
+        balance.FlexGrow = 0
+        balance.FlexShrink = 0
+        top.Add(balance)
+        top.Add(Network(input))
+        page.Add(top)
+        page.Add(Recent(input, chain, arrivals))
         return page
+    }
+
+    private func RequestNetwork(input OverviewInput) {
+        if networkLoading || !input.Node.Running || networkLoaded == input.Node {
+            return
+        }
+        guard let window = input.Window else {
+            return
+        }
+        networkLoaded = input.Node
+        networkLoading = true
+        input.Ui.Actions.Background(ct -> LoadNetwork(input, window, ct))
+    }
+
+    private async func LoadNetwork(input OverviewInput, window Window, ct CancellationToken) {
+        try {
+            await input.Session.Node.ReadOverviewNetworkAsync(ct)
+        } catch (error Exception) { } finally {
+            window.TryPost(
+                () -> {
+                    networkLoading = false
+                    Rebuild()
+                }
+            )
+        }
+    }
+
+    private func Network(input OverviewInput) Blob {
+        let ui = input.Ui
+        let node = input.Node
+        let report = input.Session.Node.Network
+        let online = node.Running
+        let size = input.Width < 1200 ? 20.0: 24.0
+        let color = online ? ui.Ink: ui.Dim
+        let card = WalletParts.Card(ui, input.Width < 1200 ? 16.0: 18.0, 10)
+        card.FlexGrow = 1
+        card.FlexBasis = 0
+        card.OnPointerDown = (event PointerEvent) -> if !event.IsFromInteractiveChild {
+            input.OnNavigate(AppPage.Network)
+        }
+        let height = !online ? ui.Strings.Get("offline"): Count(node.Height)
+        let sync = !online ? "": node.Syncing ? "/ " + Count(node.ChainHeight): ui.Strings.Get("synced")
+        let age = Math.Max(0L, DateTimeOffset.Now.ToUnixTimeSeconds() - node.LastBlockTime)
+        let last = node.LastBlockTime == 0 ? "-": String.Format(
+            ui.Strings.Get(age < 3600 ? "{0}m ago": "{0}h ago"),
+            age < 3600 ? age / 60: age / 3600
+        )
+        let first = Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: 10,
+            NetworkParts.Figure(
+                ui,
+                "height",
+                height,
+                sync,
+                size,
+                !online ? ui.Pink: node.Syncing ? ui.Orange: ui.Lime,
+                1.85
+            ),
+            NetworkParts.Figure(ui, "peers", Count(node.Peers), "", size, color),
+            NetworkParts.Figure(ui, "last block", last, "", size, online && age > 900 ? ui.Orange: color)
+        }
+        card.Add(first)
+        let second = Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: 10,
+            NetworkParts.Figure(ui, "hashrate", Rate(report.Hashrate), Unit(report.Hashrate), size, color, 1.85),
+            NetworkParts.Figure(ui, "difficulty", Compact(report.Difficulty), "", size, color),
+            NetworkParts.Figure(
+                ui,
+                "mempool",
+                Count(node.Mempool),
+                ui.Strings.Get("tx") + " · " + (node.MempoolBytes / 1000.0).ToString(
+                    "0.0",
+                    CultureInfo.InvariantCulture
+                ) +
+                    " KB",
+                size,
+                color
+            )
+        }
+        card.Add(second)
+        card.Add(NetworkParts.TimeChart(ui, report.Blocks, networkPlot, 0, _ -> { }, true, !online))
+        let blocks = report.Blocks
+        let count = Math.Min(30, blocks.Length - 1)
+        let average = count > 0 ? Duration(
+            (blocks[blocks.Length - 1].Timestamp - blocks[blocks.Length - count - 1].Timestamp) / count
+        ): "-"
+        card.Add(
+            WalletParts.Header(
+                Label(ui, ui.Strings.Get("block time") + " " + average, 12, color, ""),
+                8,
+                Link(ui, "network", () -> input.OnNavigate(AppPage.Network))
+            )
+        )
+        return card
     }
 
     private func RequestTimes(input OverviewInput) {
@@ -659,35 +761,13 @@ class OverviewPage : Cell[OverviewInput] {
         )
     }
 
-    private func Incoming(input OverviewInput, arrivals List[Arrival]) Blob {
-        let ui = input.Ui
-        let card = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 16, Right: 16}, 0)
-        card.Overflow = Overflow.Hidden
-        card.FlexShrink = 1
-        card.MaxHeight = Percent(62)
-        let header = WalletParts.Header(Label(ui, ui.Strings.Get("incoming"), 12, ui.Body, ""))
-        header.Height = 24
-        header.Margin = Edges{Bottom: 4}
-        header.Add(Label(ui, arrivals.Count.ToString(), 14, ui.Dim, ""))
-        header.Add(Container{FlexGrow: 1})
-        header.Add(Label(ui, ui.Strings.Get("all ready"), 12, ui.Body, ""))
-        header.Add(Label(ui, Wait(input, arrivals.Max((item Arrival) -> item.Blocks)), 14, ui.Ink, ""))
-        card.Add(header)
-        let rows = Container{FlexShrink: 1, MinHeight: 0, Overflow: Overflow.Scroll, ScrollbarY: Theme.Read().Scrollbar}
-        for index in 0 ... arrivals.Count {
-            rows.Add(Arrive(input, arrivals[index], index == arrivals.Count - 1))
-        }
-        card.Add(rows)
-        return card
-    }
-
     private func Fade(color Color, faded bool) Color -> if faded {
         Color.FromNormalized(color.R * 0.3F + 0.014F, color.G * 0.3F + 0.014F, color.B * 0.3F + 0.014F, 1F)
     } else {
         color
     }
 
-    private func Arrive(input OverviewInput, item Arrival, last bool) Blob {
+    private func Arrive(input OverviewInput, item Arrival) Blob {
         let ui = input.Ui
         let faded = hovering && item.Kind == "pool"
         let key = item.TxId + ":" + item.Height.ToString()
@@ -703,9 +783,9 @@ class OverviewPage : Cell[OverviewInput] {
             AlignItems: AlignItems.Stretch,
             JustifyContent: JustifyContent.FlexStart,
             Gap: 6,
-            Padding: Edges{Top: 9, Bottom: 9},
+            Padding: Edges{Top: 12, Bottom: 12},
             FlexShrink: 0,
-            BorderWidth: Edges{Bottom: last ? 0.0: 1.0},
+            BorderWidth: Edges{Bottom: 1},
             BorderColor: ui.Rule,
             BackgroundColor: Color.Transparent,
             Focus: Theme.Read().FocusStyle,
@@ -725,46 +805,41 @@ class OverviewPage : Cell[OverviewInput] {
                 AlignItems: AlignItems.Center,
                 Gap: 12,
                 Container{Width: 16, AlignItems: AlignItems.Center, glyph},
-                Number(ui, input.Privacy, Fixed(item.Amount), Fade(ui.Ink, faded), Fade(ui.Dim, faded)),
+                Container{
+                    Width: 120,
+                    Number(ui, input.Privacy, Fixed(item.Amount), Fade(ui.Ink, faded), Fade(ui.Dim, faded))
+                },
                 Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Source, 512)), 13, Fade(ui.Dim, faded), "")),
                 Container{
-                    Width: 76,
+                    Width: input.Width < 1200 ? 110.0: 160.0,
+                    Gap: 5,
                     AlignItems: AlignItems.FlexEnd,
-                    Label(ui, Wait(input, item.Blocks), 14, Fade(ui.Ink, faded), "")
-                }
-            },
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: 12,
-                Container{Width: 16},
-                Grow(
+                    Label(
+                        ui,
+                        item.Kind == "pool" ? ui.Strings.Get("mempool"): item.Confirmations.ToString() +
+                            "/" +
+                            item
+                            .Required
+                            .ToString(),
+                        11,
+                        Fade(item.Kind == "pool" ? ui.Blue: ui.Orange, faded),
+                        ""
+                    ),
                     Container{
-                        Height: 4,
-                        BorderRadius: 2,
-                        Overflow: Overflow.Hidden,
+                        Width: Percent(100),
+                        Height: 3,
                         BackgroundColor: Fade(ui.Selected, faded),
                         Container{
                             Width: Percent(100.0 * item.Confirmations / item.Required),
-                            Height: 4,
+                            Height: 3,
                             BackgroundColor: Fade(ui.Orange, faded)
                         }
                     }
-                ),
+                },
                 Container{
-                    Width: 76,
+                    Width: 60,
                     AlignItems: AlignItems.FlexEnd,
-                    if item.Kind == "pool" {
-                        Label(ui, ui.Strings.Get("mempool"), 12, Fade(ui.Blue, faded), "")
-                    } else {
-                        Label(
-                            ui,
-                            item.Confirmations.ToString() + "/" + item.Required.ToString(),
-                            12,
-                            Fade(ui.Dim, faded),
-                            ""
-                        )
-                    }
+                    Label(ui, Wait(input, item.Blocks), 11, Fade(ui.Dim, faded), "")
                 }
             }
         }
@@ -813,11 +888,10 @@ class OverviewPage : Cell[OverviewInput] {
                     },
                     Status: if output.BlockHeight == 0 {
                         "mempool"
-                    } else if confirmations < required {
-                        (confirmations + 1).ToString() + "/" + required.ToString()
                     } else {
-                        ""
+                        Math.Min(confirmations + 1, required).ToString() + "/" + required.ToString()
                     },
+                    Ready: output.BlockHeight > 0 && confirmations >= required,
                     Order: output.BlockHeight == 0 ? uint64.MaxValue: output.BlockHeight,
                     Timestamp: times.GetValueOrDefault(output.BlockHeight)
                 }
@@ -832,7 +906,9 @@ class OverviewPage : Cell[OverviewInput] {
                     Label: label.Length > 0 ? label: Short(send.TxId),
                     Status: send.Status == "not_found" ? ui.Strings.Get(
                         "not found"
-                    ): send.Status == "mempool" ? "mempool": "",
+                    ): send.Status == "mempool" ? "mempool": Math
+                        .Min(send.Confirmations, uint64(10)).ToString() + "/10",
+                    Ready: send.Status == "confirmed" && send.Confirmations >= 10,
                     Order: if send.Status == "mempool" {
                         uint64.MaxValue
                     } else {
@@ -845,7 +921,7 @@ class OverviewPage : Cell[OverviewInput] {
         return items.OrderByDescending((item Activity) -> item.Order).Take(50).ToList()
     }
 
-    private func Recent(input OverviewInput, chain uint64) Blob {
+    private func Recent(input OverviewInput, chain uint64, arrivals List[Arrival]) Blob {
         let ui = input.Ui
         let card = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 16, Right: 16}, 0)
         card.Overflow = Overflow.Hidden
@@ -855,24 +931,38 @@ class OverviewPage : Cell[OverviewInput] {
         let header = WalletParts.Header(Label(ui, ui.Strings.Get("recent"), 12, ui.Body, ""))
         header.Height = 24
         header.Margin = Edges{Bottom: 4}
+        if arrivals.Count > 0 {
+            header.Add(Label(ui, ui.Strings.Get("incoming") + " " + arrivals.Count.ToString(), 11, ui.Body, ""))
+            header.Add(
+                Label(
+                    ui,
+                    ui.Strings.Get("all ready") + " " + Wait(input, arrivals.Max((item Arrival) -> item.Blocks)),
+                    11,
+                    ui.Dim,
+                    ""
+                )
+            )
+        }
         header.Add(Container{FlexGrow: 1})
         header.Add(Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions)))
         card.Add(header)
         let activities = Activities(input, chain)
-        if activities.Count == 0 {
+        if activities.Count == 0 && arrivals.Count == 0 {
             card.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Height: 40,
-                    Grow(Label(ui, ui.Strings.Get("no transactions yet"), 14, ui.Dim, "")),
-                    Link(ui, "receive", () -> input.OnNavigate(AppPage.Receive))
+                    Grow(Label(ui, ui.Strings.Get("no transactions yet"), 14, ui.Dim, ""))
                 }
             )
             return card
         }
-        let height = Math.Clamp(input.Height * 0.05, 34, 44)
+        let height = 48.0
         let rows = Container{FlexGrow: 1, MinHeight: 0, Overflow: Overflow.Scroll, ScrollbarY: Theme.Read().Scrollbar}
+        for item in arrivals {
+            rows.Add(Arrive(input, item))
+        }
         for item in activities {
             let outgoing = item.Kind == "out"
             let shown = input.Privacy ? ui.Strings.Get("Amounts hidden"): WalletAmount.Format(item.Amount)
@@ -905,23 +995,30 @@ class OverviewPage : Cell[OverviewInput] {
                             ""
                         )
                     },
-                    Number(
-                        ui,
-                        input.Privacy,
-                        (outgoing ? "-": "+") + Fixed(item.Amount),
-                        outgoing ? ui.Pink: ui.Mint,
-                        ui.Dim
-                    ),
-                    Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Label, 512)), 13, ui.Dim, "")),
-                    Label(
-                        ui,
-                        item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,
-                        12,
-                        item.Status == "mempool" ? ui.Blue: ui.Orange,
-                        ""
-                    ),
                     Container{
-                        Width: 44,
+                        Width: 120,
+                        Number(
+                            ui,
+                            input.Privacy,
+                            (outgoing ? "-": "+") + Fixed(item.Amount),
+                            outgoing ? ui.Pink: ui.Mint,
+                            ui.Dim
+                        )
+                    },
+                    Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Label, 512)), 13, ui.Dim, "")),
+                    Container{
+                        Width: input.Width < 1200 ? 110.0: 160.0,
+                        AlignItems: AlignItems.FlexEnd,
+                        Label(
+                            ui,
+                            item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,
+                            11,
+                            item.Status == "mempool" ? ui.Blue: item.Ready ? ui.Lime: ui.Orange,
+                            ""
+                        )
+                    },
+                    Container{
+                        Width: 60,
                         AlignItems: AlignItems.FlexEnd,
                         Label(ui, item.Timestamp > 0 ? Clock(item.Timestamp): "-", 12, ui.Dim, "")
                     }
