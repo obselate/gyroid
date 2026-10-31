@@ -95,7 +95,7 @@ class OverviewPage : Cell[OverviewInput] {
             page.Add(Upgrade(input))
         }
         let top = Container{
-            Height: Math.Clamp(Math.Min(input.Height * 0.32, input.Width * 0.09 + 151), 260, 372),
+            Height: Math.Clamp(Math.Min(input.Height * 0.32, input.Width * 0.09 + 151), 260, 352),
             FlexShrink: 0,
             FlexDirection: FlexDirection.Row,
             Gap: 16
