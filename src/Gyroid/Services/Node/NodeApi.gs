@@ -14,6 +14,24 @@ import System.Threading
 import System.Threading.Tasks
 
 class NodeApi : IDisposable {
+    shared {
+        private let sendGate SemaphoreSlim = SemaphoreSlim(1, 1)
+        private var lastSendTimestamp int64
+
+        private async func PaceSendAsync(ct CancellationToken) {
+            await sendGate.WaitAsync(ct)
+            try {
+                let remaining = 2100.0 - Stopwatch.GetElapsedTime(lastSendTimestamp).TotalMilliseconds
+                if remaining > 0 {
+                    await Task.Delay(TimeSpan.FromMilliseconds(remaining), ct)
+                }
+                lastSendTimestamp = Stopwatch.GetTimestamp()
+            } finally {
+                sendGate.Release()
+            }
+        }
+    }
+
     let settings WalletSettings
     var verifiedStart int64
     let http HttpClient
@@ -165,6 +183,9 @@ class NodeApi : IDisposable {
                 request.Headers.Authorization = AuthenticationHeaderValue("Bearer", token)
                 if idempotencyKey.Length > 0 {
                     request.Headers.Add("Idempotency-Key", idempotencyKey)
+                }
+                if path == "wallet/send" || path == "wallet/send/advanced" {
+                    await PaceSendAsync(ct)
                 }
                 using let response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
                 let code = int32(response.StatusCode)

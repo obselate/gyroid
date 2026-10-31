@@ -15,6 +15,8 @@ partial class MessagingService {
     private var store MessagingStore?
     private var conversations List[Conversation] = List[Conversation]()
     private let sending Dictionary[Message, string] = Dictionary[Message, string]()
+    private let sendCancellations Dictionary[Message, CancellationTokenSource] =
+    Dictionary[Message, CancellationTokenSource]()
     private var receivedRows Dictionary[string, DecodedMemo] = Dictionary[string, DecodedMemo](StringComparer.Ordinal)
     private var sentRows[]JsonElement = Array.Empty[JsonElement]()
     private var sentMemos Dictionary[string, Dictionary[string, DecodedMemo]] =
@@ -145,6 +147,7 @@ partial class MessagingService {
         lock sending {
             version = generation
             sending[message] = conversation.Id
+            sendCancellations[message] = CancellationTokenSource()
             let current = conversations.Find(item -> item.Id == conversation.Id) ??
                 Conversation{
                 Id: conversation.Id,
@@ -183,8 +186,27 @@ partial class MessagingService {
 
     private async func Dispatch(conversation Conversation, message Message, version int64, ct CancellationToken) {
         try {
-            await Transmit(conversation, message.Text, false, message, version, ct)
+            var token CancellationToken
+            lock sending {
+                if version != generation {
+                    throw OperationCanceledException("The wallet session changed")
+                }
+                if !sendCancellations.TryGetValue(message, out let cancellation) {
+                    return
+                }
+                token = cancellation.Token
+            }
+            using let linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token)
+            await Transmit(conversation, message.Text, false, message, version, linked.Token)
         } catch (error Exception) {
+            lock sending {
+                if version != generation {
+                    throw OperationCanceledException("The wallet session changed", error)
+                }
+                if !sending.ContainsKey(message) {
+                    return
+                }
+            }
             message.State = MessageState.Failed
             session.Changed?.Invoke()
             throw error
@@ -197,7 +219,6 @@ partial class MessagingService {
         if address.StartsWith("$", StringComparison.Ordinal) || address.StartsWith("@", StringComparison.Ordinal) {
             let client = RequireSend()
             handle = "$" + address.Substring(1)
-            await WaitSend(ct)
             using let resolved = await client.JsonAsync(
                 "wallet/send",
                 writer -> {
@@ -313,11 +334,19 @@ partial class MessagingService {
         let local = store ?? throw WalletException("Load a wallet first")
         local.Removed[conversation.Id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         local.Conversations.TryRemove(conversation.Id, out _)
+        let cancelled = List[CancellationTokenSource]()
         lock sending {
             conversations = conversations.Where(item -> item.Id != conversation.Id).ToList()
             for message in sending.Keys.Where(item -> sending[item] == conversation.Id).ToList() {
                 sending.Remove(message)
+                if sendCancellations.Remove(message, out let cancellation) {
+                    cancelled.Add(cancellation)
+                }
             }
+        }
+        for cancellation in cancelled {
+            cancellation.Cancel()
+            cancellation.Dispose()
         }
         session.Changed?.Invoke()
         await session.gate.WaitAsync(ct)
@@ -344,11 +373,14 @@ partial class MessagingService {
 
     func Reset() {
         var previous CancellationTokenSource
+        var cancelled[]CancellationTokenSource
         lock sending {
             previous = syncLifetime
             syncLifetime = CancellationTokenSource()
             generation++
             appliedRevision = -1
+            cancelled = sendCancellations.Values.ToArray()
+            sendCancellations.Clear()
             sending.Clear()
             conversations = List[Conversation]()
             receivedMessages = Dictionary[string, Message](StringComparer.Ordinal)
@@ -360,6 +392,10 @@ partial class MessagingService {
             selected = ""
             store = nil
             Error = ""
+        }
+        for cancellation in cancelled {
+            cancellation.Cancel()
+            cancellation.Dispose()
         }
         previous.Cancel()
         previous.Dispose()

@@ -267,6 +267,9 @@ partial class MessagingService {
                         item -> item.Txid == pair.Key.Txid && item.Outgoing
                     ) == true {
                         sending.Remove(pair.Key)
+                        if sendCancellations.Remove(pair.Key, out let cancellation) {
+                            cancellation.Dispose()
+                        }
                         continue
                     }
                     if conversation != nil {

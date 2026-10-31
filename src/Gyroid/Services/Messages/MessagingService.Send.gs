@@ -8,7 +8,6 @@ import System.IO
 import System.Linq
 import System.Text.Json
 import System.Threading
-import System.Threading.Tasks
 
 class PreparedSend {
     let Addresses List[string] = List[string]()
@@ -17,16 +16,6 @@ class PreparedSend {
 }
 
 partial class MessagingService {
-    private var lastSend DateTimeOffset
-
-    private async func WaitSend(ct CancellationToken) {
-        let remaining = 2100.0 - (DateTimeOffset.UtcNow - lastSend).TotalMilliseconds
-        if remaining > 0 {
-            await Task.Delay(TimeSpan.FromMilliseconds(remaining), ct)
-        }
-        lastSend = DateTimeOffset.UtcNow
-    }
-
     private func RequireSend() NodeApi {
         if Mode != MessengerMode.Send {
             throw InvalidOperationException("Sending requires an unlocked spend wallet")
@@ -201,7 +190,6 @@ partial class MessagingService {
                     message.SendPayload = payload
                 }
             }
-            await WaitSend(ct)
             if !IsCurrent(message, version) {
                 return
             }
