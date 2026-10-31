@@ -29,6 +29,7 @@ class MessagesViewState {
 data struct MessagesInput {
     var Ui Presentation
     var Session WalletSession
+    var Snapshot WalletSnapshot
     var State MessagesViewState
     var Contacts SortedDictionary[string, string]
     var Width float64
@@ -56,10 +57,47 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     private var issue string = ""
     private var busy bool
     private let members List[string] = List[string]()
+    private var preparation SendEstimate?
+    private var preparationFee uint64?
+    private var preparationTransaction string = ""
+    private var readySnapshot WalletSnapshot?
+    private var readyRequest CancellationTokenSource?
+    private var readyOutputs uint64?
+    private var readyError string = ""
 
     func Dispose() {
+        readyRequest?.Cancel()
+        readyRequest?.Dispose()
         scrollTimer?.Dispose()
         highlightTimer?.Dispose()
+    }
+
+    private async func ReadReadyOutputs(input MessagesInput, pageToken CancellationToken, ct CancellationToken) {
+        using let cancel = CancellationTokenSource.CreateLinkedTokenSource(ct, pageToken)
+        var count uint64? = nil
+        var error = ""
+        try {
+            count = await input.Session.Send.ReadReadyOutputCountAsync(cancel.Token)
+        } catch (failure Exception) {
+            if cancel.IsCancellationRequested {
+                return
+            }
+            error = failure.Message
+        }
+        input
+            .Ui
+            .Actions
+            .window
+            ?.TryPost(
+            () -> {
+                if pageToken.IsCancellationRequested || !Object.ReferenceEquals(readySnapshot, input.Snapshot) {
+                    return
+                }
+                readyOutputs = count
+                readyError = error
+                Rebuild()
+            }
+        )
     }
 
     private func Run(input MessagesInput, action Func[CancellationToken, Task], done Action? = nil) {
@@ -109,6 +147,25 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     protected override func Build(input MessagesInput) Blob {
         let ui = input.Ui
         let service = input.Session.Messages
+        let canPrepare = !input.Drawer && service.Mode == MessengerMode.Send && input.Session.Send.CanSplitOutputs
+        if !canPrepare {
+            readyRequest?.Cancel()
+            readyRequest?.Dispose()
+            readyRequest = nil
+            readySnapshot = nil
+            readyOutputs = nil
+            readyError = ""
+        } else if !Object.ReferenceEquals(readySnapshot, input.Snapshot) {
+            readyRequest?.Cancel()
+            readyRequest?.Dispose()
+            let request = CancellationTokenSource()
+            readyRequest = request
+            let token = request.Token
+            readySnapshot = input.Snapshot
+            readyOutputs = nil
+            readyError = ""
+            ui.Actions.Background(ct -> ReadReadyOutputs(input, token, ct))
+        }
         let conversations = service.Conversations
         let listWidth = Math.Clamp(input.Width * 0.25, 200.0, 300.0)
         let threadWidth = input.Drawer ? input.Width: input.Width - listWidth
@@ -148,6 +205,52 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         thread.MinWidth = 0
         thread.MinHeight = 0
         thread.Overflow = Overflow.Hidden
+        let balance = input.Session.Snapshot.Balance
+        let ready = readyOutputs ?? uint64.MaxValue
+        if canPrepare && ready < 4 {
+            let readiness = Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: 12,
+                Padding: 16,
+                FlexShrink: 0,
+                Grow(Figure(ui, "Ready outputs", ready.ToString(), ui.Ink))
+            }
+            if let fee = preparationFee {
+                readiness.Add(Figure(ui, "fee", Amount(ui.Privacy, fee) + " BNT", ui.Ink))
+                var confirmations uint64 = 0
+                let height = balance?.ChainHeight ?? uint64(0)
+                for output in input.Session.History.Outputs {
+                    if output.TxId == preparationTransaction && height >= output.BlockHeight {
+                        confirmations = Math.Min(uint64(10), height - output.BlockHeight)
+                        break
+                    }
+                }
+                readiness.Add(Figure(ui, "Maturing", confirmations.ToString() + "/10", ui.Ink))
+            }
+            if (balance?.Spendable ?? uint64(0)) > 0 &&
+                !input
+                .Session
+                .Snapshot
+                .ScanBehind(input.Session.Node.Status.Height) {
+                readiness.Add(
+                    Button(
+                        ui,
+                        "Prepare",
+                        () -> Run(
+                            input,
+                            ct -> EstimatePreparation(input, ct),
+                            () -> {
+                                dialog = "prepare"
+                                Rebuild()
+                            }
+                        ),
+                        busy || input.Session.Send.Pending != nil
+                    )
+                )
+            }
+            thread.Add(readiness)
+        }
         if let current = conversation {
             thread.Add(Header(input, current))
             let rows = Container{
@@ -269,7 +372,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 }
             )
         }
-        let error = issue.Length > 0 ? issue: service.Error
+        let error = issue.Length > 0 ? issue: readyError.Length > 0 ? readyError: service.Error
         if error.Length > 0 {
             thread.Add(
                 Container{
@@ -287,7 +390,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         }
         root.Add(thread)
         if dialog.Length > 0 {
-            root.Add(Dialog(input, conversation))
+            root.Add(dialog == "prepare" ? PreparationDialog(input): Dialog(input, conversation))
         }
         if let message = detail {
             root.Add(Details(input, message))
@@ -672,6 +775,61 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     private async func CreateGroup(input MessagesInput, ct CancellationToken) {
         let conversation = await input.Session.Messages.CreateGroup(name, members, ct)
         input.Ui.Actions.window?.TryPost(() -> Select(input, conversation))
+    }
+
+    private async func EstimatePreparation(input MessagesInput, ct CancellationToken) {
+        let estimate = await input.Session.Send.EstimatePreparationAsync(ct)
+        preparation = estimate
+    }
+
+    private async func SubmitPreparation(input MessagesInput, estimate SendEstimate, ct CancellationToken) {
+        let result = await input.Session.Send.SubmitAsync(estimate, ct)
+        preparationFee = result.Fee
+        preparationTransaction = result.TxId
+        await input.Session.RefreshAsync(ct)
+    }
+
+    private func PreparationDialog(input MessagesInput) Blob {
+        let ui = input.Ui
+        let close Action = () -> {
+            dialog = ""
+            preparation = nil
+            input.Session.Send.InvalidateConfirmation()
+            Rebuild()
+        }
+        let estimate = preparation
+        let content = Container{
+            Gap: 12,
+            Label(ui, ui.Strings.Get("Prepare for messaging"), 17, ui.Ink, ""),
+            Figure(ui, "outputs", "8", ui.Ink),
+            Figure(ui, "amount", Amount(ui.Privacy, estimate?.Amount ?? uint64(0)) + " BNT", ui.Ink),
+            Figure(ui, "fee", Amount(ui.Privacy, estimate?.Fee ?? uint64(0)) + " BNT", ui.Ink),
+            Figure(ui, "Confirmed", "0/10", ui.Ink)
+        }
+        if issue.Length > 0 {
+            content.Add(Label(ui, ui.Strings.Explain(issue), 12, ui.Pink, ""))
+        }
+        return WalletParts.Modal(
+            ui,
+            "prepare-messaging-dialog",
+            ModalDialog{
+                Open: true,
+                Preset: ModalDialogPreset.Confirm,
+                AccessibilityName: ui.Strings.Get("Prepare for messaging"),
+                Width: 440,
+                Content: content,
+                ConfirmText: ui.Strings.Get("Prepare"),
+                CancelText: ui.Strings.Get("Cancel"),
+                ConfirmDisabled: busy || estimate == nil,
+                OnConfirm: () -> {
+                    if let confirmed = preparation {
+                        Run(input, ct -> SubmitPreparation(input, confirmed, ct), close)
+                    }
+                },
+                OnCancel: close,
+                OnClose: close
+            }
+        )
     }
 
     private func Details(input MessagesInput, message Message) Blob {
