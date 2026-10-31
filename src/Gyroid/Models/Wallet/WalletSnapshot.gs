@@ -47,6 +47,7 @@ class WalletSnapshot {
                 balance.Pending != previous.Pending ||
                 balance.Unconfirmed != previous.Unconfirmed ||
                 balance.Outputs != previous.Outputs ||
+                balance.ReadyOutputs != previous.ReadyOutputs ||
                 balance.MemoErrors != previous.MemoErrors {
                 return false
             }
@@ -106,5 +107,6 @@ class WalletBalance {
     var Pending uint64? = nil
     var Unconfirmed uint64
     var Outputs uint64
+    var ReadyOutputs uint64
     var MemoErrors uint64
 }

@@ -55,10 +55,15 @@ class SendService {
                 throw WalletException("View-only wallets cannot send")
             }
             let handles = await ResolveRecipientsAsync(recipients, ct)
-            using let result = await session
-                .Node
-                .Api
-                .JsonAsync("wallet/send", writer -> WriteSend(writer, recipients, true), ct)
+            using let request = MemoryStream()
+            using let requestWriter = Utf8JsonWriter(request)
+            WriteSend(requestWriter, recipients, false)
+            requestWriter.Flush()
+            let body = await SplitChangeAsync(
+                Encoding.UTF8.GetString(request.GetBuffer(), 0, int32(request.Length)),
+                ct
+            )
+            using let result = await EstimateBodyAsync(body, ct)
             let root = result.RootElement
             if !NodeJson.Flag(root, "dry_run") {
                 throw WalletException("Daemon did not return a dry-run estimate")
@@ -67,6 +72,7 @@ class SendService {
             let inputTotal = NodeJson.Number(root, "input_total")
             let change = NodeJson.Number(root, "change")
             let estimate = SendEstimate(recipients, handles, fee, change, int32(NodeJson.Number(root, "input_count")))
+            estimate.Body = body
             if estimate.Amount > uint64.MaxValue - fee || inputTotal < change || inputTotal - change != estimate.Total {
                 throw WalletException("Node returned an invalid send total")
             }
@@ -208,13 +214,9 @@ class SendService {
             if NodeJson.Flag(walletAddress.RootElement, "view_only") {
                 throw WalletException("View-only wallets cannot send")
             }
-            using let body = MemoryStream()
-            using let writer = Utf8JsonWriter(body)
-            WriteSend(writer, estimate.Recipients, false)
-            writer.Flush()
             let pending = PendingSend{
                 Key: key,
-                Body: Encoding.UTF8.GetString(body.GetBuffer(), 0, int32(body.Length)),
+                Body: estimate.Body,
                 Wallet: session.settings.ActiveWallet,
                 Network: session.settings.Network,
                 CoreStarted: session.Node.Api.ListenerStarted,
@@ -266,7 +268,10 @@ class SendService {
             using let response = await session
                 .Node
                 .Api
-                .JsonAsync("wallet/send/status?idempotency_key=" + Uri.EscapeDataString(pending.Key), ct: ct)
+                .JsonAsync(
+                SendPath(pending.Body) + "/status?idempotency_key=" + Uri.EscapeDataString(pending.Key),
+                ct: ct
+            )
             let root = response.RootElement
             let status = NodeJson.Text(root, "state")
             if reloadSends && session.State == WalletState.Unlocked {
@@ -317,7 +322,13 @@ class SendService {
             using let response = await session
                 .Node
                 .Api
-                .JsonAsync("wallet/send", writer -> writer.WriteRawValue(pending.Body, true), ct, pending.Key, true)
+                .JsonAsync(
+                SendPath(pending.Body),
+                writer -> writer.WriteRawValue(pending.Body, true),
+                ct,
+                pending.Key,
+                true
+            )
             let root = response.RootElement
             let txid = NodeJson.Text(root, "txid")
             if txid.Length == 0 || NodeJson.Flag(root, "dry_run") {
@@ -407,7 +418,134 @@ class SendService {
         }
     }
 
+    async func EstimatePreparationAsync(ct CancellationToken) SendEstimate {
+        let address = session.Snapshot.Address
+        let others = [7]WalletRecipient
+        for index in 0 ... others.Length {
+            others[index] = WalletRecipient{Address: address, Amount: 1}
+        }
+        let maximum = await MaximumAsync(others, address, "", ct)
+        let amount = maximum + uint64(others.Length)
+        let recipients = [8]WalletRecipient
+        for index in 0 ... recipients.Length {
+            recipients[index] = WalletRecipient{
+                Address: address,
+                Amount: amount / 8 + (index == 0 ? amount % 8: uint64(0))
+            }
+        }
+        return await EstimateAsync(recipients, ct)
+    }
+
+    async func EstimateBodyAsync(body string, ct CancellationToken) JsonDocument {
+        using let request = JsonDocument.Parse(body)
+        return await session
+            .Node
+            .Api
+            .JsonAsync(
+            SendPath(body),
+            writer -> {
+                writer.WriteStartObject()
+                for property in request.RootElement.EnumerateObject() {
+                    if property.Name != "dry_run" {
+                        property.WriteTo(writer)
+                    }
+                }
+                writer.WriteBoolean("dry_run", true)
+                writer.WriteEndObject()
+            },
+            ct
+        )
+    }
+
+    async func SplitChangeAsync(body string, ct CancellationToken) string {
+        using let estimate = await EstimateBodyAsync(body, ct)
+        let root = estimate.RootElement
+        if NodeJson.Number(root, "change") < 400000000 {
+            return body
+        }
+        using let owned = await session.Node.Api.JsonAsync("wallet/outputs", ct: ct)
+        let outputs = owned
+            .RootElement
+            .GetProperty("outputs")
+            .EnumerateArray()
+            .Where(output -> NodeJson.Text(output, "status") == "unspent")
+            .OrderByDescending(output -> NodeJson.Number(output, "amount"))
+            .ToArray()
+        if outputs.Length - int32(NodeJson.Number(root, "input_count")) >= 4 {
+            return body
+        }
+        using let request = JsonDocument.Parse(body)
+        let recipients = request.RootElement.GetProperty("recipients")
+        var amount uint64 = 0
+        for recipient in recipients.EnumerateArray() {
+            amount += NodeJson.Number(recipient, "amount")
+        }
+        var count int32 = 0
+        var total uint64 = 0
+        let needed = amount + NodeJson.Number(root, "fee")
+        while count < outputs.Length && total < needed && count < 256 {
+            total += NodeJson.Number(outputs[count], "amount")
+            count++
+        }
+        if outputs.Length - count >= 4 {
+            return body
+        }
+        using let probe = await session
+            .Node
+            .Api
+            .JsonAsync(
+            "wallet/send/advanced",
+            writer -> {
+                writer.WriteStartObject()
+                writer.WriteBoolean("dry_run", true)
+                writer.WriteNumber("change_split", 4)
+                WriteInputs(writer, outputs, count)
+                writer.WriteStartArray("recipients")
+                for recipient in recipients.EnumerateArray() {
+                    writer.WriteStartObject()
+                    writer.WriteString("address", NodeJson.Text(recipient, "address"))
+                    writer.WriteNumber("amount", 1)
+                    writer.WriteEndObject()
+                }
+                writer.WriteEndArray()
+                writer.WriteEndObject()
+            },
+            ct
+        )
+        let fee = NodeJson.Number(probe.RootElement, "fee")
+        if total < amount || total - amount < fee || total - amount - fee < 400000000 {
+            return body
+        }
+        using let stream = MemoryStream()
+        using let writer = Utf8JsonWriter(stream)
+        writer.WriteStartObject()
+        writer.WriteBoolean("dry_run", false)
+        writer.WriteNumber("change_split", 4)
+        WriteInputs(writer, outputs, count)
+        writer.WritePropertyName("recipients")
+        recipients.WriteTo(writer)
+        writer.WriteEndObject()
+        writer.Flush()
+        return Encoding.UTF8.GetString(stream.GetBuffer(), 0, int32(stream.Length))
+    }
+
     shared {
+        func SendPath(body string) string {
+            using let request = JsonDocument.Parse(body)
+            return request.RootElement.TryGetProperty("inputs", out _) ? "wallet/send/advanced": "wallet/send"
+        }
+
+        private func WriteInputs(writer Utf8JsonWriter, outputs[]JsonElement, count int32) {
+            writer.WriteStartArray("inputs")
+            for index in 0 ... count {
+                writer.WriteStartObject()
+                writer.WriteString("txid", NodeJson.Text(outputs[index], "txid"))
+                writer.WriteNumber("output_index", NodeJson.Number(outputs[index], "output_index"))
+                writer.WriteEndObject()
+            }
+            writer.WriteEndArray()
+        }
+
         private func WriteSend(writer Utf8JsonWriter, recipients[]WalletRecipient, dryRun bool) {
             writer.WriteStartObject()
             writer.WriteBoolean("dry_run", dryRun)

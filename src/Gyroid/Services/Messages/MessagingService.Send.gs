@@ -6,6 +6,7 @@ import System
 import System.Collections.Generic
 import System.IO
 import System.Linq
+import System.Text
 import System.Text.Json
 import System.Threading
 
@@ -185,7 +186,11 @@ partial class MessagingService {
                 using let writer = Utf8JsonWriter(stream)
                 WriteRecipients(writer, prepared)
                 writer.Flush()
-                payload = stream.ToArray()
+                let body = await session.Send.SplitChangeAsync(
+                    Encoding.UTF8.GetString(stream.GetBuffer(), 0, int32(stream.Length)),
+                    ct
+                )
+                payload = Encoding.UTF8.GetBytes(body)
                 if message != nil {
                     message.Outputs = prepared.Estimate.Outputs
                     message.SendPayload = payload
@@ -195,7 +200,7 @@ partial class MessagingService {
                 return
             }
             using let sent = await client.JsonAsync(
-                "wallet/send",
+                SendService.SendPath(Encoding.UTF8.GetString(payload)),
                 writer -> writer.WriteRawValue(ReadOnlySpan[uint8](payload), true),
                 ct,
                 message?.IdempotencyKey ?? Guid.NewGuid().ToString("N"),

@@ -11,6 +11,7 @@ class SendEstimate {
     let Change uint64
     let Total uint64
     let InputCount int32
+    var Body string = ""
 
     init(recipients[]WalletRecipient, handles[]string, fee uint64, change uint64, inputCount int32) {
         Recipients = recipients

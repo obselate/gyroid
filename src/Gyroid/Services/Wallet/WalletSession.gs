@@ -990,6 +990,7 @@ class WalletSession : IDisposable {
                 }
             }
             let sends = await History.ReadSendsAsync(ct)
+            using let owned = await Node.Api.JsonAsync("wallet/outputs", ct: ct)
             let root = balance.RootElement
             let change = NodeJson.OptionalNumber(root, "pending_unconfirmed") ?? uint64(0)
             let amounts = WalletBalance{
@@ -1001,6 +1002,7 @@ class WalletSession : IDisposable {
                 Pending: NodeJson.OptionalNumber(root, "pending") + change,
                 Unconfirmed: change,
                 Outputs: NodeJson.OptionalNumber(root, "outputs_total") ?? uint64(0),
+                ReadyOutputs: NodeJson.Number(owned.RootElement, "unspent"),
                 MemoErrors: NodeJson.OptionalNumber(root, "memo_decrypt_failures") ?? uint64(0)
             }
             let outputs = await History.ReloadAsync(ct)
