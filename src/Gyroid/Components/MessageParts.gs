@@ -228,7 +228,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         input.OnDraft("")
         let animate = input.Ui.Actions.playbackActive()
         if animate {
-            arrow.To(Point{X: 0, Y: -36}, Motion.Tween(0.16, Easing.EaseIn))
+            arrow.To(Point{X: 0, Y: -36}, Motion.Tween(160, Easing.EaseIn))
         } else {
             arrow.Set(Point{X: 0, Y: -36})
         }
@@ -244,7 +244,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 ready = false
                 arrow.Set(Point{X: 0, Y: 36})
                 if animate {
-                    fill.To(0, Motion.Tween(0.2, Easing.Linear))
+                    fill.To(0, Motion.Tween(200, Easing.Linear))
                 } else {
                     fill.Set(0)
                 }
@@ -294,9 +294,9 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
             ready = hasText
             arrow.To(
                 Point{X: 0, Y: hasText ? 0.0: 36.0},
-                Motion.Tween(hasText ? 0.18: 0.14, hasText ? Easing.EaseOut: Easing.EaseIn)
+                Motion.Tween(hasText ? 180.0: 140.0, hasText ? Easing.EaseOut: Easing.EaseIn)
             )
-            fill.To(hasText ? 1.0: 0.0, Motion.Tween(hasText ? 0.18: 0.14, Easing.Linear))
+            fill.To(hasText ? 1.0: 0.0, Motion.Tween(hasText ? 180.0: 140.0, Easing.Linear))
         }
         let send Action = () -> Send(input, enabled)
         let rows = Math.Clamp(
