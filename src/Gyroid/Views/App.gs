@@ -19,6 +19,7 @@ enum AppPage {
     Send,
     Receive,
     Transactions,
+    Messages,
     Tools,
     Contacts,
     Mining,
@@ -246,6 +247,7 @@ partial class App : Cell {
         ClearSeed()
         sendRows.Clear()
         wallet.Changed = nil
+        messageToastTimer?.Dispose()
     }
 
     private func Touch() {
@@ -308,6 +310,7 @@ partial class App : Cell {
     private func Sync() {
         let node = wallet.Node.Status
         let snapshot = wallet.Snapshot
+        ObserveMessages()
         if snapshot.State != WalletState.Unlocked {
             ClearSeed()
             toolsState.Report = nil
@@ -428,6 +431,12 @@ partial class App : Cell {
 
     private func Open(target AppPage) {
         upgradeShown = false
+        if target != AppPage.Messages && !messageDrawer {
+            wallet.Messages.ClearSelection()
+        }
+        if target == AppPage.Messages {
+            LoadContacts()
+        }
         if target != AppPage.Seed {
             ClearSeed()
         }
@@ -660,7 +669,8 @@ partial class App : Cell {
             Language: ui.Strings.Language,
             Decode: ui.Actions.Progress("page"),
             Width: width,
-            OnReceive: openReceive
+            OnReceive: openReceive,
+            OnMessage: OpenMessage
         }
     )
 
@@ -799,6 +809,8 @@ partial class App : Cell {
             )
         } else if page == AppPage.Transactions {
             HistoryView(snapshot)
+        } else if page == AppPage.Messages {
+            MessagesView(false)
         } else if page == AppPage.Network {
             Cell.Mount[NetworkInput, NetworkPage](
                 "network",
@@ -924,6 +936,7 @@ partial class App : Cell {
         let cardWidth = switch page {
             case AppPage.Overview: span
             case AppPage.Transactions: span
+            case AppPage.Messages: span
             case AppPage.Network: span
             case AppPage.Sync: 760.0
             case AppPage.Settings: 1004.0
@@ -975,6 +988,7 @@ partial class App : Cell {
                 case AppPage.Send: "Send"
                 case AppPage.Receive: "Receive"
                 case AppPage.Transactions: "Transactions"
+                case AppPage.Messages: "Messages"
                 case AppPage.Tools: "Tools"
                 case AppPage.Contacts: "Contacts"
                 case AppPage.Mining: "Mining"
@@ -1020,6 +1034,7 @@ partial class App : Cell {
         }
         if page == AppPage.Overview ||
             page == AppPage.Transactions ||
+            page == AppPage.Messages ||
             page == AppPage.Mining ||
             page == AppPage.Network {
             content.Key = "content-stage"
@@ -1051,7 +1066,10 @@ partial class App : Cell {
         if WalletAvailable() {
             main.Padding = 0
             main.Width = Percent(100)
-            if page != AppPage.Transactions && page != AppPage.Overview && page != AppPage.Network {
+            if page != AppPage.Transactions &&
+                page != AppPage.Messages &&
+                page != AppPage.Overview &&
+                page != AppPage.Network {
                 main.MaxWidth = 1400
             }
             frame.Padding = Edges{Left: 14, Right: 20, Bottom: 20}
@@ -1063,6 +1081,9 @@ partial class App : Cell {
         }
         root.Add(frame)
         if WalletAvailable() {
+            if page != AppPage.Messages {
+                root.Add(MessageOverlay())
+            }
             if confirmPendingSend {
                 root.Add(ConfirmPendingSend())
             }

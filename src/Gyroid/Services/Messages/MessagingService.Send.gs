@@ -187,6 +187,7 @@ partial class MessagingService {
                 writer.Flush()
                 payload = stream.ToArray()
                 if message != nil {
+                    message.Outputs = prepared.Estimate.Outputs
                     message.SendPayload = payload
                 }
             }
@@ -202,6 +203,7 @@ partial class MessagingService {
             )
             if message != nil {
                 message.Txid = NodeJson.Text(sent.RootElement, "txid")
+                message.FeeAtomic = int64(NodeJson.Number(sent.RootElement, "fee"))
                 message.State = MessageState.Pending
                 message.EtaSeconds = AverageBlockSeconds
             }

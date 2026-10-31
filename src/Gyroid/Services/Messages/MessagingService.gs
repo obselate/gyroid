@@ -254,6 +254,29 @@ partial class MessagingService {
         return conversation
     }
 
+    async func OpenConversation(
+        name string,
+        recipient string,
+        ct CancellationToken = default(CancellationToken)
+    ) Conversation {
+        await syncGate.WaitAsync(ct)
+        try {
+            await session.BeginAsync(ct, false)
+            try {
+                let local = store ?? throw WalletException("Load a wallet first")
+                let conversation = await ResolveConversation(name, recipient, ct)
+                local.Removed.TryRemove(conversation.Id, out _)
+                SaveConversation(conversation)
+                local.Save()
+                return conversations.Find(item -> item.Id == conversation.Id) ?? conversation
+            } finally {
+                session.End()
+            }
+        } finally {
+            syncGate.Release()
+        }
+    }
+
     async func AddContact(
         name string,
         recipient string,
@@ -320,6 +343,10 @@ partial class MessagingService {
     async func Select(conversation Conversation, ct CancellationToken = default(CancellationToken)) {
         selected = conversation.Id
         await MarkRead(conversation, ct)
+    }
+
+    func ClearSelection() {
+        selected = ""
     }
 
     async func MarkRead(conversation Conversation, ct CancellationToken = default(CancellationToken)) {

@@ -35,6 +35,7 @@ data struct HistoryInput {
     var Decode float64
     var Width float64
     var OnReceive Action
+    var OnMessage Action[string]
 }
 
 enum HistoryRowKind {
@@ -1038,15 +1039,7 @@ class HistoryPage : Cell[HistoryInput] {
         }
         panel.Add(values)
         if row.Memo.Length > 0 && row.Recipients.Length <= 1 {
-            panel.Add(
-                Container{
-                    Gap: 3,
-                    MinWidth: 0,
-                    Overflow: Overflow.Hidden,
-                    Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, ""),
-                    Label(ui, Hidden(ui.Privacy, SafeText(row.Memo, 512)), 13, ui.Ink, "")
-                }
-            )
+            panel.Add(MemoSection(row, row.Memo))
         }
         if row.Recipients.Length > 1 {
             for entry in row.Recipients {
@@ -1056,21 +1049,59 @@ class HistoryPage : Cell[HistoryInput] {
                     Figure(ui, "amount", Amount(ui.Privacy, entry.Amount) + " BNT", ui.Ink, 13, compact: true)
                 }
                 if entry.Memo.Length > 0 {
-                    details.Add(
-                        Container{
-                            Gap: 3,
-                            MinWidth: 0,
-                            Overflow: Overflow.Hidden,
-                            Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, ""),
-                            Label(ui, Hidden(ui.Privacy, SafeText(entry.Memo, 512)), 13, ui.Ink, "")
-                        }
-                    )
+                    details.Add(MemoSection(row, entry.Memo))
                 }
                 panel.Add(details)
             }
         }
         panel.Add(Block("transaction", row.TxId, Grouped(row.TxId), ui.Body))
         return panel
+    }
+
+    private func MemoSection(row HistoryRow, memo string) Blob {
+        let ui = current.Ui
+        let preview = Hidden(ui.Privacy, MessagesPage.Preview(SafeText(memo, 512)))
+        let label = Label(ui, preview, 13, ui.Ink, "")
+        let section = Container{
+            Gap: 3,
+            MinWidth: 0,
+            Overflow: Overflow.Hidden,
+            Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, "")
+        }
+        if current.Session.Messages.Lookup(row.TxId) != nil {
+            let button = Goo
+                .Button{
+                MinWidth: 0,
+                Padding: 8,
+                BorderRadius: 6,
+                BackgroundColor: ui.Rule,
+                Hover: Style{BackgroundColor: ui.Edge},
+                Focus: Theme.Read().FocusStyle,
+                Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: preview},
+                OnClick: () -> current.OnMessage(row.TxId),
+                label
+            }
+            WidgetKeyBindings.BindActivation(button)
+            section.Add(button)
+        } else {
+            section.Add(
+                Container{
+                    MinWidth: 0,
+                    MaxHeight: 100,
+                    OverflowY: Overflow.Scroll,
+                    ScrollbarY: Theme.Read().Scrollbar,
+                    Text{
+                        Content: Hidden(ui.Privacy, SafeText(memo, 512)),
+                        FontFamily: ui.Font,
+                        FontSize: 13,
+                        Color: ui.Ink,
+                        TextWrap: TextWrap.Wrap,
+                        MinWidth: 0
+                    }
+                }
+            )
+        }
+        return section
     }
 
     private func Block(label string, value string, text string, color Color) Blob {

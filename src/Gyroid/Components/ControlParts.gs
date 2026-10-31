@@ -216,19 +216,7 @@ class ControlParts {
             } else {
                 ui.Dim
             }
-            let track = PathBuilder(0, 0, 18, 18)
-            let arc = PathBuilder(0, 0, 18, 18)
-            for step in 0 ... 33 {
-                let turn = step / 32.0 * Math.PI * 2
-                let sweep = turn * share - Math.PI / 2
-                if step == 0 {
-                    track.MoveTo(16, 9)
-                    arc.MoveTo(9 + 7 * Math.Cos(sweep), 9 + 7 * Math.Sin(sweep))
-                } else {
-                    track.LineTo(9 + 7 * Math.Cos(turn), 9 + 7 * Math.Sin(turn))
-                    arc.LineTo(9 + 7 * Math.Cos(sweep), 9 + 7 * Math.Sin(sweep))
-                }
-            }
+            let ring = Ring(share, color, Color.Parse("#1f1f1f"))
             let meter = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
@@ -242,31 +230,47 @@ class ControlParts {
             if counted && share >= 0.75 {
                 meter.Add(Label(ui, (limit - used).ToString(), 11.5, color, ""))
             }
-            meter.Add(
-                Container{
+            meter.Add(ring)
+            return meter
+        }
+
+        func Ring(share float64, color Color, trackColor Color) Blob {
+            let track = PathBuilder(0, 0, 18, 18)
+            let arc = PathBuilder(0, 0, 18, 18)
+            for step in 0 ... 33 {
+                let turn = step / 32.0 * Math.PI * 2
+                let sweep = turn * Math.Clamp(share, 0.0, 1.0) - Math.PI / 2
+                if step == 0 {
+                    track.MoveTo(16, 9)
+                    arc.MoveTo(9 + 7 * Math.Cos(sweep), 9 + 7 * Math.Sin(sweep))
+                } else {
+                    track.LineTo(9 + 7 * Math.Cos(turn), 9 + 7 * Math.Sin(turn))
+                    arc.LineTo(9 + 7 * Math.Cos(sweep), 9 + 7 * Math.Sin(sweep))
+                }
+            }
+            return Container{
+                Width: 18,
+                Height: 18,
+                FlexShrink: 0,
+                Shape{
+                    Position: PositionType.Absolute,
                     Width: 18,
                     Height: 18,
-                    Shape{
-                        Position: PositionType.Absolute,
-                        Width: 18,
-                        Height: 18,
-                        Path: track.Build(),
-                        Fit: ShapeFit.Fill,
-                        BorderWidth: 2,
-                        BorderColor: Color.Parse("#1f1f1f")
-                    },
-                    Shape{
-                        Position: PositionType.Absolute,
-                        Width: 18,
-                        Height: 18,
-                        Path: arc.Build(),
-                        Fit: ShapeFit.Fill,
-                        BorderWidth: 2,
-                        BorderColor: used > 0 ? color: Color.Transparent
-                    }
+                    Path: track.Build(),
+                    Fit: ShapeFit.Fill,
+                    BorderWidth: 2,
+                    BorderColor: trackColor
+                },
+                Shape{
+                    Position: PositionType.Absolute,
+                    Width: 18,
+                    Height: 18,
+                    Path: arc.Build(),
+                    Fit: ShapeFit.Fill,
+                    BorderWidth: 2,
+                    BorderColor: share > 0 ? color: Color.Transparent
                 }
-            )
-            return meter
+            }
         }
     }
 }

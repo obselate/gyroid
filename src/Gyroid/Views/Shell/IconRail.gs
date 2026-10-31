@@ -10,7 +10,14 @@ import System
 import System.Linq
 
 partial class App {
-    private func RailItem(label string, icon string, selected bool, disabled bool, action Action) Blob {
+    private func RailItem(
+        label string,
+        icon string,
+        selected bool,
+        disabled bool,
+        action Action,
+        unread int32 = 0
+    ) Blob {
         let color = if disabled {
             ui.Dim
         } else if selected {
@@ -38,7 +45,7 @@ partial class App {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
-                Name: ui.Strings.Get(label),
+                Name: ui.Strings.Get(label) + (unread > 0 ? " " + unread.ToString(): ""),
                 Selected: selected
             },
             OnClick: action,
@@ -46,6 +53,19 @@ partial class App {
             Label(ui, ui.Strings.Get(label), 11, color, "")
         }
         WidgetKeyBindings.BindActivation(button)
+        if unread > 0 {
+            button.Add(
+                Container{
+                    Position: PositionType.Absolute,
+                    Right: 4,
+                    Top: 2,
+                    Padding: Edges{Left: 3, Right: 3},
+                    BorderRadius: 3,
+                    BackgroundColor: ui.Lime,
+                    Label(ui, unread.ToString(), 9, ui.Black, "")
+                }
+            )
+        }
         return button
     }
 
@@ -64,6 +84,16 @@ partial class App {
         rail.Add(RailItem("receive", "south_west", page == AppPage.Receive, blocked, () -> Navigate(AppPage.Receive)))
         rail.Add(
             RailItem("history", "schedule", page == AppPage.Transactions, blocked, () -> Navigate(AppPage.Transactions))
+        )
+        rail.Add(
+            RailItem(
+                "messages",
+                "chat_bubble",
+                page == AppPage.Messages,
+                blocked,
+                () -> Navigate(AppPage.Messages),
+                wallet.Messages.Conversations.Sum(item -> item.Unread)
+            )
         )
         rail.Add(RailItem("tools", "tune", page == AppPage.Tools, blocked, () -> Navigate(AppPage.Tools)))
         rail.Add(RailItem("contacts", "person", page == AppPage.Contacts, blocked, () -> Navigate(AppPage.Contacts)))
