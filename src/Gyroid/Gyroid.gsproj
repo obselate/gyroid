@@ -27,4 +27,7 @@
     <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="[3.1.0]" />
     <PackageReference Include="NSec.Cryptography" Version="[26.4.0]" />
   </ItemGroup>
+  <ItemGroup>
+    <GooMaterialIcon Include="account_balance_wallet;add;alternate_email;arrow_back;build;cancel;check;check_circle;chevron_left;chevron_right;close;content_copy;delete;description;diamond;dns;download;draft;edit;expand_less;expand_more;folder;grid_view;hardware;info;key;lock;menu_book;north_east;notes;person;person_add;play_arrow;public;replay;schedule;settings;share;south_west;stop;sync;tune;verified;visibility;visibility_off;warning" />
+  </ItemGroup>
 </Project>
