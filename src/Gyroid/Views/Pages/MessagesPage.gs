@@ -511,6 +511,9 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         let title = group ? "New group": remove ? "Remove conversation": contact ? "Add contact": "New conversation"
         let content = Container{Gap: 12, MinHeight: 0}
         let close Action = () -> {
+            if busy {
+                return
+            }
             dialog = ""
             Rebuild()
         }
@@ -523,6 +526,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                     TextField{
                         Value: name,
                         Controlled: true,
+                        Disabled: busy,
                         Placeholder: ui.Strings.Get("Name"),
                         AccessibilityName: ui.Strings.Get("Name"),
                         OnChange: value -> {
@@ -539,6 +543,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                         TextField{
                             Value: address,
                             Controlled: true,
+                            Disabled: busy,
                             Password: ui.Privacy,
                             Placeholder: ui.Strings.Get("Address"),
                             AccessibilityName: ui.Strings.Get("Address"),
@@ -580,7 +585,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                                 }
                                 Rebuild()
                             },
-                            group && !chosen && members.Count >= cap
+                            busy || group && !chosen && members.Count >= cap
                         )
                     )
                 }
@@ -637,21 +642,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                             }
                         )
                     } else if group {
-                        Run(
-                            input,
-                            ct -> input.Session.Messages.CreateGroup(name, members, ct),
-                            () -> {
-                                let created = input
-                                    .Session
-                                    .Messages
-                                    .Conversations
-                                    .LastOrDefault(item -> item.IsGroup && item.Title == name.Trim())
-                                if created != nil {
-                                    Select(input, created)
-                                }
-                                close.Invoke()
-                            }
-                        )
+                        Run(input, ct -> CreateGroup(input, ct), close)
                     } else if contact {
                         Run(
                             input,
@@ -677,6 +668,11 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
 
     private async func OpenConversation(input MessagesInput, ct CancellationToken) {
         let conversation = await input.Session.Messages.OpenConversation(name, address, ct)
+        input.Ui.Actions.window?.TryPost(() -> Select(input, conversation))
+    }
+
+    private async func CreateGroup(input MessagesInput, ct CancellationToken) {
+        let conversation = await input.Session.Messages.CreateGroup(name, members, ct)
         input.Ui.Actions.window?.TryPost(() -> Select(input, conversation))
     }
 

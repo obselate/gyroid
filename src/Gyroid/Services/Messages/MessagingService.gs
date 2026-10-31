@@ -322,22 +322,33 @@ partial class MessagingService {
         }
     }
 
-    async func CreateGroup(name string, members List[string], ct CancellationToken = default(CancellationToken)) {
+    async func CreateGroup(
+        name string,
+        members List[string],
+        ct CancellationToken = default(CancellationToken)
+    ) Conversation {
+        let version = generation
         let conversation = Conversation{
             Id: Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(8)),
             Title: name.Trim(),
             IsGroup: true
         }
         for member in members {
-            Address.Decode(member, Network)
-            if member != OwnAddress && !conversation.Members.Contains(member) {
-                conversation.Members.Add(member)
+            var recipient = member
+            if member.StartsWith("$", StringComparison.Ordinal) || member.StartsWith("@", StringComparison.Ordinal) {
+                let resolved = await ResolveConversation("", member, ct)
+                recipient = resolved.Id
+            }
+            Address.Decode(recipient, Network)
+            if recipient != OwnAddress && !conversation.Members.Contains(recipient) {
+                conversation.Members.Add(recipient)
             }
         }
         if conversation.Members.Count == 0 {
             throw WalletException("A group requires another member")
         }
-        await Transmit(conversation, "", true, nil, generation, ct)
+        await Transmit(conversation, "", true, nil, version, ct)
+        return conversations.Find(item -> item.Id == conversation.Id) ?? conversation
     }
 
     async func Select(conversation Conversation, ct CancellationToken = default(CancellationToken)) {
