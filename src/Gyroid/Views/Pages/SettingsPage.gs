@@ -848,8 +848,6 @@ class SettingsStartup : Cell, IDisposable {
     private var context SettingsPageInput
     private var draft WalletSettings?
     private var source WalletSettings?
-    private var listenIssue string = ""
-    private var programIssue string = ""
     private var applyPending bool
     private var generation int32
     private var validated WalletSettings?
@@ -869,8 +867,6 @@ class SettingsStartup : Cell, IDisposable {
             source = settings
             draft = settings.Copy()
             applyPending = false
-            listenIssue = ""
-            programIssue = ""
         }
         let next = SettingsStartupInput{
             Language: input.Language,
@@ -979,12 +975,8 @@ class SettingsStartup : Cell, IDisposable {
                 "Node program",
                 value.BinaryPath,
                 FileDialogKind.OpenFile,
-                text -> {
-                    value.BinaryPath = text
-                    programIssue = ""
-                },
-                "BINARY",
-                programIssue
+                text -> value.BinaryPath = text,
+                "BINARY"
             )
         }
         if state.ListenVisible {
@@ -994,10 +986,8 @@ class SettingsStartup : Cell, IDisposable {
                     value.ListenAddress,
                     text -> {
                         value.ListenAddress = text
-                        listenIssue = ""
                         Rebuild()
                     },
-                    issue: listenIssue,
                     disabled: Pinned("LISTEN")
                 )
             )
@@ -1013,8 +1003,7 @@ class SettingsStartup : Cell, IDisposable {
         value string,
         kind FileDialogKind,
         changed Action[string],
-        variable string,
-        issue string = ""
+        variable string
     ) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.FlexStart,
@@ -1027,7 +1016,6 @@ class SettingsStartup : Cell, IDisposable {
                     changed.Invoke(text)
                     Rebuild()
                 },
-                issue: issue,
                 disabled: Pinned(variable)
             )
         ),
@@ -1087,7 +1075,10 @@ class SettingsStartup : Cell, IDisposable {
         }
         owner.TryPost(
             () -> {
-                if request != generation || draft == nil || value.StartupDiffers(draft) {
+                guard let current = draft else {
+                    return
+                }
+                if request != generation || value.StartupDiffers(current) {
                     return
                 }
                 validationIssue = issue
@@ -2290,6 +2281,7 @@ class SettingsDialogs : Cell, IDisposable {
         let request = generation
         let session = input.Session
         fileIssue = ""
+        Rebuild()
         input.Ui.Actions.Run(ct -> ExportKeys(session, owner, path, copy, request, ct))
     }
 
@@ -2627,6 +2619,8 @@ class SettingsDialogs : Cell, IDisposable {
                 creating = false
                 if issue == "Wrong wallet password" {
                     currentPasswordIssue = issue
+                } else if issue == "Wallet file already exists. Choose a different name" {
+                    filenameIssue = issue
                 } else {
                     fileIssue = issue
                 }

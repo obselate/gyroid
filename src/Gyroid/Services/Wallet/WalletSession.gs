@@ -393,7 +393,9 @@ class WalletSession : IDisposable {
 
     async func ReadSettingsChainAsync(value WalletSettings, ct CancellationToken) SettingsChainResult {
         let data = DirectoryInfo(value.DataDirectory)
-        var result = SettingsChainResult{}
+        var size int64
+        var wallets int32
+        var local uint64
         if data.Exists {
             for file in data.EnumerateFiles(
                 "*",
@@ -404,30 +406,38 @@ class WalletSession : IDisposable {
                 }
             ) {
                 ct.ThrowIfCancellationRequested()
-                result.Size += file.Length
+                size += file.Length
             }
             try {
-                result.Wallets = Library.DataWallets().Count
+                wallets = Library.DataWallets().Count
             } catch (failure Exception) {
-                result.Wallets = -1
+                wallets = -1
             }
             let saved = FileInfo(Path.Combine(data.FullName, "checkpoints.dat"))
             if saved.Exists && saved.Length <= 1048576 {
-                result.Local = Checkpoints.Height(Checkpoints.Parse(File.ReadAllBytes(saved.FullName)))
+                local = Checkpoints.Height(Checkpoints.Parse(File.ReadAllBytes(saved.FullName)))
             }
         }
-        result.Free = DriveInfo(
+        let free = DriveInfo(
             OperatingSystem.IsWindows() ? Path.GetPathRoot(data.FullName) ?? data.FullName:
             data.Exists ? data.FullName: data.Parent?.FullName ?? "/"
         ).AvailableFreeSpace
-        result.Trusted = value.Network == "mainnet" ?
+        let trusted = value.Network == "mainnet" ?
         Checkpoints.Height(Checkpoints.Parse(Resources.Resource("Gyroid.Checkpoints.Mainnet"))): uint64(0)
+        var autoSave bool?
         try {
-            result.AutoSave = await CheckpointAutoSaveAsync(nil, ct)
+            autoSave = await CheckpointAutoSaveAsync(nil, ct)
         } catch (cancelled OperationCanceledException) {
             throw cancelled
         } catch (failure Exception) { }
-        return result
+        return SettingsChainResult{
+            Size: size,
+            Wallets: wallets,
+            Free: free,
+            Trusted: trusted,
+            Local: local,
+            AutoSave: autoSave
+        }
     }
 
     async func ApplySettingsAsync(value WalletSettings, ct CancellationToken = default(CancellationToken)) {
