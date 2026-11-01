@@ -2,6 +2,8 @@ package Gyroid.Views
 
 import Goo
 import Goo.Widgets
+import Goo.Widgets.Layout
+import Gyroid.Components
 import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Services.WalletText
