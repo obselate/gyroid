@@ -219,6 +219,7 @@ class HistoryPage : Cell, IDisposable {
         let changed = !Object.ReferenceEquals(current.Snapshot, input.Snapshot) ||
             current.Tip != input.Tip ||
             current.SelectionTx != input.SelectionTx ||
+            current.SelectionRevision != input.SelectionRevision ||
             !next.Equals(identity) || !nextSource.Equals(source)
         let resumePagination = loading && !nextSource.Equals(source)
         let pendingTimes = nextSource.Equals(source) ? Array.Empty[uint64](): requested.Except(times.Keys).ToArray()
@@ -1722,7 +1723,7 @@ class HistoryTransactions : Cell, IDisposable {
             )
             recipients.Height = Math.Min(
                 228.0,
-                row.Recipients.Sum((entry HistoryRecipient) -> entry.Memo.Length > 0 ? 228.0: 76.0)
+                row.Recipients.Sum((entry HistoryRecipient) -> entry.Memo.Length > 0 ? 118.0: 76.0)
             )
             recipients.MinHeight = 0
             panel.Add(ListParts.Viewport(recipients, grow: false))
