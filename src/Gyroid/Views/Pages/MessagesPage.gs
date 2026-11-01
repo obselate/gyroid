@@ -774,6 +774,9 @@ class MessageThread : Cell, IDisposable {
         input = next
         if jump {
             jumpRequested = true
+            if next.MessageId.Length > 0 {
+                following = false
+            }
             highlight = next.MessageId
             highlightTimer?.Dispose()
             if highlight.Length > 0 {
