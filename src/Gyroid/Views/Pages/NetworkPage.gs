@@ -97,6 +97,7 @@ class NetworkPage : Cell, IDisposable {
             request = nil
             loaded = false
             loading = false
+            failed = false
             report = NetworkReport()
         }
         RequestReport()
@@ -212,10 +213,11 @@ class NetworkPage : Cell, IDisposable {
             while !token.IsCancellationRequested {
                 var result NetworkReport? = nil
                 try {
-                    result = NodeText.Prepare(await node.ReadNetworkAsync(token), history, sends, age)
-                    if Enumerable.SequenceEqual[NetworkBlock](previous.Blocks, result.Blocks) {
-                        result.Blocks = previous.Blocks
+                    let prepared = NodeText.Prepare(await node.ReadNetworkAsync(token), history, sends, age)
+                    if Enumerable.SequenceEqual[NetworkBlock](previous.Blocks, prepared.Blocks) {
+                        prepared.Blocks = previous.Blocks
                     }
+                    result = prepared
                 } catch (failure Exception) { }
                 if token.IsCancellationRequested {
                     return
