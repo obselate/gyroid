@@ -180,8 +180,8 @@ class NodeSupervisor : IDisposable {
         start.Environment["BLOCKNET_P2P_KEY"] = Path.Combine(settings.DataDirectory, "identity.key")
         start.Environment.Remove("BLOCKNET_VIEW_PRIV")
         stop.CancelAfter(TimeSpan.FromSeconds(60))
-        var stdout Task = Task.CompletedTask
-        var stderr Task = Task.CompletedTask
+        let drained = TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        var draining = false
         try {
             lock ownership {
                 ct.ThrowIfCancellationRequested()
@@ -210,8 +210,11 @@ class NodeSupervisor : IDisposable {
             if !OperatingSystem.IsWindows() {
                 owned.StandardInput.Close()
             }
-            stdout = ReadOutputAsync(owned.StandardOutput, owned)
-            stderr = ReadOutputAsync(owned.StandardError, owned)
+            let stdout = owned.StandardOutput
+            let stderr = owned.StandardError
+            let lifetime = shutdown.Token
+            go DrainOutput(stdout, stderr, owned, drained, lifetime)
+            draining = true
             owned.Exited += (_, _) -> {
                 if Object.ReferenceEquals(process, owned) && !disposed {
                     Exited?.Invoke()
@@ -219,7 +222,7 @@ class NodeSupervisor : IDisposable {
             }
             owned.EnableRaisingEvents = true
             if owned.HasExited {
-                await Task.WhenAll(stdout, stderr)
+                await drained.Task
                 throw WalletException(ExitError)
             }
             using let core = Process.GetProcessById(settings.OwnedProcessId)
@@ -237,11 +240,11 @@ class NodeSupervisor : IDisposable {
                 }
                 await Task.Delay(250, ct)
             }
-            await Task.WhenAll(stdout, stderr)
+            await drained.Task
             throw WalletException(ExitError)
         } catch (error Exception) {
-            if process?.HasExited == true {
-                await Task.WhenAll(stdout, stderr)
+            if draining && process?.HasExited == true {
+                await drained.Task
             }
             let failure = ExitError
             Stop()
@@ -257,9 +260,32 @@ class NodeSupervisor : IDisposable {
         }
     }
 
-    private async func ReadOutputAsync(reader StreamReader, owned Process) {
+    private func DrainOutput(
+        stdout StreamReader,
+        stderr StreamReader,
+        owned Process,
+        drained TaskCompletionSource,
+        cancellation CancellationToken
+    ) {
         try {
-            while let line = await reader.ReadLineAsync() {
+            scope {
+                go ReadOutputAsync(stdout, owned, cancellation)
+                go ReadOutputAsync(stderr, owned, cancellation)
+            }
+        } catch (error Exception) {
+            lock ownership {
+                if Object.ReferenceEquals(process, owned) {
+                    output = "Core output could not be read: " + error.Message
+                }
+            }
+        } finally {
+            drained.TrySetResult()
+        }
+    }
+
+    private async func ReadOutputAsync(reader StreamReader, owned Process, cancellation CancellationToken) {
+        try {
+            while let line = await reader.ReadLineAsync(cancellation) {
                 if !string.IsNullOrWhiteSpace(line) {
                     lock ownership {
                         if Object.ReferenceEquals(process, owned) {
@@ -268,7 +294,8 @@ class NodeSupervisor : IDisposable {
                     }
                 }
             }
-        } catch (error IOException) { } catch (error ObjectDisposedException) { }
+        } catch (error IOException) { } catch (error ObjectDisposedException) {
+        } catch (error OperationCanceledException) when cancellation.IsCancellationRequested { }
     }
 
     private func UseInstallation(settings WalletSettings) {
