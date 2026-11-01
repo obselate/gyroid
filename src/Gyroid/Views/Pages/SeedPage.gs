@@ -188,7 +188,7 @@ class SeedPage : Cell, IDisposable {
             let chosen = await pending
             if chosen.Status == FileDialogStatus.Success && chosen.Paths.Count > 0 {
                 await keys.ExportSeedAsync(chosen.Paths[0], request, ct)
-                result = "Export complete"
+                result = "Saved"
             } else if chosen.Status != FileDialogStatus.Cancelled {
                 result = "File dialog unavailable"
             }
