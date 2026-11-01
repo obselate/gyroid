@@ -77,6 +77,7 @@ data struct ToolsHealthInput {
     var Region ToolsRegionInput
     var State ToolsState
     var Outputs uint64
+    var OnReport Action
 }
 
 data struct ToolsLockInput {
@@ -87,12 +88,19 @@ data struct ToolsLockInput {
 class ToolsPage : Cell {
     private let configurePrivacy Action[ToolsPrivacyRegion]
     private let configureHealth Action[ToolsHealthRegion]
+    private let reportChanged Action
     private var current ToolsInput
 
     init() {
+        reportChanged = () -> Rebuild()
         configurePrivacy = region -> region.Accept(current)
         configureHealth = region -> region.Accept(
-            ToolsHealthInput{Region: current.Region, State: current.State, Outputs: current.Outputs}
+            ToolsHealthInput{
+                Region: current.Region,
+                State: current.State,
+                Outputs: current.Outputs,
+                OnReport: reportChanged
+            }
         )
     }
 
@@ -117,6 +125,9 @@ class ToolsPage : Cell {
             items[index] = NavigationItem{Id: ids[index], Label: ui.Strings.Get(ids[index])}
         }
         let card = WalletParts.PageCard(ui, input.Width, input.Height)
+        if tab == "health" && (input.State.Report?.Stale.Length ?? 0) > 0 {
+            card.Height = Percent(100)
+        }
         card.Add(
             Tabs(
                 ui,
@@ -1433,7 +1444,7 @@ class ToolsHealthRegion : Cell, IDisposable {
     override func Build() Blob {
         let view = current
         let input = view.Region
-        let card = Container{Gap: AppTheme.Space16}
+        let card = Container{Gap: AppTheme.Space16, FlexGrow: 1, MinHeight: 0}
         let ui = input.Ui
         let compact = input.Compact
         let report = view.State.Report
@@ -1589,6 +1600,7 @@ class ToolsHealthRegion : Cell, IDisposable {
                 auditing = false
                 auditIssue = error
                 Rebuild()
+                input.OnReport()
             }
         }
         go AuditOutputs(session, window, token, publish)
