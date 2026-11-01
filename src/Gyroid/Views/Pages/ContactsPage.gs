@@ -43,11 +43,11 @@ class ContactDraft {
     public var Issue string = ""
 }
 
-class ContactsPage : Cell[ContactsInput], IDisposable {
+class ContactsPage : Cell, IDisposable {
     private var current ContactsInput
     private var rows[]ContactRow = []ContactRow{}
     private var draft ContactDraft = ContactDraft{}
-    private let rowKey Func[ContactRow, string] = row -> "contact-row-" + row.Name
+    private let rowKey Func[ContactRow, string]
     private let rowBuilder Func[ContactRow, Blob]
     private var generation int32
     private var disposed bool
@@ -55,6 +55,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
     private var issue string = ""
 
     init() {
+        rowKey = row -> "contact-row-" + row.Name
         rowBuilder = row -> Row(current, row.Name, row.Destination, row.Valid)
     }
 
@@ -135,7 +136,8 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
 
     private let listHandle ElementHandle = ElementHandle{}
 
-    protected override func Build(input ContactsInput) Blob {
+    override func Build() Blob {
+        let input = current
         let ui = input.Ui
         let card = WalletParts.PageCard(
             ui,
