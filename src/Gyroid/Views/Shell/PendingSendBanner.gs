@@ -6,7 +6,6 @@ import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
-import Gyroid.Models
 import System
 import System.Collections.Generic
 import System.Linq

@@ -2,24 +2,11 @@ package Gyroid.Views
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
 import Goo.Widgets.Feedback
-import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
-import Goo.Widgets.Layout
-import Goo.Widgets.Navigation
 import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Models
-import System
-import System.Collections.Generic
-import System.Diagnostics
-import System.IO
-import System.Linq
-import System.Numerics
-import System.Text
-import System.Threading.Tasks
 
 partial class App {
     private func Problem() Blob? {

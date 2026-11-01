@@ -183,3 +183,15 @@ data struct HistoryOverview {
     var Arrivals[]HistoryArrival
     var Activity[]HistoryActivity
 }
+
+data struct OverviewRow {
+    var Key string
+    var Arrival HistoryArrival
+    var Activity HistoryActivity
+    var IsArrival bool
+    var Privacy bool
+    var Wide bool
+    var Language string
+    var Hovering bool
+    var Expanded bool
+}

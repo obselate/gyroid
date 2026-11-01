@@ -458,7 +458,7 @@ partial class App : Cell, IDisposable {
         }
         retrySeed = () -> {
             if let buffer = seedPassword {
-                RevealSeed(buffer.ToArray(), false)
+                RevealSeed(buffer.ToArray())
             }
         }
         configureSeed = cell -> cell.Accept(
@@ -865,29 +865,19 @@ partial class App : Cell, IDisposable {
         retrySeed()
     }
 
-    private func RevealSeed(buffer[]char, fromWallet bool) {
+    private func RevealSeed(buffer[]char) {
         seedGeneration++
         let request = seedGeneration
         let identity = wallet.Settings.ActiveWallet
         let page = pageGeneration
-        Run(ct -> ShowSeed(buffer, fromWallet, request, identity, page, ct), nil, buffer)
+        Run(ct -> ShowSeed(buffer, request, identity, page, ct), nil, buffer)
     }
 
-    private async func ShowSeed(
-        buffer[]char,
-        fromWallet bool,
-        request int32,
-        identity string,
-        page int32,
-        ct CancellationToken
-    ) {
+    private async func ShowSeed(buffer[]char, request int32, identity string, page int32, ct CancellationToken) {
         var words[]char
         try {
             words = await wallet.Keys.RevealSeedAsync(buffer, ct)
         } catch (failure WalletException) {
-            if fromWallet {
-                throw failure
-            }
             let message = failure.Message
             window?.TryPost(
                 () -> {
@@ -923,7 +913,7 @@ partial class App : Cell, IDisposable {
                 }
                 ClearSeed()
                 seed = words
-                seedFromWallet = fromWallet
+                seedFromWallet = false
                 Open(AppPage.Seed)
             }
         ) != true {

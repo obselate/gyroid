@@ -7,7 +7,6 @@ import Gyroid.Components
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
 import Gyroid.Models
-import Gyroid.Services
 import Gyroid.Services.WalletText
 import System
 import System.Collections.Generic

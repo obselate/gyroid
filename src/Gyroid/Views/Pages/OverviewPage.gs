@@ -94,18 +94,6 @@ data struct OverviewRecentInput {
     var Hovering bool
 }
 
-data struct OverviewRow {
-    var Key string
-    var Arrival HistoryArrival
-    var Activity HistoryActivity
-    var IsArrival bool
-    var Privacy bool
-    var Wide bool
-    var Language string
-    var Hovering bool
-    var Expanded bool
-}
-
 data struct OverviewUpgradeInput {
     var Ui Presentation
     var Date string

@@ -1,7 +1,6 @@
 package Gyroid.Views
 
 import Goo
-import Gyroid.Services
 import System
 import System.Collections.Generic
 import System.Diagnostics

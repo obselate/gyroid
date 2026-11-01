@@ -2,10 +2,8 @@ package Gyroid.Views
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
 import Gyroid.Components
@@ -89,7 +87,6 @@ data struct SettingsNodeInput {
     var UpgradeDeadline string
     var State WalletState
     var Busy bool
-    var ViewHeight float64
 }
 
 data struct SettingsStartupInput {
@@ -641,8 +638,7 @@ class SettingsNode : Cell, IDisposable {
             UpgradeNotice: status.UpgradeNotice,
             UpgradeDeadline: status.UpgradeDeadline,
             State: input.Snapshot.State,
-            Busy: input.Busy,
-            ViewHeight: input.Height
+            Busy: input.Busy
         }
         if input.Section == "node" && next.Directory != directoryRead {
             generation++

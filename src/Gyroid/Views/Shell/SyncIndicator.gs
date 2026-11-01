@@ -1,14 +1,7 @@
 package Gyroid.Views
 
-import Goo
-import Goo.Widgets.Feedback
-import Goo.Widgets.Icons
-import Gyroid.Components.TextParts
 import Gyroid.Models
-import Gyroid.Services
 import System
-import System.IO
-import System.Linq
 
 partial class App {
     private func Phase() NodePhase {

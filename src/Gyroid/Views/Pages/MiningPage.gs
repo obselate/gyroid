@@ -1,7 +1,6 @@
 package Gyroid.Views
 
 import Goo
-import Goo.Widgets
 import Goo.Widgets.Icons
 import Gyroid.Components
 import Gyroid.Components.LayoutParts
