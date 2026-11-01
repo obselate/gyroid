@@ -98,18 +98,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     }
 
     private func Small(input ToolsInput, label string, primary bool, action Action) Blob ->
-    Button(
-        input.Ui,
-        label,
-        action,
-        input.Busy,
-        primary,
-        appearance: (primary ? AppTheme.PrimaryButton: AppTheme.Button) with{
-            Height = AppTheme.ControlCompact,
-            PaddingHorizontal = AppTheme.Space10,
-            FontSize = AppTheme.Type12
-        }
-    )
+    Button(input.Ui, label, action, input.Busy, primary)
 
     private func Info(input ToolsInput, key string, topic string, lines[]string) Blob ->
     Cell.Mount[InfoTipInput, InfoTip](
