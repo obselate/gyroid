@@ -870,6 +870,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
         let recipients = List[string](members)
         let identity = input.Session.Messages.OwnAddress
         go Execute(input, title, destination, recipients, generation, identity, owner.Token)
+        Rebuild()
     }
 
     private async func Execute(
@@ -1012,6 +1013,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
                                     name = label
                                     address = destination
                                 }
+                                Rebuild()
                             },
                             busy || group && !chosen && members.Count >= cap
                         )
