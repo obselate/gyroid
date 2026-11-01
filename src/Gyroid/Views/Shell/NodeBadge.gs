@@ -186,10 +186,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                     NodeReading(
                         ui,
                         "Speed",
-                        String.Format(
-                            ui.Strings.Get("{0} blk/s"),
-                            NodeText.FixedPoint(status.SyncRate, 0)
-                        )
+                        String.Format(ui.Strings.Get("{0} blk/s"), NodeText.FixedPoint(status.SyncRate, 0))
                     )
                 )
                 readings.Add(NodeReading(ui, "Remaining", String.Format(ui.Strings.Get("~{0} min"), minutes)))
