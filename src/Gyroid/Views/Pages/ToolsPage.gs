@@ -33,7 +33,7 @@ data struct ToolsInput {
     var Session WalletSession
     var Ui Presentation
     var State ToolsState
-    var Address string
+    var Wallet string
     var Network string
     var ViewOnly bool
     var Outputs uint64
@@ -139,7 +139,7 @@ class ToolsPage : Cell {
         Language: input.Language,
         Width: input.Width,
         Height: input.Height,
-        Identity: input.Network + ":" + input.Address
+        Identity: input.Network + ":" + input.Wallet
     }
 
     override func Build() Blob {
@@ -224,8 +224,10 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             Rebuild()
         }
         checkedPhrase = date -> {
-            checkedAt = date
-            Rebuild()
+            if !lifetime.IsCancellationRequested {
+                checkedAt = date
+                Rebuild()
+            }
         }
     }
 
@@ -671,7 +673,6 @@ class ToolsPrivacyRegion : Cell, IDisposable {
 
     private func RestrictFile(input ToolsPrivacyInput) {
         let session = input.Region.Session
-        let closed = input.Region.Ui.Actions.window?.Closed ?? lifetime.Token
         let run = generation
         let token = lifetime.Token
         var mode UnixFileMode?
@@ -681,14 +682,16 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             .Actions
             .Run(
             ct -> {
-                using let linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token, closed)
-                linked.Token.ThrowIfCancellationRequested()
                 session.Checks.RestrictWalletFile()
                 mode = session.Checks.WalletFileMode()
                 return Task.CompletedTask
             },
             () -> {
-                if run == generation && !token.IsCancellationRequested {
+                if run == generation &&
+                    input
+                    .Region
+                    .Identity == ReadWalletIdentity(session) &&
+                    !token.IsCancellationRequested {
                     fileMode = mode
                     Rebuild()
                 }
@@ -697,8 +700,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
     }
 }
 
-class ToolsLockRegion : Cell[ToolsLockInput], IDisposable {
-    private let lifetime CancellationTokenSource = CancellationTokenSource()
+class ToolsLockRegion : Cell[ToolsLockInput] {
     private var editing bool
 
     protected override func Build(input ToolsLockInput) Blob {
@@ -752,18 +754,7 @@ class ToolsLockRegion : Cell[ToolsLockInput], IDisposable {
                         Rebuild()
                         let minutes = Int32.Parse(value)
                         if minutes != input.AutoLock {
-                            let token = lifetime.Token
-                            let closed = ui.Actions.window?.Closed ?? token
-                            ui.Actions.Run(
-                                async (ct) -> {
-                                    using let linked = CancellationTokenSource.CreateLinkedTokenSource(
-                                        ct,
-                                        token,
-                                        closed
-                                    )
-                                    await context.Session.SaveAutoLockAsync(minutes, linked.Token)
-                                }
-                            )
+                            ui.Actions.Run(ct -> context.Session.SaveAutoLockAsync(minutes, ct))
                         }
                     }
                 )
@@ -782,11 +773,6 @@ class ToolsLockRegion : Cell[ToolsLockInput], IDisposable {
         input.Region.Ui.Strings.Get("never")
     } else {
         input.AutoLock.ToString() + " " + input.Region.Ui.Strings.Get("min")
-    }
-
-    func Dispose() {
-        lifetime.Cancel()
-        lifetime.Dispose()
     }
 }
 
@@ -847,13 +833,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
                 () -> {
                     try {
                         if run == generation &&
-                            identity == session
-                            .Settings
-                            .Network +
-                            ":" +
-                            session
-                            .Snapshot
-                            .Address &&
+                            identity == ReadWalletIdentity(session) &&
                             !active.IsCancellationRequested {
                             Ask(phrase)
                             busy = false
@@ -871,15 +851,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             let active = linked.Token
             window.TryPost(
                 () -> {
-                    if run == generation &&
-                        identity == session
-                        .Settings
-                        .Network +
-                        ":" +
-                        session
-                        .Snapshot
-                        .Address &&
-                        !active.IsCancellationRequested {
+                    if run == generation && identity == ReadWalletIdentity(session) && !active.IsCancellationRequested {
                         busy = false
                         issue = message
                         Rebuild()
@@ -942,71 +914,35 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         Rebuild()
         if found == answers.Length {
             step = "done"
-            guard let window = input.Region.Ui.Actions.window else {
-                return
-            }
-            go MarkChecked(
-                input.Region.Session,
-                window,
-                input.Region.Identity,
-                generation,
-                lifetime.Token,
-                input.OnChecked
-            )
+            MarkChecked(input)
         }
     }
 
-    private async func MarkChecked(
-        session WalletSession,
-        window Window,
-        identity string,
-        run int32,
-        token CancellationToken,
-        onChecked Action[DateTime?]
-    ) {
-        using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, window.Closed)
-        try {
-            linked.Token.ThrowIfCancellationRequested()
-            await session.Checks.MarkPhraseCheckedAsync()
-            let date = session.Checks.PhraseChecked()
-            let active = linked.Token
-            window.TryPost(
-                () -> {
-                    if run == generation &&
-                        identity == session
-                        .Settings
-                        .Network +
-                        ":" +
-                        session
-                        .Snapshot
-                        .Address &&
-                        !active.IsCancellationRequested {
+    private func MarkChecked(input ToolsPhraseInput) {
+        let session = input.Region.Session
+        let identity = input.Region.Identity
+        let run = generation
+        let token = lifetime.Token
+        var date DateTime?
+        input
+            .Region
+            .Ui
+            .Actions
+            .Run(
+            async (ct) -> {
+                await session.Checks.MarkPhraseCheckedAsync()
+                date = session.Checks.PhraseChecked()
+            },
+            () -> {
+                if identity == ReadWalletIdentity(session) {
+                    input.OnChecked(date)
+                    if run == generation && !token.IsCancellationRequested {
                         checkedAt = date
-                        onChecked(date)
                         Rebuild()
                     }
                 }
-            )
-        } catch (failure OperationCanceledException) { } catch (failure Exception) {
-            let message = failure.Message
-            let active = linked.Token
-            window.TryPost(
-                () -> {
-                    if run == generation &&
-                        identity == session
-                        .Settings
-                        .Network +
-                        ":" +
-                        session
-                        .Snapshot
-                        .Address &&
-                        !active.IsCancellationRequested {
-                        issue = message
-                        Rebuild()
-                    }
-                }
-            )
-        }
+            }
+        )
     }
 
     func Dispose() {
@@ -1310,15 +1246,7 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         let active = linked.Token
         window.TryPost(
             () -> {
-                if run == generation &&
-                    identity == session
-                    .Settings
-                    .Network +
-                    ":" +
-                    session
-                    .Snapshot
-                    .Address &&
-                    !active.IsCancellationRequested {
+                if run == generation && identity == ReadWalletIdentity(session) && !active.IsCancellationRequested {
                     busy = false
                     signature = value
                     issue = error
@@ -1410,15 +1338,7 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
         let active = linked.Token
         window.TryPost(
             () -> {
-                if run == generation &&
-                    identity == session
-                    .Settings
-                    .Network +
-                    ":" +
-                    session
-                    .Snapshot
-                    .Address &&
-                    !active.IsCancellationRequested {
+                if run == generation && identity == ReadWalletIdentity(session) && !active.IsCancellationRequested {
                     busy = false
                     verdict = error.Length == 0 ? value: nil
                     issue = error
@@ -1529,15 +1449,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
         let active = linked.Token
         window.TryPost(
             () -> {
-                if run == generation &&
-                    identity == session
-                    .Settings
-                    .Network +
-                    ":" +
-                    session
-                    .Snapshot
-                    .Address &&
-                    !active.IsCancellationRequested {
+                if run == generation && identity == ReadWalletIdentity(session) && !active.IsCancellationRequested {
                     busy = false
                     verdict = error.Length == 0 ? value: nil
                     issue = error
@@ -1800,17 +1712,7 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
                 if run == generation &&
                     input
                     .Region
-                    .Identity == input
-                    .Region
-                    .Session
-                    .Settings
-                    .Network +
-                    ":" +
-                    input
-                    .Region
-                    .Session
-                    .Snapshot
-                    .Address &&
+                    .Identity == ReadWalletIdentity(input.Region.Session) &&
                     !active.IsCancellationRequested {
                     input.State.Report = report
                     auditReport = report
@@ -1825,6 +1727,9 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
 
 class ToolsParts {
     shared {
+        func ReadWalletIdentity(session WalletSession) string ->
+        session.Settings.Network + ":" + session.Settings.ActiveWallet
+
         func Small(input ToolsRegionInput, label string, primary bool, action Action) Blob ->
         Button(input.Ui, label, action, input.Busy, primary)
 

@@ -196,7 +196,7 @@ partial class App : Cell {
                     Session: wallet,
                     Ui: ui,
                     State: toolsState,
-                    Address: snapshot.Address,
+                    Wallet: wallet.Settings.ActiveWallet,
                     Network: wallet.Settings.Network,
                     ViewOnly: snapshot.ViewOnly,
                     Outputs: snapshot.Balance?.Outputs ?? uint64(0),
