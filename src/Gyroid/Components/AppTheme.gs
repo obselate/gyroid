@@ -172,7 +172,6 @@ class AppTheme {
         }
         let DangerButton ActionButton = Button with{BackgroundColor = DangerQuiet, BorderColor = Pink, TextColor = Pink}
         let ButtonStyle Style = Style{
-            FlexDirection: FlexDirection.Row,
             Height: ControlRegular,
             MinWidth: 64,
             Padding: Edges{Left: Space14, Right: Space14},
