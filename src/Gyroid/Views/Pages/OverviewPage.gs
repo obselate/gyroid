@@ -481,7 +481,7 @@ class OverviewPage : Cell[OverviewInput] {
         } else if known {
             Fixed(total)
         } else {
-            ui.Strings.Get("Unavailable")
+            "-"
         }
         let color = if masked || !known || total == 0 {
             ui.Dim
@@ -489,7 +489,7 @@ class OverviewPage : Cell[OverviewInput] {
             ui.Lime
         }
         let inner = Math.Max(0.0, heroWidth - 40)
-        let size = if masked {
+        let size = if masked || !known {
             34.0
         } else {
             Math.Clamp(Math.Min(input.Height * 0.12, inner * 1.53 / value.Length), 34, 150)
@@ -582,17 +582,36 @@ class OverviewPage : Cell[OverviewInput] {
         )
         if scanning {
             card.Add(
-                Label(
-                    ui,
-                    ui.Strings.Get("scan height") +
-                        " " +
-                        Count(balance?.ScanHeight ?? uint64(0)) +
-                        " / " +
-                        Count(balance?.ChainHeight ?? input.Node.Height),
-                    14,
-                    ui.Orange,
-                    ""
-                )
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: 6,
+                    Text{
+                        Content: String.Format(
+                            ui.Strings.Get("Syncing {0} / {1} · balance may be inaccurate"),
+                            Count(balance?.ScanHeight ?? uint64(0)),
+                            Count(balance?.ChainHeight ?? input.Node.Height)
+                        ),
+                        FontFamily: ui.Font,
+                        FontSize: 12,
+                        Color: ui.Orange,
+                        TextWrap: TextWrap.Wrap,
+                        FlexGrow: 1,
+                        MinWidth: 0
+                    },
+                    Cell.Mount[InfoTipInput, InfoTip](
+                        "scan-info",
+                        InfoTipInput{
+                            Ui: ui,
+                            Topic: "About sync",
+                            Lines: []string{
+                                "The wallet is catching up with the chain. The amount shown is the last known balance and updates when syncing ends."
+                            },
+                            Language: ui.Strings.Language,
+                            Width: 300
+                        }
+                    )
+                }
             )
         }
         let height = Math.Clamp(input.Height * 0.018, 12, 20)
