@@ -271,7 +271,13 @@ class Cli {
                                         message
                                         .Verification
                                         .ToString() + " " + WalletText.SafeText(
-                                        WalletText.Hidden(privacy, message.Text)
+                                        WalletText.Hidden(
+                                            privacy,
+                                            message
+                                                .InvitationName
+                                                .Length > 0 ? "Group invitation: " +
+                                                message.InvitationName: message.Text
+                                        )
                                     )
                                 )
                             }
@@ -367,7 +373,10 @@ class Cli {
                                 " ",
                                 send
                                     .Recipients
-                                    .Select(recipient -> recipient.Memo)
+                                    .Select(
+                                    recipient -> recipient.InvitationName.Length > 0 ?
+                                    "Group invitation: " + recipient.InvitationName: recipient.Memo
+                                )
                                     .Where(value -> value.Length > 0)
                                     .Distinct(StringComparer.Ordinal)
                             )
@@ -387,6 +396,8 @@ class Cli {
                             if count >= limit {
                                 break
                             }
+                            let memo = output.InvitationName.Length > 0 ?
+                            "Group invitation: " + output.InvitationName: output.Memo
                             Console.WriteLine(
                                 "Received " + output.TxId + ":" + output.OutputIndex.ToString(
                                     CultureInfo.InvariantCulture
@@ -395,11 +406,7 @@ class Cli {
                                     WalletAmount.Format(output.Amount) + " BNT height " + output.BlockHeight.ToString(
                                     CultureInfo.InvariantCulture
                                 ) +
-                                    (
-                                    output.Memo.Length > 0 ? " " + WalletText.SafeText(
-                                        WalletText.Hidden(privacy, output.Memo)
-                                    ): ""
-                                )
+                                    (memo.Length > 0 ? " " + WalletText.SafeText(WalletText.Hidden(privacy, memo)): "")
                             )
                             count = count + 1
                         }

@@ -83,7 +83,8 @@ class WalletSnapshot {
                 output.BlockHeight != previous.BlockHeight ||
                 output.Spent != previous.Spent ||
                 output.Coinbase != previous.Coinbase ||
-                output.Memo != previous.Memo {
+                output.Memo != previous.Memo ||
+                output.InvitationName != previous.InvitationName {
                 return false
             }
         }
@@ -109,7 +110,8 @@ class WalletSnapshot {
                 let prior = previous.Recipients[recipientIndex]
                 if recipient.Address != prior.Address ||
                     recipient.Amount != prior.Amount ||
-                    recipient.Memo != prior.Memo {
+                    recipient.Memo != prior.Memo ||
+                    recipient.InvitationName != prior.InvitationName {
                     return false
                 }
             }

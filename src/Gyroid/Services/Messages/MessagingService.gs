@@ -80,39 +80,35 @@ partial class MessagingService {
     ) MessagesProjection {
         lock sending {
             let rows = List[ConversationView](conversations.Count)
-            var current Conversation? = nil
+            let current Conversation? = conversations.FirstOrDefault(item -> item.Id == id) ??
+                fallback ??
+                (first ? conversations.FirstOrDefault(): nil)
             for source in conversations {
                 ct.ThrowIfCancellationRequested()
                 let latest = source.Messages.LastOrDefault()
                 rows.Add(
                     ConversationView{
-                        Source: source,
                         Id: source.Id,
                         Title: source.Title,
-                        Handle: source.Handle,
                         IsGroup: source.IsGroup,
                         Unread: source.Unread,
-                        Text: (latest?.Text ?? source.Handle).Replace("\r", " ").Replace("\n", " "),
+                        Text: latest?.Text ?? source.Handle,
                         InvitationName: latest?.InvitationName ?? "",
                         Time: latest?.SentAt.ToLocalTime().ToString("HH:mm") ?? "",
-                        Selected: source.Id == id || id.Length == 0 && first && rows.Count == 0,
+                        Selected: source == current,
                         Privacy: privacy,
                         Language: language
                     }
                 )
-                if source.Id == id {
-                    current = source
-                }
             }
-            current ??= fallback ?? (first ? conversations.FirstOrDefault(): nil)
             let thread = List[MessageThreadRow]()
             if let source = current {
                 let messages = source.Messages
                 let keys = Dictionary[string, string](StringComparer.Ordinal)
                 if previous.Conversation?.Id == source.Id {
                     for row in previous.Thread {
-                        if row.Message.Source.Txid.Length > 0 {
-                            keys[row.Message.Source.Txid] = row.Key
+                        if row.Message.Txid.Length > 0 {
+                            keys[row.Message.Txid] = row.Key
                         }
                     }
                 }
@@ -125,27 +121,18 @@ partial class MessagingService {
                         MessageThreadRow{
                             Key: keys.GetValueOrDefault(message.Txid, message.Key),
                             Message: MessageView{
-                                Source: message,
                                 Key: message.Key,
                                 Txid: message.Txid,
                                 Outgoing: message.Outgoing,
                                 SenderName: message.SenderName,
-                                SenderAddress: message.SenderAddress,
                                 Text: message.Text,
                                 InvitationName: message.InvitationName,
                                 SentAt: message.SentAt,
+                                ArrivedAt: message.ArrivedAt,
                                 State: message.State,
                                 Confirmations: message.Confirmations,
                                 Height: message.Height,
-                                Verification: message.Verification,
-                                FeeAtomic: message.FeeAtomic,
-                                Outputs: message.Outputs,
-                                Time: (
-                                    message.Outgoing ? message.SentAt:
-                                    message.ArrivedAt ?? message.SentAt
-                                )
-                                    .ToLocalTime().ToString("HH:mm"),
-                                ArrivedTime: (message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm")
+                                Verification: message.Verification
                             },
                             Header: before == nil || (message.SentAt - before.SentAt).TotalMinutes > 15 ?
                             message.SentAt.ToLocalTime().ToString("HH:mm"): "",
@@ -161,23 +148,6 @@ partial class MessagingService {
             }
             let values = rows.ToArray()
             let messages = thread.ToArray()
-            let oldConversations = previous.Conversations.ToDictionary(row -> row.Id, StringComparer.Ordinal)
-            for index in 0 ... values.Length {
-                let row = values[index]
-                if oldConversations.TryGetValue(row.Id, out let old) && (row with{Source = old.Source}) == old {
-                    values[index] = old
-                }
-            }
-            let oldMessages = previous.Thread.ToDictionary(row -> row.Key, StringComparer.Ordinal)
-            for index in 0 ... messages.Length {
-                let row = messages[index]
-                if oldMessages.TryGetValue(row.Key, out let old) {
-                    let stable = row with{Message = row.Message with{Source = old.Message.Source}}
-                    if stable == old {
-                        messages[index] = old
-                    }
-                }
-            }
             return MessagesProjection{
                 Conversations: values.SequenceEqual(previous.Conversations) ? previous.Conversations: values,
                 Conversation: current,
@@ -240,7 +210,7 @@ partial class MessagingService {
                 store = local
                 ownAddress = own
                 Error = local.Error
-                conversations = List[Conversation](local.Conversations.Values)
+                conversations = local.Conversations.Values.Where(item -> item.IsGroup || item.Id != own).ToList()
                 for conversation in conversations {
                     for message in conversation.Messages {
                         sending[message] = conversation.Id

@@ -70,30 +70,23 @@ class MessageEstimate {
 }
 
 data struct MessageView {
-    var Source Message
     var Key string
     var Txid string
     var Outgoing bool
     var SenderName string
-    var SenderAddress string
     var Text string
     var InvitationName string
     var SentAt DateTimeOffset
+    var ArrivedAt DateTimeOffset?
     var State MessageState
     var Confirmations int32
     var Height int64
     var Verification Verification
-    var FeeAtomic int64
-    var Outputs int32
-    var Time string
-    var ArrivedTime string
 }
 
 data struct ConversationView {
-    var Source Conversation
     var Id string
     var Title string
-    var Handle string
     var IsGroup bool
     var Unread int32
     var Text string

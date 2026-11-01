@@ -36,8 +36,9 @@ partial class MessagingService {
         return message
     }
 
-    private func KnownConversations(local MessagingStore, network string) Dictionary[string, Conversation] {
+    private func KnownConversations(local MessagingStore, network string, own string) Dictionary[string, Conversation] {
         let known = Dictionary[string, Conversation](local.Conversations, StringComparer.Ordinal)
+        known.Remove(own)
         try {
             for entry in AddressBook.ReadContacts(_ -> { }) {
                 var address = PaymentLink.Parse(entry.Value)?.Address ?? entry.Value
@@ -55,6 +56,9 @@ partial class MessagingService {
                     } catch (error ArgumentException) {
                         continue
                     }
+                }
+                if address == own {
+                    continue
                 }
                 if known.ContainsKey(address) {
                     if !local.Conversations.ContainsKey(address) {
@@ -130,7 +134,7 @@ partial class MessagingService {
         using let status = await client.JsonAsync("status", ct: ct)
         let height = int64(NodeJson.Number(status.RootElement, "chain_height"))
         let tip = await BlockTime(client, network, height, ct)
-        let known = KnownConversations(local, network)
+        let known = KnownConversations(local, network, own)
         let updated = Dictionary[string, Conversation](StringComparer.Ordinal)
         for pair in known {
             let saved = pair.Value
@@ -244,7 +248,9 @@ partial class MessagingService {
                     }
                 )
                 for saved in local.Conversations.Values {
-                    if !local.Removed.ContainsKey(saved.Id) && !result.Any(item -> item.Id == saved.Id) {
+                    if (saved.IsGroup || saved.Id != own) && !local.Removed.ContainsKey(saved.Id) && !result.Any(
+                        item -> item.Id == saved.Id
+                    ) {
                         result.Add(
                             Conversation{
                                 Id: saved.Id,
@@ -258,9 +264,11 @@ partial class MessagingService {
                 }
                 for pair in sending.ToArray() {
                     let conversation = result.Find(item -> item.Id == pair.Value)
-                    if pair.Key.Txid.Length > 0 && conversation?.Messages.Any(
+                    let confirmed = conversation?.Messages.FirstOrDefault(
                         item -> item.Txid == pair.Key.Txid && item.Outgoing
-                    ) == true {
+                    )
+                    if pair.Key.Txid.Length > 0 && confirmed != nil {
+                        confirmed.Key = pair.Key.Key
                         sending.Remove(pair.Key)
                         if sendCancellations.Remove(pair.Key, out let cancellation) {
                             cancellation.Dispose()

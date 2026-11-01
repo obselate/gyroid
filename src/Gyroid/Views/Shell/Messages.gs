@@ -240,7 +240,16 @@ class MessageOverlay : Cell, IDisposable {
                     },
                     leading: MaterialIcons.Create("chat_bubble", AppTheme.Icon16, AppTheme.Lime)
                 ),
-                Label(ui, Hidden(ui.Privacy, MessagesPage.Preview(latest.Text)), AppTheme.Type12, AppTheme.Body, "")
+                Label(
+                    ui,
+                    Hidden(
+                        ui.Privacy,
+                        MessagesPage.Preview(MessageParts.Content(ui, latest.Text, latest.InvitationName))
+                    ),
+                    AppTheme.Type12,
+                    AppTheme.Body,
+                    ""
+                )
             }
             WidgetKeyBindings.BindActivation(notification)
             root.Add(notification)

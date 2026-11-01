@@ -68,7 +68,6 @@ class MessagingStore {
                                 SenderAddress: address,
                                 SenderName: "You",
                                 Text: NodeJson.Text(message, "text"),
-                                InvitationName: NodeJson.Text(message, "invitation_name"),
                                 SentAt: DateTimeOffset.FromUnixTimeSeconds(
                                     ReadNumber(ReadField(message, "sent_at", JsonValueKind.Number))
                                 ),
@@ -184,7 +183,6 @@ class MessagingStore {
                             writer.WriteString("idempotency_key", message.IdempotencyKey)
                             writer.WriteBase64String("payload", ReadOnlySpan[uint8](message.SendPayload))
                             writer.WriteString("text", message.Text)
-                            writer.WriteString("invitation_name", message.InvitationName)
                             writer.WriteNumber("sent_at", message.SentAt.ToUnixTimeSeconds())
                             writer.WriteEndObject()
                         }

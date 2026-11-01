@@ -1325,7 +1325,11 @@ class HistoryTransactions : Cell, IDisposable {
                 Fee: row.Fee,
                 State: row.State,
                 Confirmations: row.Maturity.Confirmations,
-                Memo: row.Recipients.Select(entry -> entry.Memo).FirstOrDefault(value -> value.Length > 0) ?? "",
+                Memo: row
+                    .Recipients
+                    .Select(entry -> MessageParts.Content(ui, entry.Memo, entry.InvitationName))
+                    .FirstOrDefault(value -> value.Length > 0) ??
+                    "",
                 Recipient: WalletText.Short(row.Recipients.FirstOrDefault().Address ?? "") +
                     (row.Recipients.Length > 1 ? " +" + (row.Recipients.Length - 1).ToString(): ""),
                 Privacy: input.Privacy,
@@ -1370,11 +1374,9 @@ class HistoryTransactions : Cell, IDisposable {
             row.Maturity.Count.ToString() + "/" + row.Maturity.Required.ToString()
         }
         let recipient = row.Recipients.FirstOrDefault()
-        let note = row
-            .Memo
-            .Length > 0 ? row.Memo: row
-            .Recipients
-            .Length > 1 ? Short(recipient.Address ?? ""): Short(row.TxId)
+        let memo = MessageParts.Content(ui, row.Memo, row.InvitationName)
+        let note = memo.Length > 0 ? memo:
+        row.Recipients.Length > 1 ? Short(recipient.Address ?? ""): Short(row.TxId)
         let preview = Hidden(ui.Privacy, SafeText(note, 512))
         let sign = row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "+": "−"
         let notes = Container{
@@ -1388,7 +1390,7 @@ class HistoryTransactions : Cell, IDisposable {
                     ui,
                     (row.Self ? ui.Strings.Get("To self") + " · ": "") + preview,
                     AppTheme.Type12,
-                    row.Memo.Length > 0 ? AppTheme.Ink: AppTheme.Dim,
+                    memo.Length > 0 ? AppTheme.Ink: AppTheme.Dim,
                     ""
                 )
             )
@@ -1687,8 +1689,8 @@ class HistoryTransactions : Cell, IDisposable {
             )
         }
         panel.Add(values)
-        if row.Memo.Length > 0 && row.Recipients.Length <= 1 && !row.Self {
-            panel.Add(MemoSection(row, row.Memo))
+        if (row.Memo.Length > 0 || row.InvitationName.Length > 0) && row.Recipients.Length <= 1 && !row.Self {
+            panel.Add(MemoSection(row, MessageParts.Content(ui, row.Memo, row.InvitationName)))
         }
         if row.Self || row.Recipients.Length > 1 {
             let recipients = VirtualRows(
@@ -1703,7 +1705,9 @@ class HistoryTransactions : Cell, IDisposable {
             )
             recipients.Height = Math.Min(
                 228.0,
-                row.Recipients.Sum((entry HistoryRecipient) -> entry.Memo.Length > 0 ? 118.0: 76.0)
+                row.Recipients.Sum(
+                    (entry HistoryRecipient) -> entry.Memo.Length > 0 || entry.InvitationName.Length > 0 ? 118.0: 76.0
+                )
             )
             recipients.MinHeight = 0
             panel.Add(ListParts.Viewport(recipients, grow: false))
@@ -1731,8 +1735,8 @@ class HistoryTransactions : Cell, IDisposable {
                 compact: true
             )
         }
-        if entry.Memo.Length > 0 {
-            details.Add(MemoSection(row, entry.Memo))
+        if entry.Memo.Length > 0 || entry.InvitationName.Length > 0 {
+            details.Add(MemoSection(row, MessageParts.Content(ui, entry.Memo, entry.InvitationName)))
         }
         return details
     }

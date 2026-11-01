@@ -70,12 +70,10 @@ data struct MessageBubbleInput {
     var Highlight bool
     var CanRetry bool
     var Width float64
-    var Revision int64
     var Privacy bool
     var Language string
-    var OnOpen Action[Message]
-    var OnRetry Action[Message]
-    var Handle ElementHandle
+    var OnOpen Action[string]
+    var OnRetry Action[string]
 }
 
 class MessageBubble : Cell[MessageBubbleInput] {
@@ -107,7 +105,10 @@ class MessageBubble : Cell[MessageBubbleInput] {
         let invalid = message.Verification == Verification.Invalid
         let verification = message.Verification.ToString()
         let color = invalid ? AppTheme.Pink: message.Verification == Verification.Unverified ? AppTheme.Orange: AppTheme.Dim
-        let time = message.Time
+        let content = Hidden(ui.Privacy, MessageParts.Content(ui, message.Text, message.InvitationName))
+        let time = (message.Outgoing ? message.SentAt: message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString(
+            "HH:mm"
+        )
         let delivered = message.State == MessageState.Confirmed && message.Confirmations > 0
         let statusColor = message.Outgoing ? AppTheme.Black.WithAlpha(0.9): AppTheme.Body
         let metadata = Container{
@@ -127,7 +128,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             let tip = delivered ? ui
                 .Strings
                 .Get("Delivered {time}, block {height}")
-                .Replace("{time}", message.ArrivedTime)
+                .Replace("{time}", (message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm"))
                 .Replace("{height}", message.Height.ToString()): ui
                 .Strings
                 .Get("Waiting for the next block. Usually about 5 min, sometimes longer")
@@ -160,7 +161,6 @@ class MessageBubble : Cell[MessageBubbleInput] {
             )
         }
         let column = Container{
-            Handle: input.Handle,
             FlexShrink: 0,
             MinWidth: 0,
             Gap: AppTheme.Space4,
@@ -185,17 +185,11 @@ class MessageBubble : Cell[MessageBubbleInput] {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
-                Name: Hidden(ui.Privacy, MessageParts.Content(ui, message.Text, message.InvitationName)) +
-                    " " +
-                    time +
-                    " " +
-                    ui
-                    .Strings
-                    .Get(verification)
+                Name: content + " " + time + " " + ui.Strings.Get(verification)
             },
-            OnClick: () -> input.OnOpen(message.Source),
+            OnClick: () -> input.OnOpen(message.Key),
             Text{
-                Content: Hidden(ui.Privacy, MessageParts.Content(ui, message.Text, message.InvitationName)),
+                Content: content,
                 FontFamily: AppTheme.Font,
                 FontSize: AppTheme.Type13,
                 Color: message.Outgoing ? AppTheme.Black: AppTheme.Ink,
@@ -216,7 +210,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
                     AlignItems: AlignItems.Center,
                     Gap: AppTheme.Space8,
                     Label(ui, ui.Strings.Get("Not sent"), AppTheme.Type11, AppTheme.Pink, ""),
-                    Button(ui, "Retry", () -> input.OnRetry(message.Source), !input.CanRetry)
+                    Button(ui, "Retry", () -> input.OnRetry(message.Key), !input.CanRetry)
                 }
             )
         }
@@ -231,7 +225,6 @@ data struct MessageComposerInput {
     var Unavailable string
     var Measure Func[string, MessageEstimate]
     var Language string
-    var Revision int64
     var Draft string
     var Width float64
     var OnDraft Action[string]
@@ -253,10 +246,7 @@ class MessageComposer : Cell, IDisposable {
         if next == input {
             return
         }
-        let measure = !initialized ||
-            next.Recipients != input.Recipients ||
-            next.Revision != input.Revision ||
-            next.CanSend != input.CanSend
+        let measure = !initialized || next.Recipients != input.Recipients || next.CanSend != input.CanSend
         input = next
         if !initialized {
             draft = next.Draft

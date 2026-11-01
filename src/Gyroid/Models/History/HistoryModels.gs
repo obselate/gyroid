@@ -9,6 +9,7 @@ data class WalletOutput {
     var Coinbase bool
     var IsChange bool
     var Memo string = ""
+    var InvitationName string = ""
     var OutputIndices[]int32 = System.Array.Empty[int32]()
 
     func Maturity(tip uint64) WalletMaturity -> WalletMaturity(
@@ -28,6 +29,7 @@ data class WalletRecipient {
     var Address string = ""
     var Amount uint64
     var Memo string = ""
+    var InvitationName string = ""
 }
 
 data class WalletSend {
@@ -58,6 +60,7 @@ data struct HistoryRecipient {
     var Address string
     var Amount uint64
     var Memo string
+    var InvitationName string = ""
     var Privacy bool
     var Language string
 }
@@ -79,6 +82,7 @@ data struct HistoryRow {
     var Fee uint64
     var Self bool
     var Memo string
+    var InvitationName string = ""
     var Indices[]int32
     var Height uint64
     var Maturity WalletMaturity
@@ -149,6 +153,7 @@ data struct HistoryArrival {
     var Kind string
     var Amount uint64
     var Source string
+    var InvitationName string = ""
     var Confirmations uint64
     var Required uint64
     var Blocks uint64
@@ -162,6 +167,7 @@ data struct HistoryActivity {
     var Kind string
     var Amount uint64
     var Label string
+    var InvitationName string = ""
     var Status string
     var Ready bool
     var Order uint64

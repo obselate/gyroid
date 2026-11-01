@@ -124,11 +124,13 @@ class HistoryService {
                 outputs[position].Spent = outputs[position].Spent && output.Spent
             } else {
                 positions[output.TxId] = outputs.Count
+                let message = session.Messages.HistoryMessage(output.TxId, "", false)
                 outputs.Add(
                     WalletOutput{
                         ... output,
                         OutputIndex: output.OutputIndices[0],
-                        Memo: session.Messages.HistoryMessage(output.TxId, "", false)?.Text ?? output.Memo
+                        Memo: message?.Text ?? output.Memo,
+                        InvitationName: message?.InvitationName ?? output.InvitationName
                     }
                 )
             }
@@ -152,13 +154,11 @@ class HistoryService {
                 } else if grouped.TryGetValue(recipient.Address, out let combined) {
                     combined.Amount += recipient.Amount
                 } else {
+                    let message = session.Messages.HistoryMessage(sent.TxId, recipient.Address, true)
                     let merged = WalletRecipient{
                         ... recipient,
-                        Memo: session
-                            .Messages
-                            .HistoryMessage(sent.TxId, recipient.Address, true)
-                            ?.Text ??
-                            recipient.Memo
+                        Memo: message?.Text ?? recipient.Memo,
+                        InvitationName: message?.InvitationName ?? recipient.InvitationName
                     }
                     grouped[recipient.Address] = merged
                     recipients.Add(merged)
@@ -408,6 +408,7 @@ class HistoryService {
                         Kind: output.IsChange ? "change": output.Coinbase ? "mined": "in",
                         Amount: output.Amount,
                         Source: output.Memo,
+                        InvitationName: output.InvitationName,
                         Confirmations: maturity.Count,
                         Required: maturity.Required,
                         Blocks: maturity.Remaining,
@@ -432,6 +433,7 @@ class HistoryService {
                     Kind: output.Coinbase ? "mined": "in",
                     Amount: output.Amount,
                     Label: output.Memo,
+                    InvitationName: output.InvitationName,
                     Status: output.BlockHeight == 0 ? "mempool": "confirmed",
                     Ready: output.BlockHeight > 0 && maturity.Ready,
                     Order: output.BlockHeight == 0 ? uint64.MaxValue: output.BlockHeight,
@@ -562,6 +564,7 @@ class HistoryService {
                     Indices = indices,
                     Amount = output.Amount,
                     Memo = output.Memo,
+                    InvitationName = output.InvitationName,
                     Height = output.BlockHeight,
                     Maturity = output.Maturity(tip),
                     Time = input.Times.GetValueOrDefault(output.BlockHeight)
@@ -582,7 +585,8 @@ class HistoryService {
                     Index: index,
                     Address: entry.Address,
                     Amount: entry.Amount,
-                    Memo: entry.Memo
+                    Memo: entry.Memo,
+                    InvitationName: entry.InvitationName
                 }
             )
                 .ToArray()
@@ -609,6 +613,10 @@ class HistoryService {
                             .Where((memo string) -> memo.Length > 0)
                             .Distinct(StringComparer.Ordinal)
                     ),
+                    InvitationName = entries.Select(entry -> entry.InvitationName).FirstOrDefault(
+                        name -> name.Length > 0
+                    ) ??
+                        "",
                     Height = height,
                     Maturity = WalletMaturity(confirmed ? send.Confirmations: uint64(0), 10),
                     Time = confirmed ? input.Times.GetValueOrDefault(height): send.Timestamp,
@@ -633,6 +641,7 @@ class HistoryService {
         Key: key,
         TxId: "",
         Memo: "",
+        InvitationName: "",
         Indices: Array.Empty[int32](),
         State: "",
         Recipients: Array.Empty[HistoryRecipient]()
@@ -706,6 +715,7 @@ class HistoryService {
                 case HistoryRowKind.Sent: "out"
                 case HistoryRowKind.Pending: "pending"
             }
+            let content = row.InvitationName.Length > 0 ? "Group invitation: " + row.InvitationName: row.Memo
             if let output = writer {
                 output.WriteStartObject()
                 output.WriteString("type", kind)
@@ -715,7 +725,7 @@ class HistoryService {
                 output.WriteString("time", time)
                 output.WriteString("txid", row.TxId)
                 if withMemos {
-                    output.WriteString("memo", row.Memo)
+                    output.WriteString("memo", content)
                 }
                 output.WriteEndObject()
                 if output.BytesPending >= 65536 {
@@ -734,7 +744,7 @@ class HistoryService {
                 csv.Write(',')
                 csv.Write(row.TxId)
                 if withMemos {
-                    let memo = "=+-@\t\r".Contains(row.Memo.FirstOrDefault()) ? "'" + row.Memo: row.Memo
+                    let memo = "=+-@\t\r".Contains(content.FirstOrDefault()) ? "'" + content: content
                     csv.Write(",\"")
                     csv.Write(memo.Replace("\"", "\"\""))
                     csv.Write('"')

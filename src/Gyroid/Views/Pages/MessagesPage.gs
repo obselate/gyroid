@@ -77,20 +77,27 @@ class MessagesPage : Cell, IDisposable {
                 Conversation: conversation,
                 Rows: projection.Thread,
                 Width: threadWidth,
-                Revision: input.Revision,
                 Privacy: input.Privacy,
                 Language: input.Language,
                 Request: input.State.Request,
                 MessageId: input.State.MessageId,
                 CanRetry: input.Mode == MessengerMode.Send && !busy && !input.Working,
-                OnOpen: message -> {
-                    detail = message
+                OnOpen: key -> {
+                    detail = input.Session.Messages.Thread(selected).FirstOrDefault(item -> item.Key == key)
                     Rebuild()
                 },
-                OnRetry: message -> {
-                    if let current = conversation {
-                        let service = input.Session.Messages
-                        Run(input, ct -> service.Resend(current, message, ct))
+                OnRetry: key -> {
+                    let current Conversation? = input
+                        .Session
+                        .Messages
+                        .Conversations
+                        .FirstOrDefault(item -> item.Id == selected)
+                    if let conversation = current {
+                        let selectedMessage Message? = conversation.Messages.FirstOrDefault(item -> item.Key == key)
+                        if let message = selectedMessage {
+                            let service = input.Session.Messages
+                            Run(input, ct -> service.Resend(conversation, message, ct))
+                        }
                     }
                 }
             }
@@ -99,14 +106,13 @@ class MessagesPage : Cell, IDisposable {
             MessagesListInput{
                 Ui: input.Ui,
                 Conversations: projection.Conversations,
-                Selected: selected,
                 Width: listWidth,
                 Busy: busy || input.Working,
                 CanSend: input.Mode == MessengerMode.Send,
-                Privacy: input.Privacy,
-                Language: input.Language,
-                Revision: input.Revision,
-                OnSelect: current -> Select(input, current),
+                OnSelect: id -> Select(
+                    input,
+                    input.Session.Messages.Conversations.FirstOrDefault(item -> item.Id == id)
+                ),
                 OnBegin: kind -> Begin(kind)
             }
         )
@@ -115,7 +121,6 @@ class MessagesPage : Cell, IDisposable {
                 child.Accept(
                     MessageComposerInput{
                         Ui: input.Ui,
-                        Revision: input.Revision,
                         Recipients: projection.Recipients,
                         CanSend: input.Mode == MessengerMode.Send,
                         Unavailable: input.Locked ? "Wallet is locked":
@@ -559,14 +564,10 @@ class MessagesPage : Cell, IDisposable {
 data struct MessagesListInput {
     var Ui Presentation
     var Conversations[]ConversationView
-    var Selected string
     var Width float64
     var Busy bool
     var CanSend bool
-    var Privacy bool
-    var Language string
-    var Revision int64
-    var OnSelect Action[Conversation]
+    var OnSelect Action[string]
     var OnBegin Action[string]
 }
 
@@ -657,7 +658,7 @@ class MessageConversationList : Cell {
                     (conversation.Unread > 0 ? " " + conversation.Unread.ToString(): ""),
                 Selected: conversation.Selected
             },
-            OnClick: () -> input.OnSelect(conversation.Source),
+            OnClick: () -> input.OnSelect(conversation.Id),
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
@@ -688,7 +689,9 @@ class MessageConversationList : Cell {
                         ui,
                         Hidden(
                             conversation.Privacy,
-                            MessageParts.Content(ui, conversation.Text, conversation.InvitationName)
+                            MessagesPage.Preview(
+                                MessageParts.Content(ui, conversation.Text, conversation.InvitationName)
+                            )
                         ),
                         AppTheme.Type11,
                         AppTheme.Dim,
@@ -714,14 +717,13 @@ data struct MessageThreadInput {
     var Conversation Conversation?
     var Rows[]MessageThreadRow
     var Width float64
-    var Revision int64
     var Privacy bool
     var Language string
     var Request int64
     var MessageId string
     var CanRetry bool
-    var OnOpen Action[Message]
-    var OnRetry Action[Message]
+    var OnOpen Action[string]
+    var OnRetry Action[string]
 }
 
 data struct MessageDisplayRow {
@@ -792,7 +794,9 @@ class MessageThread : Cell, IDisposable {
 
     private func Refresh() {
         if let window = input.Ui.Actions.window {
-            let active = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
+            lifetime?.Cancel()
+            lifetime?.Dispose()
+            let active = CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
             lifetime = active
             generation++
             let source = input
@@ -871,7 +875,7 @@ class MessageThread : Cell, IDisposable {
                     }
                 }
             )
-        } catch (error OperationCanceledException) when token.IsCancellationRequested { }
+        } catch (error OperationCanceledException) when token.IsCancellationRequested { } catch (error Exception) { }
     }
 
     private func Scroll(key string) {
@@ -987,7 +991,9 @@ class MessageDialog : Cell, IDisposable {
 
     private func RefreshContacts() {
         if let window = input.Ui.Actions.window {
-            let active = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
+            lifetime?.Cancel()
+            lifetime?.Dispose()
+            let active = CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
             lifetime = active
             contactGeneration++
             let source = input
@@ -1115,6 +1121,7 @@ class MessageDialog : Cell, IDisposable {
                     return
                 }
                 busy = false
+                RefreshContacts()
                 issue = error
                 if error.Length == 0 {
                     if input.Kind == "contact" {

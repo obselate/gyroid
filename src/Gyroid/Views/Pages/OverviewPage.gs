@@ -352,13 +352,14 @@ class OverviewPage : Cell, IDisposable {
                         .Sends
                         .FirstOrDefault(value -> value.Status == "mempool"):
                     sends.GetValueOrDefault(item.TxId)
-                    let name = Contact(input.Contacts, input.Session.Messages, send)
+                    let name = Contact(input.Ui, input.Contacts, input.Session.Messages, send)
+                    let content = MessageParts.Content(input.Ui, item.Source, item.InvitationName)
                     let label = if item.Kind == "change" || item.Kind == "pool" {
                         input.Ui.Strings.Get("change") + (name.Length > 0 ? " · " + name: "")
                     } else if item.Kind == "mined" {
                         input.Ui.Strings.Get("mined") + " · " + input.Ui.Strings.Get("block") + " " + Count(item.Height)
                     } else {
-                        item.Source.Length > 0 ? item.Source: OverviewParts.Short(item.TxId)
+                        content.Length > 0 ? content: OverviewParts.Short(item.TxId)
                     }
                     if item.Kind != "pool" {
                         count++
@@ -383,10 +384,11 @@ class OverviewPage : Cell, IDisposable {
                 }
                 for item in result.Activity.DistinctBy(value -> (value.TxId, value.OutputIndex)) {
                     let name = item.OutputIndex < 0 ? Contact(
+                        input.Ui,
                         input.Contacts,
                         input.Session.Messages,
                         sends.GetValueOrDefault(item.TxId)
-                    ): item.Label
+                    ): MessageParts.Content(input.Ui, item.Label, item.InvitationName)
                     let label = if item.Kind == "self" {
                         input.Ui.Strings.Get("To self") + (name.Length > 0 ? " · " + name: "")
                     } else if name.Length > 0 {
@@ -486,13 +488,20 @@ class OverviewParts {
             "tx " + txid
         }
 
-        func Contact(contacts SortedDictionary[string, string], messages MessagingService, send WalletSend?) string {
+        func Contact(
+            ui Presentation,
+            contacts SortedDictionary[string, string],
+            messages MessagingService,
+            send WalletSend?
+        ) string {
             guard let value = send else {
                 return ""
             }
             let memo = value
                 .Recipients
-                .Select((recipient WalletRecipient) -> recipient.Memo)
+                .Select(
+                (recipient WalletRecipient) -> MessageParts.Content(ui, recipient.Memo, recipient.InvitationName)
+            )
                 .FirstOrDefault((text string) -> text.Length > 0) ??
                 ""
             if messages.Lookup(value.TxId) != nil {
