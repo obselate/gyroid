@@ -137,12 +137,12 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             MinHeight: 0,
             MinWidth: 0,
             FlexDirection: FlexDirection.Row,
-            Gap: 12
+            Gap: AppTheme.Space12
         }
         if !input.Drawer {
             root.Add(Conversations(input, conversations, listWidth))
         }
-        let thread = WalletParts.Card(ui, 0, 0, 6)
+        let thread = WalletParts.Card(ui, AppTheme.Space0, AppTheme.Space0, AppTheme.Radius6)
         thread.FlexGrow = 1
         thread.FlexBasis = 0
         thread.MinWidth = 0
@@ -156,7 +156,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 FlexBasis: 0,
                 MinHeight: 0,
                 MinWidth: 0,
-                Padding: Edges{Left: 16, Right: 16, Bottom: 16},
+                Padding: Edges{Left: AppTheme.Space16, Right: AppTheme.Space16, Bottom: AppTheme.Space16},
                 OverflowY: Overflow.Scroll,
                 OverflowX: Overflow.Hidden,
                 ScrollbarY: Theme.Read().Scrollbar
@@ -185,8 +185,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                         Container{
                             Key: "time:" + message.Key,
                             AlignItems: AlignItems.Center,
-                            Margin: Edges{Top: 14},
-                            Label(ui, message.SentAt.ToLocalTime().ToString("HH:mm"), 10, ui.Dim, "")
+                            Margin: Edges{Top: AppTheme.Space14},
+                            Label(ui, message.SentAt.ToLocalTime().ToString("HH:mm"), AppTheme.Type10, AppTheme.Dim, "")
                         }
                     )
                 }
@@ -257,13 +257,18 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 )
             )
         } else {
-            thread.Add(Container{Padding: 16, Label(ui, ui.Strings.Get("messages"), 17, ui.Ink, "")})
+            thread.Add(
+                Container{
+                    Padding: AppTheme.Space16,
+                    Label(ui, ui.Strings.Get("messages"), AppTheme.Type17, AppTheme.Ink, "")
+                }
+            )
             thread.Add(
                 Container{
                     FlexGrow: 1,
                     JustifyContent: JustifyContent.Center,
                     AlignItems: AlignItems.Center,
-                    Label(ui, ui.Strings.Get("No conversations"), 13, ui.Dim, "")
+                    Label(ui, ui.Strings.Get("No conversations"), AppTheme.Type13, AppTheme.Dim, "")
                 }
             )
         }
@@ -271,13 +276,13 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         if error.Length > 0 {
             thread.Add(
                 Container{
-                    Padding: 12,
+                    Padding: AppTheme.Space12,
                     FlexShrink: 0,
                     Text{
                         Content: ui.Strings.Explain(error),
-                        FontFamily: ui.Font,
-                        FontSize: 12,
-                        Color: ui.Pink,
+                        FontFamily: AppTheme.Font,
+                        FontSize: AppTheme.Type12,
+                        Color: AppTheme.Pink,
                         TextWrap: TextWrap.Wrap
                     }
                 }
@@ -321,7 +326,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
 
     private func Conversations(input MessagesInput, conversations IReadOnlyList[Conversation], width float64) Blob {
         let ui = input.Ui
-        let panel = WalletParts.Card(ui, 10, 8, 6)
+        let panel = WalletParts.Card(ui, AppTheme.Space10, AppTheme.Space8, AppTheme.Radius6)
         panel.Width = width
         panel.FlexShrink = 0
         panel.MinHeight = 0
@@ -329,8 +334,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 4,
-                Grow(Label(ui, ui.Strings.Get("messages"), 17, ui.Ink, "")),
+                Gap: AppTheme.Space4,
+                Grow(Label(ui, ui.Strings.Get("messages"), AppTheme.Type17, AppTheme.Ink, "")),
                 WalletParts.Square(
                     ui,
                     "person_add",
@@ -338,8 +343,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                     false,
                     busy,
                     () -> Begin("direct"),
-                    28,
-                    ui.Body
+                    AppTheme.ControlCompact,
+                    AppTheme.Body
                 ),
                 WalletParts.Square(
                     ui,
@@ -348,8 +353,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                     false,
                     busy || input.Session.Messages.Mode != MessengerMode.Send,
                     () -> Begin("group"),
-                    28,
-                    ui.Body
+                    AppTheme.ControlCompact,
+                    AppTheme.Body
                 )
             }
         )
@@ -364,17 +369,22 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             let latest = conversation.Messages.LastOrDefault()
             let row = Goo
                 .Button{
+                BasedOn: AppTheme.ListRowStyle,
+                FlexDirection: FlexDirection.Column,
                 Key: conversation.Id,
                 Width: Percent(100),
                 AlignItems: AlignItems.Stretch,
-                Padding: Edges{Top: 14, Bottom: 14, Left: 8, Right: 8},
+                Padding: Edges{
+                    Top: AppTheme.Space14,
+                    Bottom: AppTheme.Space14,
+                    Left: AppTheme.Space8,
+                    Right: AppTheme.Space8
+                },
                 FlexShrink: 0,
                 MinWidth: 0,
-                Gap: 6,
-                BorderWidth: Edges{Bottom: 1},
-                BorderColor: ui.Rule,
-                BackgroundColor: conversation.Id == input.State.ConversationId ? ui.Active: Color.Transparent,
-                Hover: Style{BackgroundColor: ui.Rule},
+                Gap: AppTheme.Space6,
+                BackgroundColor: conversation.Id == input.State.ConversationId ? AppTheme.Active: Color.Transparent,
+                Hover: Style{BackgroundColor: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Button,
@@ -385,30 +395,44 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 7,
+                    Gap: AppTheme.Space8,
                     MaterialIcons.Create(
                         conversation.IsGroup ? "group": "person",
-                        16,
-                        conversation.Unread > 0 ? ui.Lime: ui.Dim
+                        AppTheme.Icon16,
+                        conversation.Unread > 0 ? AppTheme.Lime: AppTheme.Dim
                     ),
                     Grow(
                         Label(
                             ui,
                             Hidden(ui.Privacy, conversation.Title),
-                            13,
-                            conversation.Id == selected ? ui.Lime: ui.Ink,
+                            AppTheme.Type13,
+                            conversation.Id == selected ? AppTheme.Lime: AppTheme.Ink,
                             ""
                         )
                     ),
-                    Label(ui, latest?.SentAt.ToLocalTime().ToString("HH:mm") ?? "", 10, ui.Dim, "")
+                    Label(ui, latest?.SentAt.ToLocalTime().ToString("HH:mm") ?? "", AppTheme.Type10, AppTheme.Dim, "")
                 },
                 Container{
                     FlexDirection: FlexDirection.Row,
-                    Gap: 8,
-                    Padding: Edges{Left: 23},
+                    Gap: AppTheme.Space8,
+                    Padding: Edges{Left: AppTheme.Space22},
                     MinWidth: 0,
-                    Grow(Label(ui, Hidden(ui.Privacy, Preview(latest?.Text ?? conversation.Handle)), 11, ui.Dim, "")),
-                    Label(ui, conversation.Unread > 0 ? conversation.Unread.ToString(): "", 11, ui.Lime, "")
+                    Grow(
+                        Label(
+                            ui,
+                            Hidden(ui.Privacy, Preview(latest?.Text ?? conversation.Handle)),
+                            AppTheme.Type11,
+                            AppTheme.Dim,
+                            ""
+                        )
+                    ),
+                    Label(
+                        ui,
+                        conversation.Unread > 0 ? conversation.Unread.ToString(): "",
+                        AppTheme.Type11,
+                        AppTheme.Lime,
+                        ""
+                    )
                 }
             }
             WidgetKeyBindings.BindActivation(row)
@@ -423,16 +447,16 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         let header = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 6,
-            Padding: 14,
+            Gap: AppTheme.Space6,
+            Padding: AppTheme.Space14,
             FlexShrink: 0,
-            BorderWidth: Edges{Bottom: 1},
-            BorderColor: ui.Rule,
+            BorderWidth: Edges{Bottom: AppTheme.Border1},
+            BorderColor: AppTheme.Rule,
             Grow(
                 Container{
-                    Gap: 4,
+                    Gap: AppTheme.Space4,
                     MinWidth: 0,
-                    Label(ui, Hidden(ui.Privacy, conversation.Title), 16, ui.Ink, ""),
+                    Label(ui, Hidden(ui.Privacy, conversation.Title), AppTheme.Type16, AppTheme.Ink, ""),
                     Label(
                         ui,
                         Hidden(
@@ -441,8 +465,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                                 conversation.Members.Count(member -> member != input.Session.Messages.OwnAddress) + 1
                             ).ToString() + " " + ui.Strings.Get("members"): conversation.Handle
                         ),
-                        11,
-                        ui.Dim,
+                        AppTheme.Type11,
+                        AppTheme.Dim,
                         ""
                     )
                 }
@@ -460,8 +484,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                         Begin("contact")
                         address = conversation.Id
                     },
-                    30,
-                    ui.Body
+                    AppTheme.ControlCompact,
+                    AppTheme.Body
                 )
             )
         }
@@ -473,8 +497,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 false,
                 busy,
                 () -> Begin("remove"),
-                30,
-                ui.Dim
+                AppTheme.ControlCompact,
+                AppTheme.Dim
             )
         )
         if input.Drawer {
@@ -486,12 +510,21 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                     false,
                     false,
                     input.OnOpen,
-                    30,
-                    ui.Body
+                    AppTheme.ControlCompact,
+                    AppTheme.Body
                 )
             )
             header.Add(
-                WalletParts.Square(ui, "close", ui.Strings.Get("Close"), false, false, input.OnClose, 30, ui.Body)
+                WalletParts.Square(
+                    ui,
+                    "close",
+                    ui.Strings.Get("Close"),
+                    false,
+                    false,
+                    input.OnClose,
+                    AppTheme.ControlCompact,
+                    AppTheme.Body
+                )
             )
         }
         return header
@@ -505,7 +538,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         let maximum = Math.Max(0, Wire.MaxMembers(name))
         let cap = Math.Max(0, maximum - 1)
         let title = group ? "New group": remove ? "Remove conversation": contact ? "Add contact": "New conversation"
-        let content = Container{Gap: 12, MinHeight: 0}
+        let content = Container{Gap: AppTheme.Space12, MinHeight: 0}
         let close Action = () -> {
             if busy {
                 return
@@ -514,7 +547,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             Rebuild()
         }
         if remove {
-            content.Add(Label(ui, Hidden(ui.Privacy, conversation?.Title ?? ""), 14, ui.Ink, ""))
+            content.Add(Label(ui, Hidden(ui.Privacy, conversation?.Title ?? ""), AppTheme.Type14, AppTheme.Ink, ""))
         } else {
             content.Add(
                 Entry(
@@ -557,7 +590,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                     MinHeight: 0,
                     OverflowY: Overflow.Scroll,
                     ScrollbarY: Theme.Read().Scrollbar,
-                    Gap: 3
+                    Gap: AppTheme.Space4
                 }
                 for (label, destination) in input.Contacts {
                     if destination == input.Session.Messages.OwnAddress {
@@ -592,15 +625,15 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                     Label(
                         ui,
                         (members.Count + 1).ToString() + "/" + maximum.ToString() + " " + ui.Strings.Get("members"),
-                        12,
-                        members.Count + 1 > maximum ? ui.Pink: ui.Dim,
+                        AppTheme.Type12,
+                        members.Count + 1 > maximum ? AppTheme.Pink: AppTheme.Dim,
                         ""
                     )
                 )
             }
         }
         if issue.Length > 0 {
-            content.Add(Label(ui, ui.Strings.Explain(issue), 12, ui.Pink, ""))
+            content.Add(Label(ui, ui.Strings.Explain(issue), AppTheme.Type12, AppTheme.Pink, ""))
         }
         return WalletParts.Modal(
             ui,
@@ -680,16 +713,16 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         }
         let verification = message.Verification.ToString()
         let content = Container{
-            Gap: 12,
-            Label(ui, message.SentAt.ToLocalTime().ToString("g"), 12, ui.Dim, ""),
-            Figure(ui, "fee", Amount(ui.Privacy, uint64(message.FeeAtomic)) + " BNT", ui.Ink),
-            Figure(ui, "memos", message.Outputs.ToString(), ui.Ink),
-            Figure(ui, "Confirmed", message.Confirmations.ToString() + "/10", ui.Ink),
+            Gap: AppTheme.Space12,
+            Label(ui, message.SentAt.ToLocalTime().ToString("g"), AppTheme.Type12, AppTheme.Dim, ""),
+            Figure(ui, "fee", Amount(ui.Privacy, uint64(message.FeeAtomic)) + " BNT", AppTheme.Ink),
+            Figure(ui, "memos", message.Outputs.ToString(), AppTheme.Ink),
+            Figure(ui, "Confirmed", message.Confirmations.ToString() + "/10", AppTheme.Ink),
             Label(
                 ui,
                 ui.Strings.Get(verification),
-                12,
-                message.Verification == Verification.Invalid ? ui.Pink: ui.Dim,
+                AppTheme.Type12,
+                message.Verification == Verification.Invalid ? AppTheme.Pink: AppTheme.Dim,
                 ""
             ),
             Copyable(ui, "transaction", message.Txid, Hidden(ui.Privacy, Short(message.Txid)))

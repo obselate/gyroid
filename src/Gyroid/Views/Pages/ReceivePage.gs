@@ -85,10 +85,10 @@ class ReceivePage : Cell[ReceivePageInput] {
         } else {
             ""
         }
-        let dim = List[TextStyleRange]{TextStyleRange(TextRange(0, 11), Style{Color: ui.Dim})}
+        let dim = List[TextStyleRange]{TextStyleRange(TextRange(0, 11), Style{Color: AppTheme.Dim})}
         var start = 11 + input.Address.Length
         for part in query {
-            dim.Add(TextStyleRange(TextRange(start, part.IndexOf('=') + 2), Style{Color: ui.Dim}))
+            dim.Add(TextStyleRange(TextRange(start, part.IndexOf('=') + 2), Style{Color: AppTheme.Dim}))
             start += part.Length + 1
         }
         let payload = if shown == "address" {
@@ -108,17 +108,17 @@ class ReceivePage : Cell[ReceivePageInput] {
         } else {
             nil
         }
-        let status = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8}
+        let status = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: AppTheme.Space8}
         if let output = paid {
             let confirmations = Confirmations(input, output)
-            status.Add(MaterialIcons.Create("check", 14, ui.Lime))
-            status.Add(Label(ui, Amount(ui.Privacy, output.Amount), 12.5, ui.Ink, ""))
+            status.Add(MaterialIcons.Create("check", AppTheme.Icon14, AppTheme.Lime))
+            status.Add(Label(ui, Amount(ui.Privacy, output.Amount), AppTheme.Type13, AppTheme.Ink, ""))
             if confirmations < 10 {
-                status.Add(Label(ui, confirmations.ToString() + "/10", 12.5, ui.Dim, ""))
+                status.Add(Label(ui, confirmations.ToString() + "/10", AppTheme.Type13, AppTheme.Dim, ""))
             }
         } else if let output = possible {
-            status.Add(Badge(ui, ui.Strings.Get("possible payment"), ui.Orange, "warning"))
-            status.Add(Label(ui, Amount(ui.Privacy, output.Amount), 14, ui.Ink, ""))
+            status.Add(Badge(ui, ui.Strings.Get("possible payment"), AppTheme.Orange, "warning"))
+            status.Add(Label(ui, Amount(ui.Privacy, output.Amount), AppTheme.Type14, AppTheme.Ink, ""))
             status.Add(
                 Cell.Mount[InfoTipInput, InfoTip](
                     "possible",
@@ -141,12 +141,12 @@ class ReceivePage : Cell[ReceivePageInput] {
         let code = Container{
             Width: side,
             Height: side,
-            BorderRadius: 10,
+            BorderRadius: AppTheme.Radius10,
             Overflow: Overflow.Hidden,
             BackgroundColor: if input.Privacy || paid != nil {
-                ui.Surface
+                AppTheme.Surface
             } else {
-                ui.Ink
+                AppTheme.Ink
             },
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center,
@@ -162,7 +162,7 @@ class ReceivePage : Cell[ReceivePageInput] {
             }
         }
         if input.Privacy {
-            code.Add(MaterialIcons.Create("visibility_off", 32, ui.Dim))
+            code.Add(MaterialIcons.Create("visibility_off", AppTheme.Icon32, AppTheme.Dim))
         } else if paid != nil {
             code.Add(
                 Shape{
@@ -171,12 +171,14 @@ class ReceivePage : Cell[ReceivePageInput] {
                     Height: side,
                     Path: qrPath,
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: ui.Rule
+                    BackgroundColor: AppTheme.Rule
                 }
             )
-            code.Add(MaterialIcons.Create("check", 56, ui.Mint))
+            code.Add(MaterialIcons.Create("check", AppTheme.Icon56, AppTheme.Mint))
         } else {
-            code.Add(Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: ui.Black})
+            code.Add(
+                Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: AppTheme.Black}
+            )
         }
         let copied = shown != "qr" && ReadOnlySpan[char](input.Clipboard).SequenceEqual(
             System.MemoryExtensions.AsSpan(payload)
@@ -200,12 +202,12 @@ class ReceivePage : Cell[ReceivePageInput] {
                     Rebuild()
                 },
                 Accessibility{Role: AccessibilityRole.Tab, Name: ui.Strings.Get(label), Selected: shown == id},
-                0,
-                13
+                AppTheme.Space0,
+                AppTheme.Type13
             )
             button.FlexGrow = 1
             button.FlexBasis = 0
-            button.Height = 28
+            button.Height = AppTheme.ControlCompact
             button.AlignItems = AlignItems.Center
             button.JustifyContent = JustifyContent.Center
             tabs.Add(button)
@@ -224,23 +226,23 @@ class ReceivePage : Cell[ReceivePageInput] {
                 []TextStyleRange{}
             } else if shown == "address" {
                 []TextStyleRange{
-                    TextStyleRange(TextRange(first, grouped.LastIndexOf(' ') - first), Style{Color: ui.Body})
+                    TextStyleRange(TextRange(first, grouped.LastIndexOf(' ') - first), Style{Color: AppTheme.Body})
                 }
             } else if shown == "qr" {
-                []TextStyleRange{TextStyleRange(TextRange(0, link.Length), Style{Color: ui.Dim})}
+                []TextStyleRange{TextStyleRange(TextRange(0, link.Length), Style{Color: AppTheme.Dim})}
             } else {
                 dim.ToArray()
             },
-            FontFamily: ui.Font,
-            FontSize: 12.5,
-            Color: ui.Ink,
+            FontFamily: AppTheme.Font,
+            FontSize: AppTheme.Type13,
+            Color: AppTheme.Ink,
             TextWrap: TextWrap.Wrap
         }
         let field = FieldBox(
             ui,
             preview,
-            Edges{Left: 14, Right: 14, Top: 12, Bottom: 12},
-            copied ? ui.Mint: ui.FieldEdge
+            Edges{Left: AppTheme.Space14, Right: AppTheme.Space14, Top: AppTheme.Space12, Bottom: AppTheme.Space12},
+            copied ? AppTheme.Mint: AppTheme.FieldEdge
         )
         field.MinHeight = 72
         field.Accessibility = Accessibility{Role: AccessibilityRole.Status}
@@ -255,9 +257,9 @@ class ReceivePage : Cell[ReceivePageInput] {
                 input,
                 "add",
                 "New request",
-                ui.Ink,
-                ui.Edge,
-                ui.Control,
+                AppTheme.Ink,
+                AppTheme.Edge,
+                AppTheme.Control,
                 "",
                 () -> {
                     request.Amount = ""
@@ -267,23 +269,45 @@ class ReceivePage : Cell[ReceivePageInput] {
                 }
             )
         } else if copied {
-            Action(input, "check", "Copied", ui.Mint, ui.Mint, Color.Parse("#00140d"), "clears in 2 min", () -> { })
+            Action(
+                input,
+                "check",
+                "Copied",
+                AppTheme.Mint,
+                AppTheme.Mint,
+                AppTheme.CopiedFill,
+                "clears in 2 min",
+                () -> { }
+            )
         } else if shown == "qr" {
-            Action(input, "download", "Save QR image", ui.Lime, ui.Lime, ui.ActionFill, "", () -> SaveQr(input))
+            Action(
+                input,
+                "download",
+                "Save QR image",
+                AppTheme.Lime,
+                AppTheme.Lime,
+                AppTheme.ActionFill,
+                "",
+                () -> SaveQr(input)
+            )
         } else {
             Action(
                 input,
                 "content_copy",
                 shown == "link" ? "Copy link": "Copy address",
-                ui.Lime,
-                ui.Lime,
-                ui.ActionFill,
+                AppTheme.Lime,
+                AppTheme.Lime,
+                AppTheme.ActionFill,
                 "",
                 () -> ui.Actions.Copy(payload, 120000)
             )
         }
         action.Disabled = input.Busy || shown != "address" && (amountIssue.Length > 0 || memoIssue.Length > 0)
-        let card = WalletParts.Card(ui, input.Height < 700 ? 18.0: 22.0, radius: 14)
+        let card = WalletParts.Card(
+            ui,
+            input.Height < 700 ? AppTheme.Space16: AppTheme.Space22,
+            radius: AppTheme.Space14
+        )
         let form = WalletForm(ui, false, nil, []string{})
         card.Width = Percent(100)
         card.MaxWidth = 900
@@ -293,10 +317,10 @@ class ReceivePage : Cell[ReceivePageInput] {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                Gap: 12,
+                Gap: AppTheme.Space12,
                 MinHeight: 26,
                 FlexShrink: 0,
-                Label(ui, ui.Strings.Get("receive"), 17, ui.Ink, ""),
+                Label(ui, ui.Strings.Get("receive"), AppTheme.Type17, AppTheme.Ink, ""),
                 status
             }
         )
@@ -304,23 +328,23 @@ class ReceivePage : Cell[ReceivePageInput] {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 28,
+                Gap: AppTheme.Space28,
                 MinHeight: 0,
                 Container{
                     FlexShrink: 0,
-                    Padding: 4,
-                    BorderWidth: 2,
-                    BorderRadius: 14,
-                    BorderColor: shown == "qr" && paid == nil ? ui.Lime: Color.Transparent,
-                    Margin: -6,
+                    Padding: AppTheme.Space4,
+                    BorderWidth: AppTheme.Border2,
+                    BorderRadius: AppTheme.Radius14,
+                    BorderColor: shown == "qr" && paid == nil ? AppTheme.Lime: Color.Transparent,
+                    Margin: -AppTheme.Space6,
                     code
                 },
                 Grow(
                     Container{
-                        Gap: 18,
+                        Gap: AppTheme.Space16,
                         Container{
                             FlexDirection: FlexDirection.Row,
-                            Gap: 10,
+                            Gap: AppTheme.Space10,
                             FlexShrink: 0,
                             Container{
                                 FlexGrow: 0.7,
@@ -341,7 +365,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                         } else {
                                             nil
                                         },
-                                        Trailing: Label(ui, "BNT", 12, ui.Dim, ""),
+                                        Trailing: Label(ui, "BNT", AppTheme.Type12, AppTheme.Dim, ""),
                                         OnChange: value -> {
                                             request.Amount = value.Trim()
                                             Rebuild()
@@ -366,12 +390,18 @@ class ReceivePage : Cell[ReceivePageInput] {
                                             } else {
                                                 nil
                                             },
-                                            Leading: MaterialIcons.Create("notes", 16, ui.Dim),
+                                            Leading: MaterialIcons.Create("notes", AppTheme.Icon16, AppTheme.Dim),
                                             Trailing: Container{
                                                 FlexDirection: FlexDirection.Row,
                                                 AlignItems: AlignItems.Center,
-                                                Gap: 8,
-                                                Label(ui, Hidden(ui.Privacy, request.Reference), 14, ui.Dim, ""),
+                                                Gap: AppTheme.Space8,
+                                                Label(
+                                                    ui,
+                                                    Hidden(ui.Privacy, request.Reference),
+                                                    AppTheme.Type14,
+                                                    AppTheme.Dim,
+                                                    ""
+                                                ),
                                                 Meter(
                                                     ui,
                                                     Encoding.UTF8.GetByteCount(full),
@@ -388,7 +418,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                 }
                             )
                         },
-                        Container{Gap: 12, FlexShrink: 0, tabs, field, action}
+                        Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, field, action}
                     }
                 )
             }
@@ -409,27 +439,21 @@ class ReceivePage : Cell[ReceivePageInput] {
         let ui = input.Ui
         let button = Goo
             .Button{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center,
-            Gap: 8,
-            Height: 38,
+            BasedOn: AppTheme.ButtonStyle,
             FlexShrink: 0,
-            BorderWidth: 1,
-            BorderRadius: 8,
             BorderColor: border,
             BackgroundColor: fill,
             Disabled: input.Busy,
-            Hover: Style{BackgroundColor: ui.Rule},
+            Hover: Style{BackgroundColor: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
-            MaterialIcons.Create(icon, 16, color),
-            Label(ui, ui.Strings.Get(label), 14, color, "")
+            MaterialIcons.Create(icon, AppTheme.Icon16, color),
+            Label(ui, ui.Strings.Get(label), AppTheme.Type14, color, "")
         }
         WidgetKeyBindings.BindActivation(button)
         if note.Length > 0 {
-            button.Add(Label(ui, ui.Strings.Get(note), 14, ui.Dim, ""))
+            button.Add(Label(ui, ui.Strings.Get(note), AppTheme.Type14, AppTheme.Dim, ""))
         }
         return button
     }
