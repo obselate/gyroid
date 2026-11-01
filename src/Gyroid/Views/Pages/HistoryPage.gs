@@ -1196,6 +1196,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Dim, ""),
                 (
                     AppTheme.IconButton with{
+                        RootStyle = AppTheme.DisclosureStyle,
                         Icon = MaterialIcons.Create("content_copy", AppTheme.Icon14, AppTheme.Dim),
                         AccessibilityName = ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
                         Disabled = value.Length == 0,
