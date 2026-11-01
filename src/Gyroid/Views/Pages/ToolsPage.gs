@@ -678,7 +678,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     private var issue string = ""
     private var generation int32
     private var current ToolsPhraseInput
-    private let suggestionKey Func[string, string] = word -> word
+    private let suggestionKey Func[string, string] = (word string) -> word
     private let suggestionRow Func[string, Blob]
 
     init() {

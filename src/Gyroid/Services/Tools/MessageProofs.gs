@@ -53,7 +53,7 @@ class MessageProofs {
     }
 
     async func VerifyCoreAsync(address string, message string, signature string, ct CancellationToken) bool {
-        signature = signature.Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "")
+        let normalized = signature.Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "")
         try {
             using let response = await session
                 .Node
@@ -64,7 +64,7 @@ class MessageProofs {
                     writer.WriteStartObject()
                     writer.WriteString("address", WalletValidation.ValidateAddress(address))
                     writer.WriteString("message", message)
-                    writer.WriteString("signature", signature)
+                    writer.WriteString("signature", normalized)
                     writer.WriteEndObject()
                 },
                 ct
