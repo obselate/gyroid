@@ -11,6 +11,7 @@ import System.IO
 
 data struct SeedPageInput {
     var Session WalletSession
+    var Wallet string
     var Ui Presentation
     var Words[]char
     var ClipboardOwner ReadOnlyMemory[uint8]
@@ -23,31 +24,27 @@ data struct SeedPageInput {
     var OnRetry Action
 }
 
-class SeedPage : Cell {
+class SeedPage : Cell, IDisposable {
     private var input SeedPageInput
-    private let configureActions Action[SeedActions]
-
-    init() {
-        configureActions = cell -> cell.Accept(
-            SeedActionsInput{
-                Keys: input.Session.Keys,
-                Ui: input.Ui,
-                Words: input.Words,
-                ClipboardOwner: input.ClipboardOwner,
-                FromWallet: input.FromWallet,
-                Busy: input.Busy,
-                Language: input.Language,
-                ChooseFile: input.ChooseFile,
-                OnDone: input.OnDone
-            }
-        )
-    }
+    private var visible bool
+    private var saved bool
+    private var hold int32
+    private var copiedOwner ReadOnlyMemory[uint8]
+    private var generation int32
 
     func Accept(next SeedPageInput) {
-        if !input.Equals(next) {
-            input = next
-            Rebuild()
+        if next == input {
+            return
         }
+        if next.Wallet != input.Wallet || !Object.ReferenceEquals(input.Words, next.Words) {
+            generation++
+            visible = false
+            saved = false
+            hold = Random.Shared.Next()
+            copiedOwner = ReadOnlyMemory[uint8].Empty
+        }
+        input = next
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -61,50 +58,7 @@ class SeedPage : Cell {
             }
             return card
         }
-        card.Add(Cell.Mount[SeedActions]("seed-actions", configureActions))
-        return card
-    }
-}
-
-data struct SeedActionsInput {
-    var Keys WalletKeys
-    var Ui Presentation
-    var Words[]char
-    var ClipboardOwner ReadOnlyMemory[uint8]
-    var FromWallet bool
-    var Busy bool
-    var Language string
-    var ChooseFile Action[FileDialogKind, string, string, Action[string]]
-    var OnDone Action
-}
-
-class SeedActions : Cell, IDisposable {
-    private var input SeedActionsInput
-    private var visible bool
-    private var saved bool
-    private var hold int32
-    private var copiedOwner ReadOnlyMemory[uint8]
-    private var generation int32
-
-    func Accept(next SeedActionsInput) {
-        if input.Equals(next) {
-            return
-        }
-        if !Object.ReferenceEquals(input.Words, next.Words) {
-            generation++
-            visible = false
-            saved = false
-            hold = Random.Shared.Next()
-            copiedOwner = ReadOnlyMemory[uint8].Empty
-        }
-        input = next
-        Rebuild()
-    }
-
-    override func Build() Blob {
-        let ui = input.Ui
-        let content = Container{Gap: AppTheme.GetPageGap(0)}
-        content.Add(
+        card.Add(
             Cell.Mount[SeedPhraseInput, SeedPhrase](
                 "seed-phrase",
                 SeedPhraseInput{Ui: ui, Words: input.Words, Visible: visible, Hold: hold, Language: input.Language}
@@ -166,11 +120,11 @@ class SeedActions : Cell, IDisposable {
                 true
             )
         )
-        content.Add(actions)
-        return content
+        card.Add(actions)
+        return card
     }
 
-    private func Export(input SeedActionsInput) {
+    private func Export(input SeedPageInput) {
         let current = generation
         input.ChooseFile.Invoke(
             FileDialogKind.SaveFile,
@@ -178,7 +132,7 @@ class SeedActions : Cell, IDisposable {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt"),
             (path string) -> {
                 if current == generation {
-                    input.Ui.Actions.Run(ct -> input.Keys.ExportSeedAsync(path, input.Words, ct))
+                    input.Ui.Actions.Run(ct -> input.Session.Keys.ExportSeedAsync(path, input.Words, ct))
                 }
             }
         )
@@ -186,10 +140,6 @@ class SeedActions : Cell, IDisposable {
 
     func Dispose() {
         generation++
-        visible = false
-        saved = false
-        input = default
-        copiedOwner = ReadOnlyMemory[uint8].Empty
     }
 }
 

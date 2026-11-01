@@ -235,6 +235,7 @@ partial class App : Cell {
         configureSeed = cell -> cell.Accept(
             SeedPageInput{
                 Session: wallet,
+                Wallet: wallet.Settings.ActiveWallet,
                 Ui: ui,
                 Words: seed ?? Array.Empty[char](),
                 ClipboardOwner: ui.Actions.ClipboardOwner,
