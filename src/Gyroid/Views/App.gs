@@ -40,6 +40,7 @@ partial class App : Cell {
 
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
     private let configureLibrary Action[LibraryPage]
+    private let configureMining Action[MiningPage]
 
     private let receiveRequest ReceiveRequest = ReceiveRequest()
     private let configureReceive Action[ReceivePage]
@@ -211,6 +212,24 @@ partial class App : Cell {
                 }
             )
         }
+        configureMining = cell -> cell.Accept(
+            MiningPageInput{
+                Ui: ui,
+                Session: wallet,
+                Window: window,
+                History: miningHistory,
+                Wallet: WalletName(wallet.Settings.ActiveWallet),
+                Network: wallet.Settings.Network,
+                Language: ui.Strings.Language,
+                Busy: ui.Working(),
+                Visible: !hidden &&
+                    window?.IsVisible == true &&
+                    window?.State != WindowState.Minimized &&
+                    window?.Occlusion != WindowOcclusion.Occluded,
+                NodeRunning: wallet.Node.Status.Running,
+                Height: height
+            }
+        )
         openReceive = () -> Navigate(AppPage.Receive)
         finishSeed = () -> FinishSeed()
         contactsChanged = next -> {
@@ -989,24 +1008,7 @@ partial class App : Cell {
         } else if page == AppPage.Receive {
             Cell.Mount[ReceivePage]("receive", configureReceive)
         } else if page == AppPage.Mining {
-            Cell.Mount[MiningPageInput, MiningPage](
-                "mining",
-                MiningPageInput{
-                    Ui: ui,
-                    Session: wallet,
-                    Window: window,
-                    History: miningHistory,
-                    Wallet: WalletName(wallet.Settings.ActiveWallet),
-                    Language: ui.Strings.Language,
-                    Busy: ui.Working(),
-                    Visible: !hidden &&
-                        window?.IsVisible == true &&
-                        window?.State != WindowState.Minimized &&
-                        window?.Occlusion != WindowOcclusion.Occluded,
-                    NodeRunning: wallet.Node.Status.Running,
-                    Height: height
-                }
-            )
+            Cell.Mount[MiningPage]("mining", configureMining)
         } else if page == AppPage.Transactions {
             HistoryView(snapshot)
         } else if page == AppPage.Messages {

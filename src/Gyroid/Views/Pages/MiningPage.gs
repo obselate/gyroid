@@ -37,48 +37,104 @@ data struct MiningPageInput {
     var Height float64
     var Visible bool
     var NodeRunning bool
+    var Network string
 }
 
-class MiningPage : Cell[MiningPageInput], IDisposable {
-    private let plot ElementHandle = ElementHandle()
+data struct MiningCommandInput {
+    var Ui Presentation
+    var Language string
+    var Running bool
+    var Toggle Action
+}
 
-    private let shutdown CancellationTokenSource = CancellationTokenSource()
-    private let refreshRequested chan[bool] = chan[bool](1)
-    private var worker Task? = nil
+data struct MiningSetupInput {
+    var Ui Presentation
+    var Language string
+    var Wallet string
+    var Height float64
+    var Threads int32
+    var SetThreads Action[int32]
+}
 
+data struct MiningRateInput {
+    var Ui Presentation
+    var Language string
+    var Height float64
+    var Rate float64
+}
+
+data struct MiningReadingsInput {
+    var Ui Presentation
+    var Language string
+    var Status MiningStatus
+    var Height float64
+}
+
+data struct MiningChartInput {
+    var Ui Presentation
+    var Language string
+    var Samples[]MiningSample
+}
+
+class MiningPage : Cell, IDisposable {
+    private let lifetime CancellationTokenSource = CancellationTokenSource()
+    private let toggle Action
+    private let setThreads Action[int32]
+    private var source MiningPageInput
+    private var request CancellationTokenSource?
+    private var timer WindowTimer?
+    private var generation int32
     private var opened bool
-
     private var disposed bool
-    private var visible bool
     private var unavailable bool
-    private var running bool
-    private var nodeRunning bool
+    private var loading bool
+    private var acting bool
+    private var refreshPending bool
+    private var samples[]MiningSample = []MiningSample{}
 
-    private var hover int32 = -1
+    init() {
+        toggle = () -> Toggle()
+        setThreads = value -> SetThreads(value)
+    }
 
-    protected override func Build(input MiningPageInput) Blob {
-        let shown = input.Visible
-        let connected = input.NodeRunning
-        if nodeRunning != connected {
-            nodeRunning = connected
-            if opened && connected {
-                refreshRequested.Writer.TryWrite(true)
-            }
-        }
-        if visible != shown {
-            visible = shown
-            if opened && shown {
-                refreshRequested.Writer.TryWrite(true)
-            }
-        }
-        if !opened {
+    func Accept(input MiningPageInput) {
+        let replaced = !opened ||
+            source.Session != input.Session ||
+            source.Window != input.Window ||
+            source.Wallet != input.Wallet ||
+            source.Network != input.Network ||
+            source.Visible != input.Visible ||
+            source.NodeRunning != input.NodeRunning
+        let changed = !opened || source != input
+        source = input
+        if replaced {
             opened = true
-            worker = RunWorkerAsync(input, Context.FromToken(shutdown.Token))
+            generation++
+            request?.Cancel()
+            request?.Dispose()
+            timer?.Dispose()
+            timer = nil
+            loading = false
+            acting = false
+            refreshPending = false
+            if input.Visible && input.NodeRunning {
+                guard let window = input.Window else {
+                    return
+                }
+                request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
+                Refresh()
+            }
         }
+        if changed {
+            Rebuild()
+        }
+    }
+
+    override func Build() Blob {
+        let input = source
         let ui = input.Ui
         let status = input.History.Status
-        let compact = input.Height < 700
-        let card = WalletParts.PageCard(ui, height: input.Height, maxWidth: 1180, fill: true)
+        let card = WalletParts.PageCard(ui, height: input.Height, maxWidth: status.Running ? 1180.0: 620.0, fill: true)
         let head = WalletParts.Header(
             Label(ui, ui.Strings.Get("mining"), AppTheme.Type17, AppTheme.Ink, ""),
             AppTheme.Space10,
@@ -98,160 +154,180 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             )
         )
         head.MinHeight = 34
+        head.Add(
+            Cell.Mount[MiningCommandInput, MiningCommand](
+                "command",
+                MiningCommandInput{Ui: ui, Language: input.Language, Running: status.Running, Toggle: toggle}
+            )
+        )
         card.Add(head)
-        if unavailable || !input.Session.Node.Status.Running {
+        if unavailable || !input.NodeRunning {
             card.MaxWidth = 620
             card.Add(Label(ui, ui.Strings.Get("Node unavailable"), AppTheme.Type14, AppTheme.Body, ""))
-            return Container{FlexGrow: 1, AlignItems: AlignItems.Center, JustifyContent: JustifyContent.Center, card}
-        }
-        if !status.Running {
-            card.MaxWidth = 620
-            card.Add(Setup(input))
-            return Container{
-                FlexGrow: 1,
-                MinHeight: 0,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
-                card
-            }
-        }
-        head.Add(
-            Command(
-                input,
-                "stop",
-                "Stop",
-                AppTheme.Ink,
-                AppTheme.Edge,
-                () -> Act(input, ct -> input.Session.Mining.StopAsync(ct))
+        } else if !status.Running {
+            card.Add(
+                Cell.Mount[MiningSetupInput, MiningSetup](
+                    "setup",
+                    MiningSetupInput{
+                        Ui: ui,
+                        Language: input.Language,
+                        Wallet: input.Wallet,
+                        Height: input.Height,
+                        Threads: status.Threads,
+                        SetThreads: setThreads
+                    }
+                )
             )
-        )
-        card.MaxWidth = 1180
-        card.FlexGrow = 1
-        let samples = input.History.Samples
-        let rate = if samples.Count > 0 {
-            samples[samples.Count - 1].Rate
         } else {
-            status.Hashrate
-        }
-        let text = rate.ToString("F1", CultureInfo.InvariantCulture)
-        card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.FlexEnd,
-                Gap: AppTheme.Space8,
-                FlexShrink: 0,
-                TextParts.Value(
-                    ui,
+            card.FlexGrow = 1
+            let rate = samples.Length > 0 ? samples[samples.Length - 1].Rate: status.Hashrate
+            card.Add(
+                Cell.Mount[MiningRateInput, MiningRate](
                     "rate",
-                    ui.Strings.Get("hashrate") + " " + text + " H/s",
-                    text,
-                    AppTheme.GetMajorFigureSize(input.Height),
-                    AppTheme.Ink
-                ),
-                Container{Padding: Edges{Bottom: AppTheme.Space4}, Label(ui, "H/s", AppTheme.Type16, AppTheme.Body, "")}
-            }
-        )
-        card.Add(Chart(input))
-        let stats = Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: compact ? AppTheme.Space8: AppTheme.Space12,
-            Padding: Edges{Top: AppTheme.Space12},
-            BorderWidth: Edges{Top: AppTheme.Border1},
-            BorderColor: AppTheme.Rule,
-            FlexShrink: 0
-        }
-        let size = compact ? AppTheme.Type14: AppTheme.Type16
-        stats.Add(TextParts.Figure(ui, "threads", status.Threads.ToString(), "", size, AppTheme.Ink))
-        stats.Add(TextParts.Figure(ui, "hashes", Count(status.Hashes), "", size, AppTheme.Ink))
-        stats.Add(TextParts.Figure(ui, "blocks found", Count(status.Blocks), "", size, AppTheme.Ink))
-        stats.Add(
-            TextParts.Figure(
-                ui,
-                "since",
-                status.Started.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture),
-                "",
-                size,
-                AppTheme.Ink
+                    MiningRateInput{Ui: ui, Language: input.Language, Height: input.Height, Rate: rate}
+                )
             )
-        )
-        card.Add(stats)
-        return Container{FlexGrow: 1, MinHeight: 0, AlignItems: AlignItems.Center, card}
+            card.Add(
+                Cell.Mount[MiningChartInput, MiningChart](
+                    "chart",
+                    MiningChartInput{Ui: ui, Language: input.Language, Samples: samples}
+                )
+            )
+            card.Add(
+                Cell.Mount[MiningReadingsInput, MiningReadings](
+                    "readings",
+                    MiningReadingsInput{Ui: ui, Language: input.Language, Status: status, Height: input.Height}
+                )
+            )
+        }
+        return Container{
+            FlexGrow: 1,
+            MinHeight: 0,
+            AlignItems: AlignItems.Center,
+            JustifyContent: status.Running ? JustifyContent.FlexStart: JustifyContent.Center,
+            card
+        }
     }
 
     func Dispose() {
         disposed = true
-        shutdown.Cancel()
-        worker?.GetAwaiter().GetResult()
-        shutdown.Dispose()
-        refreshRequested.Writer.TryComplete()
+        generation++
+        timer?.Dispose()
+        lifetime.Cancel()
+        request?.Cancel()
+        request?.Dispose()
+        lifetime.Dispose()
     }
 
-    private func Act(input MiningPageInput, action Func[CancellationToken, Task]) {
-        input.Ui.Actions.Run(action, () -> refreshRequested.Writer.TryWrite(true))
-    }
-
-    private async func RunWorkerAsync(input MiningPageInput, parentContext Context) {
-        try {
-            scope {
-                go Poll(input, ctx)
-            }
-        } catch (failure OperationCanceledException) when disposed { } catch (failure Exception) {
-            Console.Error.WriteLine("Mining background task failed: " + failure.GetType().Name)
-            input.Window?.TryPost(() -> input.Ui.Actions.Report("Mining background task failed"))
-        }
-    }
-
-    private func Poll(input MiningPageInput, pageContext Context) {
-        while !pageContext.IsCancelled {
-            if visible {
-                await Load(input, pageContext)
-            }
-            if visible && running {
-                select {
-                    case <- refreshRequested { }
-                    case <- after(TimeSpan.FromSeconds(5)) { }
-                }
-            } else {
-                select {
-                    case <- refreshRequested { }
-                }
-            }
-        }
-    }
-
-    private async func Load(input MiningPageInput, pageContext Context) {
-        var status MiningStatus? = nil
-        try {
-            status = await input.Session.Mining.StatusAsync(pageContext.Token)
-        } catch (failure OperationCanceledException) when pageContext.IsCancelled {
+    private func Toggle() {
+        if disposed || unavailable || !source.NodeRunning || source.Busy || acting {
             return
-        } catch (failure Exception) { }
-        running = status?.Running == true
+        }
+        let mining = source.Session.Mining
+        if source.History.Status.Running {
+            Act(ct -> mining.StopAsync(ct))
+        } else {
+            Act(ct -> mining.StartAsync(ct))
+        }
+    }
+
+    private func SetThreads(value int32) {
+        if disposed || source.Busy || acting || value < 1 || value > Environment.ProcessorCount {
+            return
+        }
+        let mining = source.Session.Mining
+        Act(ct -> mining.SetThreadsAsync(value, ct))
+    }
+
+    private func Act(action Func[CancellationToken, Task]) {
+        guard let current = request else {
+            return
+        }
+        acting = true
+        go Execute(action, source, generation, current.Token)
+    }
+
+    private func Execute(
+        action Func[CancellationToken, Task],
+        input MiningPageInput,
+        id int32,
+        token CancellationToken
+    ) {
+        var message = ""
+        try {
+            await action(token)
+        } catch (failure OperationCanceledException) when token.IsCancellationRequested {
+            return
+        } catch (failure WalletException) {
+            message = failure.Message
+        } catch (failure Exception) {
+            message = "Operation failed"
+        }
         input.Window?.TryPost(
             () -> {
-                if disposed {
+                if disposed || id != generation {
                     return
                 }
-                guard let value = status else {
-                    unavailable = true
-                    input.History.Samples.Clear()
-                    Rebuild()
+                acting = false
+                if message.Length > 0 {
+                    input.Ui.Actions.Report(message)
+                }
+                Refresh()
+            }
+        )
+    }
+
+    private func Refresh() {
+        if disposed || !source.Visible || !source.NodeRunning {
+            return
+        }
+        if loading {
+            refreshPending = true
+            return
+        }
+        guard let current = request else {
+            return
+        }
+        timer?.Dispose()
+        timer = nil
+        loading = true
+        go Load(source, generation, current.Token)
+    }
+
+    private func Load(input MiningPageInput, id int32, token CancellationToken) {
+        var status MiningStatus? = nil
+        try {
+            status = await input.Session.Mining.StatusAsync(token)
+        } catch (failure OperationCanceledException) when token.IsCancellationRequested {
+            return
+        } catch (failure Exception) { }
+        input.Window?.TryPost(
+            () -> {
+                if disposed || id != generation {
                     return
                 }
+                loading = false
+                let previous = input.History.Status
                 let recovered = unavailable
-                unavailable = false
-                let changed = value.Running ||
-                    value.Running != input
-                    .History
-                    .Status
-                    .Running ||
-                    value.Threads != input
-                    .History
-                    .Status
-                    .Threads
-                Record(input.History, value)
-                if changed || recovered {
+                unavailable = status == nil
+                if let value = status {
+                    Record(input.History, value)
+                    if value.Running {
+                        samples = input.History.Samples.ToArray()
+                    }
+                    if value != previous || recovered {
+                        Rebuild()
+                    }
+                } else if !recovered {
+                    input.History.Samples.Clear()
+                    samples = []MiningSample{}
                     Rebuild()
+                }
+                if refreshPending {
+                    refreshPending = false
+                    Refresh()
+                } else if input.History.Status.Running {
+                    timer = input.Window?.SetTimeout(() -> Refresh(), 5000)
                 }
             }
         )
@@ -282,10 +358,30 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             samples.RemoveAt(0)
         }
     }
+}
 
-    private func Setup(input MiningPageInput) Blob {
+class MiningCommand : Cell[MiningCommandInput] {
+    protected override func Build(input MiningCommandInput) Blob {
+        let color = input.Running ? AppTheme.Ink: AppTheme.Lime
+        return ControlParts.Button(
+            input.Ui,
+            input.Running ? "Stop": "Start mining",
+            input.Toggle,
+            appearance: AppTheme.Button with{
+                FontSize = AppTheme.Type13,
+                BorderColor = input.Running ? AppTheme.Edge: AppTheme.Lime,
+                TextColor = color,
+                HoverBackgroundColor = AppTheme.Rule,
+                Leading = MaterialIcons.Create(input.Running ? "stop": "play_arrow", AppTheme.Icon14, color)
+            }
+        )
+    }
+}
+
+class MiningSetup : Cell[MiningSetupInput] {
+    protected override func Build(input MiningSetupInput) Blob {
         let ui = input.Ui
-        let threads = input.History.Status.Threads
+        let threads = input.Threads
         let cores = Environment.ProcessorCount
         let total = Math.Max(1.0, Math.Round(float64(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes) / 1073741824))
         let share = Math.Min(1.0, float64(threads) * 2 / total)
@@ -326,8 +422,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                                 threads > 1 ? AppTheme.Ink: AppTheme.Dim
                             ),
                             ui.Strings.Get("Fewer threads"),
-                            () -> Act(input, ct -> input.Session.Mining.SetThreadsAsync(threads - 1, ct)),
-                            threads <= 1 || input.Busy,
+                            () -> input.SetThreads(threads - 1),
+                            threads <= 1,
                             size: AppTheme.ControlCompact
                         ),
                         Container{
@@ -354,8 +450,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                                 threads > 0 && threads < cores ? AppTheme.Ink: AppTheme.Dim
                             ),
                             ui.Strings.Get("More threads"),
-                            () -> Act(input, ct -> input.Session.Mining.SetThreadsAsync(threads + 1, ct)),
-                            threads <= 0 || threads >= cores || input.Busy,
+                            () -> input.SetThreads(threads + 1),
+                            threads <= 0 || threads >= cores,
                             size: AppTheme.ControlCompact
                         )
                     }
@@ -391,49 +487,73 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     }
                 ),
             },
-            Container{
-                FlexDirection: FlexDirection.Row,
-                JustifyContent: JustifyContent.FlexEnd,
-                Command(
-                    input,
-                    "play_arrow",
-                    "Start mining",
-                    AppTheme.Lime,
-                    AppTheme.Lime,
-                    () -> Act(input, ct -> input.Session.Mining.StartAsync(ct))
-                )
-            }
         }
     }
 
     private func Row(ui Presentation, wide bool, label string, value Blob) Blob ->
     TextParts.KeyValue(ui, ui.Strings.Get(label), value, labelWidth: wide ? 110.0: 90.0)
+}
 
-    private func Command(
-        input MiningPageInput,
-        icon string,
-        label string,
-        color Color,
-        border Color,
-        action Action
-    ) Blob -> ControlParts
-        .Button(
-        input.Ui,
-        label,
-        action,
-        busy: input.Busy,
-        appearance: AppTheme.Button with{
-            FontSize = AppTheme.Type13,
-            BorderColor = border,
-            TextColor = color,
-            HoverBackgroundColor = AppTheme.Rule,
-            Leading = MaterialIcons.Create(icon, AppTheme.Icon14, color)
-        }
-    )
-
-    private func Chart(input MiningPageInput) Blob {
+class MiningRate : Cell[MiningRateInput] {
+    protected override func Build(input MiningRateInput) Blob {
         let ui = input.Ui
-        let samples = input.History.Samples
+        let text = input.Rate.ToString("F1", CultureInfo.InvariantCulture)
+        return Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.FlexEnd,
+            Gap: AppTheme.Space8,
+            FlexShrink: 0,
+            TextParts.Value(
+                ui,
+                "rate",
+                ui.Strings.Get("hashrate") + " " + text + " H/s",
+                text,
+                AppTheme.GetMajorFigureSize(input.Height),
+                AppTheme.Ink
+            ),
+            Container{Padding: Edges{Bottom: AppTheme.Space4}, Label(ui, "H/s", AppTheme.Type16, AppTheme.Body, "")}
+        }
+    }
+}
+
+class MiningReadings : Cell[MiningReadingsInput] {
+    protected override func Build(input MiningReadingsInput) Blob {
+        let ui = input.Ui
+        let status = input.Status
+        let compact = input.Height < 700
+        let stats = Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: compact ? AppTheme.Space8: AppTheme.Space12,
+            Padding: Edges{Top: AppTheme.Space12},
+            BorderWidth: Edges{Top: AppTheme.Border1},
+            BorderColor: AppTheme.Rule,
+            FlexShrink: 0
+        }
+        let size = compact ? AppTheme.Type14: AppTheme.Type16
+        stats.Add(TextParts.Figure(ui, "threads", status.Threads.ToString(), "", size, AppTheme.Ink))
+        stats.Add(TextParts.Figure(ui, "hashes", Count(status.Hashes), "", size, AppTheme.Ink))
+        stats.Add(TextParts.Figure(ui, "blocks found", Count(status.Blocks), "", size, AppTheme.Ink))
+        stats.Add(
+            TextParts.Figure(
+                ui,
+                "since",
+                status.Started.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture),
+                "",
+                size,
+                AppTheme.Ink
+            )
+        )
+        return stats
+    }
+}
+
+class MiningChart : Cell[MiningChartInput] {
+    private let plot ElementHandle = ElementHandle()
+    private var hover int32 = -1
+
+    protected override func Build(input MiningChartInput) Blob {
+        let ui = input.Ui
+        let samples = input.Samples
         var peak = 0.0
         for sample in samples {
             peak = Math.Max(peak, sample.Rate)
@@ -471,14 +591,14 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             Height: 14,
             FlexShrink: 0
         }
-        if samples.Count > 1 {
+        if samples.Length > 1 {
             let first = samples[0].Time
-            let span = Math.Max(1.0, (samples[samples.Count - 1].Time - first).TotalSeconds)
+            let span = Math.Max(1.0, (samples[samples.Length - 1].Time - first).TotalSeconds)
             let format = span >= 300 ? "HH:mm": "HH:mm:ss"
             let line = PathBuilder(0, 0, 1000, 1000)
             let fill = PathBuilder(0, 0, 1000, 1000)
             fill.MoveTo(0, 1000)
-            for index in 0 ... samples.Count {
+            for index in 0 ... samples.Length {
                 let x = (samples[index].Time - first).TotalSeconds / span * 1000
                 let y = 1000 - samples[index].Rate / top * 1000
                 if index == 0 {
@@ -516,11 +636,11 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             area.Add(
                 ChartParts.Point(
                     Percent(100),
-                    Percent((1 - samples[samples.Count - 1].Rate / top) * 100),
+                    Percent((1 - samples[samples.Length - 1].Rate / top) * 100),
                     AppTheme.Lime
                 )
             )
-            if hover >= 0 && hover < samples.Count {
+            if hover >= 0 && hover < samples.Length {
                 let sample = samples[hover]
                 let x = (sample.Time - first).TotalSeconds / span
                 let y = 1 - sample.Rate / top
@@ -577,13 +697,13 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         }
     }
 
-    private func Track(samples List[MiningSample], position float64) {
+    private func Track(samples[]MiningSample, position float64) {
         var nearest = -1
-        if position >= 0 && samples.Count > 1 {
+        if position >= 0 && samples.Length > 1 {
             let first = samples[0].Time
-            let span = Math.Max(1.0, (samples[samples.Count - 1].Time - first).TotalSeconds)
+            let span = Math.Max(1.0, (samples[samples.Length - 1].Time - first).TotalSeconds)
             var distance = 2.0
-            for index in 0 ... samples.Count {
+            for index in 0 ... samples.Length {
                 let gap = Math.Abs((samples[index].Time - first).TotalSeconds / span - position)
                 if gap < distance {
                     distance = gap
@@ -593,7 +713,6 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         }
         if nearest != hover {
             hover = nearest
-            Rebuild()
         }
     }
 
