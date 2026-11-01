@@ -33,7 +33,6 @@ data struct MiningPageInput {
     var History MiningHistory
     var Wallet string
     var Language string
-    var Busy bool
     var Height float64
     var Visible bool
     var NodeRunning bool
@@ -88,7 +87,6 @@ class MiningPage : Cell, IDisposable {
     private var disposed bool
     private var unavailable bool
     private var loading bool
-    private var acting bool
     private var refreshPending bool
     private var samples[]MiningSample = []MiningSample{}
 
@@ -115,7 +113,6 @@ class MiningPage : Cell, IDisposable {
             timer?.Dispose()
             timer = nil
             loading = false
-            acting = false
             refreshPending = false
             if input.Visible && input.NodeRunning {
                 guard let window = input.Window else {
@@ -220,7 +217,7 @@ class MiningPage : Cell, IDisposable {
     }
 
     private func Toggle() {
-        if disposed || unavailable || !source.NodeRunning || source.Busy || acting {
+        if disposed || unavailable || !source.NodeRunning || source.Ui.Working() {
             return
         }
         let mining = source.Session.Mining
@@ -232,7 +229,7 @@ class MiningPage : Cell, IDisposable {
     }
 
     private func SetThreads(value int32) {
-        if disposed || source.Busy || acting || value < 1 || value > Environment.ProcessorCount {
+        if disposed || source.Ui.Working() || value < 1 || value > Environment.ProcessorCount {
             return
         }
         let mining = source.Session.Mining
@@ -240,39 +237,16 @@ class MiningPage : Cell, IDisposable {
     }
 
     private func Act(action Func[CancellationToken, Task]) {
-        guard let current = request else {
-            return
-        }
-        acting = true
-        go Execute(action, source, generation, current.Token)
-    }
-
-    private func Execute(
-        action Func[CancellationToken, Task],
-        input MiningPageInput,
-        id int32,
-        token CancellationToken
-    ) {
-        var message = ""
-        try {
-            await action(token)
-        } catch (failure OperationCanceledException) when token.IsCancellationRequested {
-            return
-        } catch (failure WalletException) {
-            message = failure.Message
-        } catch (failure Exception) {
-            message = "Operation failed"
-        }
-        input.Window?.TryPost(
+        let id = generation
+        source
+            .Ui
+            .Actions
+            .Run(
+            action,
             () -> {
-                if disposed || id != generation {
-                    return
+                if !disposed && id == generation {
+                    Refresh()
                 }
-                acting = false
-                if message.Length > 0 {
-                    input.Ui.Actions.Report(message)
-                }
-                Refresh()
             }
         )
     }
@@ -291,7 +265,10 @@ class MiningPage : Cell, IDisposable {
         timer?.Dispose()
         timer = nil
         loading = true
-        go Load(source, generation, current.Token)
+        let input = source
+        let id = generation
+        let token = current.Token
+        go Load(input, id, token)
     }
 
     private func Load(input MiningPageInput, id int32, token CancellationToken) {

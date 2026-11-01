@@ -221,7 +221,6 @@ partial class App : Cell {
                 Wallet: WalletName(wallet.Settings.ActiveWallet),
                 Network: wallet.Settings.Network,
                 Language: ui.Strings.Language,
-                Busy: ui.Working(),
                 Visible: !hidden &&
                     window?.IsVisible == true &&
                     window?.State != WindowState.Minimized &&
