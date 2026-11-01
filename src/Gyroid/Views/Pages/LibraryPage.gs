@@ -29,7 +29,7 @@ data struct LibraryInput {
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnNavigate Action[AppPage]
     var OnCreate Action[string, []char]
-    var OnBackup Action[[]char]
+    var OnUnlock Action[string, Func[CancellationToken, Task], Action]
 }
 
 class LibraryPage : Cell, IDisposable {
@@ -144,7 +144,7 @@ class LibraryPage : Cell, IDisposable {
                         Issue: issue,
                         ChooseFile: input.ChooseFile,
                         OnNavigate: input.OnNavigate,
-                        OnBackup: input.OnBackup,
+                        OnUnlock: input.OnUnlock,
                         OnStart: start
                     }
                 )
@@ -174,7 +174,7 @@ data struct LibraryListInput {
     var Issue string
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnNavigate Action[AppPage]
-    var OnBackup Action[[]char]
+    var OnUnlock Action[string, Func[CancellationToken, Task], Action]
     var OnStart Action[string]
 }
 
@@ -185,7 +185,6 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
     private var password string = ""
     private var issue string = ""
     private var busy bool
-    private var backup[]char = []char{}
 
     protected override func Build(input LibraryListInput) Blob {
         let ui = input.Ui
@@ -458,11 +457,34 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
     }
 
     private func Unlock(input LibraryListInput, filename string) {
-        let secret = password.ToCharArray()
-        Array.Clear(backup)
-        backup = secret.ToArray()
+        let text = password
+        let secret = text.ToCharArray()
+        let session = input.Session
+        let active = input.ActiveWallet
+        var message = ""
         password = ""
-        Run(ct -> OpenWallet(input.Session, input.ActiveWallet, filename, secret, ct), true, secret, filename)
+        issue = ""
+        busy = true
+        generation++
+        let id = generation
+        input.OnUnlock(
+            text,
+            ct -> OpenWallet(session, active, filename, secret, value -> message = value, ct),
+            () -> {
+                if id != generation || lifetime.IsCancellationRequested {
+                    return
+                }
+                guard let current = Input as LibraryListInput else {
+                    return
+                }
+                if session != current.Session || current.ActiveWallet != filename {
+                    return
+                }
+                busy = false
+                issue = message
+                Rebuild()
+            }
+        )
     }
 
     private async func OpenWallet(
@@ -470,43 +492,36 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         active string,
         filename string,
         secret[]char,
+        report Action[string],
         ct CancellationToken
     ) {
-        if filename != active {
-            await session.Library.ChooseWalletAsync(filename, ct)
+        try {
+            if filename != active {
+                await session.Library.ChooseWalletAsync(filename, ct)
+            }
+            await session.UnlockAsync(secret, ct)
+        } catch (failure Exception) {
+            report(failure.Message)
+        } finally {
+            Array.Clear(secret)
         }
-        await session.UnlockAsync(secret, ct)
     }
 
-    private func Run(
-        action Func[CancellationToken, Task],
-        unlocking bool = false,
-        secret[]?char = nil,
-        expectedWallet string = ""
-    ) {
+    private func Run(action Func[CancellationToken, Task], expectedWallet string = "") {
         guard let source = Input as LibraryListInput else {
-            if let value = secret {
-                Array.Clear(value)
-            }
             return
         }
         guard let owner = source.Ui.Actions.window else {
-            if let value = secret {
-                Array.Clear(value)
-            }
             return
         }
         if busy {
-            if let value = secret {
-                Array.Clear(value)
-            }
             return
         }
         busy = true
         issue = ""
         generation++
         let token = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, owner.Closed)
-        go Complete(action, source, owner, generation, token, unlocking, secret, expectedWallet)
+        go Complete(action, source, owner, generation, token, expectedWallet)
     }
 
     private async func Complete(
@@ -515,8 +530,6 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         owner Window,
         id int32,
         token CancellationTokenSource,
-        unlocking bool,
-        secret[]?char,
         expectedWallet string
     ) {
         var message = ""
@@ -527,9 +540,6 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         } catch (failure Exception) {
             message = failure.Message
         } finally {
-            if let value = secret {
-                Array.Clear(value)
-            }
             token.Dispose()
         }
         owner.TryPost(
@@ -546,14 +556,6 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 }
                 busy = false
                 issue = message
-                if unlocking && message.Length == 0 && source.Session.Keys.BackupPending {
-                    let transferred = backup
-                    backup = []char{}
-                    source.OnBackup(transferred)
-                } else {
-                    Array.Clear(backup)
-                    backup = []char{}
-                }
                 Rebuild()
             }
         )
@@ -563,7 +565,6 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         generation++
         lifetime.Cancel()
         lifetime.Dispose()
-        Array.Clear(backup)
         password = ""
     }
 }
