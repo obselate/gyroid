@@ -289,7 +289,10 @@ class LibraryList : Cell, IDisposable {
                 )
             )
             let list = VirtualRows(input.Wallets, 48 + AppTheme.Space8, rowKey, rowBuilder, false)
-            list.Height = input.Wallets.Count * (48 + AppTheme.Space8)
+            let expandedHeight = (opened ?? input.ActiveWallet).Length > 0 ? AppTheme.ControlRegular +
+                AppTheme.Space12: 0
+            let issueHeight = issue.Length > 0 ? AppTheme.ControlRegular + AppTheme.Space16 + AppTheme.Space10: 0
+            list.Height = input.Wallets.Count * (48 + AppTheme.Space8) + expandedHeight + issueHeight
             list.MinHeight = 0
             list.MaxHeight = Percent(100)
             list.FlexShrink = 1
