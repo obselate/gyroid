@@ -703,17 +703,22 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     private var generation int32
     private var current ToolsPhraseInput
     private let suggestionKey Func[string, string] = (word string) -> word
-    private let suggestionRow Func[string, Blob]
+    private var suggestionRow Func[string, Blob]
     private let lifetime CancellationTokenSource = CancellationTokenSource()
 
     init() {
-        suggestionRow = word -> ControlParts.Button(
-            current.Region.Ui,
-            word,
-            () -> Answer(current, word),
-            false,
-            suggestions.Count > 0 && word == suggestions[0]
-        )
+        suggestionRow = word -> BuildSuggestion(word, "")
+    }
+
+    private func BuildSuggestion(word string, first string) Blob {
+        let style = word == first ? AppTheme.PrimaryButton: AppTheme.Button
+        return (
+            style with{
+                Content = word,
+                OnClick = () -> Answer(current, word),
+                FontFamily = AppTheme.Font
+            }
+        ).Build()
     }
 
     private func Reveal(input ToolsRegionInput) {
@@ -811,6 +816,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             return
         }
         typed = value
+        let previous = suggestions.Count > 0 ? suggestions[0]: ""
         suggestions = if value.Length == 0 {
             List[string]()
         } else {
@@ -819,6 +825,10 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
                 .Where((word string) -> word.StartsWith(value, StringComparison.Ordinal))
                 .Take(5)
                 .ToList()
+        }
+        let first = suggestions.Count > 0 ? suggestions[0]: ""
+        if first != previous {
+            suggestionRow = word -> BuildSuggestion(word, first)
         }
     }
 
@@ -991,6 +1001,8 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             )
             list.Height = AppTheme.ControlRegular
             list.MinHeight = 0
+            list.FlexDirection = FlexDirection.Row
+            list.FlexWrap = FlexWrap.Wrap
             list.FlexGrow = 1
             pick.Add(list)
         }
