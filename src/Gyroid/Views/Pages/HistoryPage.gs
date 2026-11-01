@@ -773,6 +773,7 @@ class HistoryRibbon : Cell, IDisposable {
     private let plot ElementHandle = ElementHandle()
     private var generation int32
     private var request CancellationTokenSource?
+    private var disposed bool
     private var data HistoryRibbonData = HistoryRibbonData{
         Bins: [40]HistoryRibbonBin,
         Received: [40]float64,
@@ -787,7 +788,7 @@ class HistoryRibbon : Cell, IDisposable {
             cell.Accept(current, plotWidth, plotHeight, data.Bins)
         }
         plot.MetricsChanged += metrics -> {
-            if metrics.BorderBox.Width != plotWidth {
+            if !disposed && metrics.BorderBox.Width != plotWidth {
                 plotWidth = metrics.BorderBox.Width
                 PrepareBins()
                 Rebuild()
@@ -862,6 +863,7 @@ class HistoryRibbon : Cell, IDisposable {
     }
 
     public func Dispose() {
+        disposed = true
         generation++
         request?.Cancel()
         request?.Dispose()
