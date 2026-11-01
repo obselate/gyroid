@@ -92,7 +92,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             JustifyContent: JustifyContent.FlexEnd,
             AlignItems: AlignItems.Center,
             Gap: 4,
-            Label(ui, time, 11, statusColor, "")
+            Text{Content: time, FontFamily: ui.Font, FontSize: 11, FontWeight: 700, Color: statusColor}
         }
         if message.Outgoing && message.State != MessageState.Failed {
             let tip = delivered ? ui
