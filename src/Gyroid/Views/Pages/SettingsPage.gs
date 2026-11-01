@@ -407,8 +407,9 @@ class SettingsGeneral : Cell, IDisposable {
 
     func Dispose() {
         lifetime?.Cancel()
-        for request in requests.Values {
-            request.Dispose()
+        for key in requests.Keys {
+            generations[key]++
+            requests[key].Dispose()
         }
         lifetime?.Dispose()
     }
@@ -1317,6 +1318,9 @@ class SettingsAdvanced : Cell, IDisposable {
     private var context SettingsPageInput
     private var openPurge Action[string, string, int32]
     private var lifetime CancellationTokenSource?
+    private var chainRequest CancellationTokenSource?
+    private var certificateRequest CancellationTokenSource?
+    private var checkpointGeneration int32
     private var generation int32
     private var certifyGeneration int32
     private var loadIssue string = ""
@@ -1335,14 +1339,33 @@ class SettingsAdvanced : Cell, IDisposable {
         context = input
         this.openPurge = openPurge
         let settings = input.Session.Settings
-        if input.Section == "advanced" &&
-            (!chainLoaded || state.Network != settings.Network || state.Directory != settings.DataDirectory) {
+        if lifetime == nil || state.Network != settings.Network || state.Directory != settings.DataDirectory {
             lifetime?.Cancel()
+            chainRequest?.Dispose()
+            certificateRequest?.Dispose()
+            chainRequest = nil
+            certificateRequest = nil
             lifetime?.Dispose()
-            let current = CancellationTokenSource.CreateLinkedTokenSource(
-                input.Window?.Closed ?? CancellationToken.None
-            )
-            lifetime = current
+            lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
+            generation++
+            certifyGeneration++
+            checkpointGeneration++
+            chainLoaded = false
+            dataSize = -1
+            sizeText = "-"
+            freeSpace = 0
+            dataWallets = 0
+            trustedCheckpoint = 0
+            localCheckpoint = 0
+            autoSave = nil
+            certificate = nil
+            loadIssue = ""
+        }
+        if input.Section == "advanced" && !chainLoaded {
+            chainRequest?.Cancel()
+            chainRequest?.Dispose()
+            let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime?.Token ?? CancellationToken.None)
+            chainRequest = current
             generation++
             chainLoaded = true
             go LoadChain(input.Session, settings.Copy(), input.Window, generation, current.Token)
@@ -1374,7 +1397,10 @@ class SettingsAdvanced : Cell, IDisposable {
     func Dispose() {
         generation++
         certifyGeneration++
+        checkpointGeneration++
         lifetime?.Cancel()
+        chainRequest?.Dispose()
+        certificateRequest?.Dispose()
         lifetime?.Dispose()
     }
 
@@ -1595,7 +1621,10 @@ class SettingsAdvanced : Cell, IDisposable {
                         input,
                         "auto save",
                         autoSave == true,
-                        () -> Checkpoints(input, ct -> input.Session.CheckpointAutoSaveAsync(autoSave != true, ct)),
+                        () -> {
+                            let enabled = autoSave != true
+                            Checkpoints(input, ct -> input.Session.CheckpointAutoSaveAsync(enabled, ct))
+                        },
                         autoSave == nil
                     ),
                     Button(
@@ -1691,17 +1720,22 @@ class SettingsAdvanced : Cell, IDisposable {
     }
 
     private func Checkpoints(input SettingsPageInput, task Func[CancellationToken, Task]) {
-        let request = generation
+        guard let owner = lifetime else {
+            return
+        }
+        checkpointGeneration++
+        let request = checkpointGeneration
+        let token = owner.Token
         let network = state.Network
         let directory = state.Directory
         input
             .Ui
             .Actions
             .Run(
-            task,
+            ct -> SaveCheckpoints(task, token, ct),
             () -> {
-                if request == generation &&
-                    lifetime?.IsCancellationRequested == false &&
+                if request == checkpointGeneration &&
+                    !token.IsCancellationRequested &&
                     state.Network == network &&
                     state.Directory == directory {
                     chainLoaded = false
@@ -1711,12 +1745,25 @@ class SettingsAdvanced : Cell, IDisposable {
         )
     }
 
+    private async func SaveCheckpoints(
+        task Func[CancellationToken, Task],
+        token CancellationToken,
+        ct CancellationToken
+    ) {
+        using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, ct)
+        await task.Invoke(linked.Token)
+    }
+
     private func Certify(input SettingsPageInput) {
         guard let lifetime = lifetime, let owner = input.Window else {
             return
         }
+        certificateRequest?.Cancel()
+        certificateRequest?.Dispose()
+        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token)
+        certificateRequest = current
         certifyGeneration++
-        go ReadCertificate(input.Session, state.Network, owner, certifyGeneration, lifetime.Token)
+        go ReadCertificate(input.Session, state.Network, owner, certifyGeneration, current.Token)
     }
 
     private async func ReadCertificate(
