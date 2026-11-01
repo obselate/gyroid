@@ -421,12 +421,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let automatic = settings.NodeMode == "automatic"
         let height = List[Blob]()
         if status.Running {
+            let heightText = Count(status.Height)
             height.Add(
                 Value(
                     ui,
                     "height",
-                    ui.Strings.Get("Height") + " " + Count(status.Height),
-                    Count(status.Height),
+                    ui.Strings.Get("Height") + " " + heightText,
+                    heightText,
                     14,
                     AppTheme.Mint
                 )
@@ -650,12 +651,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let scan = List[Blob]()
         if let balance = input.Snapshot.Balance {
+            let scanText = Count(balance.ScanHeight)
             scan.Add(
                 Value(
                     ui,
                     "scan",
-                    ui.Strings.Get("scan height") + " " + Count(balance.ScanHeight),
-                    Count(balance.ScanHeight),
+                    ui.Strings.Get("scan height") + " " + scanText,
+                    scanText,
                     AppTheme.Type14,
                     AppTheme.Ink
                 )
@@ -1008,6 +1010,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             }
         )
+        let checkpointText = Count(localCheckpoint)
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -1017,8 +1020,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Value(
                     ui,
                     "checkpoint",
-                    ui.Strings.Get("checkpoint") + " " + Count(localCheckpoint),
-                    Count(localCheckpoint),
+                    ui.Strings.Get("checkpoint") + " " + checkpointText,
+                    checkpointText,
                     figure,
                     AppTheme.Ink,
                     AppTheme.Dim
