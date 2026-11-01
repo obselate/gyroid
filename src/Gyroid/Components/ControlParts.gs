@@ -79,7 +79,7 @@ class ControlParts {
                 )
             }
             return Cell.Mount[ToggleGroupInput, ToggleGroup](
-                key.Length > 0 ? key: label,
+                key.Length > 0 ? key: "segment-" + label,
                 ToggleGroupInput{
                     Items: items.ToArray(),
                     SelectedIds: []string{selected},
