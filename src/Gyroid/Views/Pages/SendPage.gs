@@ -31,8 +31,6 @@ class SendRow {
 data struct SendPageInput {
     var Session WalletSession
     var Wallet string
-    var Endpoint string
-    var CoreStarted int64
     var Rows List[SendRow]
     var Display SendDisplay
     var Spendable uint64?
@@ -77,7 +75,6 @@ class SendPage : Cell, IDisposable {
     private var sent SendEstimate?
     private var result SendResult?
     private var reviewRows[]SendReviewRow = []SendReviewRow{}
-    private var balanceAmounts[]uint64 = []uint64{}
     private var balanceRows[]SendReviewRow = []SendReviewRow{}
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var request CancellationTokenSource?
@@ -100,18 +97,10 @@ class SendPage : Cell, IDisposable {
     }
 
     public func Accept(next SendPageInput) {
-        if next == input && input.Rows.Count > 0 {
+        if (next with{Sends = sent == nil ? input.Sends: next.Sends}) == input && input.Rows.Count > 0 {
             return
         }
-        if input.Session != next.Session ||
-            input
-            .Display
-            .Network != next
-            .Display
-            .Network ||
-            input.Wallet != next.Wallet ||
-            input.Endpoint != next.Endpoint ||
-            input.CoreStarted != next.CoreStarted {
+        if input.Display.Network != next.Display.Network || input.Wallet != next.Wallet {
             generation++
             request?.Cancel()
             estimate = nil
@@ -149,11 +138,10 @@ class SendPage : Cell, IDisposable {
         }
         let over = total > spendable
         canSubmit = ready && !over && total > 0
-        let amounts = input.Rows.Select(row -> Atoms(row.Amount) ?? uint64(0)).ToArray()
-        if !balanceAmounts.SequenceEqual(amounts) {
-            balanceAmounts = amounts
-        }
-        let rows = input.Rows.Select(row -> SendReviewRow{Id: row.Id, Address: row.Address}).ToArray()
+        let rows = input
+            .Rows
+            .Select(row -> SendReviewRow{Id: row.Id, Address: row.Address, Amount: Atoms(row.Amount) ?? uint64(0)})
+            .ToArray()
         if !balanceRows.SequenceEqual(rows) {
             balanceRows = rows
         }
@@ -214,7 +202,6 @@ class SendPage : Cell, IDisposable {
                 "totals",
                 SendBalanceInput{
                     Display: display,
-                    Amounts: balanceAmounts,
                     Rows: balanceRows,
                     Spendable: spendable,
                     Total: total,
@@ -324,20 +311,7 @@ class SendPage : Cell, IDisposable {
     }
 
     private func Current(id int32, session WalletSession, network string, wallet string) bool ->
-    id == generation &&
-        session
-        .Settings
-        .Network == network &&
-        session
-        .Settings
-        .ActiveWallet == wallet &&
-        session
-        .Settings
-        .Endpoint == input.Endpoint &&
-        session
-        .Node
-        .Api
-        .verifiedStart == input.CoreStarted
+    id == generation && session.Settings.Network == network && session.Settings.ActiveWallet == wallet
 
     private func Review() {
         if !canSubmit {
@@ -348,7 +322,10 @@ class SendPage : Cell, IDisposable {
         let wallet = input.Wallet
         let token = BeginRequest()
         let id = generation
-        let drafts = input.Rows.Select(row -> SendReviewRow{Id: row.Id, Address: row.Address}).ToArray()
+        let drafts = input
+            .Rows
+            .Select(row -> SendReviewRow{Id: row.Id, Address: row.Address, Amount: Atoms(row.Amount) ?? uint64(0)})
+            .ToArray()
         let requests = input
             .Rows
             .Select(
@@ -466,6 +443,11 @@ class SendPage : Cell, IDisposable {
 
 class SendRecipientEditor : Cell[SendEditorInput] {
     private var form WalletForm
+    private let memoLines[]string = []string{
+        "Use this optional note for a payment reference, invoice number or message (up to 124 UTF-8 bytes).",
+        "It is encrypted on chain for the recipient.",
+        "The sender keeps a copy in their wallet."
+    }
 
     protected override func Build(input SendEditorInput) Blob {
         let display = input.Display
@@ -877,11 +859,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
                         InfoTipInput{
                             Ui: ui,
                             Topic: "About memos",
-                            Lines: []string{
-                                "Use this optional note for a payment reference, invoice number or message (up to 124 UTF-8 bytes).",
-                                "It is encrypted on chain for the recipient.",
-                                "The sender keeps a copy in their wallet."
-                            },
+                            Lines: memoLines,
                             Language: input.Language,
                             Width: 300
                         }
@@ -898,7 +876,6 @@ class SendRecipientEditor : Cell[SendEditorInput] {
 
 data struct SendBalanceInput {
     var Display SendDisplay
-    var Amounts[]uint64
     var Rows[]SendReviewRow
     var Spendable uint64
     var Total uint64
@@ -938,7 +915,7 @@ class SendBalance : Cell[SendBalanceInput] {
     private func Bar(value SendBalanceInput) Blob {
         let input = value.Display
         let ui = input.Ui
-        let amounts = value.Amounts
+        let amounts = value.Rows.Select(row -> row.Amount).ToArray()
         let spendable = value.Spendable
         let fee = value.Fee
         let change = value.Change
@@ -1017,6 +994,7 @@ class SendBalance : Cell[SendBalanceInput] {
 data struct SendReviewRow {
     var Id string
     var Address string
+    var Amount uint64
 }
 
 data struct SendReviewInput {
@@ -1030,15 +1008,10 @@ data struct SendReviewInput {
 
 class SendReview : Cell[SendReviewInput] {
     private var openRow string = ""
-    private var reviewAmounts[]uint64 = []uint64{}
 
     protected override func Build(value SendReviewInput) Blob {
         let input = value.Display
         let pending = value.Estimate
-        let amounts = pending.Recipients.Select(recipient -> recipient.Amount).ToArray()
-        if !reviewAmounts.SequenceEqual(amounts) {
-            reviewAmounts = amounts
-        }
         let spendable = value.Spendable
         let ui = input.Ui
         let compact = input.Height < 700
@@ -1075,7 +1048,6 @@ class SendReview : Cell[SendReviewInput] {
                 "review-totals",
                 SendBalanceInput{
                     Display: input,
-                    Amounts: reviewAmounts,
                     Rows: value.Rows,
                     Fee: pending.Fee,
                     Change: pending.Change,

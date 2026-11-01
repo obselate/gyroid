@@ -260,8 +260,6 @@ partial class App : Cell {
             SendPageInput{
                 Session: wallet,
                 Wallet: wallet.Settings.ActiveWallet,
-                Endpoint: wallet.Settings.Endpoint,
-                CoreStarted: wallet.Node.Api.verifiedStart,
                 Rows: sendRows,
                 Display: SendDisplay{
                     Ui: ui,
