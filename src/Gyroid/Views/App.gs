@@ -840,6 +840,9 @@ partial class App : Cell, IDisposable {
             Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
             window?.TryPost(
                 () -> {
+                    if closed {
+                        return
+                    }
                     error = "Window background task failed"
                     Rebuild()
                 }
@@ -854,7 +857,13 @@ partial class App : Cell, IDisposable {
             throw failure
         } catch (failure Exception) {
             Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
-            window?.TryPost(() -> ui.Actions.Report("Window background task failed"))
+            window?.TryPost(
+                () -> {
+                    if !closed {
+                        ui.Actions.Report("Window background task failed")
+                    }
+                }
+            )
         }
     }
 
@@ -945,6 +954,9 @@ partial class App : Cell, IDisposable {
         }
         window?.TryPost(
             () -> {
+                if closed || ct.IsCancellationRequested {
+                    return
+                }
                 refreshing = false
                 if message != refreshError {
                     refreshError = message
@@ -975,6 +987,9 @@ partial class App : Cell, IDisposable {
         }
         host.TryPost(
             () -> {
+                if closed {
+                    return
+                }
                 if path.Length > 0 {
                     chosen(path)
                 } else if message.Length > 0 {

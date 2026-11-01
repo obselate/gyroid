@@ -526,7 +526,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                         peeking = true
                     },
                     OnKeyUp: (event KeyEvent) -> Hide(),
-                    OnBlur: (event FocusEvent) -> Hide(),
+                    OnBlur: peeking ? ((event FocusEvent) -> Hide()): nil,
                     OnPointerDown: press,
                     OnPointerUp: (event PointerEvent) -> Hide(),
                     OnPointerCancel: (event PointerEvent) -> Hide(),
