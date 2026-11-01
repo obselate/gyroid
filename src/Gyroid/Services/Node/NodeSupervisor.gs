@@ -294,8 +294,9 @@ class NodeSupervisor : IDisposable {
                     }
                 }
             }
-        } catch (error IOException) { } catch (error ObjectDisposedException) {
-        } catch (error OperationCanceledException) when cancellation.IsCancellationRequested { }
+        } catch (error IOException) { } catch (error ObjectDisposedException) { } catch (
+            error OperationCanceledException
+        ) when cancellation.IsCancellationRequested { }
     }
 
     private func UseInstallation(settings WalletSettings) {
