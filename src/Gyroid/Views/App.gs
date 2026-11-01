@@ -252,6 +252,22 @@ partial class App : Cell {
         createWallet = (filename, buffer) -> Run(ct -> CreateWallet(filename, buffer, ct))
         backupSeed = buffer -> StartSeed(buffer)
         closeSettings = () -> Back()
+        let unlockLibrary Action[string, Func[CancellationToken, Task], Action] = (password, work, completed) -> {
+            var retained = password
+            Run(
+                work,
+                () -> {
+                    try {
+                        completed()
+                        if wallet.Snapshot.State == WalletState.Unlocked && wallet.Keys.BackupPending {
+                            backupSeed(retained.ToCharArray())
+                        }
+                    } finally {
+                        retained = ""
+                    }
+                }
+            )
+        }
         configureLibrary = cell -> cell.Accept(
             LibraryInput{
                 Session: wallet,
@@ -263,22 +279,7 @@ partial class App : Cell {
                 ChooseFile: chooseFile,
                 OnNavigate: navigate,
                 OnCreate: createWallet,
-                OnUnlock: (password, work, completed) -> {
-                    var retained = password
-                    Run(
-                        work,
-                        () -> {
-                            try {
-                                completed()
-                                if wallet.Snapshot.State == WalletState.Unlocked && wallet.Keys.BackupPending {
-                                    backupSeed(retained.ToCharArray())
-                                }
-                            } finally {
-                                retained = ""
-                            }
-                        }
-                    )
-                }
+                OnUnlock: unlockLibrary
             }
         )
         ApplyPreferences()

@@ -46,6 +46,7 @@ class LibraryPage : Cell, IDisposable {
     private var wallets SortedDictionary[string, DateTime] = SortedDictionary[string, DateTime](StringComparer.Ordinal)
     private let start Action[string]
     private let back Action
+    private let configureList Action[LibraryList]
 
     init() {
         start = kind -> {
@@ -56,6 +57,23 @@ class LibraryPage : Cell, IDisposable {
             form = ""
             Rebuild()
         }
+        configureList = cell -> cell.Accept(
+            LibraryListInput{
+                Session: input.Session,
+                Ui: input.Ui,
+                State: input.State,
+                ActiveWallet: input.ActiveWallet,
+                Directory: directory,
+                Busy: input.Busy,
+                Language: input.Language,
+                Wallets: wallets,
+                Issue: issue,
+                ChooseFile: input.ChooseFile,
+                OnNavigate: input.OnNavigate,
+                OnUnlock: input.OnUnlock,
+                OnStart: start
+            }
+        )
     }
 
     func Accept(next LibraryInput) {
@@ -83,7 +101,9 @@ class LibraryPage : Cell, IDisposable {
         let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, owner.Closed)
         request = current
         generation++
-        go Load(next.Session.Library, owner, generation, current.Token)
+        let id = generation
+        let token = current.Token
+        go Load(next.Session.Library, owner, id, token)
     }
 
     private func Load(library WalletLibrary, owner Window, id int32, token CancellationToken) {
@@ -129,26 +149,7 @@ class LibraryPage : Cell, IDisposable {
                 )
             )
         } else {
-            card.Add(
-                Cell.Mount[LibraryListInput, LibraryList](
-                    network + directory + input.ActiveWallet,
-                    LibraryListInput{
-                        Session: input.Session,
-                        Ui: input.Ui,
-                        State: input.State,
-                        ActiveWallet: input.ActiveWallet,
-                        Directory: directory,
-                        Busy: input.Busy,
-                        Language: input.Language,
-                        Wallets: wallets,
-                        Issue: issue,
-                        ChooseFile: input.ChooseFile,
-                        OnNavigate: input.OnNavigate,
-                        OnUnlock: input.OnUnlock,
-                        OnStart: start
-                    }
-                )
-            )
+            card.Add(Cell.Mount[LibraryList](network + directory + input.ActiveWallet, configureList))
         }
         return card
     }
@@ -178,7 +179,8 @@ data struct LibraryListInput {
     var OnStart Action[string]
 }
 
-class LibraryList : Cell[LibraryListInput], IDisposable {
+class LibraryList : Cell, IDisposable {
+    private var input LibraryListInput
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var generation int32
     private var opened string?
@@ -186,7 +188,15 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
     private var issue string = ""
     private var busy bool
 
-    protected override func Build(input LibraryListInput) Blob {
+    func Accept(next LibraryListInput) {
+        if EqualityComparer[LibraryListInput].Default.Equals(input, next) {
+            return
+        }
+        input = next
+        Rebuild()
+    }
+
+    override func Build() Blob {
         let ui = input.Ui
         let card = Container{Gap: AppTheme.Space14, MinHeight: 0}
         let header = WalletParts.Header(
@@ -254,11 +264,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         return card
     }
 
-    private func ImportCurrent() {
-        if let source = Input as LibraryListInput {
-            ImportFile(source)
-        }
-    }
+    private func ImportCurrent() -> ImportFile(input)
 
     private func ImportFile(input LibraryListInput) {
         input.ChooseFile.Invoke(
@@ -423,6 +429,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                             value -> {
                                 password = value
                                 issue = ""
+                                Rebuild()
                             },
                             secret: true,
                             disabled: input.Busy || busy,
@@ -474,9 +481,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 if id != generation || lifetime.IsCancellationRequested {
                     return
                 }
-                guard let current = Input as LibraryListInput else {
-                    return
-                }
+                let current = this.input
                 if session != current.Session || current.ActiveWallet != filename {
                     return
                 }
@@ -508,9 +513,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
     }
 
     private func Run(action Func[CancellationToken, Task], expectedWallet string = "") {
-        guard let source = Input as LibraryListInput else {
-            return
-        }
+        let source = input
         guard let owner = source.Ui.Actions.window else {
             return
         }
@@ -520,8 +523,9 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         busy = true
         issue = ""
         generation++
+        let id = generation
         let token = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, owner.Closed)
-        go Complete(action, source, owner, generation, token, expectedWallet)
+        go Complete(action, source, owner, id, token, expectedWallet)
     }
 
     private async func Complete(
@@ -544,9 +548,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         }
         owner.TryPost(
             () -> {
-                guard let current = Input as LibraryListInput else {
-                    return
-                }
+                let current = input
                 if id != generation ||
                     lifetime.IsCancellationRequested ||
                     source.Session != current.Session ||
@@ -600,11 +602,9 @@ class LibraryMenu : Cell[LibraryMenuInput] {
         Menu(input)
     }
 
-    private func Start(kind string) {
+    private func Start(input LibraryMenuInput, kind string) {
         menu = false
-        if let source = Input as LibraryMenuInput {
-            source.OnStart(kind)
-        }
+        input.OnStart(kind)
     }
 
     private func ImportFile(input LibraryMenuInput) {
@@ -629,9 +629,9 @@ class LibraryMenu : Cell[LibraryMenuInput] {
                 AccessibilityName: ui.Strings.Get("Add wallet"),
                 Content: Container{
                     MinWidth: 0,
-                    Item(input, "add", "Create", () -> Start("Create")),
-                    Item(input, "replay", "Restore · 12 words", () -> Start("Phrase")),
-                    Item(input, "key", "Import view keys", () -> Start("ViewOnly")),
+                    Item(input, "add", "Create", () -> Start(input, "Create")),
+                    Item(input, "replay", "Restore · 12 words", () -> Start(input, "Phrase")),
+                    Item(input, "key", "Import view keys", () -> Start(input, "ViewOnly")),
                     Item(input, "draft", "Open file", () -> ImportFile(input))
                 },
                 OnDismiss: reason -> {
@@ -729,6 +729,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                 name,
                 value -> {
                     name = value
+                    Rebuild()
                 },
                 disabled: disabled
             )
@@ -740,6 +741,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                     phrase,
                     value -> {
                         phrase = value
+                        Rebuild()
                     },
                     true,
                     disabled: disabled
@@ -753,6 +755,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                     spendKey,
                     value -> {
                         spendKey = value.Trim()
+                        Rebuild()
                     },
                     disabled: disabled
                 )
@@ -763,6 +766,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                     viewKey,
                     value -> {
                         viewKey = value.Trim()
+                        Rebuild()
                     },
                     true,
                     disabled: disabled
@@ -778,6 +782,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
             issue,
             value -> {
                 issue = value
+                Rebuild()
             },
             disabled
         )
@@ -809,7 +814,8 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
         busy = true
         issue = ""
         generation++
-        go Import(input, filename, secret, extra, publicKey, directory, network.ToString(), owner, generation, token)
+        let id = generation
+        go Import(input, filename, secret, extra, publicKey, directory, network.ToString(), owner, id, token)
     }
 
     private async func Import(
@@ -843,12 +849,8 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
         }
         owner.TryPost(
             () -> {
-                guard let current = Input as LibraryFormInput else {
-                    return
-                }
                 if id != generation ||
                     lifetime.IsCancellationRequested ||
-                    source.Session != current.Session ||
                     directory != source
                     .Session
                     .Settings
