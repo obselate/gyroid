@@ -120,7 +120,6 @@ class Strings {
             case "Input ended before a value was provided": "输入在提供值之前结束"
             case "Core startup timed out": "核心启动超时"
             case "Wallet sync complete": "钱包同步完成"
-            case "Daemon returned an incomplete received history page": "节点返回的收款历史记录页面不完整"
             case "       Use - for an address, transaction key or memo to read one line from stdin or a terminal": "       地址、交易密钥或备注使用 -，可从标准输入或终端读取一行"
             case "       gyroid sync | unload | load <filename.dat>": "       gyroid sync | unload | load <文件名.dat>"
             case "       gyroid sign [--] <message> | verify <address> <message> <signature>": "       gyroid sign [--] <消息> | verify <地址> <消息> <签名>"

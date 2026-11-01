@@ -55,16 +55,16 @@ class SettingsStore {
                     if root.ValueKind != JsonValueKind.Object {
                         throw JsonException()
                     }
-                    settings.ActiveWallet = Text(root, "active_wallet")
-                    settings.Network = Text(root, "network", "mainnet")
-                    settings.Endpoint = Text(root, "endpoint", settings.Endpoint)
-                    settings.DataDirectory = Text(root, "data_directory")
-                    settings.WalletDirectory = Text(root, "wallet_directory")
-                    settings.BinaryPath = Text(root, "binary_path")
-                    settings.ListenAddress = Text(root, "listen_address", settings.ListenAddress)
-                    settings.NodeMode = Text(root, "node_mode", "automatic")
-                    settings.Language = Text(root, "language")
-                    settings.Privacy = Flag(root, "privacy")
+                    settings.ActiveWallet = NodeJson.Text(root, "active_wallet")
+                    settings.Network = NodeJson.Text(root, "network", "mainnet")
+                    settings.Endpoint = NodeJson.Text(root, "endpoint", settings.Endpoint)
+                    settings.DataDirectory = NodeJson.Text(root, "data_directory")
+                    settings.WalletDirectory = NodeJson.Text(root, "wallet_directory")
+                    settings.BinaryPath = NodeJson.Text(root, "binary_path")
+                    settings.ListenAddress = NodeJson.Text(root, "listen_address", settings.ListenAddress)
+                    settings.NodeMode = NodeJson.Text(root, "node_mode", "automatic")
+                    settings.Language = NodeJson.Text(root, "language")
+                    settings.Privacy = NodeJson.Flag(root, "privacy")
                     if root.TryGetProperty("auto_lock_minutes", out let minutes) {
                         settings.AutoLockMinutes = if minutes.ValueKind == JsonValueKind.Number && minutes.TryGetInt32(
                             out let value
@@ -74,14 +74,14 @@ class SettingsStore {
                             0
                         }
                     }
-                    settings.Background = Text(root, "background", "glyphs")
-                    settings.ReduceMotion = Flag(root, "reduce_motion")
+                    settings.Background = NodeJson.Text(root, "background", "glyphs")
+                    settings.ReduceMotion = NodeJson.Flag(root, "reduce_motion")
                     if root.TryGetProperty("ui_scale_percent", out let scale) &&
                         scale.ValueKind == JsonValueKind.Number &&
                         scale.TryGetInt32(out let percent) && percent >= 100 && percent <= 200 && percent % 25 == 0 {
                         settings.UiScalePercent = percent
                     }
-                    settings.StartInTray = Flag(root, "start_in_tray")
+                    settings.StartInTray = NodeJson.Flag(root, "start_in_tray")
                     if root.TryGetProperty("background_lock_minutes", out let backgroundMinutes) {
                         settings.BackgroundLockMinutes = if backgroundMinutes.ValueKind == JsonValueKind.Number &&
                             backgroundMinutes.TryGetInt32(out let value) {
@@ -135,16 +135,6 @@ class SettingsStore {
             }
             return true
         }
-
-        private func Text(root JsonElement, key string, fallback string = "") string ->
-        if root.TryGetProperty(key, out let value) && value.ValueKind == JsonValueKind.String {
-            value.GetString() ?? fallback
-        } else {
-            fallback
-        }
-
-        private func Flag(root JsonElement, key string) bool ->
-        root.TryGetProperty(key, out let value) && value.ValueKind == JsonValueKind.True
 
         private func WriteSetting(
             writer Utf8JsonWriter,

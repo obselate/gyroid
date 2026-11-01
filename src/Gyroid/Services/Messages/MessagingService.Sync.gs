@@ -285,8 +285,6 @@ partial class MessagingService {
                 receivedMessages = acceptedReceived
                 sentMessages = acceptedSent
                 appliedRevision = currentRevision
-                TipHeight = height
-                TipTime = tip
                 Error = local.Error
             }
             session.History.ApplyMessages()

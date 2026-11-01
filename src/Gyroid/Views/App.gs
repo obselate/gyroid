@@ -734,7 +734,6 @@ partial class App : Cell {
                 .Height,
             Privacy: ui.Privacy,
             Language: ui.Strings.Language,
-            Decode: ui.Actions.Progress("page"),
             Width: width,
             OnReceive: openReceive,
             OnMessage: OpenMessage
@@ -929,7 +928,6 @@ partial class App : Cell {
                     Privacy: ui.Privacy,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
-                    Decode: ui.Actions.Progress("page"),
                     Width: width,
                     Height: height,
                     OnNavigate: navigate,

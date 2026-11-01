@@ -32,7 +32,6 @@ data struct HistoryInput {
     var Tip uint64
     var Privacy bool
     var Language string
-    var Decode float64
     var Width float64
     var OnReceive Action
     var OnMessage Action[string]

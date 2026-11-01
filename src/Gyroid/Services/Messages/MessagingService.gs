@@ -28,8 +28,6 @@ partial class MessagingService {
     private var revision int64
     private var appliedRevision int64 = -1
     var Error string = ""
-    var TipHeight int64
-    var TipTime DateTimeOffset
 
     prop Conversations IReadOnlyList[Conversation] -> conversations
     prop OwnAddress string -> ownAddress
