@@ -134,32 +134,31 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let nav = WalletParts.Card(ui, AppTheme.Space8, AppTheme.Space2, AppTheme.Radius14)
         nav.Width = navWidth
         nav.FlexShrink = 0
-        let entries = List[NavigationItem]()
-        for id in sections {
-            entries.Add(
-                NavigationItem{
-                    Id: id,
-                    Label: ui.Strings.Get(id),
-                    Content: MaterialIcons.Create(
-                        switch id {
-                            case "security": "lock"
-                            case "node": "dns"
-                            case "wallet": "account_balance_wallet"
-                            case "advanced": "build"
-                            default: "notes"
-                        },
-                        AppTheme.Icon18,
-                        id == section ? AppTheme.Lime: AppTheme.Body
-                    )
-                }
-            )
+        let entries = [sections.Count]NavigationItem
+        for index in 0 ... sections.Count {
+            let id = sections[index]
+            entries[index] = NavigationItem{
+                Id: id,
+                Label: ui.Strings.Get(id),
+                Content: MaterialIcons.Create(
+                    switch id {
+                        case "security": "lock"
+                        case "node": "dns"
+                        case "wallet": "account_balance_wallet"
+                        case "advanced": "build"
+                        default: "notes"
+                    },
+                    AppTheme.Icon18,
+                    id == section ? AppTheme.Lime: AppTheme.Body
+                )
+            }
         }
         nav.Add(
             Navigation(
                 ui,
                 "settings-navigation",
                 NavigationRailInput{
-                    Items: entries.ToArray(),
+                    Items: entries,
                     SelectedId: section,
                     AccessibilityName: ui.Strings.Get("settings"),
                     Expanded: true,
