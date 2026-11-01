@@ -27,6 +27,7 @@ import System.Threading.Tasks
 
 data struct SettingsPageInput {
     var Session WalletSession
+    var Settings WalletSettings
     var Ui Presentation
     var Tools ToolsState
     var Window Window?
@@ -181,7 +182,7 @@ class SettingsPage : Cell {
     }
 
     func Accept(input SettingsPageInput) {
-        current = input
+        current = input with{Settings = input.Session.Settings}
         Rebuild()
     }
 
@@ -345,7 +346,7 @@ class SettingsGeneral : Cell, IDisposable {
     func Accept(input SettingsPageInput) {
         context = input
         lifetime ??= CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
-        let settings = input.Session.Settings
+        let settings = input.Settings
         rowHeight = RowHeight(input.Height)
         let next = SettingsGeneralInput{
             Language: input.Language,
@@ -363,7 +364,7 @@ class SettingsGeneral : Cell, IDisposable {
     }
 
     override func Build() Blob {
-        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, General(context, context.Session.Settings)}
+        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, General(context, context.Settings)}
         if issue.Length > 0 {
             content.Add(Label(context.Ui, context.Ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
         }
@@ -543,7 +544,7 @@ class SettingsSecurity : Cell {
         context = input
         this.showDialog = showDialog
         rowHeight = RowHeight(input.Height)
-        let settings = input.Session.Settings
+        let settings = input.Settings
         let next = SettingsSecurityInput{
             Language: input.Language,
             AutoLock: settings.AutoLockMinutes,
@@ -560,7 +561,7 @@ class SettingsSecurity : Cell {
         }
     }
 
-    override func Build() Blob -> Security(context, context.Session.Settings)
+    override func Build() Blob -> Security(context, context.Settings)
 
     private func Open(kind string) -> showDialog(kind)
 
@@ -669,7 +670,7 @@ class SettingsNode : Cell, IDisposable {
         context = input
         startupOwner?.Accept(input)
         rowHeight = RowHeight(input.Height)
-        let settings = input.Session.Settings
+        let settings = input.Settings
         let status = input.Node
         let next = SettingsNodeInput{
             Language: input.Language,
@@ -707,7 +708,7 @@ class SettingsNode : Cell, IDisposable {
         }
     }
 
-    override func Build() Blob -> NodeSection(context, context.Session.Settings)
+    override func Build() Blob -> NodeSection(context, context.Settings)
 
     private func ReadDirectory(path string, owner Window?, request int32, token CancellationToken) {
         var exists = false
@@ -905,9 +906,9 @@ class SettingsStartup : Cell {
 
     func Accept(input SettingsPageInput) {
         context = input
-        let settings = input.Session.Settings
+        let settings = input.Settings
         if source?.StartupDiffers(settings) != false {
-            source = settings.Copy()
+            source = settings
             draft = settings.Copy()
             applyPending = false
             listenIssue = ""
@@ -940,7 +941,7 @@ class SettingsStartup : Cell {
         guard let value = draft else {
             return Container{}
         }
-        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, Startup(context, context.Session.Settings, value)}
+        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, Startup(context, context.Settings, value)}
         if applyPending {
             content.Add(ConfirmApply(context))
         }
@@ -1151,7 +1152,7 @@ class SettingsWallet : Cell, IDisposable {
     func Accept(input SettingsPageInput, showDialog Action[string]) {
         context = input
         this.showDialog = showDialog
-        if lifetime == nil || state.Wallet != input.Session.Settings.ActiveWallet {
+        if lifetime == nil || state.Wallet != input.Settings.ActiveWallet {
             lifetime?.Cancel()
             lifetime?.Dispose()
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
@@ -1159,7 +1160,7 @@ class SettingsWallet : Cell, IDisposable {
             syncing = false
         }
         rowHeight = RowHeight(input.Height)
-        let settings = input.Session.Settings
+        let settings = input.Settings
         let next = SettingsWalletInput{
             Language: input.Language,
             ScanHeight: input.Snapshot.Balance?.ScanHeight ?? uint64(0),
@@ -1178,7 +1179,7 @@ class SettingsWallet : Cell, IDisposable {
 
     override func Build() Blob {
         let pane = Container{MinHeight: 0, Gap: AppTheme.Space12}
-        WalletSection(context, context.Session.Settings, pane)
+        WalletSection(context, context.Settings, pane)
         if issue.Length > 0 {
             pane.Add(Label(context.Ui, context.Ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
         }
@@ -1388,7 +1389,7 @@ class SettingsAdvanced : Cell, IDisposable {
     func Accept(input SettingsPageInput, openPurge Action[string, string, int32]) {
         context = input
         this.openPurge = openPurge
-        let settings = input.Session.Settings
+        let settings = input.Settings
         if lifetime == nil || state.Network != settings.Network || state.Directory != settings.DataDirectory {
             lifetime?.Cancel()
             chainRequest?.Dispose()
@@ -1420,7 +1421,7 @@ class SettingsAdvanced : Cell, IDisposable {
             chainRequest = current
             generation++
             chainLoaded = true
-            go LoadChain(input.Session, settings.Copy(), input.Window, generation, current.Token)
+            go LoadChain(input.Session, settings, input.Window, generation, current.Token)
         }
         let next = SettingsAdvancedInput{
             Language: input.Language,
@@ -2027,7 +2028,7 @@ class SettingsDialogs : Cell {
 
     func Accept(input SettingsPageInput) {
         context = input
-        if (state.Wallet.Length > 0 && state.Wallet != input.Session.Settings.ActiveWallet) ||
+        if (state.Wallet.Length > 0 && state.Wallet != input.Settings.ActiveWallet) ||
             (
             input
                 .Snapshot
@@ -2093,7 +2094,7 @@ class SettingsKeysDialog : Cell, IDisposable {
         }
     }
 
-    override func Build() Blob -> Dialog(context, context.Session.Settings)
+    override func Build() Blob -> Dialog(context, context.Settings)
 
     private func Close(ui Presentation) -> close.Invoke()
 
@@ -2384,7 +2385,6 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         if lifetime == nil {
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
             viewOnlyName = input
-                .Session
                 .Settings
                 .ActiveWallet
                 .Replace(".wallet.dat", "")
@@ -2398,7 +2398,7 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         }
     }
 
-    override func Build() Blob -> ViewOnly(context, context.Session.Settings)
+    override func Build() Blob -> ViewOnly(context, context.Settings)
 
     private func Close(ui Presentation) -> close.Invoke()
 
@@ -2666,8 +2666,8 @@ class SettingsPurgeDialog : Cell, IDisposable {
         lifetime ??= CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
         let next = data with{
             Language = input.Language,
-            Network = input.Session.Settings.Network,
-            Directory = input.Session.Settings.DataDirectory,
+            Network = input.Settings.Network,
+            Directory = input.Settings.DataDirectory,
             Busy = input.Busy,
             Width = input.Width
         }
@@ -2677,7 +2677,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
         }
     }
 
-    override func Build() Blob -> Purge(context, context.Session.Settings)
+    override func Build() Blob -> Purge(context, context.Settings)
 
     private func Close(ui Presentation) -> close.Invoke()
 
@@ -2903,8 +2903,8 @@ class SettingsParts {
         func DialogInput(input SettingsPageInput, kind string) SettingsDialogInput -> SettingsDialogInput{
             Kind: kind,
             Language: input.Language,
-            Wallet: input.Session.Settings.ActiveWallet,
-            Directory: input.Session.Settings.WalletDirectory,
+            Wallet: input.Settings.ActiveWallet,
+            Directory: input.Settings.WalletDirectory,
             Privacy: input.Privacy,
             Busy: input.Busy,
             Width: input.Width,
