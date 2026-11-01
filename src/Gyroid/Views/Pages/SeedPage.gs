@@ -159,16 +159,16 @@ class SeedPage : Cell, IDisposable {
                 FileDialogKind.SaveFile,
                 FileDialogOptions{
                     Title: input.Ui.Strings.Get("Export"),
-                    InitialPath: Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt")
+                    InitialPath: Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        "seed.txt"
+                    )
                 }
             )
             exporting = true
             exportResult = ""
             let keys = input.Session.Keys
-            input.Ui.Actions.Run(
-                ct -> CompleteExport(owner, pending, keys, request, current, ct),
-                secret: request
-            )
+            input.Ui.Actions.Run(ct -> CompleteExport(owner, pending, keys, request, current, ct), secret: request)
         } catch (failure Exception) {
             Array.Clear(request)
             exportResult = input.Ui.Strings.Explain(failure.Message)
