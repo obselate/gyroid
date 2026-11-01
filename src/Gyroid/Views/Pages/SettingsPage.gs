@@ -629,19 +629,28 @@ class SettingsSecurity : Cell {
     }
 }
 
-class SettingsNode : Cell {
+class SettingsNode : Cell, IDisposable {
     private var state SettingsNodeInput
     private var context SettingsPageInput
     private var rowHeight float64
     private var startupOpen bool
+    private var startupOwner SettingsStartup?
+    private var directoryRead string = ""
+    private var directoryExists bool
+    private var lifetime CancellationTokenSource?
+    private var generation int32
     private let configureStartup Action[SettingsStartup]
 
     init() {
-        configureStartup = region -> region.Accept(context)
+        configureStartup = region -> {
+            startupOwner = region
+            region.Accept(context)
+        }
     }
 
     func Accept(input SettingsPageInput) {
         context = input
+        startupOwner?.Accept(input)
         rowHeight = RowHeight(input.Height)
         let settings = input.Session.Settings
         let status = input.Node
@@ -663,6 +672,18 @@ class SettingsNode : Cell {
             Busy: input.Busy,
             ViewHeight: input.Height
         }
+        if input.Section == "node" && next.Directory != directoryRead {
+            lifetime?.Cancel()
+            lifetime?.Dispose()
+            let current = CancellationTokenSource.CreateLinkedTokenSource(
+                input.Window?.Closed ?? CancellationToken.None
+            )
+            lifetime = current
+            generation++
+            directoryRead = next.Directory
+            directoryExists = false
+            go ReadDirectory(next.Directory, input.Window, generation, current.Token)
+        }
         if !next.Equals(state) {
             state = next
             Rebuild()
@@ -670,6 +691,30 @@ class SettingsNode : Cell {
     }
 
     override func Build() Blob -> NodeSection(context, context.Session.Settings)
+
+    private func ReadDirectory(path string, owner Window?, request int32, token CancellationToken) {
+        var exists = false
+        try {
+            exists = Directory.Exists(path)
+        } catch (failure Exception) { }
+        owner?.TryPost(
+            () -> {
+                if request == generation &&
+                    !token.IsCancellationRequested &&
+                    state.Directory == path &&
+                    directoryExists != exists {
+                    directoryExists = exists
+                    Rebuild()
+                }
+            }
+        )
+    }
+
+    func Dispose() {
+        generation++
+        lifetime?.Cancel()
+        lifetime?.Dispose()
+    }
 
     private func NodeSection(input SettingsPageInput, settings WalletSettings) Blob {
         let ui = input.Ui
@@ -782,7 +827,7 @@ class SettingsNode : Cell {
                                     return Task.CompletedTask
                                 }
                             ),
-                            input.Busy || folder.Length == 0
+                            input.Busy || !directoryExists
                         )
                     }
                 )
