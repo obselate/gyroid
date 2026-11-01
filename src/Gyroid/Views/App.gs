@@ -812,7 +812,7 @@ partial class App : Cell {
             BorderRadius: if maximized {
                 AppTheme.Radius0
             } else {
-                theme.PanelRadius
+                theme.PanelRadius!!
             },
             Overflow: Overflow.Hidden,
             FontFamily: AppTheme.Font,
@@ -1233,7 +1233,7 @@ partial class App : Cell {
                     Right: 0,
                     Bottom: 0,
                     BorderWidth: AppTheme.Border1,
-                    BorderRadius: theme.PanelRadius,
+                    BorderRadius: theme.PanelRadius!!,
                     BorderColor: if window?.IsFocused == true {
                         AppTheme.Edge
                     } else {
