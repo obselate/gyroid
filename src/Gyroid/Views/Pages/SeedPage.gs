@@ -14,7 +14,6 @@ data struct SeedPageInput {
     var Wallet string
     var Ui Presentation
     var Words[]char
-    var ClipboardOwner ReadOnlyMemory[uint8]
     var FromWallet bool
     var Busy bool
     var Language string
@@ -31,12 +30,26 @@ class SeedPage : Cell, IDisposable {
     private var hold int32
     private var copiedOwner ReadOnlyMemory[uint8]
     private var generation int32
+    private var actions UiService?
+    private let clipboardChanged Action
+
+    init() {
+        clipboardChanged = () -> Rebuild()
+    }
 
     func Accept(next SeedPageInput) {
+        if actions != next.Ui.Actions {
+            if let source = actions {
+                source.ClipboardChanged -= clipboardChanged
+            }
+            actions = next.Ui.Actions
+            next.Ui.Actions.ClipboardChanged += clipboardChanged
+        }
         if next == input {
             return
         }
         if next.Wallet != input.Wallet || !Object.ReferenceEquals(input.Words, next.Words) {
+            ReleaseCopy()
             generation++
             visible = false
             saved = false
@@ -82,7 +95,7 @@ class SeedPage : Cell, IDisposable {
                 }
             )
         )
-        let copied = !copiedOwner.IsEmpty && copiedOwner.Equals(input.ClipboardOwner)
+        let copied = !copiedOwner.IsEmpty && copiedOwner.Equals(ui.Actions.ClipboardOwner)
         actions.Add(
             Button(
                 ui,
@@ -138,8 +151,22 @@ class SeedPage : Cell, IDisposable {
         )
     }
 
+    private func ReleaseCopy() {
+        if let source = actions {
+            if !copiedOwner.IsEmpty && copiedOwner.Equals(source.ClipboardOwner) {
+                source.ReleaseClipboard()
+            }
+        }
+        copiedOwner = ReadOnlyMemory[uint8].Empty
+    }
+
     func Dispose() {
         generation++
+        if let source = actions {
+            source.ClipboardChanged -= clipboardChanged
+        }
+        ReleaseCopy()
+        actions = nil
     }
 }
 

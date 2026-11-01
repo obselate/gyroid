@@ -382,7 +382,6 @@ partial class App : Cell, IDisposable {
                 Wallet: wallet.Settings.ActiveWallet,
                 Ui: ui,
                 Words: seed ?? Array.Empty[char](),
-                ClipboardOwner: ui.Actions.ClipboardOwner,
                 FromWallet: seedFromWallet,
                 Busy: ui.Working(),
                 Language: ui.Strings.Language,
@@ -761,7 +760,6 @@ partial class App : Cell, IDisposable {
     }
 
     private func ClearSeed() {
-        ui.Actions.ReleaseClipboard()
         if let password = seedPassword {
             Array.Clear(password)
         }
