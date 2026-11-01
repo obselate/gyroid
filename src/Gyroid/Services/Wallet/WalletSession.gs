@@ -278,11 +278,6 @@ class WalletSession : IDisposable {
                     if Node.Supervisor.NeedsRestart {
                         NodeError = Node.Supervisor.ExitError
                     }
-                    if restartAttempts >= 3 {
-                        Node.Publish()
-                        Changed?.Invoke()
-                        continue
-                    }
                     StopEvents()
                     connected = false
                     managed = false
@@ -291,6 +286,9 @@ class WalletSession : IDisposable {
                     PublishEmpty()
                     Node.Publish()
                     Changed?.Invoke()
+                    if restartAttempts >= 3 {
+                        continue
+                    }
                     let delay = nextRestart - DateTimeOffset.UtcNow
                     if delay > TimeSpan.Zero {
                         await Task.Delay(delay, ct)
