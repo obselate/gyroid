@@ -3,8 +3,8 @@ package Gyroid.Components
 import Goo
 import Gyroid.Components.TextParts
 import Gyroid.Models
-import Gyroid.Services.WalletText
 import Gyroid.Services
+import Gyroid.Services.WalletText
 import Gyroid.Views
 import System
 import System.Globalization

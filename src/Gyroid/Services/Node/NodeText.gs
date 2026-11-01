@@ -8,14 +8,28 @@ import System.Threading
 
 class NodeText {
     shared {
-        func Rows(peers[]NetworkPeer, bans[]BannedPeer, language string, width float64, hovered string, banned bool, token CancellationToken)[]NetworkRow {
+        func Rows(
+            peers[]NetworkPeer,
+            bans[]BannedPeer,
+            language string,
+            width float64,
+            hovered string,
+            banned bool,
+            token CancellationToken
+        )[]NetworkRow {
             let rows = [banned ? bans.Length: peers.Length]NetworkRow
             for index in 0 ... rows.Length {
                 token.ThrowIfCancellationRequested()
                 rows[index] = if banned {
                     NetworkRow{Key: "ban:" + bans[index].Id, Ban: bans[index], Language: language}
                 } else {
-                    NetworkRow{Key: "peer:" + peers[index].Id, Peer: peers[index], Language: language, Width: width, Hovered: peers[index].Id == hovered}
+                    NetworkRow{
+                        Key: "peer:" + peers[index].Id,
+                        Peer: peers[index],
+                        Language: language,
+                        Width: width,
+                        Hovered: peers[index].Id == hovered
+                    }
                 }
             }
             return rows
@@ -54,12 +68,19 @@ class NodeText {
             var hours = 0
             let separator = age.IndexOf('h')
             if separator > 0 {
-                int32.TryParse(age.Substring(0, separator), NumberStyles.Integer, CultureInfo.InvariantCulture, out hours)
+                int32.TryParse(
+                    age.Substring(0, separator),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out hours
+                )
             }
             return NetworkReport{
                 ... report,
                 Blocks: prepared,
-                Average: blocks.Length > 1 ? float64(blocks[blocks.Length - 1].Timestamp - blocks[0].Timestamp) / (blocks.Length - 1): 0,
+                Average: blocks.Length > 1 ? float64(blocks[blocks.Length - 1].Timestamp - blocks[0].Timestamp) / (
+                    blocks.Length - 1
+                ): 0,
                 MaximumTransactions: maximum,
                 IdentityHours: hours
             }

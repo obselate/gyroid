@@ -5,8 +5,8 @@ import Goo.Widgets
 import Goo.Widgets.Data
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
-import Goo.Widgets.Navigation
 import Goo.Widgets.Layout
+import Goo.Widgets.Navigation
 import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
@@ -70,18 +70,20 @@ class NetworkPage : Cell, IDisposable {
     private let configurePeers Action[NetworkPeers]
 
     init() {
-        configurePeers = cell -> cell.Accept(NetworkPeersInput{
-            Ui: input.Ui,
-            Window: input.Window,
-            Peers: report.Peers,
-            Banned: report.Banned,
-            Tcp: report.Tcp,
-            IdentityHours: report.IdentityHours,
-            PeerId: report.Status.PeerId,
-            Online: report.Status.Running,
-            Width: input.Width,
-            Language: input.Language
-        })
+        configurePeers = cell -> cell.Accept(
+            NetworkPeersInput{
+                Ui: input.Ui,
+                Window: input.Window,
+                Peers: report.Peers,
+                Banned: report.Banned,
+                Tcp: report.Tcp,
+                IdentityHours: report.IdentityHours,
+                PeerId: report.Status.PeerId,
+                Online: report.Status.Running,
+                Width: input.Width,
+                Language: input.Language
+            }
+        )
     }
 
     public func Accept(next NetworkInput) {
@@ -208,7 +210,16 @@ class NetworkPage : Cell, IDisposable {
         lifetime.Dispose()
     }
 
-    private async func Load(node NodeSession, window Window?, id int32, token CancellationToken, history[]WalletOutput, sends[]WalletSend, age string, previous NetworkReport) {
+    private async func Load(
+        node NodeSession,
+        window Window?,
+        id int32,
+        token CancellationToken,
+        history[]WalletOutput,
+        sends[]WalletSend,
+        age string,
+        previous NetworkReport
+    ) {
         try {
             while !token.IsCancellationRequested {
                 var result NetworkReport? = nil
@@ -367,10 +378,7 @@ class NetworkBlocks : Cell[NetworkBlocksInput] {
             MinHeight: 0,
             Gap: AppTheme.Space12,
             Cell.Mount[NetworkChartInput, NetworkTimeChart]("network-times", chart),
-            Cell.Mount[NetworkRibbonInput, NetworkRibbon](
-                "network-ribbon",
-                NetworkRibbonInput{Chart: chart}
-            )
+            Cell.Mount[NetworkRibbonInput, NetworkRibbon]("network-ribbon", NetworkRibbonInput{Chart: chart})
         }
     }
 
@@ -455,7 +463,10 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
         let chart = input.Chart
         let blocks = chart.Blocks
         let tip = blocks.Length > 0 ? blocks[blocks.Length - 1]: NetworkBlock()
-        let index = chart.Selected > 0 && blocks.Length > 0 && chart.Selected >= blocks[0].Height && chart.Selected <= tip.Height ?
+        let index = chart.Selected > 0 &&
+            blocks.Length > 0 &&
+            chart.Selected >= blocks[0].Height &&
+            chart.Selected <= tip.Height ?
         int32(chart.Selected - blocks[0].Height): -1
         let shown = index >= 0 ? blocks[index]: tip
         let card = WalletParts.Card(
@@ -620,7 +631,6 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
 
     private func Offset(age float64, width float64) float64 -> 2 + width * (1 - age / 7200)
 
-
     private func Details(input NetworkRibbonInput, block NetworkBlock, tip NetworkBlock) Blob {
         let ui = input.Chart.Ui
         let row = Container{
@@ -758,15 +768,24 @@ class NetworkPeers : Cell, IDisposable {
         go LoadRows(input, window, id, token, selected, banned)
     }
 
-    private func LoadRows(input NetworkPeersInput, window Window?, id int32, token CancellationToken, selected string, banned bool) {
+    private func LoadRows(
+        input NetworkPeersInput,
+        window Window?,
+        id int32,
+        token CancellationToken,
+        selected string,
+        banned bool
+    ) {
         try {
             let result = NodeText.Rows(input.Peers, input.Banned, input.Language, input.Width, selected, banned, token)
-            window?.TryPost(() -> {
-                if id == generation {
-                    rows = result
-                    Rebuild()
+            window?.TryPost(
+                () -> {
+                    if id == generation {
+                        rows = result
+                        Rebuild()
+                    }
                 }
-            })
+            )
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
             Console.Error.WriteLine("Network rows failed: " + failure.GetType().Name)
         }

@@ -6,9 +6,9 @@ import System.Collections.Generic
 import System.Diagnostics
 import System.Globalization
 import System.IO
+import System.Linq
 import System.Text.Json
 import System.Threading
-import System.Linq
 
 class NodeSession : IDisposable {
     var Settings WalletSettings
