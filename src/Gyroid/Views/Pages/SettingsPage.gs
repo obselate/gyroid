@@ -18,7 +18,6 @@ import Gyroid.Services.WalletText
 import Gyroid.Views.SettingsParts
 import System
 import System.Collections.Generic
-import System.Diagnostics
 import System.Globalization
 import System.IO
 import System.Linq
@@ -855,11 +854,15 @@ class SettingsStartup : Cell, IDisposable {
     private var generation int32
     private var validated WalletSettings?
     private var validationIssue string = ""
+    private var lifetime CancellationTokenSource?
 
     func Accept(input SettingsPageInput) {
         context = input
         let settings = input.Settings
         if source?.StartupDiffers(settings) != false {
+            lifetime?.Cancel()
+            lifetime?.Dispose()
+            lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
             generation++
             validated = nil
             validationIssue = ""
@@ -1060,14 +1063,25 @@ class SettingsStartup : Cell, IDisposable {
         let request = generation
         let next = value.Copy()
         let current = input.Session.Settings
-        go ValidateSettings(next, current, owner, request)
+        let token = lifetime?.Token ?? CancellationToken.None
+        go ValidateSettings(next, current, owner, request, token)
     }
 
-    private func ValidateSettings(value WalletSettings, current WalletSettings, owner Window, request int32) {
+    private func ValidateSettings(
+        value WalletSettings,
+        current WalletSettings,
+        owner Window,
+        request int32,
+        token CancellationToken
+    ) {
         var result WalletSettings?
         var issue = ""
         try {
+            token.ThrowIfCancellationRequested()
             result = SettingsValidation.Prepare(value, current)
+            token.ThrowIfCancellationRequested()
+        } catch (cancelled OperationCanceledException) {
+            return
         } catch (failure Exception) {
             issue = failure.Message
         }
@@ -1093,6 +1107,8 @@ class SettingsStartup : Cell, IDisposable {
 
     func Dispose() {
         generation++
+        lifetime?.Cancel()
+        lifetime?.Dispose()
     }
 
     private func ConfirmApply(input SettingsPageInput) Blob {
@@ -2539,6 +2555,9 @@ class SettingsDialogs : Cell, IDisposable {
         fileIssue = ""
         try {
             WalletValidation.ValidateFilename(filename)
+            if !filename.EndsWith(".wallet.dat", StringComparison.Ordinal) {
+                throw WalletException("View-only file name must end in .wallet.dat")
+            }
         } catch (failure Exception) {
             filenameIssue = failure.Message
             Rebuild()

@@ -118,8 +118,7 @@ class WalletSession : IDisposable {
                 go AutoLock(ctx)
                 go RestartOwned(ctx)
                 go ManageEvents(ctx)
-                let messages = Messages
-                go messages.Sync(ctx)
+                go Messages.Sync(ctx)
             }
         } catch (error OperationCanceledException) when shutdown.IsCancellationRequested { } catch (error Exception) {
             ReportBackgroundFailure(error)
