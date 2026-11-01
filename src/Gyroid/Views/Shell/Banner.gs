@@ -9,6 +9,7 @@ import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
 import Gyroid.Components.ControlParts
+import Gyroid.Components.LayoutParts
 import Gyroid.Models
 import System
 import System.Collections.Generic
@@ -51,16 +52,20 @@ partial class App {
             Content: ui.Strings.Explain(message),
             FontFamily: ui.Font,
             Title: wallet.NodeRestartStopped ? ui.Strings.Get("Automatic node restart stopped"): nil,
-            Action: wallet
+            Actions: wallet
                 .NodeError
-                .Length > 0 ? Button(
-                ui,
-                "Retry",
-                () -> {
-                    refreshError = ""
-                    Run(ct -> wallet.ConnectAsync(ct))
-                },
-                ui.Working() || wallet.Busy || Preparing()
+                .Length > 0 ? ActionRow(
+                []Blob{
+                    Button(
+                        ui,
+                        "Retry",
+                        () -> {
+                            refreshError = ""
+                            Run(ct -> wallet.ConnectAsync(ct))
+                        },
+                        ui.Working() || wallet.Busy || Preparing()
+                    )
+                }
             ): nil,
             OnDismiss: wallet.NodeError.Length > 0 ? nil: () -> {
                 error = ""
