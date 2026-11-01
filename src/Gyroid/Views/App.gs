@@ -39,6 +39,7 @@ partial class App : Cell {
     private let sendDone Action
 
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
+    private let configureLibrary Action[LibraryPage]
 
     private let receiveRequest ReceiveRequest = ReceiveRequest()
     private let configureReceive Action[ReceivePage]
@@ -251,6 +252,20 @@ partial class App : Cell {
         createWallet = (filename, buffer) -> Run(ct -> CreateWallet(filename, buffer, ct))
         backupSeed = buffer -> StartSeed(buffer)
         closeSettings = () -> Back()
+        configureLibrary = cell -> cell.Accept(
+            LibraryInput{
+                Session: wallet,
+                Ui: ui,
+                State: wallet.Snapshot.State,
+                ActiveWallet: wallet.Settings.ActiveWallet,
+                Busy: ui.Working(),
+                Language: ui.Strings.Language,
+                ChooseFile: chooseFile,
+                OnNavigate: navigate,
+                OnCreate: createWallet,
+                OnBackup: backupSeed
+            }
+        )
         ApplyPreferences()
         nodeAnchor.MetricsChanged += _ -> {
             if nodeOpen {
@@ -1064,21 +1079,7 @@ partial class App : Cell {
                 }
             )
         } else {
-            Cell.Mount[LibraryInput, LibraryPage](
-                "library",
-                LibraryInput{
-                    Session: wallet,
-                    Ui: ui,
-                    State: snapshot.State,
-                    ActiveWallet: wallet.Settings.ActiveWallet,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    ChooseFile: chooseFile,
-                    OnNavigate: navigate,
-                    OnCreate: createWallet,
-                    OnBackup: backupSeed
-                }
-            )
+            Cell.Mount[LibraryPage]("library", configureLibrary)
         }
         let left = if WalletAvailable() {
             102.0
