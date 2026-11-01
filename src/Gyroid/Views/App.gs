@@ -192,8 +192,6 @@ partial class App : Cell {
             cell.Accept(
                 ReceivePageInput{
                     Ui: ui,
-                    Wallet: wallet.Settings.ActiveWallet,
-                    Network: wallet.Settings.Network,
                     Address: snapshot.Address,
                     History: snapshot.History,
                     ChainHeight: snapshot.Balance?.ChainHeight ?? uint64(0),

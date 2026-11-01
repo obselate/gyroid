@@ -29,8 +29,6 @@ class ReceiveRequest {
 
 data struct ReceivePageInput {
     var Ui Presentation
-    var Wallet string
-    var Network string
     var Request ReceiveRequest
     var Address string
     var History[]WalletOutput
@@ -74,8 +72,6 @@ data struct ReceiveStatusInput {
 
 data struct ReceivePresentationInput {
     var Ui Presentation
-    var Wallet string
-    var Network string
     var Draft ReceiveDraft
     var Address string
     var Format string
@@ -104,19 +100,15 @@ class ReceivePage : Cell {
             input.Request.Amount = amount.Trim()
             input.Request.Memo = memo.Trim()
             Prepare()
-            Rebuild()
         }
         selectFormat = format -> {
             input.Request.Format = format
             Prepare()
-            Rebuild()
         }
         reset = () -> {
             input.Request.Amount = ""
             input.Request.Memo = ""
-            input.Request.Reference = ""
             Prepare()
-            Rebuild()
         }
     }
 
@@ -126,7 +118,6 @@ class ReceivePage : Cell {
         }
         input = next
         Prepare()
-        Rebuild()
     }
 
     private func Prepare() {
@@ -176,14 +167,12 @@ class ReceivePage : Cell {
             } else {
                 uint64(0)
             },
-            Reference: request.Reference,
+            Reference: possible != nil ? request.Reference: "",
             Privacy: input.Privacy,
             Language: input.Language
         }
         presentation = ReceivePresentationInput{
             Ui: input.Ui,
-            Wallet: input.Wallet,
-            Network: input.Network,
             Draft: draft,
             Address: input.Address,
             Format: request.Format,
@@ -198,6 +187,7 @@ class ReceivePage : Cell {
             Select: selectFormat,
             Reset: reset
         }
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -350,15 +340,8 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
     private var qrCode QrCode?
     private var qrPath VectorPath = VectorPath.Empty
     private var generation int32
-    private var sourceWallet string = ""
-    private var sourceNetwork string = ""
 
     protected override func Build(input ReceivePresentationInput) Blob {
-        if input.Wallet != sourceWallet || input.Network != sourceNetwork {
-            generation++
-            sourceWallet = input.Wallet
-            sourceNetwork = input.Network
-        }
         let ui = input.Ui
         let draft = input.Draft
         let empty = draft.Amount.Length == 0 && draft.Memo.Length == 0
@@ -385,7 +368,6 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
             ranges.Add(TextStyleRange(TextRange(start, part.IndexOf('=') + 2), Style{Color: AppTheme.Dim}))
             start += part.Length + 1
         }
-        let dim = ranges.ToArray()
         let payload = shown == "address" ? input.Address: link
         if payload != qrText {
             generation++
@@ -457,7 +439,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
             } else if shown == "qr" {
                 []TextStyleRange{TextStyleRange(TextRange(0, link.Length), Style{Color: AppTheme.Dim})}
             } else {
-                dim
+                ranges.ToArray()
             },
             FontFamily: AppTheme.Font,
             FontSize: AppTheme.Type13,
@@ -568,7 +550,6 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         guard let code = qrCode else {
             return
         }
-        let ui = input.Ui
         let current = generation
         input.ChooseFile.Invoke(
             FileDialogKind.SaveFile,
@@ -576,7 +557,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "blocknet-request.png"),
             (path string) -> {
                 if current == generation {
-                    ui.Actions.Run(ct -> File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8), ct))
+                    input.Ui.Actions.Run(ct -> File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8), ct))
                 }
             }
         )
@@ -584,8 +565,6 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
 
     public func Dispose() {
         generation++
-        qrCode = nil
-        qrPath = VectorPath.Empty
     }
 
     private func QrPath(code QrCode) VectorPath {
