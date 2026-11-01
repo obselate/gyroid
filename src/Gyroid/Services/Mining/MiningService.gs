@@ -41,13 +41,19 @@ class MiningService {
         }
     }
 
-    func PollAsync(previous MiningPollResult, requests chan[MiningPollRequest], ct CancellationToken) MiningPollResult {
+    async func PollAsync(
+        previous MiningPollResult,
+        requests chan[MiningPollRequest],
+        ct CancellationToken
+    ) MiningPollResult {
         var state = previous.Request
         var continuous = previous.Continuous
         while true {
             if state.Visible && state.Online {
                 select {
-                    case let next = <- requests { state = next }
+                    case let next = <- requests {
+                        state = next
+                    }
                     case <- after(TimeSpan.FromSeconds(5)) { }
                 }
             } else {

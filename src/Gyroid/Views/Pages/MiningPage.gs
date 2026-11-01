@@ -113,11 +113,8 @@ class MiningPage : Cell, IDisposable {
             }
             let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
             request = current
-            let id = generation
-            let requests = refreshRequested
             let report = input.History.Report
-            let context = Context.FromToken(current.Token)
-            RunWorkerAsync(input, report, id, requests, context)
+            RunWorkerAsync(input, report, generation, refreshRequested, Context.FromToken(current.Token))
             Refresh()
         } else if stateChanged {
             Refresh()
@@ -259,7 +256,13 @@ class MiningPage : Cell, IDisposable {
         )
     }
 
-    private async func RunWorkerAsync(input MiningPageInput, report MiningReport, id int32, requests chan[MiningPollRequest], parentContext Context) {
+    private async func RunWorkerAsync(
+        input MiningPageInput,
+        report MiningReport,
+        id int32,
+        requests chan[MiningPollRequest],
+        parentContext Context
+    ) {
         try {
             scope {
                 go Poll(input, report, id, requests, ctx)
@@ -276,7 +279,13 @@ class MiningPage : Cell, IDisposable {
         }
     }
 
-    private func Poll(input MiningPageInput, initial MiningReport, id int32, requests chan[MiningPollRequest], pageContext Context) {
+    private func Poll(
+        input MiningPageInput,
+        initial MiningReport,
+        id int32,
+        requests chan[MiningPollRequest],
+        pageContext Context
+    ) {
         var observation = MiningPollResult{Report: initial}
         let mining = input.Session.Mining
         let token = pageContext.Token
@@ -575,13 +584,7 @@ class MiningChart : Cell[MiningChartInput] {
                     VectorEffect: VectorEffect.NonScalingStroke
                 }
             )
-            area.Add(
-                ChartParts.Point(
-                    Percent(100),
-                    Percent(samples[samples.Length - 1].Y * 100),
-                    AppTheme.Lime
-                )
-            )
+            area.Add(ChartParts.Point(Percent(100), Percent(samples[samples.Length - 1].Y * 100), AppTheme.Lime))
             if hover >= 0 && hover < samples.Length {
                 let sample = samples[hover]
                 let x = sample.X

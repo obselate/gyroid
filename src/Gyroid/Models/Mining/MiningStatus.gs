@@ -51,8 +51,10 @@ data struct MiningReport {
         let count = Math.Min(Samples.Length, 719)
         let samples = [count + 1]MiningSample
         Array.Copy(Samples, Samples.Length - count, samples, 0, count)
-        let interrupted = !continuous || status.Started != Status.Started ||
-            count == 0 || (now - samples[count - 1].Time).TotalSeconds > 7.5 ||
+        let interrupted = !continuous ||
+            status.Started != Status.Started ||
+            count == 0 ||
+            (now - samples[count - 1].Time).TotalSeconds > 7.5 ||
             status.Hashes < samples[count - 1].Hashes
         var rate = 0.0
         if !interrupted {
