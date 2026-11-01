@@ -89,6 +89,7 @@ data struct HistoryIdentity {
     var Endpoint string
     var Api NodeApi
     var ProcessId int32
+    var Start int64
     var Running bool
 }
 
@@ -226,6 +227,7 @@ class HistoryPage : Cell, IDisposable {
             Endpoint: session.settings.Endpoint,
             Api: session.Node.Api,
             ProcessId: session.settings.OwnedProcessId,
+            Start: session.Node.Api.verifiedStart,
             Running: session.Node.Status.Running
         }
     }
