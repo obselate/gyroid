@@ -82,7 +82,6 @@ class MiningPage : Cell, IDisposable {
     private var generation int32
     private var opened bool
     private var pollRevision int32
-    private var unavailable bool
 
     init() {
         toggle = () -> Toggle()
@@ -132,7 +131,7 @@ class MiningPage : Cell, IDisposable {
         let report = input.History.Report
         let status = report.Status
         let samples = report.Samples
-        let running = status.Running && input.NodeRunning && !unavailable
+        let running = status.Running && input.NodeRunning && report.Available
         let card = WalletParts.PageCard(ui, height: input.Height, maxWidth: running ? 1180.0: 620.0, fill: true)
         let head = WalletParts.Header(
             Label(ui, ui.Strings.Get("mining"), AppTheme.Type17, AppTheme.Ink, ""),
@@ -150,13 +149,13 @@ class MiningPage : Cell, IDisposable {
                     Ui: ui,
                     Language: input.Language,
                     Running: running,
-                    Available: input.NodeRunning && !unavailable,
+                    Available: input.NodeRunning && report.Available,
                     Toggle: toggle
                 }
             )
         )
         card.Add(head)
-        if unavailable || !input.NodeRunning {
+        if !report.Available || !input.NodeRunning {
             card.MaxWidth = 620
             card.Add(Label(ui, ui.Strings.Get("Node unavailable"), AppTheme.Type14, AppTheme.Body, ""))
         } else if !status.Running {
@@ -219,7 +218,7 @@ class MiningPage : Cell, IDisposable {
     }
 
     private func Toggle() {
-        if unavailable || !source.NodeRunning || source.Ui.Working() {
+        if !source.History.Report.Available || !source.NodeRunning || source.Ui.Working() {
             return
         }
         let mining = source.Session.Mining
@@ -292,7 +291,6 @@ class MiningPage : Cell, IDisposable {
                     }
                     if input.History.Report != report {
                         input.History.Report = report
-                        unavailable = !report.Available
                         Rebuild()
                     }
                 }

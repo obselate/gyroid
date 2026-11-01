@@ -47,7 +47,7 @@ class MiningService {
         while true {
             if state.Visible && state.Online {
                 select {
-                    case next <- requests { state = next }
+                    case let next = <- requests { state = next }
                     case <- after(TimeSpan.FromSeconds(5)) { }
                 }
             } else {
@@ -69,6 +69,9 @@ class MiningService {
         var report = MiningReport{... previous.Report, Available: false}
         try {
             let status = await StatusAsync(ct)
+            if requests.Reader.TryPeek(out _) {
+                return previous
+            }
             let waiting = status.Running && session.Node.Status.Peers == 0
             report = previous.Report.Record(status, waiting, continuous, DateTimeOffset.Now)
         } catch (failure OperationCanceledException) when ct.IsCancellationRequested {
