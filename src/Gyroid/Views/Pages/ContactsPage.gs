@@ -144,9 +144,6 @@ class ContactsPage : Cell, IDisposable {
             maxWidth: Math.Clamp(640 + Math.Max(0, input.Height - 640) * 0.6, 640.0, 900.0),
             fill: true
         )
-        if rows.Length > 0 {
-            card.Height = Percent(100)
-        }
         card.Add(
             WalletParts.Header(
                 Label(ui, ui.Strings.Get("contacts"), AppTheme.Type17, AppTheme.Ink, ""),
@@ -168,9 +165,10 @@ class ContactsPage : Cell, IDisposable {
         }
         let list = VirtualRows(rows, 56, rowKey, rowBuilder, false)
         list.Handle = listHandle
-        list.FlexGrow = 1
+        list.Height = rows.Length * 56
+        list.FlexShrink = 1
         list.MinHeight = 0
-        card.Add(ListParts.Viewport(list))
+        card.Add(ListParts.Viewport(list, Style{FlexShrink: 1}, grow: false))
         if issue.Length > 0 {
             card.Add(Label(input.Ui, input.Ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Dim, ""))
         }
