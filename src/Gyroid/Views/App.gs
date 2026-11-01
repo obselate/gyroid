@@ -126,10 +126,24 @@ partial class App : Cell {
     private let backupSeed Action[[]char]
 
     private let closeSettings Action
+    private let configureNetwork Action[NetworkPage]
 
     init(wallet WalletSession, scaleOverride bool = false) {
         this.wallet = wallet
         this.scaleOverride = scaleOverride
+        configureNetwork = region -> region.Accept(
+            NetworkInput{
+                Ui: ui,
+                Session: wallet,
+                Window: window,
+                Node: wallet.Node.Status,
+                History: wallet.Snapshot.History,
+                Sends: wallet.Snapshot.Sends,
+                Language: ui.Strings.Language,
+                Width: width,
+                Height: height
+            }
+        )
         ui = Presentation(
             wallet.Settings.Language,
             wallet.Settings.Privacy,
@@ -941,20 +955,7 @@ partial class App : Cell {
         } else if page == AppPage.Messages {
             MessagesView(false)
         } else if page == AppPage.Network {
-            Cell.Mount[NetworkInput, NetworkPage](
-                "network",
-                NetworkInput{
-                    Ui: ui,
-                    Session: wallet,
-                    Window: window,
-                    Node: wallet.Node.Status,
-                    History: snapshot.History,
-                    Sends: snapshot.Sends,
-                    Language: ui.Strings.Language,
-                    Width: width,
-                    Height: height
-                }
-            )
+            Cell.Mount[NetworkPage]("network", configureNetwork)
         } else if page == AppPage.Sync {
             Cell.Mount[SyncInput, SyncPage](
                 "sync",
