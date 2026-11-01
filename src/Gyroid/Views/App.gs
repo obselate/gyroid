@@ -1052,8 +1052,6 @@ partial class App : Cell, IDisposable {
             Overflow: Overflow.Hidden,
             FontFamily: AppTheme.Font,
             Color: AppTheme.Ink,
-            OnPointerDown: (event PointerEvent) -> Touch(),
-            OnWheel: (event WheelEvent) -> Touch(),
             Container{
                 Position: PositionType.Absolute,
                 Left: 0,
@@ -1332,6 +1330,24 @@ partial class App : Cell, IDisposable {
                 }
             )
         }
-        return root
+        return Cell.Mount[AppActivityInput, AppActivity](
+            "window-activity",
+            AppActivityInput{Content: root, Touch: ui.Actions.touch}
+        )
+    }
+}
+
+data struct AppActivityInput {
+    var Content Blob
+    var Touch Action
+}
+
+class AppActivity : Cell[AppActivityInput] {
+    protected override func Build(input AppActivityInput) Blob -> Container{
+        Width: Percent(100),
+        Height: Percent(100),
+        OnPointerDown: (event PointerEvent) -> input.Touch(),
+        OnWheel: (event WheelEvent) -> input.Touch(),
+        input.Content
     }
 }
