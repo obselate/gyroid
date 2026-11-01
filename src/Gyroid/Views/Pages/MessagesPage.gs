@@ -845,7 +845,7 @@ class MessageThread : Cell, IDisposable {
                             First: row.First,
                             Last: row.Last,
                             Highlight: selected == row.Message.Key || selected == row.Key,
-                            CanRetry: source.CanRetry,
+                            CanRetry: row.Message.State == MessageState.Failed && source.CanRetry,
                             Width: source.Width,
                             OnOpen: source.OnOpen,
                             OnRetry: source.OnRetry

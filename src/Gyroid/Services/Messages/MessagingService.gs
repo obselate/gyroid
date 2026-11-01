@@ -512,8 +512,11 @@ partial class MessagingService {
         }
         for member in members {
             var recipient = PaymentLink.Parse(member)?.Address ?? member
-            if member.StartsWith("$", StringComparison.Ordinal) || member.StartsWith("@", StringComparison.Ordinal) {
-                let resolved = await ResolveConversation("", member, ct)
+            if recipient.StartsWith("$", StringComparison.Ordinal) || recipient.StartsWith(
+                "@",
+                StringComparison.Ordinal
+            ) {
+                let resolved = await ResolveConversation("", recipient, ct)
                 recipient = resolved.Id
             }
             Address.Decode(recipient, Network)
