@@ -98,6 +98,7 @@ partial class App : Cell {
     private var backgroundLockTimer WindowTimer?
 
     private let navigate Action[AppPage]
+    private let configureTools Action[ToolsPage]
 
     private var shownHeight string = ""
 
@@ -188,6 +189,25 @@ partial class App : Cell {
             settingsSection = "node"
             Navigate(AppPage.Settings)
         }
+        configureTools = region -> region.Accept(
+            ToolsInput{
+                Session: wallet,
+                Ui: ui,
+                State: toolsState,
+                Snapshot: wallet.Snapshot,
+                Node: wallet.Node.Status,
+                Section: page,
+                AutoLock: wallet.Settings.AutoLockMinutes,
+                Privacy: ui.Privacy,
+                Busy: ui.Working(),
+                Language: ui.Strings.Language,
+                Width: width,
+                Height: height,
+                OnNavigate: navigate,
+                OnPrivacy: togglePrivacy,
+                OnNodeSettings: openNodeSettings
+            }
+        )
         showUpgrade = () -> {
             upgradeShown = true
             Rebuild()
@@ -1020,26 +1040,7 @@ partial class App : Cell {
         } else if seed != nil {
             Cell.Mount[SeedPage]("seed", configureSeed)
         } else if page == AppPage.Tools || page == AppPage.Privacy {
-            Cell.Mount[ToolsInput, ToolsPage](
-                "tools",
-                ToolsInput{
-                    Session: wallet,
-                    Ui: ui,
-                    State: toolsState,
-                    Snapshot: snapshot,
-                    Node: wallet.Node.Status,
-                    Section: page,
-                    AutoLock: wallet.Settings.AutoLockMinutes,
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Width: width,
-                    Height: height,
-                    OnNavigate: navigate,
-                    OnPrivacy: togglePrivacy,
-                    OnNodeSettings: openNodeSettings
-                }
-            )
+            Cell.Mount[ToolsPage]("tools", configureTools)
         } else if page == AppPage.Contacts {
             Cell.Mount[ContactsInput, ContactsPage](
                 "contacts",
