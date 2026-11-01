@@ -56,8 +56,6 @@ data struct MessageBubbleInput {
 class MessageBubble : Cell[MessageBubbleInput] {
     private let shift Anim[Point]
     private var started bool
-    private let statusAnchor ElementHandle = ElementHandle()
-    private var statusVisible bool
 
     init() {
         shift = AnimateValue(Point{X: 0, Y: 0})
@@ -105,45 +103,30 @@ class MessageBubble : Cell[MessageBubbleInput] {
                 .Strings
                 .Get("Waiting for the next block. Usually about 5 min, sometimes longer")
             metadata.Add(
-                Container{
-                    Handle: statusAnchor,
-                    OnPointerEnter: (event PointerEvent) -> {
-                        statusVisible = true
-                        Rebuild()
-                    },
-                    OnPointerLeave: (event PointerEvent) -> {
-                        statusVisible = false
-                        Rebuild()
-                    },
-                    Accessibility: Accessibility{Role: AccessibilityRole.Text, Name: tip},
-                    MaterialIcons.Create(
-                        delivered ? "done_all": message.State == MessageState.InProgress ? "schedule": "done",
-                        13,
-                        statusColor
-                    ),
-                    Cell.Mount[PopoverInput, Popover](
-                        "status-tip",
-                        PopoverInput{
-                            Open: statusVisible,
-                            Anchor: statusAnchor,
-                            Placement: PopoverPlacement.BottomEnd,
-                            Width: 270,
-                            Padding: 12,
-                            Content: Text{
-                                Content: tip,
-                                FontFamily: ui.Font,
-                                FontSize: 12,
-                                Color: ui.Body,
-                                TextWrap: TextWrap.Wrap
-                            },
-                            AccessibilityName: tip,
-                            OnDismiss: reason -> {
-                                statusVisible = false
-                                Rebuild()
-                            }
+                Cell.Mount[TooltipInput, Tooltip](
+                    "status-tip",
+                    TooltipInput{
+                        Window: ui.Actions.window,
+                        DelayMs: 0,
+                        Placement: PortalPlacement.BottomEnd,
+                        Target: Container{
+                            Accessibility: Accessibility{Role: AccessibilityRole.Text, Name: tip},
+                            MaterialIcons.Create(
+                                delivered ? "done_all": message.State == MessageState.InProgress ? "schedule": "done",
+                                13,
+                                statusColor
+                            )
+                        },
+                        Content: Text{
+                            Content: tip,
+                            FontFamily: ui.Font,
+                            FontSize: 12,
+                            Color: ui.Body,
+                            TextWrap: TextWrap.Wrap,
+                            MaxWidth: 246
                         }
-                    )
-                }
+                    }
+                )
             )
         }
         let column = Container{
