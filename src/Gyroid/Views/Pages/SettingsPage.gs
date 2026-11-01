@@ -116,7 +116,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         rowHeight = Math.Clamp(52 + Math.Max(0, input.Height - 640) * 0.025, 52.0, 72.0)
         let settings = input.Session.Settings
         if input.Snapshot.State != WalletState.Unlocked && (dialog == "view-key" || viewKeys != nil) {
-            Close()
+            Close(ui)
         }
         draft ??= settings
         let sections = List[string]{"general", "security", "node"}
@@ -1188,7 +1188,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         Rebuild()
     }
 
-    private func Close() {
+    private func Close(ui Presentation) {
+        if viewKeys != nil {
+            ui.Actions.ReleaseClipboard()
+        }
         viewKeys?.Dispose()
         viewKeys = nil
         viewPrivateShown = false
@@ -1201,7 +1204,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func Dialog(input SettingsPageInput, settings WalletSettings) Blob {
         let ui = input.Ui
-        let close Action = () -> Close()
+        let close Action = () -> Close(ui)
         if dialog == "purge" {
             return Purge(input, settings)
         }
@@ -1346,10 +1349,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         ),
                         input.Busy
                     ),
-                    Button(ui, "Done", () -> Close(), false, true)
+                    Button(ui, "Done", () -> Close(ui), false, true)
                 }
             ),
-            () -> Close()
+            () -> Close(ui)
         )
     }
 
@@ -1417,7 +1420,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func ViewOnly(input SettingsPageInput, settings WalletSettings) Blob {
         let ui = input.Ui
-        let close Action = () -> Close()
+        let close Action = () -> Close(ui)
         let form = WalletForm(
             ui,
             !input.Busy,
@@ -1611,7 +1614,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func Purge(input SettingsPageInput, settings WalletSettings) Blob {
         let ui = input.Ui
-        let close Action = () -> Close()
+        let close Action = () -> Close(ui)
         if purging {
             return WalletParts.Modal(
                 ui,

@@ -326,6 +326,7 @@ class WalletSession : IDisposable {
                     await SettingsStore.SaveAsync(settings, ct)
                 }
                 managed = true
+                Keys.BackupPending = File.Exists(Library.WalletPath(filename) + ".backup-pending")
             }
             connected = true
             if managed {
@@ -689,6 +690,7 @@ class WalletSession : IDisposable {
             Library.RequireNewWallet(filename, password)
             await PrepareWalletAsync(ct)
             await ConnectCoreAsync(ct)
+            await Keys.RequireBackupAsync(filename, ct)
             using let result = await Node.Api.JsonAsync(
                 "wallet/create",
                 writer -> WriteCredentials(writer, password, "filename", filename),

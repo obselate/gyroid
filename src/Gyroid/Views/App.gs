@@ -123,6 +123,7 @@ partial class App : Cell {
     private let revealSeed Action[[]char]
 
     private let createWallet Action[string, []char]
+    private let backupSeed Action[[]char]
 
     private let closeSettings Action
 
@@ -182,6 +183,7 @@ partial class App : Cell {
             }
         }
         createWallet = (filename, buffer) -> Run(ct -> CreateWallet(filename, buffer, ct))
+        backupSeed = buffer -> StartSeed(buffer)
         closeSettings = () -> Back()
         ApplyPreferences()
         nodeAnchor.MetricsChanged += _ -> {
@@ -448,6 +450,10 @@ partial class App : Cell {
             Array.Clear(buffer)
             throw failure
         }
+        StartSeed(buffer)
+    }
+
+    private func StartSeed(buffer[]char) {
         if window?.TryPost(
             () -> {
                 if wallet.Snapshot.State != WalletState.Unlocked || wallet.LockQueued {
@@ -516,8 +522,18 @@ partial class App : Cell {
 
     private func FinishSeed() {
         let target = seedFromWallet ? AppPage.Settings: AppPage.Overview
-        ClearSeed()
-        Open(target)
+        if seedFromWallet {
+            ClearSeed()
+            Open(target)
+            return
+        }
+        Run(
+            ct -> wallet.Keys.ConfirmBackupAsync(ct),
+            () -> {
+                ClearSeed()
+                Open(target)
+            }
+        )
     }
 
     private func LoadContacts() {
@@ -1035,7 +1051,8 @@ partial class App : Cell {
                     Language: ui.Strings.Language,
                     ChooseFile: chooseFile,
                     OnNavigate: navigate,
-                    OnCreate: createWallet
+                    OnCreate: createWallet,
+                    OnBackup: backupSeed
                 }
             )
         }

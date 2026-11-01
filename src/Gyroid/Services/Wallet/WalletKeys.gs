@@ -2,14 +2,35 @@ package Gyroid.Services
 
 import Gyroid.Models
 import System
+import System.IO
 import System.Text
 import System.Threading
+import System.Threading.Tasks
 
 class WalletKeys {
     let session WalletSession
+    var BackupPending bool
 
     init(session WalletSession) {
         this.session = session
+    }
+
+    async func RequireBackupAsync(filename string, ct CancellationToken) {
+        let path = session.Library.WalletPath(filename) + ".backup-pending"
+        Directory.CreateDirectory(session.settings.WalletDirectory)
+        await PrivateFiles.WriteAtomic(path, _ -> Task.CompletedTask, true, false)
+        BackupPending = true
+    }
+
+    async func ConfirmBackupAsync(ct CancellationToken) {
+        await session.BeginAsync(ct)
+        try {
+            session.RequireUnlocked()
+            File.Delete(session.Library.WalletPath(session.settings.ActiveWallet) + ".backup-pending")
+            BackupPending = false
+        } finally {
+            session.End()
+        }
     }
 
     async func RevealSeedAsync(password[]char, ct CancellationToken = default(CancellationToken))[]char {

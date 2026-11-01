@@ -28,6 +28,7 @@ data struct LibraryInput {
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnNavigate Action[AppPage]
     var OnCreate Action[string, []char]
+    var OnBackup Action[[]char]
 }
 
 class LibraryPage : Cell[LibraryInput], IDisposable {
@@ -442,6 +443,9 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 await input.Session.Library.ChooseWalletAsync(filename, ct)
             }
             await input.Session.UnlockAsync(secret, ct)
+            if input.Session.Keys.BackupPending {
+                input.OnBackup.Invoke(secret.ToArray())
+            }
         } catch (failure WalletException) {
             if failure.Message != "Wrong wallet password" {
                 throw failure
