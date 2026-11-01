@@ -425,7 +425,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             )
         )
         let gap = compact ? AppTheme.Space8: AppTheme.Space12
-        let height = compact ? 124.0: Math.Clamp(input.Height * 0.19, 136, 210)
+        let height = Math.Clamp(input.Height * 0.19, 136, 210)
         let grid = SegmentGrid(2, 4, index -> tiles[index], gap, gap, height, height)
         grid.FlexGrow = 0
         grid.FlexShrink = 0
@@ -470,11 +470,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             FlexGrow: 1,
             FlexBasis: 0,
             MinWidth: 0,
-            MinHeight: if compact {
-                124.0
-            } else {
-                Math.Clamp(input.Height * 0.19, 136, 210)
-            },
+            MinHeight: Math.Clamp(input.Height * 0.19, 136, 210),
             Padding: compact ? AppTheme.Space12: AppTheme.Space14,
             Gap: compact ? AppTheme.Space8: AppTheme.Space10,
             BorderColor: if edit {
@@ -701,9 +697,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             AccessibilityName: ui.Strings.Get("recovery phrase"),
             Labels: []string{ui.Strings.Get("show"), ui.Strings.Get("check"), ui.Strings.Get("done")},
             CurrentIndex: step == "show" ? 0: step == "check" ? 1: 2,
-            FontSize: AppTheme.Type12,
-            Height: AppTheme.ControlCompact,
-            Gap: AppTheme.Space8
+            Width: 300
         }.Build()
         card.Add(
             WalletParts.Header(
@@ -954,7 +948,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
         card.Add(
             WalletParts.Header(
-                tabs,
+                Grow(tabs),
                 AppTheme.Space16,
                 if tab == "health" {
                     Info(
