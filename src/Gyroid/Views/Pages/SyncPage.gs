@@ -131,8 +131,8 @@ class SyncPage : Cell, IDisposable {
                     .Delay(
                     100,
                     () -> {
-                        updateTimer = nil
                         if current == generation && lifetime?.IsCancellationRequested != true {
+                            updateTimer = nil
                             Apply(pending)
                         }
                     }
@@ -185,8 +185,8 @@ class SyncPage : Cell, IDisposable {
                     .Delay(
                     60000,
                     () -> {
-                        stallTimer = nil
                         if current == generation && lifetime?.IsCancellationRequested != true {
+                            stallTimer = nil
                             stalled = true
                             Rebuild()
                         }
