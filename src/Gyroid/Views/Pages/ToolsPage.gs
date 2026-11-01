@@ -934,17 +934,16 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Rebuild()
             }
         )
-        let items = List[NavigationItem]()
-        for id in[]string{"sign", "verify", "proof", "health"} {
-            if id != "sign" || !viewOnly {
-                items.Add(NavigationItem{Id: id, Label: ui.Strings.Get(id)})
-            }
+        let ids = viewOnly ? []string{"verify", "proof", "health"}: []string{"sign", "verify", "proof", "health"}
+        let items = [ids.Length]NavigationItem
+        for index in 0 ... ids.Length {
+            items[index] = NavigationItem{Id: ids[index], Label: ui.Strings.Get(ids[index])}
         }
         let tabs = Tabs(
             ui,
             "tools-tabs",
             "tools",
-            items.ToArray(),
+            items,
             tab,
             id -> {
                 state.Tab = id
