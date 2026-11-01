@@ -4,10 +4,41 @@ import System
 import System.Collections.Generic
 import System.IO
 import System.Text.Json
+import System.Threading
 import System.Threading.Tasks
+
+data struct ContactRecord {
+    var Name string
+    var Destination string
+    var Valid bool
+}
 
 class AddressBook {
     shared {
+        func StoreContacts(
+            contacts SortedDictionary[string, string],
+            original string,
+            name string,
+            destination string?
+        ) SortedDictionary[string, string] {
+            let next = SortedDictionary[string, string](contacts, StringComparer.Ordinal)
+            next.Remove(original)
+            if let address = destination {
+                next[name] = address
+            }
+            WriteContacts(next)
+            return next
+        }
+
+        func PrepareContacts(contacts SortedDictionary[string, string], token CancellationToken)[]ContactRecord {
+            let rows = List[ContactRecord](contacts.Count)
+            for (name, destination) in contacts {
+                token.ThrowIfCancellationRequested()
+                rows.Add(ContactRecord{Name: name, Destination: destination, Valid: IsDestination(destination)})
+            }
+            return rows.ToArray()
+        }
+
         func IsDestination(value string) bool {
             try {
                 WalletValidation.ValidateDestination(value)

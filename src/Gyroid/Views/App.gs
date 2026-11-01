@@ -136,10 +136,24 @@ partial class App : Cell, IDisposable {
     private let closeSettings Action
     private let configureNetwork Action[NetworkPage]
     private let configureSettings Action[SettingsPage]
+    private let configureContacts Action[ContactsPage]
 
     init(wallet WalletSession, scaleOverride bool = false) {
         this.wallet = wallet
         this.scaleOverride = scaleOverride
+        configureContacts = page -> page.Accept(
+            ContactsInput{
+                Ui: ui,
+                Window: window,
+                Contacts: contacts,
+                Privacy: ui.Privacy,
+                Busy: ui.Working(),
+                Language: ui.Strings.Language,
+                Network: wallet.Settings.Network,
+                Height: height,
+                OnChange: contactsChanged
+            }
+        )
         configureNetwork = region -> region.Accept(
             NetworkInput{
                 Ui: ui,
@@ -1142,19 +1156,7 @@ partial class App : Cell, IDisposable {
         } else if page == AppPage.Tools || page == AppPage.Privacy {
             Cell.Mount[ToolsPage]("tools", configureTools)
         } else if page == AppPage.Contacts {
-            Cell.Mount[ContactsInput, ContactsPage](
-                "contacts",
-                ContactsInput{
-                    Ui: ui,
-                    Contacts: contacts,
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Network: wallet.Settings.Network,
-                    Height: height,
-                    OnChange: contactsChanged
-                }
-            )
+            Cell.Mount[ContactsPage]("contacts", configureContacts)
         } else if page == AppPage.Settings {
             Cell.Mount[SettingsPage]("settings", configureSettings)
         } else {

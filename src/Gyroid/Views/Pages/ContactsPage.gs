@@ -12,10 +12,12 @@ import Gyroid.Services
 import Gyroid.Services.WalletText
 import System
 import System.Collections.Generic
+import System.Threading
 import System.Threading.Tasks
 
 data struct ContactsInput {
     var Ui Presentation
+    var Window Window?
     var Contacts SortedDictionary[string, string]
     var Privacy bool
     var Busy bool
@@ -25,7 +27,105 @@ data struct ContactsInput {
     var OnChange Action[SortedDictionary[string, string]]
 }
 
-class ContactsPage : Cell[ContactsInput] {
+data struct ContactRow {
+    var Name string
+    var Destination string
+    var Valid bool
+    var Privacy bool
+    var Busy bool
+    var Language string
+}
+
+class ContactDraft {
+    public var Name string? = nil
+    public var Address string? = nil
+    public var Issue string = ""
+}
+
+class ContactsPage : Cell[ContactsInput], IDisposable {
+    private var current ContactsInput
+    private var rows[]ContactRow = []ContactRow{}
+    private var draft ContactDraft = ContactDraft{}
+    private let rowKey Func[ContactRow, string] = row -> row.Name
+    private let rowBuilder Func[ContactRow, Blob]
+    private var generation int32
+    private var disposed bool
+    private var lifetime CancellationTokenSource? = nil
+    private var issue string = ""
+
+    init() {
+        rowBuilder = row -> Row(current, row.Name, row.Destination, row.Valid)
+    }
+
+    public func Accept(input ContactsInput) {
+        if disposed || current.Equals(input) {
+            return
+        }
+        let prepare = current.Contacts != input.Contacts ||
+            current.Privacy != input.Privacy ||
+            current.Busy != input.Busy ||
+            current.Language != input.Language
+        current = input
+        if !prepare {
+            Rebuild()
+            return
+        }
+        generation++
+        if let window = input.Window {
+            let source = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
+            lifetime = source
+            let token = source.Token
+            let id = generation
+            go Prepare(input, window, id, token)
+        }
+    }
+
+    private func Prepare(input ContactsInput, window Window, id int32, token CancellationToken) {
+        try {
+            let contacts = AddressBook.PrepareContacts(input.Contacts, token)
+            let prepared = List[ContactRow](contacts.Length)
+            for contact in contacts {
+                prepared.Add(
+                    ContactRow{
+                        Name: contact.Name,
+                        Destination: contact.Destination,
+                        Valid: contact.Valid,
+                        Privacy: input.Privacy,
+                        Busy: input.Busy,
+                        Language: input.Language
+                    }
+                )
+            }
+            let result = prepared.ToArray()
+            window.TryPost(
+                () -> {
+                    if id == generation {
+                        rows = result
+                        issue = ""
+                        Rebuild()
+                    }
+                }
+            )
+        } catch (error OperationCanceledException) { } catch (error Exception) {
+            let message = error.Message
+            window.TryPost(
+                () -> {
+                    if id == generation {
+                        issue = message
+                        Rebuild()
+                    }
+                }
+            )
+        }
+    }
+
+    public func Dispose() {
+        disposed = true
+        generation++
+        lifetime?.Cancel()
+        lifetime?.Dispose()
+    }
+
     private var editing string? = nil
 
     private var deleting string = ""
@@ -55,27 +155,19 @@ class ContactsPage : Cell[ContactsInput] {
                 )
             )
         )
-        let list = Container{
-            Handle: listHandle,
-            Gap: AppTheme.Space8,
-            MinHeight: 0,
-            FlexShrink: 1,
-            OverflowY: Overflow.Scroll,
-            ScrollbarY: Theme.Read().Scrollbar
+        if editing != nil || input.Contacts.Count == 0 {
+            let key = editing ?? ""
+            let destination = input.Contacts.TryGetValue(key, out let address) ? address: ""
+            card.Add(Editor(input, key, destination))
         }
-        if editing == "" || input.Contacts.Count == 0 && editing == nil {
-            list.Add(Editor(input, "", ""))
+        let list = VirtualRows(rows, 56, rowKey, rowBuilder, false)
+        list.Handle = listHandle
+        list.FlexGrow = 1
+        list.MinHeight = 0
+        card.Add(ListParts.Viewport(list))
+        if issue.Length > 0 {
+            card.Add(Label(input.Ui, input.Ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Dim, ""))
         }
-        for (label, destination) in input.Contacts {
-            list.Add(
-                if label == editing {
-                    Editor(input, label, destination)
-                } else {
-                    Row(input, label, destination)
-                }
-            )
-        }
-        card.Add(ListParts.Viewport(list, Style{FlexShrink: 1}, grow: false))
         if deleting.Length > 0 {
             card.Add(DeleteDialog(input))
         }
@@ -88,17 +180,19 @@ class ContactsPage : Cell[ContactsInput] {
             return
         }
         editing = label
-        if label == "" {
-            listHandle.JumpTo(0, 0)
+        draft = ContactDraft{}
+        if label != "" {
+            listHandle.ScrollToItem(label)
         }
     }
 
     private func Reset() {
         editing = nil
+        draft = ContactDraft{}
         Rebuild()
     }
 
-    private func Row(input ContactsInput, label string, destination string) Blob {
+    private func Row(input ContactsInput, label string, destination string, valid bool) Blob {
         let ui = input.Ui
         return Container{
             BasedOn: AppTheme.ListRowStyle,
@@ -117,9 +211,7 @@ class ContactsPage : Cell[ContactsInput] {
                 MinWidth: 0,
                 Label(
                     ui,
-                    AddressBook.IsDestination(destination) ? Hidden(ui.Privacy, Short(destination)): ui.Strings.Get(
-                        "Invalid"
-                    ),
+                    valid ? Hidden(input.Privacy, Short(destination)): ui.Strings.Get("Invalid"),
                     AppTheme.Type13,
                     AppTheme.Dim,
                     ""
@@ -157,30 +249,33 @@ class ContactsPage : Cell[ContactsInput] {
             Original: original,
             Destination: destination,
             Handle: editorHandle,
+            Draft: draft,
             OnSave: (label, address) -> Save(input, label, address),
             OnCancel: Reset
         }
     )
 
-    private func Save(input ContactsInput, label string, destination string) {
-        let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
-        next.Remove(editing ?? "")
-        next[label] = destination
-        Store(input, next, Reset)
-    }
+    private func Save(input ContactsInput, label string, destination string) ->
+    Store(input, editing ?? "", label, destination, Reset)
 
-    private func Store(input ContactsInput, next SortedDictionary[string, string], done Action) {
+    private func Store(input ContactsInput, original string, label string, destination string?, done Action) {
+        var result SortedDictionary[string, string]? = nil
         input
             .Ui
             .Actions
             .Run(
             ct -> {
-                AddressBook.WriteContacts(next)
+                ct.ThrowIfCancellationRequested()
+                result = AddressBook.StoreContacts(input.Contacts, original, label, destination)
                 return Task.CompletedTask
             },
             () -> {
-                input.OnChange(next)
-                done()
+                if let next = result {
+                    input.OnChange(next)
+                    if !disposed {
+                        done()
+                    }
+                }
             }
         )
     }
@@ -205,12 +300,12 @@ class ContactsPage : Cell[ContactsInput] {
                 ConfirmDisabled = input.Busy,
                 OnConfirm = () -> {
                     let removed = deleting
-                    let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
-                    next.Remove(removed)
                     deleting = ""
                     Store(
                         input,
-                        next,
+                        removed,
+                        "",
+                        nil,
                         () -> if editing == removed {
                             Reset()
                         } else {
@@ -235,21 +330,16 @@ data struct ContactEditorInput {
     var Original string
     var Destination string
     var Handle ElementHandle
+    var Draft ContactDraft
     var OnSave Action[string, string]
     var OnCancel Action
 }
 
 class ContactEditor : Cell[ContactEditorInput] {
-    private var contactName string? = nil
-
-    private var contactAddress string? = nil
-
-    private var issue string = ""
-
     protected override func Build(input ContactEditorInput) Blob {
         let ui = input.Ui
-        let name = contactName ?? input.Original
-        let address = contactAddress ?? input.Destination
+        let name = input.Draft.Name ?? input.Original
+        let address = input.Draft.Address ?? input.Destination
         let label = name.Trim()
         let taken = label != input.Original && input.Contacts.ContainsKey(label)
         let destinationName = AddressBook.IsDestination(label)
@@ -270,7 +360,7 @@ class ContactEditor : Cell[ContactEditorInput] {
                 form.Field(
                     "Name",
                     name,
-                    value -> contactName = value,
+                    value -> input.Draft.Name = value,
                     issue: if destinationName {
                         "Name cannot be an address"
                     } else if taken {
@@ -292,10 +382,10 @@ class ContactEditor : Cell[ContactEditorInput] {
                         "Address",
                         address,
                         value -> {
-                            contactAddress = value.Trim()
-                            issue = ""
+                            input.Draft.Address = value.Trim()
+                            input.Draft.Issue = ""
                         },
-                        issue: issue,
+                        issue: input.Draft.Issue,
                         disabled: input.Busy,
                         labelled: false,
                         hidden: input.Privacy,
@@ -323,16 +413,16 @@ class ContactEditor : Cell[ContactEditorInput] {
 
     private func Save(input ContactEditorInput) {
         try {
-            let destination = WalletValidation.ValidateDestination(contactAddress ?? input.Destination)
+            let destination = WalletValidation.ValidateDestination(input.Draft.Address ?? input.Destination)
             if !destination.StartsWith("$", StringComparison.Ordinal) {
                 let addressIssue = WalletValidation.AddressIssue(destination, input.Network)
                 if addressIssue.Length > 0 {
                     throw WalletException(addressIssue)
                 }
             }
-            input.OnSave((contactName ?? input.Original).Trim(), destination)
+            input.OnSave((input.Draft.Name ?? input.Original).Trim(), destination)
         } catch (failure WalletException) {
-            issue = failure.Message
+            input.Draft.Issue = failure.Message
             Rebuild()
         }
     }
