@@ -1072,7 +1072,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 )
                 card.Add(form.Field("Amount", proofAmount, value -> proofAmount = value.Trim(), hidden: input.Privacy))
             } else {
-                card.Add(form.Field("Address", signer, value -> signer = value.Trim()))
+                card.Add(form.Field("Address", signer, value -> signer = value.Trim(), hidden: input.Privacy))
                 card.Add(form.Field("Message", message, value -> message = value))
                 card.Add(form.Field("Signature", signature, value -> signature = value.Trim()))
             }
