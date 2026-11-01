@@ -53,24 +53,14 @@ class SyncPage : Cell[SyncInput] {
             Record(input, step, now)
         }
         let stalled = step == 4 && now - heightSince >= 60
-        let padX = AppTheme.GetPanelPadding(input.Width)
         let width = input.Fill ? input.Width: Math.Min(760, input.Width - 48)
-        let inner = width - padX * 2
+        let inner = width - AppTheme.GetPagePadding(input.Width, input.Height) * 2
         let card = WalletParts.PageCard(ui, input.Width, input.Height, width, input.Fill)
         card.MinHeight = input.Fill ? 0.0: Math.Min(420, input.Height - 100)
         if input.Fill {
-            card.Width = Percent(100)
             card.FlexGrow = 1
             card.FlexBasis = 0
         }
-        card.BorderRadius = AppTheme.Radius14
-        card.Padding = Edges{
-            Left: padX,
-            Right: padX,
-            Top: AppTheme.GetPanelBlockPadding(input.Height),
-            Bottom: AppTheme.GetPanelBlockPadding(input.Height)
-        }
-        card.Gap = AppTheme.GetPanelGap(input.Height)
         card.Accessibility = Accessibility{Live: AccessibilityLive.Polite}
         card.Add(Steps(ui, node, step))
         let size = AppTheme.GetStatusFigureSize(input.Height, input.Fill)
