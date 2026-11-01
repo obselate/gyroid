@@ -914,6 +914,7 @@ partial class App : Cell {
     private func HistoryView(snapshot WalletSnapshot) Blob {
         historyInput = HistoryInput{
             Session: wallet,
+            Wallet: wallet.settings.ActiveWallet,
             Ui: ui,
             Snapshot: snapshot,
             Window: window,

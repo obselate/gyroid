@@ -19,7 +19,11 @@ data struct ObserverLensInput {
     var Loading bool
     var Error string
     var Ui Presentation
-    var Send WalletSend
+    var Amount uint64
+    var Fee uint64
+    var State string
+    var Confirmations uint64
+    var Memo string
     var Recipient string
     var Privacy bool
     var Language string
@@ -31,7 +35,6 @@ data struct ObserverLensInput {
 class ObserverLens : Cell[ObserverLensInput] {
     protected override func Build(input ObserverLensInput) Blob {
         let ui = input.Ui
-        let send = input.Send
         let view = input.View
         let compact = input.Width < 1100
         let side = compact ? 72.0: 96.0
@@ -90,7 +93,7 @@ class ObserverLens : Cell[ObserverLensInput] {
         ringRow.BorderWidth = Edges{Bottom: AppTheme.Border1}
         ringRow.BorderColor = AppTheme.Rule
         content.Add(ringRow)
-        let fee = Amount(ui.Privacy, send.Fee) + " BNT"
+        let fee = Amount(ui.Privacy, input.Fee) + " BNT"
         let height = if let value = view {
             value.Height
         } else {
@@ -101,7 +104,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 input,
                 side,
                 "amount",
-                Label(ui, "−" + Amount(ui.Privacy, send.Amount) + " BNT", AppTheme.Type14, AppTheme.Ink, ""),
+                Label(ui, "−" + Amount(ui.Privacy, input.Amount) + " BNT", AppTheme.Type14, AppTheme.Ink, ""),
                 Hidden(ui, "lock", Short(view?.Commitment ?? ""))
             )
         )
@@ -124,11 +127,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 )
             )
         )
-        let memo = send
-            .Recipients
-            .Select((recipient WalletRecipient) -> recipient.Memo)
-            .FirstOrDefault((text string) -> text.Length > 0) ??
-            ""
+        let memo = input.Memo
         content.Add(
             Item(
                 input,
@@ -173,7 +172,7 @@ class ObserverLens : Cell[ObserverLensInput] {
         if input.Error.Length > 0 {
             content.Add(MessageParts.Problem(ui, input.Error))
         }
-        let confirmed = send.Status == "confirmed"
+        let confirmed = input.State == "confirmed"
         return Cell.Mount[ModalDialog, ModalDialogHost](
             "lens",
             AppTheme.Dialog with{
@@ -188,7 +187,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                     Label(ui, ui.Strings.Get("sent"), AppTheme.Type17, AppTheme.Ink, ""),
                     Status(
                         ui,
-                        ChainState(ui, send.Status, send.Confirmations),
+                        ChainState(ui, input.State, input.Confirmations),
                         confirmed ? AppTheme.Mint: AppTheme.Orange,
                         confirmed ? "check": "schedule"
                     ),
@@ -215,7 +214,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 Content = content,
                 Footer = ActionRow(
                     []Blob{
-                        Button(ui, "Prove", input.OnProve, input.Loading || ui.Working() || !confirmed),
+                        Button(ui, "Prove", input.OnProve, input.Loading || !confirmed),
                         Button(ui, "Close", input.OnClose)
                     }
                 ),
