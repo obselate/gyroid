@@ -198,12 +198,16 @@ class ToolsPrivacyRegion : Cell, IDisposable {
 
     private func ReadChecks(session WalletSession, window Window, identity string, run int32) {
         try {
-            let result = session.Checks.ReadChecks()
+            let date = session.Checks.PhraseChecked()
+            var mode UnixFileMode?
+            try {
+                mode = session.Checks.WalletFileMode()
+            } catch (failure Exception) { }
             window.TryPost(
                 () -> {
                     if run == generation && identity == ReadWalletIdentity(session) {
-                        checkedAt = result.PhraseChecked
-                        fileMode = result.WalletFileMode
+                        checkedAt = date
+                        fileMode = mode
                         Rebuild()
                     }
                 }
@@ -700,11 +704,17 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     private var current ToolsPhraseInput
     private let suggestionKey Func[string, string] = (word string) -> word
     private let suggestionRow Func[string, Blob]
+    private let lifetime CancellationTokenSource = CancellationTokenSource()
 
     init() {
-        suggestionRow = word -> ControlParts.Button(current.Region.Ui, word, () -> Answer(current, word), false)
+        suggestionRow = word -> ControlParts.Button(
+            current.Region.Ui,
+            word,
+            () -> Answer(current, word),
+            false,
+            suggestions.Count > 0 && word == suggestions[0]
+        )
     }
-    private let lifetime CancellationTokenSource = CancellationTokenSource()
 
     private func Reveal(input ToolsRegionInput) {
         guard let window = input.Ui.Actions.window else {
@@ -797,6 +807,9 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     }
 
     private func SetTyped(value string) {
+        if value == typed {
+            return
+        }
         typed = value
         suggestions = if value.Length == 0 {
             List[string]()
@@ -969,7 +982,13 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
                     ""
                 )
             )
-            let list = VirtualRows[string](suggestions, AppTheme.ControlRegular, suggestionKey, suggestionRow)
+            let list = VirtualItems[string](
+                suggestions,
+                AppTheme.ControlRegular * 3,
+                AppTheme.ControlRegular,
+                suggestionKey,
+                suggestionRow
+            )
             list.Height = AppTheme.ControlRegular
             list.MinHeight = 0
             list.FlexGrow = 1
@@ -1087,7 +1106,7 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
                 value -> {
                     input.State.SignMessage = value
                     input.State.SignSignature = ""
-                },
+                }
             )
         }
         if input.State.SignSignature.Length > 0 {
@@ -1184,10 +1203,10 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
                 "Address",
                 input.State.VerifyAddress,
                 value -> input.State.VerifyAddress = value.Trim(),
-                secret: input.Privacy,
+                secret: input.Privacy
             ),
-            form.Field("Message", input.State.VerifyMessage, value -> input.State.VerifyMessage = value,),
-            form.Field("Signature", input.State.VerifySignature, value -> input.State.VerifySignature = value.Trim(),),
+            form.Field("Message", input.State.VerifyMessage, value -> input.State.VerifyMessage = value),
+            form.Field("Signature", input.State.VerifySignature, value -> input.State.VerifySignature = value.Trim()),
             ActionRow(
                 []Blob{
                     Verdict(input, verdict),
@@ -1291,25 +1310,25 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
                 "Transaction",
                 input.State.ProofTransaction,
                 value -> input.State.ProofTransaction = value.Trim(),
-                secret: input.Privacy,
+                secret: input.Privacy
             ),
             form.Field(
                 "Proof key",
                 input.State.ProofKey,
                 value -> input.State.ProofKey = value.Trim(),
-                secret: input.Privacy,
+                secret: input.Privacy
             ),
             form.Field(
                 "Address",
                 input.State.ProofAddress,
                 value -> input.State.ProofAddress = value.Trim(),
-                secret: input.Privacy,
+                secret: input.Privacy
             ),
             form.Field(
                 "Amount",
                 input.State.ProofAmount,
                 value -> input.State.ProofAmount = value.Trim(),
-                secret: input.Privacy,
+                secret: input.Privacy
             ),
             ActionRow(
                 []Blob{
@@ -1389,26 +1408,28 @@ class ToolsHealthRegion : Cell, IDisposable {
     private var source OutputReport?
     private var rows[]DataGridRow = []DataGridRow{}
     private var columns[]DataGridColumn = []DataGridColumn{}
+    private var generation int32
+    private let lifetime CancellationTokenSource = CancellationTokenSource()
+    private var auditing bool
+    private var auditIssue string = ""
 
     func Accept(input ToolsHealthInput) {
         if current.Equals(input) && source == input.State.Report {
             return
         }
-        let changed = source != input
-            .State
-            .Report ||
-            current
-            .Region
-            .Privacy != input
-            .Region
-            .Privacy ||
-            current
-            .Region
-            .Language != input
-            .Region
-            .Language
+        let old = current.Region
+        let next = input.Region
         current = input
-        if changed || columns.Length == 0 {
+        if old.Language != next.Language {
+            let ui = next.Ui
+            columns = []DataGridColumn{
+                DataGridColumn{Id: "height", Label: ui.Strings.Get("height"), Resizable: false},
+                DataGridColumn{Id: "output", Label: ui.Strings.Get("output"), Resizable: false},
+                DataGridColumn{Id: "reason", Label: ui.Strings.Get("reason"), Resizable: false},
+                DataGridColumn{Id: "amount", Label: ui.Strings.Get("amount"), Resizable: false}
+            }
+        }
+        if source != input.State.Report || old.Privacy != next.Privacy || old.Language != next.Language {
             PrepareRows()
         }
         Rebuild()
@@ -1417,12 +1438,6 @@ class ToolsHealthRegion : Cell, IDisposable {
     private func PrepareRows() {
         source = current.State.Report
         let ui = current.Region.Ui
-        columns = []DataGridColumn{
-            DataGridColumn{Id: "height", Label: ui.Strings.Get("height"), Resizable: false},
-            DataGridColumn{Id: "output", Label: ui.Strings.Get("output"), Resizable: false},
-            DataGridColumn{Id: "reason", Label: ui.Strings.Get("reason"), Resizable: false},
-            DataGridColumn{Id: "amount", Label: ui.Strings.Get("amount"), Resizable: false}
-        }
         let prepared = List[DataGridRow]()
         if let report = source {
             for output in report.Stale {
@@ -1439,10 +1454,6 @@ class ToolsHealthRegion : Cell, IDisposable {
         }
         rows = prepared.ToArray()
     }
-    private var generation int32
-    private let lifetime CancellationTokenSource = CancellationTokenSource()
-    private var auditing bool
-    private var auditIssue string = ""
 
     func Dispose() {
         generation++
@@ -1604,12 +1615,15 @@ class ToolsHealthRegion : Cell, IDisposable {
         let token = lifetime.Token
         let publish Action[OutputReport?, string] = (report, error) -> {
             if run == generation && identity == ReadWalletIdentity(session) {
+                let resized = ((input.State.Report?.Stale.Length ?? 0) > 0) != ((report?.Stale.Length ?? 0) > 0)
                 input.State.Report = report
                 PrepareRows()
                 auditing = false
                 auditIssue = error
                 Rebuild()
-                input.OnReport()
+                if resized {
+                    input.OnReport()
+                }
             }
         }
         go AuditOutputs(session, window, token, publish)

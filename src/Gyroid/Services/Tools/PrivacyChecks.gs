@@ -17,14 +17,6 @@ class PrivacyChecks {
         this.session = session
     }
 
-    func ReadChecks() PrivacyCheckResult {
-        var mode UnixFileMode?
-        try {
-            mode = WalletFileMode()
-        } catch (failure Exception) { }
-        return PrivacyCheckResult{PhraseChecked: PhraseChecked(), WalletFileMode: mode}
-    }
-
     private func PhraseStatePath() string -> SettingsStore.ConfigurationPath() + ".phrase-checks.json"
 
     private func WalletKey() string -> session.settings.Network + ":" + Convert.ToHexString(
@@ -62,6 +54,7 @@ class PrivacyChecks {
             }
         )
         let wallet = WalletKey()
+        let now = DateTime.UtcNow
         await PrivateFiles.WriteAtomic(
             path,
             async (stream) -> {
@@ -72,14 +65,14 @@ class PrivacyChecks {
                         entry.WriteTo(writer)
                     }
                 }
-                writer.WriteString(wallet, DateTime.UtcNow)
+                writer.WriteString(wallet, now)
                 writer.WriteEndObject()
                 await writer.FlushAsync()
             },
             true,
             false
         )
-        return PhraseChecked()
+        return now.ToLocalTime()
     }
 
     func WalletFileMode() UnixFileMode? {
