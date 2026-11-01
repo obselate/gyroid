@@ -89,6 +89,7 @@ data struct HistoryListInput {
 }
 
 data struct HistoryExportInput {
+    var Window Window?
     var Ui Presentation
     var Session WalletSession
     var Network string
@@ -363,9 +364,8 @@ class HistoryPage : Cell, IDisposable {
                     if disposed || generation != preparationGeneration || !Active(id) {
                         return
                     }
-                    if allRows == result.Rows &&
-                        shown == result.Shown &&
-                        preparedExport == result.Export &&
+                    if Object.ReferenceEquals(allRows, result.Rows) && Object.ReferenceEquals(shown, result.Shown) &&
+                        Object.ReferenceEquals(preparedExport, result.Export) &&
                         low == result.Low &&
                         span == result.Span &&
                         preparedExportCount == result.ExportCount &&
@@ -470,6 +470,7 @@ class HistoryPage : Cell, IDisposable {
         )
         bar.Add(Container{FlexGrow: 1})
         exportInput = HistoryExportInput{
+            Window: input.Window,
             Ui: ui,
             Session: input.Session,
             Network: identity.Network,
@@ -791,7 +792,7 @@ class HistoryRibbon : Cell, IDisposable {
         if current.Equals(input) {
             return
         }
-        let changed = current.Rows != input.Rows ||
+        let changed = !Object.ReferenceEquals(current.Rows, input.Rows) ||
             current.Low != input.Low ||
             current.Span != input.Span ||
             current.Tip != input.Tip
@@ -1041,7 +1042,10 @@ class HistoryRibbonHover : Cell {
     private var bins[]HistoryRibbonBin = [40]HistoryRibbonBin
 
     public func Accept(input HistoryRibbonInput, width float64, height float64, prepared[]HistoryRibbonBin) {
-        if current.Equals(input) && plotWidth == width && plotHeight == height && bins == prepared {
+        if current.Equals(input) && plotWidth == width && plotHeight == height && Object.ReferenceEquals(
+            bins,
+            prepared
+        ) {
             return
         }
         current = input
@@ -2022,13 +2026,16 @@ class HistoryTransactions : Cell, IDisposable {
     }
 }
 
-class HistoryExport : Cell {
+class HistoryExport : Cell, IDisposable {
     private var current HistoryExportInput
     private var exporting bool
     private var exportRows int32
     private var format string = "csv"
     private var memos bool = true
     private let exportAnchor ElementHandle = ElementHandle()
+    private var generation int32
+    private var disposed bool
+    private var issue string = ""
 
     public func Accept(input HistoryExportInput) {
         if current.Equals(input) {
@@ -2036,12 +2043,19 @@ class HistoryExport : Cell {
         }
         if current.Network != input.Network || current.Wallet != input.Wallet {
             exporting = false
+            generation++
+            issue = ""
         }
         current = input
         if exporting {
             exportRows = input.Count
         }
         Rebuild()
+    }
+
+    public func Dispose() {
+        disposed = true
+        generation++
     }
 
     override func Build() Blob {
@@ -2119,6 +2133,9 @@ class HistoryExport : Cell {
                 Button(ui, "save", () -> SaveExport(input), exportRows == 0, true)
             }
         }
+        if issue.Length > 0 {
+            content.Add(MessageParts.Problem(ui, ui.Strings.Explain(issue)))
+        }
         return Container{
             Handle: exportAnchor,
             FlexShrink: 0,
@@ -2156,38 +2173,50 @@ class HistoryExport : Cell {
 
     private func SaveExport(input HistoryExportInput) {
         exporting = false
+        generation++
+        let run = generation
+        issue = ""
         Rebuild()
         let rows = input.Collect()
         let known = input.Times
         let withMemos = memos
         let suffix = format
-        let selectedPeriod = input.Period
-        let selectedFrom = input.From
-        let selectedTo = input.To
         input.ChooseFile.Invoke(
             FileDialogKind.SaveFile,
             "save",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "history." + suffix),
-            path -> input
-                .Ui
-                .Actions
-                .Run(
-                ct -> input
-                    .Session
-                    .History
-                    .WriteExport(
-                    path,
-                    rows,
-                    input.Tip,
-                    known,
-                    withMemos,
-                    suffix,
-                    selectedPeriod,
-                    selectedFrom,
-                    selectedTo,
-                    ct
-                )
-            )
+            path -> input.Ui.Actions.Run(ct -> Export(input, path, rows, known, withMemos, suffix, run, ct))
+        )
+    }
+
+    private async func Export(
+        input HistoryExportInput,
+        path string,
+        rows[]HistoryRow,
+        known Dictionary[uint64, int64],
+        withMemos bool,
+        suffix string,
+        run int32,
+        ct CancellationToken
+    ) {
+        var failure string = ""
+        try {
+            await input
+                .Session
+                .History
+                .WriteExport(path, rows, input.Tip, known, withMemos, suffix, input.Period, input.From, input.To, ct)
+        } catch (error Exception) {
+            failure = error.Message
+        }
+        let result = failure
+        input.Window?.TryPost(
+            () -> {
+                if !disposed && run == generation {
+                    issue = result
+                    exporting = result.Length > 0
+                    Rebuild()
+                }
+            }
         )
     }
 }
