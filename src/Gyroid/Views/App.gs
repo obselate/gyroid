@@ -218,8 +218,9 @@ partial class App : Cell {
                 Session: wallet,
                 Window: window,
                 History: miningHistory,
-                Wallet: WalletName(wallet.Settings.ActiveWallet),
+                Wallet: wallet.Settings.ActiveWallet,
                 Network: wallet.Settings.Network,
+                Endpoint: wallet.Settings.Endpoint,
                 Language: ui.Strings.Language,
                 Visible: !hidden &&
                     window?.IsVisible == true &&

@@ -37,6 +37,7 @@ data struct MiningPageInput {
     var Visible bool
     var NodeRunning bool
     var Network string
+    var Endpoint string
 }
 
 data struct MiningCommandInput {
@@ -87,6 +88,8 @@ class MiningPage : Cell, IDisposable {
     private var opened bool
     private var disposed bool
     private var unavailable bool
+    private var visible bool
+    private var nodeRunning bool
     private var samples[]MiningSample = []MiningSample{}
 
     init() {
@@ -95,16 +98,22 @@ class MiningPage : Cell, IDisposable {
     }
 
     func Accept(input MiningPageInput) {
+        if opened && source == input {
+            return
+        }
         let replaced = !opened ||
             source.Session != input.Session ||
             source.Window != input.Window ||
+            source.History != input.History ||
             source.Wallet != input.Wallet ||
             source.Network != input.Network ||
-            source.Visible != input.Visible ||
-            source.NodeRunning != input.NodeRunning
-        let changed = !opened || source != input
+            source.Endpoint != input.Endpoint
+        let stateChanged = source.Visible != input.Visible || source.NodeRunning != input.NodeRunning
         source = input
+        Volatile.Write(ref visible, input.Visible)
+        Volatile.Write(ref nodeRunning, input.NodeRunning)
         if replaced {
+            samples = input.History.Samples.ToArray()
             generation++
             request?.Cancel()
             request?.Dispose()
@@ -113,18 +122,16 @@ class MiningPage : Cell, IDisposable {
                 refreshRequested = chan[bool](1)
             }
             opened = true
-            if input.Visible && input.NodeRunning {
-                guard let window = input.Window else {
-                    return
-                }
-                let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
-                request = current
-                worker = RunWorkerAsync(input, generation, refreshRequested, Context.FromToken(current.Token))
+            guard let window = input.Window else {
+                return
             }
+            let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
+            request = current
+            worker = RunWorkerAsync(input, generation, refreshRequested, Context.FromToken(current.Token))
+        } else if stateChanged {
+            Refresh()
         }
-        if changed {
-            Rebuild()
-        }
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -273,9 +280,12 @@ class MiningPage : Cell, IDisposable {
     }
 
     private func Poll(input MiningPageInput, id int32, requests chan[bool], pageContext Context) {
+        var running = false
         while !pageContext.IsCancelled {
-            let running = await Load(input, id, pageContext.Token)
-            if running {
+            if Volatile.Read(ref visible) && Volatile.Read(ref nodeRunning) {
+                running = await Load(input, id, pageContext.Token)
+            }
+            if Volatile.Read(ref visible) && Volatile.Read(ref nodeRunning) && running {
                 select {
                     case <- requests { }
                     case <- after(TimeSpan.FromSeconds(5)) { }
@@ -297,7 +307,7 @@ class MiningPage : Cell, IDisposable {
         } catch (failure Exception) { }
         input.Window?.TryPost(
             () -> {
-                if disposed || id != generation {
+                if disposed || id != generation || !source.Visible || !source.NodeRunning {
                     return
                 }
                 let previous = input.History.Status
@@ -418,7 +428,13 @@ class MiningSetup : Cell[MiningSetupInput] {
                     ui,
                     wide,
                     "pays to",
-                    Label(ui, ui.Strings.Get("this wallet") + " · " + input.Wallet, AppTheme.Type13, AppTheme.Ink, "")
+                    Label(
+                        ui,
+                        ui.Strings.Get("this wallet") + " · " + WalletName(input.Wallet),
+                        AppTheme.Type13,
+                        AppTheme.Ink,
+                        ""
+                    )
                 ),
                 Row(
                     ui,
