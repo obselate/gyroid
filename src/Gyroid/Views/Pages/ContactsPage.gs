@@ -191,7 +191,10 @@ class ContactsPage : Cell[ContactsInput] {
 
     private func DeleteDialog(input ContactsInput) Blob {
         let ui = input.Ui
-        let close Action = () -> deleting = ""
+        let close Action = () -> {
+            deleting = ""
+            Rebuild()
+        }
         return WalletParts.Modal(
             ui,
             "delete-contact",
@@ -258,7 +261,8 @@ class ContactEditor : Cell[ContactEditorInput] {
             ui,
             !input.Busy && !taken && !destinationName,
             () -> Save(input),
-            []string{label, address}
+            []string{label, address},
+            edited: Rebuild
         )
         let fields = Container{
             FlexDirection: FlexDirection.Row,
@@ -334,6 +338,7 @@ class ContactEditor : Cell[ContactEditorInput] {
             input.OnSave((contactName ?? input.Original).Trim(), destination)
         } catch (failure WalletException) {
             issue = failure.Message
+            Rebuild()
         }
     }
 }
