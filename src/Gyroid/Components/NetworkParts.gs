@@ -4,6 +4,7 @@ import Goo
 import Gyroid.Components.TextParts
 import Gyroid.Models
 import Gyroid.Services.WalletText
+import Gyroid.Services
 import Gyroid.Views
 import System
 import System.Globalization
@@ -148,9 +149,9 @@ class NetworkParts {
             ":" +
             (seconds % 60).ToString("00", CultureInfo.InvariantCulture)
 
-        func Rate(hashes float64) string -> (
+        func Rate(hashes float64) string -> NodeText.Positive(
             hashes / Math.Pow(1000, Math.Clamp(Math.Floor(Math.Log10(Math.Max(hashes, 1)) / 3), 0, 3))
-        ).ToString("0.00", CultureInfo.InvariantCulture)
+        )
 
         func Unit(hashes float64) string -> switch int32(
             Math.Clamp(Math.Floor(Math.Log10(Math.Max(hashes, 1)) / 3), 0, 3)

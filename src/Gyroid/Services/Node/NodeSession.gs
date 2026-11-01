@@ -8,6 +8,7 @@ import System.Globalization
 import System.IO
 import System.Text.Json
 import System.Threading
+import System.Linq
 
 class NodeSession : IDisposable {
     var Settings WalletSettings
@@ -22,6 +23,7 @@ class NodeSession : IDisposable {
     private var maxOutbound uint64
     private var coreVersion string = ""
     private var versionExecutable string = ""
+    private var networkGeneration int32
     private let networkGate SemaphoreSlim = SemaphoreSlim(1, 1)
 
     init(settings WalletSettings) {
@@ -44,6 +46,7 @@ class NodeSession : IDisposable {
     }
 
     func Reconnect() {
+        networkGeneration++
         Api.Dispose()
         Network = NetworkReport()
         Api = NodeApi(Settings)
@@ -199,6 +202,8 @@ class NodeSession : IDisposable {
     }
 
     func Publish() {
+        networkGeneration++
+        Network = NetworkReport()
         Status = NodeStatus{
             Source: if Supervisor.Executable.Length > 0 {
                 Supervisor.Source
@@ -227,6 +232,7 @@ class NodeSession : IDisposable {
         await networkGate.WaitAsync(ct)
         try {
             let status = Status
+            let generation = networkGeneration
             let previous = Network
             let blocks = previous.Blocks
             let current = blocks.Length > 0 &&
@@ -239,6 +245,9 @@ class NodeSession : IDisposable {
             }
             using let stats = await Api.JsonAsync("stats", ct: ct)
             let updatedBlocks = await ReadBlocksAsync(status, previous, ct)
+            if generation != networkGeneration {
+                return NetworkReport()
+            }
             Network = NetworkReport{
                 ... previous,
                 Hashrate: stats.RootElement.GetProperty("network_hashrate").GetDouble(),
@@ -253,10 +262,12 @@ class NodeSession : IDisposable {
     }
 
     async func ReadNetworkAsync(ct CancellationToken) NetworkReport {
+        let generation = networkGeneration
         await ReadNetworkSummaryAsync(ct)
         using let peers = await Api.JsonAsync("peers", ct: ct)
         using let bans = await Api.JsonAsync("peers/banned", ct: ct)
         let connected = List[NetworkPeer]()
+        var tcp = 0
         for peer in peers.RootElement.GetProperty("peers").EnumerateArray() {
             let addresses = peer.GetProperty("addrs")
             let parts = if addresses.GetArrayLength() > 0 {
@@ -284,6 +295,9 @@ class NodeSession : IDisposable {
                     Family: parts.Length > 1 ? parts[1]: ""
                 }
             )
+            if connected[connected.Count - 1].Transport != "quic" {
+                tcp++
+            }
         }
         let banned = List[BannedPeer]()
         for ban in bans.RootElement.GetProperty("banned").EnumerateArray() {
@@ -302,7 +316,18 @@ class NodeSession : IDisposable {
                 }
             )
         }
-        Network = NetworkReport{... Network, Peers: connected.ToArray(), Banned: banned.ToArray()}
+        let peerRows = connected.ToArray()
+        let banRows = banned.ToArray()
+        if generation != networkGeneration {
+            return NetworkReport()
+        }
+        Network = NetworkReport{
+            ... Network,
+            Status: Status,
+            Peers: Enumerable.SequenceEqual(Network.Peers, peerRows) ? Network.Peers: peerRows,
+            Banned: Enumerable.SequenceEqual(Network.Banned, banRows) ? Network.Banned: banRows,
+            Tcp: tcp
+        }
         return Network
     }
 
