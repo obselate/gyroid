@@ -2,6 +2,7 @@ package Gyroid.Views
 
 import Goo
 import Goo.Widgets
+import Goo.Widgets.Data
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.Components
@@ -46,7 +47,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
     private var current ContactsInput
     private var rows[]ContactRow = []ContactRow{}
     private var draft ContactDraft = ContactDraft{}
-    private let rowKey Func[ContactRow, string] = row -> row.Name
+    private let rowKey Func[ContactRow, string] = row -> "contact-row-" + row.Name
     private let rowBuilder Func[ContactRow, Blob]
     private var generation int32
     private var disposed bool
@@ -182,7 +183,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
         editing = label
         draft = ContactDraft{}
         if label != "" {
-            listHandle.ScrollToItem(label)
+            listHandle.ScrollToItem("contact-row-" + label)
         }
     }
 
