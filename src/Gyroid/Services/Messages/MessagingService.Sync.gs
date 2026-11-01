@@ -122,17 +122,8 @@ partial class MessagingService {
     ) {
         let client = session.Node.Api
         using let status = await client.JsonAsync("status", ct: ct)
-        using let stats = await client.JsonAsync("stats", ct: ct)
         let height = int64(NodeJson.Number(status.RootElement, "chain_height"))
         let tip = await BlockTime(client, network, height, ct)
-        var average = 300.0
-        if stats.RootElement.TryGetProperty("avg_block_time", out let field) &&
-            field.ValueKind == JsonValueKind.Number {
-            let value = field.GetDouble()
-            if double.IsFinite(value) && value > 0 {
-                average = value
-            }
-        }
         let known = KnownConversations(local, network)
         let updated = Dictionary[string, Conversation](StringComparer.Ordinal)
         for pair in known {
@@ -296,7 +287,6 @@ partial class MessagingService {
                 appliedRevision = currentRevision
                 TipHeight = height
                 TipTime = tip
-                AverageBlockSeconds = average
                 Error = local.Error
             }
             session.History.ApplyMessages()

@@ -86,7 +86,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
         let color = invalid ? ui.Pink: message.Verification == Verification.Unverified ? ui.Orange: ui.Dim
         let time = (message.Outgoing ? message.SentAt: message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm")
         let delivered = message.State == MessageState.Confirmed && message.Confirmations > 0
-        let statusColor = message.Outgoing ? (delivered ? ui.SuccessFill: ui.Black.WithAlpha(0.6)): ui.Dim
+        let statusColor = message.Outgoing ? (delivered ? ui.SuccessStroke: ui.Black.WithAlpha(0.6)): ui.Dim
         let metadata = Container{
             FlexDirection: FlexDirection.Row,
             JustifyContent: JustifyContent.FlexEnd,

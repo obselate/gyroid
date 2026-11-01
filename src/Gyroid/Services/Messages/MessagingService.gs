@@ -28,7 +28,6 @@ partial class MessagingService {
     private var revision int64
     private var appliedRevision int64 = -1
     var Error string = ""
-    var AverageBlockSeconds float64 = 300.0
     var TipHeight int64
     var TipTime DateTimeOffset
 
