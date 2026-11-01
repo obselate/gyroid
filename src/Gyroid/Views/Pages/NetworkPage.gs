@@ -15,6 +15,7 @@ import Gyroid.Services
 import Gyroid.Services.WalletText
 import System
 import System.Globalization
+import System.Linq
 import System.Threading
 import System.Threading.Tasks
 
@@ -26,53 +27,69 @@ data struct NetworkInput {
     var History[]WalletOutput
     var Sends[]WalletSend
     var Clipboard[]char
+    var Source NetworkSource
     var Language string
     var Width float64
     var Height float64
 }
 
+data struct NetworkSource {
+    var Wallet string
+    var Network string
+    var Endpoint string
+    var Running bool
+    var Start int64
+}
+
 class NetworkPage : Cell, IDisposable {
     private var input NetworkInput
     private var report NetworkReport = NetworkReport()
-    private var loaded NodeStatus? = nil
-    private var source WalletSession? = nil
-    private var wallet string = ""
+    private var source NetworkSource
+    private var loaded bool
+    private var loading bool
+    private var loadedTip string = ""
+    private var loadedHeight uint64
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var request CancellationTokenSource? = nil
     private var generation int32
     private var failed bool
 
-    public func Accept(input NetworkInput) {
-        let changed = this.input != input
-        this.input = input
-        if source == input.Session && loaded == input.Node && wallet == input.Session.Settings.ActiveWallet {
-            if changed {
-                Rebuild()
-            }
-            return
+    public func Accept(next NetworkInput) {
+        let changed = next != input
+        input = next
+        if source != next.Source {
+            source = next.Source
+            generation++
+            request?.Cancel()
+            request?.Dispose()
+            request = nil
+            loaded = false
+            loading = false
+            report = next.Session.Node.Network
         }
-        source = input.Session
-        loaded = input.Node
-        wallet = input.Session.Settings.ActiveWallet
-        generation++
-        request?.Cancel()
-        request?.Dispose()
-        request = nil
-        report = input.Session.Node.Network
-        failed = false
-        if input.Node.Running {
+        if next
+            .Source
+            .Running &&
+            !loading &&
+            (!loaded || loadedTip != next.Node.BestHash || loadedHeight != next.Node.Height) {
+            generation++
+            request?.Dispose()
             let current = CancellationTokenSource.CreateLinkedTokenSource(
                 lifetime.Token,
-                input.Window?.Closed ?? CancellationToken.None
+                next.Window?.Closed ?? CancellationToken.None
             )
             request = current
-            go Load(input.Session.Node, input.Window, generation, current.Token)
+            loading = true
+            loadedTip = next.Node.BestHash
+            loadedHeight = next.Node.Height
+            go Load(next.Session.Node, next.Window, generation, current.Token)
         }
-        Rebuild()
+        if changed {
+            Rebuild()
+        }
     }
 
     override func Build() Blob {
-        let input = this.input
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: AppTheme.Space12}
         if failed {
             page.Add(
@@ -150,8 +167,6 @@ class NetworkPage : Cell, IDisposable {
                 var result NetworkReport? = nil
                 try {
                     result = await node.ReadNetworkAsync(token)
-                } catch (failure OperationCanceledException) when token.IsCancellationRequested {
-                    return
                 } catch (failure Exception) { }
                 if token.IsCancellationRequested {
                     return
@@ -164,10 +179,24 @@ class NetworkPage : Cell, IDisposable {
                         let changed = failed != (result == nil) || result != nil && report != result
                         failed = result == nil
                         if let value = result {
+                            if Enumerable.SequenceEqual[NetworkBlock](report.Blocks, value.Blocks) {
+                                value.Blocks = report.Blocks
+                            }
+                            if Enumerable.SequenceEqual[NetworkPeer](report.Peers, value.Peers) {
+                                value.Peers = report.Peers
+                            }
+                            if Enumerable.SequenceEqual[BannedPeer](report.Banned, value.Banned) {
+                                value.Banned = report.Banned
+                            }
                             report = value
+                            loading = false
+                            loaded = true
                         }
                         if changed {
                             Rebuild()
+                        }
+                        if result != nil {
+                            Accept(input)
                         }
                     }
                 )
@@ -659,10 +688,10 @@ class NetworkPeers : Cell[NetworkPeersInput] {
     private var tab string = "peers"
     private var hovered string = ""
     private var revealed bool
-    private let peerMap ElementHandle = ElementHandle()
+    private let hoverPeer Action[string]
 
     init() {
-        peerMap.MetricsChanged += _ -> Rebuild()
+        hoverPeer = Hover
     }
 
     protected override func Build(input NetworkPeersInput) Blob {
@@ -709,7 +738,19 @@ class NetworkPeers : Cell[NetworkPeersInput] {
                 )
             }
         )
-        card.Add(Map(input))
+        card.Add(
+            Cell.Mount[NetworkPeerMapInput, NetworkPeerMap](
+                "peer-map",
+                NetworkPeerMapInput{
+                    Ui: ui,
+                    Peers: input.Peers,
+                    Banned: input.Banned,
+                    Hovered: hovered,
+                    Hover: hoverPeer,
+                    Language: input.Language
+                }
+            )
+        )
         var tcp = 0
         for peer in input.Peers {
             if peer.Transport != "quic" {
@@ -820,7 +861,90 @@ class NetworkPeers : Cell[NetworkPeersInput] {
     private func Legend(ui Presentation, label string, count int32, color Color) Blob ->
     TextParts.Legend(ui, ui.Strings.Get(label), color, Label(ui, count.ToString(), AppTheme.Type12, AppTheme.Ink, ""))
 
-    private func Map(input NetworkPeersInput) Blob {
+    private func Hover(id string) {
+        if hovered != id {
+            hovered = id
+            Rebuild()
+        }
+    }
+
+    private func PeerRow(input NetworkPeersInput, peer NetworkPeer) Blob {
+        let ui = input.Ui
+        let row = Container{
+            BasedOn: AppTheme.ListRowStyle,
+            Height: 30,
+            FlexShrink: 0,
+            Padding: Edges{Left: AppTheme.Space8, Right: AppTheme.Space8},
+            BorderRadius: AppTheme.Radius8,
+            BackgroundColor: peer.Id == hovered ? AppTheme.Rule: Color.Transparent,
+            Accessibility: Accessibility{Name: Short(peer.Id) + " " + peer.Transport + " " + peer.Address},
+            OnPointerEnter: (event PointerEvent) -> Hover(peer.Id),
+            OnPointerLeave: (event PointerEvent) -> Hover(""),
+            Container{
+                Width: 12,
+                AlignItems: AlignItems.Center,
+                Container{
+                    BasedOn: AppTheme.MarkerStyle,
+                    BorderRadius: AppTheme.Radius4,
+                    BackgroundColor: peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
+                }
+            },
+            Grow(Label(ui, Short(peer.Id), AppTheme.Type13, AppTheme.Ink, ""))
+        }
+        if input.Width >= 1100 {
+            row.Add(Label(ui, peer.Address, AppTheme.Type13, AppTheme.Body, ""))
+        }
+        return row
+    }
+
+    private func BanRow(ui Presentation, ban BannedPeer) Blob -> Container{
+        Gap: AppTheme.Space4,
+        MinHeight: 44,
+        FlexShrink: 0,
+        Padding: Edges{Left: AppTheme.Space8, Right: AppTheme.Space8},
+        Accessibility: Accessibility{Name: Short(ban.Id) + " " + ban.Reason},
+        Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: AppTheme.Space10,
+            MaterialIcons.Create("close", AppTheme.Icon12, AppTheme.Pink),
+            Label(ui, Short(ban.Id), AppTheme.Type13, AppTheme.Ink, ""),
+            Grow(Label(ui, ban.Reason, AppTheme.Type13, AppTheme.Body, "")),
+            Label(ui, ban.Count.ToString() + "×", AppTheme.Type13, AppTheme.Dim, "")
+        },
+        if ban.Permanent {
+            Label(ui, ui.Strings.Get("permanent"), AppTheme.Type13, AppTheme.Pink, "")
+        } else {
+            Label(ui, String.Format(ui.Strings.Get("until {0}"), Time(ban.Expires)), AppTheme.Type13, AppTheme.Body, "")
+        }
+    }
+
+    shared {
+        func Short(id string) string -> if id.Length > 12 {
+            id.Substring(0, 4) + "…" + id.Substring(id.Length - 6)
+        } else {
+            id
+        }
+    }
+}
+
+data struct NetworkPeerMapInput {
+    var Ui Presentation
+    var Peers[]NetworkPeer
+    var Banned[]BannedPeer
+    var Hovered string
+    var Hover Action[string]
+    var Language string
+}
+
+class NetworkPeerMap : Cell[NetworkPeerMapInput] {
+    private let peerMap ElementHandle = ElementHandle()
+
+    init() {
+        peerMap.MetricsChanged += _ -> Rebuild()
+    }
+
+    protected override func Build(input NetworkPeerMapInput) Blob {
         let ui = input.Ui
         let plot = Container{
             Handle: peerMap,
@@ -890,7 +1014,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             let px = x + Math.Cos(angle) * ring
             let py = y + Math.Sin(angle) * ring
             let color = peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
-            let active = peer.Id == hovered
+            let active = peer.Id == input.Hovered
             let radius = active ? 7.0: 5.5
             if active {
                 plot.Add(Lines(width, height, PathBuilder(0, 0, width, height).MoveTo(x, y).LineTo(px, py), color))
@@ -898,8 +1022,8 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             let dot = Dot(px, py, radius, color)
             dot.BorderWidth = active ? 1.5: AppTheme.Border0
             dot.BorderColor = AppTheme.Ink
-            dot.OnPointerEnter = (event PointerEvent) -> Hover(peer.Id)
-            dot.OnPointerLeave = (event PointerEvent) -> Hover("")
+            dot.OnPointerEnter = (event PointerEvent) -> input.Hover(peer.Id)
+            dot.OnPointerLeave = (event PointerEvent) -> input.Hover("")
             plot.Add(dot)
             if active {
                 plot.Add(
@@ -908,7 +1032,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
                         Math.Max(0.0, py - 34),
                         Container{
                             Gap: AppTheme.Space4,
-                            Tip(ui, "peer ID", Short(peer.Id), AppTheme.Ink),
+                            Tip(ui, "peer ID", NetworkPeers.Short(peer.Id), AppTheme.Ink),
                             Tip(ui, "via", peer.Transport + " · " + peer.Family, color),
                             Tip(ui, "address", peer.Address, AppTheme.Ink)
                         },
@@ -954,68 +1078,5 @@ class NetworkPeers : Cell[NetworkPeersInput] {
         let point = ChartParts.Point(x, y, color, radius * 2)
         point.HitTestSelf = true
         return point
-    }
-
-    private func Hover(id string) {
-        if hovered != id {
-            hovered = id
-        }
-    }
-
-    private func PeerRow(input NetworkPeersInput, peer NetworkPeer) Blob {
-        let ui = input.Ui
-        let row = Container{
-            BasedOn: AppTheme.ListRowStyle,
-            Height: 30,
-            FlexShrink: 0,
-            Padding: Edges{Left: AppTheme.Space8, Right: AppTheme.Space8},
-            BorderRadius: AppTheme.Radius8,
-            BackgroundColor: peer.Id == hovered ? AppTheme.Rule: Color.Transparent,
-            Accessibility: Accessibility{Name: Short(peer.Id) + " " + peer.Transport + " " + peer.Address},
-            OnPointerEnter: (event PointerEvent) -> Hover(peer.Id),
-            OnPointerLeave: (event PointerEvent) -> Hover(""),
-            Container{
-                Width: 12,
-                AlignItems: AlignItems.Center,
-                Container{
-                    BasedOn: AppTheme.MarkerStyle,
-                    BorderRadius: AppTheme.Radius4,
-                    BackgroundColor: peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
-                }
-            },
-            Grow(Label(ui, Short(peer.Id), AppTheme.Type13, AppTheme.Ink, ""))
-        }
-        if input.Width >= 1100 {
-            row.Add(Label(ui, peer.Address, AppTheme.Type13, AppTheme.Body, ""))
-        }
-        return row
-    }
-
-    private func BanRow(ui Presentation, ban BannedPeer) Blob -> Container{
-        Gap: AppTheme.Space4,
-        MinHeight: 44,
-        FlexShrink: 0,
-        Padding: Edges{Left: AppTheme.Space8, Right: AppTheme.Space8},
-        Accessibility: Accessibility{Name: Short(ban.Id) + " " + ban.Reason},
-        Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: AppTheme.Space10,
-            MaterialIcons.Create("close", AppTheme.Icon12, AppTheme.Pink),
-            Label(ui, Short(ban.Id), AppTheme.Type13, AppTheme.Ink, ""),
-            Grow(Label(ui, ban.Reason, AppTheme.Type13, AppTheme.Body, "")),
-            Label(ui, ban.Count.ToString() + "×", AppTheme.Type13, AppTheme.Dim, "")
-        },
-        if ban.Permanent {
-            Label(ui, ui.Strings.Get("permanent"), AppTheme.Type13, AppTheme.Pink, "")
-        } else {
-            Label(ui, String.Format(ui.Strings.Get("until {0}"), Time(ban.Expires)), AppTheme.Type13, AppTheme.Body, "")
-        }
-    }
-
-    private func Short(id string) string -> if id.Length > 12 {
-        id.Substring(0, 4) + "…" + id.Substring(id.Length - 6)
-    } else {
-        id
     }
 }

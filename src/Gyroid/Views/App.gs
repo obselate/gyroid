@@ -140,6 +140,13 @@ partial class App : Cell {
                 History: wallet.Snapshot.History,
                 Sends: wallet.Snapshot.Sends,
                 Clipboard: ui.Actions.ClipboardText,
+                Source: NetworkSource{
+                    Wallet: wallet.Settings.ActiveWallet,
+                    Network: wallet.Settings.Network,
+                    Endpoint: wallet.Settings.Endpoint,
+                    Running: wallet.Node.Status.Running,
+                    Start: wallet.Node.Api.verifiedStart
+                },
                 Language: ui.Strings.Language,
                 Width: width,
                 Height: height
