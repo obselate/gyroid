@@ -52,6 +52,7 @@ class MessagesPage : Cell, IDisposable {
     private var operationGeneration int64
     private var walletId string = ""
     private var ownAddress string = ""
+    private var walletNetwork string = ""
     private var disposed bool
     private let configureThread Action[MessageThread]
     private let measureDraft Func[string, MessageEstimate]
@@ -98,10 +99,20 @@ class MessagesPage : Cell, IDisposable {
             input.Privacy != next.Privacy ||
             input.Language != next.Language ||
             input.Contacts != next.Contacts
-        let reset = walletId != next.Session.Settings.ActiveWallet || ownAddress != next.Session.Messages.OwnAddress
+        let settings = next.Session.Settings
+        let reset = walletId != settings.ActiveWallet ||
+            ownAddress != next
+            .Session
+            .Messages
+            .OwnAddress ||
+            walletNetwork != next
+            .Session
+            .Messages
+            .Network
         if reset {
-            walletId = next.Session.Settings.ActiveWallet
+            walletId = settings.ActiveWallet
             ownAddress = next.Session.Messages.OwnAddress
+            walletNetwork = next.Session.Messages.Network
             operationGeneration++
             busy = false
             issue = ""
@@ -160,7 +171,14 @@ class MessagesPage : Cell, IDisposable {
             let error = failure.Message
             window?.TryPost(
                 () -> {
-                    if !disposed && version == generation {
+                    if !disposed &&
+                        version == generation &&
+                        service.OwnAddress == ownAddress &&
+                        service.Network == walletNetwork &&
+                        input
+                        .Session
+                        .Settings
+                        .ActiveWallet == walletId {
                         issue = error
                         Rebuild()
                     }
@@ -218,6 +236,14 @@ class MessagesPage : Cell, IDisposable {
                 if disposed ||
                     version != operationGeneration ||
                     identity != ownAddress ||
+                    input
+                    .Session
+                    .Settings
+                    .ActiveWallet != walletId ||
+                    input
+                    .Session
+                    .Messages
+                    .Network != walletNetwork ||
                     input
                     .Session
                     .Messages
@@ -346,6 +372,8 @@ class MessagesPage : Cell, IDisposable {
                     MessageDialogInput{
                         Ui: ui,
                         Session: input.Session,
+                        WalletId: walletId,
+                        Network: walletNetwork,
                         Contacts: input.Contacts,
                         Conversation: conversation,
                         Kind: dialog,
@@ -793,6 +821,8 @@ data struct MessageDialogInput {
     var Contacts SortedDictionary[string, string]
     var Conversation Conversation?
     var Kind string
+    var WalletId string
+    var Network string
     var Address string
     var Privacy bool
     var Language string
@@ -873,7 +903,14 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
             .window
             ?.TryPost(
             () -> {
-                if disposed || version != generation || service.OwnAddress != identity {
+                if disposed ||
+                    version != generation ||
+                    service.OwnAddress != identity ||
+                    service.Network != input.Network ||
+                    input
+                    .Session
+                    .Settings
+                    .ActiveWallet != input.WalletId {
                     return
                 }
                 busy = false

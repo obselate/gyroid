@@ -292,6 +292,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 Rebuild()
             }
         )
+        Rebuild()
     }
 
     protected override func Build(input MessageComposerInput) Blob {
@@ -355,6 +356,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                         OnChange: value -> {
                             draft = value
                             input.OnDraft(value)
+                            Rebuild()
                         },
                         Placeholder: ui.Strings.Get("Message"),
                         AccessibilityName: ui.Strings.Get("Message"),

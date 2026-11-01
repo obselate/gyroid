@@ -34,7 +34,7 @@ partial class App {
         WalletId: wallet.Settings.ActiveWallet,
         Revision: messagesState.Revision,
         Privacy: ui.Privacy,
-        Language: wallet.Settings.Language,
+        Language: ui.Strings.Language,
         OnOpen: () -> Open(AppPage.Messages),
         OnContacts: () -> {
             LoadContacts()
@@ -50,7 +50,7 @@ partial class App {
         Width: width - 122,
         Revision: messagesState.Revision,
         Privacy: ui.Privacy,
-        Language: wallet.Settings.Language,
+        Language: ui.Strings.Language,
         OnOpen: () -> Open(AppPage.Messages),
         OnClose: () -> { },
         OnContacts: () -> {
