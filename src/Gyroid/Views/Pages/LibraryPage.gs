@@ -67,7 +67,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             activeWallet = input.ActiveWallet
             Load(input)
         }
-        let card = WalletParts.Card(ui, gap: 14, radius: 14)
+        let card = WalletParts.Card(ui, gap: AppTheme.Space14, radius: AppTheme.Radius14)
         card.Width = Percent(100)
         card.MaxWidth = 560
         card.MaxHeight = Percent(100)
@@ -78,9 +78,9 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let header = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 8,
+            Gap: AppTheme.Space8,
             FlexShrink: 0,
-            Grow(Label(ui, ui.Strings.Get("wallets"), 17, ui.Ink, "")),
+            Grow(Label(ui, ui.Strings.Get("wallets"), AppTheme.Type17, AppTheme.Ink, "")),
             WalletParts.Square(
                 ui,
                 "settings",
@@ -91,21 +91,21 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             )
         }
         card.Add(header)
-        card.Add(Label(ui, input.Session.Settings.WalletDirectory, 12, ui.Dim, ""))
+        card.Add(Label(ui, input.Session.Settings.WalletDirectory, AppTheme.Type12, AppTheme.Dim, ""))
         if wallets.Count == 0 {
             card.Add(
                 Container{
-                    Gap: 10,
+                    Gap: AppTheme.Space10,
                     FlexShrink: 0,
                     Container{
                         FlexDirection: FlexDirection.Row,
-                        Gap: 10,
+                        Gap: AppTheme.Space10,
                         Tile(input, "add", "Create", true, () -> Start("Create")),
                         Tile(input, "replay", "Restore · 12 words", false, () -> Start("Phrase"))
                     },
                     Container{
                         FlexDirection: FlexDirection.Row,
-                        Gap: 10,
+                        Gap: AppTheme.Space10,
                         Tile(input, "key", "Import view keys", false, () -> Start("ViewOnly")),
                         Tile(input, "draft", "Open file", false, () -> ImportFile(input))
                     }
@@ -131,7 +131,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 }
             )
             let list = Container{
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 MinHeight: 0,
                 FlexShrink: 1,
                 OverflowY: Overflow.Scroll,
@@ -192,9 +192,9 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
 
     private func Issue(ui Presentation) Blob -> Text{
         Content: ui.Strings.Explain(issue),
-        FontFamily: ui.Font,
-        FontSize: 12,
-        Color: ui.Pink,
+        FontFamily: AppTheme.Font,
+        FontSize: AppTheme.Type12,
+        Color: AppTheme.Pink,
         TextWrap: TextWrap.Wrap,
         FlexShrink: 0,
         Accessibility: Accessibility{Role: AccessibilityRole.Alert, Name: ui.Strings.Explain(issue)}
@@ -204,25 +204,24 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let ui = input.Ui
         let button = Goo
             .Button{
+            BasedOn: AppTheme.TileStyle,
+            BackdropBlur: AppTheme.Space0,
             FlexGrow: 1,
             FlexBasis: 0,
             MinWidth: 0,
-            Height: 84,
+            Height: AppTheme.TileHeight,
             AlignItems: AlignItems.FlexStart,
             JustifyContent: JustifyContent.Center,
-            Gap: 8,
-            Padding: Edges{Left: 16, Right: 16},
-            BorderWidth: 1,
-            BorderRadius: 10,
-            BorderColor: primary ? ui.Lime: ui.Rule,
-            BackgroundColor: ui.Surface,
+            Padding: Edges{Left: AppTheme.Space16, Right: AppTheme.Space16},
+            BorderColor: primary ? AppTheme.Lime: AppTheme.Rule,
+            BackgroundColor: AppTheme.Surface,
             Disabled: input.Busy,
-            Hover: Style{BackgroundColor: ui.Rule},
+            Hover: Style{BackgroundColor: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
-            MaterialIcons.Create(icon, 20, ui.Lime),
-            Label(ui, ui.Strings.Get(label), 14, ui.Ink, "")
+            MaterialIcons.Create(icon, AppTheme.Icon20, AppTheme.Lime),
+            Label(ui, ui.Strings.Get(label), AppTheme.Type14, AppTheme.Ink, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -236,11 +235,11 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 Open: menu,
                 Anchor: menuAnchor,
                 Placement: PopoverPlacement.BottomEnd,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 Width: 250,
-                Padding: 6,
-                BackgroundColor: ui.Control,
-                BorderColor: ui.Edge,
+                Padding: AppTheme.Space6,
+                BackgroundColor: AppTheme.Control,
+                BorderColor: AppTheme.Edge,
                 Role: AccessibilityRole.Menu,
                 AccessibilityName: ui.Strings.Get("Add wallet"),
                 Content: Container{
@@ -262,19 +261,19 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let ui = input.Ui
         let button = Goo
             .Button{
-            Height: 38,
+            BasedOn: AppTheme.ButtonStyle,
+            BorderWidth: AppTheme.Border0,
+            BackgroundColor: Color.Transparent,
             FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.FlexStart,
-            Gap: 10,
-            Padding: Edges{Left: 10, Right: 10},
-            BorderRadius: 7,
-            Hover: Style{BackgroundColor: ui.Rule},
+            Gap: AppTheme.Space10,
+            Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
+            Hover: Style{BackgroundColor: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.MenuItem, Name: ui.Strings.Get(label)},
             OnClick: click,
-            MaterialIcons.Create(icon, 16, ui.Lime),
-            Label(ui, ui.Strings.Get(label), 14, ui.Body, "")
+            MaterialIcons.Create(icon, AppTheme.Icon16, AppTheme.Lime),
+            Label(ui, ui.Strings.Get(label), AppTheme.Type14, AppTheme.Body, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -285,13 +284,20 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let active = loaded && filename == input.ActiveWallet
         let expanded = filename == opened
         let label = WalletName(filename)
-        let colors = []Color{ui.Lime, ui.Blue, ui.Orange, ui.Mint, ui.Violet, ui.Pink}
+        let colors = []Color{
+            AppTheme.Lime,
+            AppTheme.Blue,
+            AppTheme.Orange,
+            AppTheme.Mint,
+            AppTheme.Violet,
+            AppTheme.Pink
+        }
         let button = Goo
             .Button{
             Height: 48,
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             Disabled: input.Busy,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
@@ -315,7 +321,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Container{
                 Width: 10,
                 Height: 10,
-                BorderRadius: 3,
+                BorderRadius: AppTheme.Radius3,
                 FlexShrink: 0,
                 BackgroundColor: colors[filename.Sum((c char) -> int32(c)) % colors.Length]
             },
@@ -323,27 +329,30 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 Label(
                     ui,
                     label,
-                    14,
+                    AppTheme.Type14,
                     if active {
-                        ui.Mint
+                        AppTheme.Mint
                     } else {
-                        ui.Ink
+                        AppTheme.Ink
                     },
                     ""
                 )
             ),
-            Label(ui, Used(ui, used), 13, ui.Dim, ""),
+            Label(ui, Used(ui, used), AppTheme.Type13, AppTheme.Dim, ""),
             if active {
                 Container{}
             } else {
-                Container{FlexShrink: 0, MaterialIcons.Create(expanded ? "expand_more": "chevron_right", 16, ui.Dim)}
+                Container{
+                    FlexShrink: 0,
+                    MaterialIcons.Create(expanded ? "expand_more": "chevron_right", AppTheme.Icon16, AppTheme.Dim)
+                }
             }
         }
         WidgetKeyBindings.BindActivation(button)
         let head = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 8,
+            Gap: AppTheme.Space8,
             Height: 48,
             FlexShrink: 0,
             Grow(button)
@@ -361,11 +370,12 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             )
         }
         let row = Container{
-            Padding: Edges{Left: 12, Right: 12},
-            BorderWidth: 1,
-            BorderRadius: 10,
-            BorderColor: expanded ? ui.Edge: ui.Rule,
-            BackgroundColor: expanded ? ui.Raised: ui.Surface,
+            BasedOn: AppTheme.TileStyle,
+            BackdropBlur: AppTheme.Space0,
+            Gap: AppTheme.Space0,
+            Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space12},
+            BorderColor: expanded ? AppTheme.Edge: AppTheme.Rule,
+            BackgroundColor: expanded ? AppTheme.Raised: AppTheme.Surface,
             FlexShrink: 0,
             head
         }
@@ -377,8 +387,8 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 10,
-                Padding: Edges{Bottom: issue.Length > 0 ? 8.0: 12.0},
+                Gap: AppTheme.Space10,
+                Padding: Edges{Bottom: issue.Length > 0 ? AppTheme.Space8: AppTheme.Space12},
                 Grow(
                     Container{
                         MinWidth: 0,
@@ -404,7 +414,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             }
         )
         if issue.Length > 0 {
-            row.Add(Container{Padding: Edges{Bottom: 10}, Issue(ui)})
+            row.Add(Container{Padding: Edges{Bottom: AppTheme.Space10}, Issue(ui)})
         }
         return row
     }
@@ -468,7 +478,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 12,
+                Gap: AppTheme.Space12,
                 FlexShrink: 0,
                 WalletParts.Square(
                     ui,
@@ -491,8 +501,8 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                             default: "create wallet"
                         }
                     ),
-                    17,
-                    ui.Ink,
+                    AppTheme.Type17,
+                    AppTheme.Ink,
                     ""
                 )
             }

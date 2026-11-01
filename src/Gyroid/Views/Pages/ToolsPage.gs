@@ -67,8 +67,6 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     private var found int32
     private var typed string = ""
     private var wrong bool
-    private let error Color = Color.Parse("#ff3d6e")
-    private let ring Color = Color.Parse("#141f00")
 
     protected override func Build(input ToolsInput) Blob {
         if !loaded {
@@ -100,24 +98,20 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
 
     private func Small(input ToolsInput, label string, primary bool, action Action) Blob {
         let ui = input.Ui
-        let color = primary ? ui.Lime: ui.Ink
+        let color = primary ? AppTheme.Lime: AppTheme.Ink
         let button = Goo
             .Button{
-            Height: 28,
-            Padding: Edges{Left: 10, Right: 10},
+            BasedOn: AppTheme.ButtonStyle,
+            Height: AppTheme.ControlCompact,
+            Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
             FlexShrink: 0,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center,
-            BorderWidth: 1,
-            BorderRadius: 7,
-            BorderColor: primary ? ui.Lime: ui.Edge,
-            BackgroundColor: ui.Control,
-            Hover: Style{BackgroundColor: primary ? ui.Active: ui.Rule},
+            BorderColor: primary ? AppTheme.Lime: AppTheme.Edge,
+            Hover: Style{BackgroundColor: primary ? AppTheme.Active: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Disabled: input.Busy,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: action,
-            Label(ui, ui.Strings.Get(label), 12, color, "")
+            Label(ui, ui.Strings.Get(label), AppTheme.Type12, color, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -161,8 +155,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Height: size,
                 Path: track.Build(),
                 Fit: ShapeFit.Fill,
-                BorderWidth: 3,
-                BorderColor: ui.Rule
+                BorderWidth: AppTheme.Border3,
+                BorderColor: AppTheme.Rule
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -170,8 +164,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Height: size,
                 Path: arc.Build(),
                 Fit: ShapeFit.Fill,
-                BorderWidth: 3,
-                BorderColor: fraction > 0 ? ui.Lime: Color.Transparent
+                BorderWidth: AppTheme.Border3,
+                BorderColor: fraction > 0 ? AppTheme.Lime: Color.Transparent
             }
         }
     }
@@ -198,7 +192,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     private func Privacy(input ToolsInput) Blob {
         let ui = input.Ui
         let compact = input.Width < 1100
-        let size = compact ? 16.0: 20.0
+        let size = compact ? AppTheme.Type16: AppTheme.Type20
         let balance = input.Snapshot.Balance
         let report = input.State.Report
         let auditing = input.State.Audit?.IsCompleted == false
@@ -223,9 +217,15 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             exposed
         }
         let phraseValue = if input.Snapshot.ViewOnly {
-            Label(ui, ui.Strings.Get("view-only"), size, ui.Dim, "")
+            Label(ui, ui.Strings.Get("view-only"), size, AppTheme.Dim, "")
         } else {
-            Label(ui, ui.Strings.Get(unchecked ? "not checked": "checked"), size, unchecked ? ui.Orange: ui.Ink, "")
+            Label(
+                ui,
+                ui.Strings.Get(unchecked ? "not checked": "checked"),
+                size,
+                unchecked ? AppTheme.Orange: AppTheme.Ink,
+                ""
+            )
         }
         let phraseFoot = if unchecked {
             Small(input, "Check", true, () -> StartPhrase())
@@ -238,7 +238,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             .Button{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             BackgroundColor: Color.Transparent,
             Focus: Theme.Read().FocusStyle,
             Disabled: input.Busy,
@@ -251,60 +251,75 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Rebuild()
             },
             Arc(ui, LockShare(input.AutoLock), compact ? 20.0: 26.0),
-            Label(ui, LockText(input), size, input.AutoLock == 0 ? ui.Orange: ui.Ink, "")
+            Label(ui, LockText(input), size, input.AutoLock == 0 ? AppTheme.Orange: AppTheme.Ink, "")
         }
         WidgetKeyBindings.BindActivation(lockValue)
         if hovered == "lock" && !editing {
-            lockValue.Add(MaterialIcons.Create("expand_more", 16, ui.Ink))
+            lockValue.Add(MaterialIcons.Create("expand_more", AppTheme.Icon16, AppTheme.Ink))
         }
         let amountsValue = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
-            ToggleSwitch{
-                Checked: input.Privacy,
-                Width: 36,
-                Height: 20,
-                ThumbSize: 14,
-                AccessibilityName: ui.Strings.Get("hide amounts"),
-                OnClick: input.OnPrivacy
-            }.Build(),
-            Label(ui, ui.Strings.Get(input.Privacy ? "on": "off"), size, input.Privacy ? ui.Ink: ui.Orange, "")
+            Gap: AppTheme.Space10,
+            (
+                AppTheme.Switch with{
+                    Checked = input.Privacy,
+                    AccessibilityName = ui.Strings.Get("hide amounts"),
+                    OnClick = input.OnPrivacy
+                }
+            ).Build(),
+            Label(
+                ui,
+                ui.Strings.Get(input.Privacy ? "on": "off"),
+                size,
+                input.Privacy ? AppTheme.Ink: AppTheme.Orange,
+                ""
+            )
         }
         let nodeValue = Goo
             .Button{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 8,
+            Gap: AppTheme.Space8,
             BackgroundColor: Color.Transparent,
             Focus: Theme.Read().FocusStyle,
             Disabled: input.Busy,
             Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get("Node settings")},
             OnClick: input.OnNodeSettings,
-            Label(ui, ui.Strings.Get("local"), size, ui.Ink, "")
+            Label(ui, ui.Strings.Get("local"), size, AppTheme.Ink, "")
         }
         WidgetKeyBindings.BindActivation(nodeValue)
         if hovered == "node" {
-            nodeValue.Add(MaterialIcons.Create("north_east", 16, ui.Ink))
+            nodeValue.Add(MaterialIcons.Create("north_east", AppTheme.Icon16, AppTheme.Ink))
         }
         let peers = input.Node.Peers
         let outputsValue = if auditing {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 10,
-                Cell.Mount[SpinnerInput, Spinner]("audit", SpinnerInput{Size: 18, StrokeWidth: 2, Color: ui.Lime}),
-                Label(ui, ui.Strings.Get("checking"), size, ui.Ink, "")
+                Gap: AppTheme.Space10,
+                Cell.Mount[SpinnerInput, Spinner](
+                    "audit",
+                    SpinnerInput{Size: 18, StrokeWidth: AppTheme.Stroke2, Color: AppTheme.Lime}
+                ),
+                Label(ui, ui.Strings.Get("checking"), size, AppTheme.Ink, "")
             }
         } else if stale > 0 {
-            Label(ui, String.Format(ui.Strings.Get("{0} stale"), stale), size, ui.Orange, "")
+            Label(ui, String.Format(ui.Strings.Get("{0} stale"), stale), size, AppTheme.Orange, "")
         } else {
-            Number(input, "outputs", "outputs", Count(report?.Total ?? balance?.Outputs ?? uint64(0)), ui.Ink, size)
+            Number(
+                input,
+                "outputs",
+                "outputs",
+                Count(report?.Total ?? balance?.Outputs ?? uint64(0)),
+                AppTheme.Ink,
+                size
+            )
         }
         let outputsFoot = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 8,
+            Gap: AppTheme.Space8,
             FlexGrow: 1
         }
         if let value = report {
@@ -329,9 +344,15 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             )
         }
         let fileValue = if fileMode == nil {
-            Label(ui, "—", size, ui.Dim, "")
+            Label(ui, "—", size, AppTheme.Dim, "")
         } else {
-            Label(ui, ui.Strings.Get(exposed ? "others can read": "owner only"), size, exposed ? ui.Orange: ui.Ink, "")
+            Label(
+                ui,
+                ui.Strings.Get(exposed ? "others can read": "owner only"),
+                size,
+                exposed ? AppTheme.Orange: AppTheme.Ink,
+                ""
+            )
         }
         let fileFoot = if exposed {
             Small(input, "Fix", true, () -> RestrictFile(input))
@@ -398,7 +419,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                     "peers",
                     "send relay",
                     Count(peers) + " " + ui.Strings.Get(peers == 1 ? "peer": "peers"),
-                    peers == 0 ? ui.Orange: ui.Ink,
+                    peers == 0 ? AppTheme.Orange: AppTheme.Ink,
                     size
                 ),
                 Note(input, peers == 0 ? ui.Strings.Get("sends wait"): "Dandelion"),
@@ -418,7 +439,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 "memo",
                 "notes",
                 "memo errors",
-                Number(input, "memos", "memo errors", Count(memos), memos > 0 ? ui.Orange: ui.Ink, size),
+                Number(input, "memos", "memo errors", Count(memos), memos > 0 ? AppTheme.Orange: AppTheme.Ink, size),
                 if memos > 0 {
                     Small(input, "View", false, () -> input.OnNavigate(AppPage.Transactions))
                 } else {
@@ -436,27 +457,34 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 []string{"Only your user account should read the wallet file"}
             )
         }
-        let score = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 3}
+        let score = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: AppTheme.Space4}
         for warning in warnings {
-            score.Add(Container{Width: 12, Height: 6, BorderRadius: 2, BackgroundColor: warning ? ui.Orange: ui.Lime})
+            score.Add(
+                Container{
+                    Width: 12,
+                    Height: 6,
+                    BorderRadius: AppTheme.Radius2,
+                    BackgroundColor: warning ? AppTheme.Orange: AppTheme.Lime
+                }
+            )
         }
         let passed = warnings.Count((warning bool) -> !warning)
         let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
         card.Add(
             WalletParts.Header(
-                Label(ui, ui.Strings.Get("privacy"), 17, ui.Ink, ""),
-                16,
+                Label(ui, ui.Strings.Get("privacy"), AppTheme.Type17, AppTheme.Ink, ""),
+                AppTheme.Space8,
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 10,
+                    Gap: AppTheme.Space10,
                     Accessibility: Accessibility{Name: ui.Strings.Get("privacy") + " " + passed.ToString() + "/8"},
                     score,
                     Container{
                         FlexDirection: FlexDirection.Row,
                         AlignItems: AlignItems.Baseline,
-                        Label(ui, passed.ToString(), 20, ui.Lime, ""),
-                        Label(ui, "/8", 13, ui.Dim, "")
+                        Label(ui, passed.ToString(), AppTheme.Type20, AppTheme.Lime, ""),
+                        Label(ui, "/8", AppTheme.Type13, AppTheme.Dim, "")
                     }
                 }
             )
@@ -474,7 +502,13 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         return card
     }
 
-    private func Note(input ToolsInput, content string) Blob -> Label(input.Ui, content, 12, input.Ui.Dim, "")
+    private func Note(input ToolsInput, content string) Blob -> Label(
+        input.Ui,
+        content,
+        AppTheme.Type12,
+        AppTheme.Dim,
+        ""
+    )
 
     private func Tile(
         input ToolsInput,
@@ -488,13 +522,20 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         let ui = input.Ui
         let compact = input.Width < 1100
         let edit = key == "lock" && editing
-        let top = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, Height: 20}
-        if !compact {
-            top.Add(MaterialIcons.Create(icon, 16, ui.Body))
+        let top = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: AppTheme.Space8,
+            Height: 20
         }
-        top.Add(Grow(Label(ui, ui.Strings.Get(label), 12, ui.Body, "")))
+        if !compact {
+            top.Add(MaterialIcons.Create(icon, AppTheme.Icon16, AppTheme.Body))
+        }
+        top.Add(Grow(Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, "")))
         top.Add(Info(input, "info-" + key, label, lines))
         return Container{
+            BasedOn: AppTheme.TileStyle,
+            BackdropBlur: AppTheme.Space0,
             FlexGrow: 1,
             FlexBasis: 0,
             MinWidth: 0,
@@ -503,20 +544,18 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             } else {
                 Math.Clamp(input.Height * 0.19, 136, 210)
             },
-            Padding: compact ? 11.0: 14.0,
-            Gap: compact ? 8.0: 10.0,
-            BorderWidth: 1,
-            BorderRadius: 10,
+            Padding: compact ? AppTheme.Space12: AppTheme.Space14,
+            Gap: compact ? AppTheme.Space8: AppTheme.Space10,
             BorderColor: if edit {
-                ui.Lime
+                AppTheme.Lime
             } else if hovered == key {
-                ui.StrongRule
+                AppTheme.StrongRule
             } else {
-                ui.Rule
+                AppTheme.Rule
             },
-            BackgroundColor: hovered == key && !edit ? Color.Parse("#121212"): ui.Raised,
+            BackgroundColor: hovered == key && !edit ? AppTheme.TileHover: AppTheme.Raised,
             BoxShadows: if edit {
-                []BoxShadow{BoxShadow{Spread: 3, Color: ring}}
+                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.ActiveOutline}}
             } else {
                 []BoxShadow{}
             },
@@ -576,8 +615,13 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                     Name: Minutes(input, minutes),
                     Checked: chosen ? AccessibilityChecked.True: AccessibilityChecked.False
                 },
-                Edges{Left: compact ? 6.0: 10.0, Right: compact ? 6.0: 10.0, Top: 4, Bottom: 4},
-                compact ? 13.0: 14.0,
+                Edges{
+                    Left: compact ? AppTheme.Space6: AppTheme.Space10,
+                    Right: compact ? AppTheme.Space6: AppTheme.Space10,
+                    Top: AppTheme.Space4,
+                    Bottom: AppTheme.Space4
+                },
+                compact ? AppTheme.Type13: AppTheme.Type14,
                 input.Busy
             )
             row.Add(button)
@@ -741,7 +785,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
         let compact = input.Width < 1100
         let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
-        let stepper = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8}
+        let stepper = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: AppTheme.Space8}
         let labels = []string{"show", "check", "done"}
         for index in 0 ... 3 {
             let label = labels[index]
@@ -753,42 +797,58 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 step == "done" ? 1: 0
             }
             if index > 0 {
-                stepper.Add(Container{Width: 26, Height: 1, BackgroundColor: state > 0 ? ui.Lime: ui.Edge})
+                stepper.Add(Container{Width: 26, Height: 1, BackgroundColor: state > 0 ? AppTheme.Lime: AppTheme.Edge})
             }
-            let color = state > 0 ? ui.Lime: ui.Dim
+            let color = state > 0 ? AppTheme.Lime: AppTheme.Dim
             let mark Blob = if state == 1 {
-                MaterialIcons.Create("check", 12, ui.Lime)
+                MaterialIcons.Create("check", AppTheme.Icon12, AppTheme.Lime)
             } else {
-                Label(ui, (index + 1).ToString(), 11, color, "")
+                Label(ui, (index + 1).ToString(), AppTheme.Type11, color, "")
             }
             stepper.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 6,
+                    Gap: AppTheme.Space6,
                     Container{
                         Width: 22,
                         Height: 22,
-                        BorderRadius: 11,
-                        BorderWidth: state == 1 ? 0.0: 1.0,
-                        BorderColor: state == 2 ? ui.Lime: ui.Edge,
-                        BackgroundColor: state == 1 ? Color.Parse("#182400"): Color.Transparent,
+                        BorderRadius: AppTheme.Radius11,
+                        BorderWidth: state == 1 ? AppTheme.Border0: AppTheme.Border1,
+                        BorderColor: state == 2 ? AppTheme.Lime: AppTheme.Edge,
+                        BackgroundColor: state == 1 ? AppTheme.CorrectAnswerFill: Color.Transparent,
                         AlignItems: AlignItems.Center,
                         JustifyContent: JustifyContent.Center,
                         mark
                     },
-                    Label(ui, ui.Strings.Get(label), 12, color, "")
+                    Label(ui, ui.Strings.Get(label), AppTheme.Type12, color, "")
                 }
             )
         }
-        card.Add(WalletParts.Header(Label(ui, ui.Strings.Get("recovery phrase"), 17, ui.Ink, ""), 16, stepper))
-        let progress = Container{FlexDirection: FlexDirection.Row, Gap: 4}
+        card.Add(
+            WalletParts.Header(
+                Label(ui, ui.Strings.Get("recovery phrase"), AppTheme.Type17, AppTheme.Ink, ""),
+                AppTheme.Space8,
+                stepper
+            )
+        )
+        let progress = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space4}
         for index in 0 ... 3 {
             progress.Add(
-                Container{Width: 18, Height: 4, BorderRadius: 2, BackgroundColor: index < found ? ui.Lime: ui.Edge}
+                Container{
+                    Width: 18,
+                    Height: 4,
+                    BorderRadius: AppTheme.Radius2,
+                    BackgroundColor: index < found ? AppTheme.Lime: AppTheme.Edge
+                }
             )
         }
-        let footer = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 10, FlexShrink: 0}
+        let footer = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: AppTheme.Space10,
+            FlexShrink: 0
+        }
         if step != "done" {
             footer.Add(Button(ui, "Back", () -> EndPhrase()))
         }
@@ -809,11 +869,11 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             card.Add(footer)
             return card
         }
-        let grid = Container{Gap: compact ? 8.0: 10.0, FlexShrink: 0}
+        let grid = Container{Gap: compact ? AppTheme.Space8: AppTheme.Space10, FlexShrink: 0}
         var line = Container{}
         for index in 0 ... words {
             if index % 4 == 0 {
-                line = Container{FlexDirection: FlexDirection.Row, Gap: compact ? 8.0: 10.0}
+                line = Container{FlexDirection: FlexDirection.Row, Gap: compact ? AppTheme.Space8: AppTheme.Space10}
                 grid.Add(line)
             }
             line.Add(Slot(input, index))
@@ -823,54 +883,79 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             FlexWrap: FlexWrap.Wrap,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             MinHeight: 50,
-            Padding: Edges{Top: 14},
-            BorderWidth: Edges{Top: 1},
-            BorderColor: ui.Rule,
+            Padding: Edges{Top: AppTheme.Space14},
+            BorderWidth: Edges{Top: AppTheme.Border1},
+            BorderColor: AppTheme.Rule,
             FlexShrink: 0
         }
         let suggestions = Suggestions()
         if step == "done" {
-            pick.Gap = 14
-            pick.Add(MaterialIcons.Create("check", 22, ui.Lime))
-            pick.Add(Label(ui, ui.Strings.Get("phrase checked"), 18, ui.Lime, ""))
+            pick.Gap = AppTheme.Space14
+            pick.Add(MaterialIcons.Create("check", AppTheme.Icon22, AppTheme.Lime))
+            pick.Add(Label(ui, ui.Strings.Get("phrase checked"), AppTheme.Type18, AppTheme.Lime, ""))
             if let date = checkedAt {
                 pick.Add(Note(input, Day(input, date, true)))
             }
         } else if wrong {
             let number = (asked[found] + 1).ToString()
-            pick.Add(MaterialIcons.Create("close", 16, error))
-            pick.Add(Label(ui, String.Format(ui.Strings.Get("That is not word {0}."), number), 14, error, ""))
-            pick.Add(Label(ui, ui.Strings.Get("Check your paper."), 14, ui.Dim, ""))
+            pick.Add(MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.ErrorStrong))
+            pick.Add(
+                Label(
+                    ui,
+                    String.Format(ui.Strings.Get("That is not word {0}."), number),
+                    AppTheme.Type14,
+                    AppTheme.ErrorStrong,
+                    ""
+                )
+            )
+            pick.Add(Label(ui, ui.Strings.Get("Check your paper."), AppTheme.Type14, AppTheme.Dim, ""))
         } else if typed.Length > 0 && suggestions.Count == 0 {
-            pick.Add(MaterialIcons.Create("warning", 16, error))
-            pick.Add(Label(ui, String.Format(ui.Strings.Get("No word starts with “{0}”."), typed), 14, error, ""))
+            pick.Add(MaterialIcons.Create("warning", AppTheme.Icon16, AppTheme.ErrorStrong))
+            pick.Add(
+                Label(
+                    ui,
+                    String.Format(ui.Strings.Get("No word starts with “{0}”."), typed),
+                    AppTheme.Type14,
+                    AppTheme.ErrorStrong,
+                    ""
+                )
+            )
         } else {
             pick.Add(
-                Label(ui, String.Format(ui.Strings.Get("word {0}"), (asked[found] + 1).ToString()), 12, ui.Lime, "")
+                Label(
+                    ui,
+                    String.Format(ui.Strings.Get("word {0}"), (asked[found] + 1).ToString()),
+                    AppTheme.Type12,
+                    AppTheme.Lime,
+                    ""
+                )
             )
             for index in 0 ... suggestions.Count {
                 let word = suggestions[index]
                 let button = Goo
                     .Button{
-                    Height: compact ? 30.0: 34.0,
-                    Padding: Edges{Left: compact ? 12.0: 16.0, Right: compact ? 12.0: 16.0},
-                    AlignItems: AlignItems.Center,
-                    BorderWidth: 1,
-                    BorderRadius: 7,
-                    BorderColor: index == 0 ? ui.Lime: ui.Edge,
-                    BackgroundColor: ui.Control,
-                    Hover: Style{BackgroundColor: ui.Rule},
+                    BasedOn: AppTheme.ButtonStyle,
+                    Height: compact ? AppTheme.ControlCompact: AppTheme.ControlRegular,
+                    Padding: Edges{
+                        Left: compact ? AppTheme.Space12: AppTheme.Space16,
+                        Right: compact ? AppTheme.Space12: AppTheme.Space16
+                    },
+                    BorderColor: index == 0 ? AppTheme.Lime: AppTheme.Edge,
+                    Hover: Style{BackgroundColor: AppTheme.Rule},
                     Focus: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: word},
                     OnClick: () -> Answer(input, word),
                     Text{
                         Content: word,
-                        FontSize: compact ? 13.0: 14.0,
-                        Color: index == 0 ? ui.Lime: ui.Ink,
+                        FontSize: compact ? AppTheme.Type13: AppTheme.Type14,
+                        Color: index == 0 ? AppTheme.Lime: AppTheme.Ink,
                         StyleRanges: []TextStyleRange{
-                            TextStyleRange(TextRange(typed.Length, word.Length - typed.Length), Style{Color: ui.Dim})
+                            TextStyleRange(
+                                TextRange(typed.Length, word.Length - typed.Length),
+                                Style{Color: AppTheme.Dim}
+                            )
                         }
                     }
                 }
@@ -905,33 +990,33 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             Height: compact ? 40.0: 46.0,
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
-            Padding: Edges{Left: compact ? 10.0: 12.0, Right: compact ? 10.0: 12.0},
-            BorderWidth: 1,
-            BorderRadius: 8,
+            Gap: AppTheme.Space10,
+            Padding: Edges{Left: compact ? AppTheme.Space10: AppTheme.Space12, Right: compact ? 10.0: AppTheme.Space12},
+            BorderWidth: AppTheme.Border1,
+            BorderRadius: AppTheme.Radius8,
             BorderColor: if invalid {
-                error
+                AppTheme.ErrorStrong
             } else if active {
-                ui.Lime
+                AppTheme.Lime
             } else if position > found {
-                ui.Edge
+                AppTheme.Edge
             } else {
-                ui.Rule
+                AppTheme.Rule
             },
-            BackgroundColor: ui.Raised,
+            BackgroundColor: AppTheme.Raised,
             BoxShadows: if invalid {
-                []BoxShadow{BoxShadow{Spread: 3, Color: Color.Parse("#24090f")}}
+                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.ErrorOutline}}
             } else if active {
-                []BoxShadow{BoxShadow{Spread: 3, Color: ring}}
+                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.ActiveOutline}}
             } else {
                 []BoxShadow{}
             },
-            Container{Width: 18, FlexShrink: 0, Label(ui, (index + 1).ToString(), 12, ui.Dim, "")}
+            Container{Width: 18, FlexShrink: 0, Label(ui, (index + 1).ToString(), AppTheme.Type12, AppTheme.Dim, "")}
         }
-        let size = compact ? 14.0: 15.0
+        let size = AppTheme.Type14
         if solved {
-            slot.Add(Grow(Label(ui, answers[position], size, ui.Lime, "")))
-            slot.Add(MaterialIcons.Create("check", 16, ui.Lime))
+            slot.Add(Grow(Label(ui, answers[position], size, AppTheme.Lime, "")))
+            slot.Add(MaterialIcons.Create("check", AppTheme.Icon16, AppTheme.Lime))
         } else if active {
             slot.Add(
                 Grow(
@@ -942,7 +1027,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                             Controlled: true,
                             AutoFocus: true,
                             FontSize: size,
-                            Color: invalid ? error: ui.Ink,
+                            Color: invalid ? AppTheme.ErrorStrong: AppTheme.Ink,
                             Accessibility: Accessibility{
                                 Name: String.Format(ui.Strings.Get("word {0}"), (index + 1).ToString())
                             },
@@ -956,7 +1041,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 )
             )
         } else if position < 0 {
-            slot.Add(Label(ui, "••••••••", size, Color.Parse("#6a6a6a"), ""))
+            slot.Add(Label(ui, "••••••••", size, AppTheme.MaskedText, ""))
         }
         return slot
     }
@@ -991,7 +1076,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         )
         let tabs = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: 4,
+            Gap: AppTheme.Space4,
             Accessibility: Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("tools")}
         }
         for id in[]string{"sign", "verify", "proof", "health"} {
@@ -1000,10 +1085,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             }
             let button = Goo
                 .Button{
-                Padding: Edges{Left: 12, Right: 12, Top: 6, Bottom: 6},
-                BorderRadius: 8,
-                BackgroundColor: tab == id ? ui.Active: Color.Transparent,
-                Hover: Style{BackgroundColor: tab == id ? ui.Active: ui.Rule},
+                BasedOn: tab == id ? AppTheme.SelectedTabStyle: AppTheme.TabStyle,
+                Hover: Style{BackgroundColor: tab == id ? AppTheme.Selected: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Tab,
@@ -1015,7 +1098,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                     ResetVerdict()
                     Rebuild()
                 },
-                Label(ui, ui.Strings.Get(id), 13, tab == id ? ui.Lime: ui.Body, "")
+                Label(ui, ui.Strings.Get(id), AppTheme.Type13, tab == id ? AppTheme.Ink: AppTheme.Body, "")
             }
             WidgetKeyBindings.BindActivation(button)
             tabs.Add(button)
@@ -1025,9 +1108,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 16,
+                Gap: AppTheme.Space16,
                 FlexShrink: 0,
-                Label(ui, ui.Strings.Get("tools"), 17, ui.Ink),
+                Label(ui, ui.Strings.Get("tools"), AppTheme.Type17, AppTheme.Ink),
                 tabs,
                 Container{FlexGrow: 1},
                 if tab == "health" {
@@ -1076,11 +1159,16 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 card.Add(form.Field("Message", message, value -> message = value))
                 card.Add(form.Field("Signature", signature, value -> signature = value.Trim()))
             }
-            let result = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexGrow: 1}
+            let result = Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: AppTheme.Space8,
+                FlexGrow: 1
+            }
             if let valid = verdict {
-                let color = valid ? ui.Lime: ui.Pink
-                result.Add(MaterialIcons.Create(valid ? "check_circle": "cancel", 18, color))
-                result.Add(Label(ui, ui.Strings.Get(valid ? "Valid": "Invalid"), 14, color, ""))
+                let color = valid ? AppTheme.Lime: AppTheme.Pink
+                result.Add(MaterialIcons.Create(valid ? "check_circle": "cancel", AppTheme.Icon18, color))
+                result.Add(Label(ui, ui.Strings.Get(valid ? "Valid": "Invalid"), AppTheme.Type14, color, ""))
             }
             card.Add(ActionRow([]Blob{result, Button(ui, "Verify", form.Submit, !form.CanSubmit, true)}))
         }
@@ -1093,8 +1181,12 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         let report = input.State.Report
         let stale = report?.Stale.Length ?? 0
         let total = report?.Total ?? input.Snapshot.Balance?.Outputs ?? uint64(0)
-        let stats = Container{FlexDirection: FlexDirection.Row, Gap: compact ? 8.0: 12.0, FlexShrink: 0}
-        stats.Add(Stat(input, "outputs", Count(total), ui.Ink, false))
+        let stats = Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: compact ? AppTheme.Space8: AppTheme.Space12,
+            FlexShrink: 0
+        }
+        stats.Add(Stat(input, "outputs", Count(total), AppTheme.Ink, false))
         stats.Add(
             Stat(
                 input,
@@ -1104,17 +1196,19 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 } else {
                     "—"
                 },
-                ui.Mint,
+                AppTheme.Mint,
                 false
             )
         )
-        stats.Add(Stat(input, "stale", report == nil ? "—": stale.ToString(), stale > 0 ? ui.Orange: ui.Ink, true))
-        stats.Add(Stat(input, "duplicates", report == nil ? "—": Count(report.Duplicates), ui.Ink, true))
+        stats.Add(
+            Stat(input, "stale", report == nil ? "—": stale.ToString(), stale > 0 ? AppTheme.Orange: AppTheme.Ink, true)
+        )
+        stats.Add(Stat(input, "duplicates", report == nil ? "—": Count(report.Duplicates), AppTheme.Ink, true))
         card.Add(stats)
         let values = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: compact ? 8.0: 12.0,
-            Padding: Edges{Left: 14, Right: 14},
+            Gap: compact ? AppTheme.Space8: AppTheme.Space12,
+            Padding: Edges{Left: AppTheme.Space14, Right: AppTheme.Space14},
             FlexShrink: 0
         }
         values.Add(
@@ -1122,12 +1216,14 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 input,
                 "stale amount",
                 report == nil ? "—": Amount(ui.Privacy, report.StaleAmount),
-                stale > 0 ? ui.Orange: ui.Ink
+                stale > 0 ? AppTheme.Orange: AppTheme.Ink
             )
         )
-        values.Add(Reading(input, "unspendable", report == nil ? "—": Amount(ui.Privacy, report.Unspendable), ui.Ink))
-        values.Add(Reading(input, "synced", report == nil ? "—": Count(report.Synced), ui.Ink))
-        values.Add(Reading(input, "checked", report == nil ? "—": report.Checked.ToString("HH:mm"), ui.Ink))
+        values.Add(
+            Reading(input, "unspendable", report == nil ? "—": Amount(ui.Privacy, report.Unspendable), AppTheme.Ink)
+        )
+        values.Add(Reading(input, "synced", report == nil ? "—": Count(report.Synced), AppTheme.Ink))
+        values.Add(Reading(input, "checked", report == nil ? "—": report.Checked.ToString("HH:mm"), AppTheme.Ink))
         card.Add(values)
         if let value = report && stale > 0 {
             let table = Container{
@@ -1136,7 +1232,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Overflow: Overflow.Scroll,
                 ScrollbarY: Theme.Read().Scrollbar
             }
-            table.Add(Row(input, []string{"height", "output", "reason", "amount"}, true, ui.Dim))
+            table.Add(Row(input, []string{"height", "output", "reason", "amount"}, true, AppTheme.Dim))
             for output in value.Stale {
                 table.Add(
                     Row(
@@ -1148,7 +1244,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                             Amount(ui.Privacy, output.Amount)
                         },
                         false,
-                        ui.Ink
+                        AppTheme.Ink
                     )
                 )
             }
@@ -1158,17 +1254,19 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.Center,
-                Gap: 10,
+                Gap: AppTheme.Space10,
                 Height: 112,
                 FlexShrink: 0,
-                BorderWidth: Edges{Top: 1},
-                BorderColor: ui.Rule
+                BorderWidth: Edges{Top: AppTheme.Border1},
+                BorderColor: AppTheme.Rule
             }
             if report == nil {
-                empty.Add(Label(ui, ui.Strings.Get("not checked"), 13, ui.Dim, ""))
+                empty.Add(Label(ui, ui.Strings.Get("not checked"), AppTheme.Type13, AppTheme.Dim, ""))
             } else {
-                empty.Add(MaterialIcons.Create("check", 18, ui.Mint))
-                empty.Add(Label(ui, ui.Strings.Get("all outputs on the main chain"), 13, ui.Mint, ""))
+                empty.Add(MaterialIcons.Create("check", AppTheme.Icon18, AppTheme.Mint))
+                empty.Add(
+                    Label(ui, ui.Strings.Get("all outputs on the main chain"), AppTheme.Type13, AppTheme.Mint, "")
+                )
             }
             card.Add(empty)
         }
@@ -1180,9 +1278,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         let title = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 8,
+            Gap: AppTheme.Space8,
             Height: 20,
-            Grow(Label(ui, ui.Strings.Get(label), 12, ui.Body, ""))
+            Grow(Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, ""))
         }
         if info {
             title.Add(
@@ -1201,15 +1299,20 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             )
         }
         return Container{
+            BasedOn: AppTheme.TileStyle,
+            BackdropBlur: AppTheme.Space0,
             FlexGrow: 1,
             FlexBasis: 0,
             MinWidth: 0,
-            Gap: 6,
-            Padding: Edges{Left: 14, Right: 14, Top: 12, Bottom: 12},
-            BorderWidth: 1,
-            BorderRadius: 10,
-            BorderColor: ui.Rule,
-            BackgroundColor: ui.Raised,
+            Gap: AppTheme.Space6,
+            Padding: Edges{
+                Left: AppTheme.Space14,
+                Right: AppTheme.Space14,
+                Top: AppTheme.Space12,
+                Bottom: AppTheme.Space12
+            },
+            BorderColor: AppTheme.Rule,
+            BackgroundColor: AppTheme.Raised,
             title,
             Number(input, "stat-" + label, label, value, color, input.Width < 1100 ? 22.0: 28.0)
         }
@@ -1219,34 +1322,45 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         FlexGrow: 1,
         FlexBasis: 0,
         MinWidth: 0,
-        Gap: 4,
+        Gap: AppTheme.Space4,
         Accessibility: Accessibility{Name: input.Ui.Strings.Get(label) + " " + value},
-        Label(input.Ui, input.Ui.Strings.Get(label), 12, input.Ui.Dim, ""),
-        Label(input.Ui, value, 15, color, "")
+        Label(input.Ui, input.Ui.Strings.Get(label), AppTheme.Type12, AppTheme.Dim, ""),
+        Label(input.Ui, value, AppTheme.Type14, color, "")
     }
 
     private func Row(input ToolsInput, cells[]string, heading bool, color Color) Blob {
         let ui = input.Ui
         let row = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: 8,
-            Padding: Edges{Left: 8, Right: 8, Top: heading ? 6.0: 9.0, Bottom: heading ? 6.0: 9.0},
-            BorderWidth: Edges{Bottom: 1},
-            BorderColor: heading ? ui.Rule: ui.FaintRule,
+            Gap: AppTheme.Space8,
+            Padding: Edges{
+                Left: AppTheme.Space8,
+                Right: AppTheme.Space8,
+                Top: heading ? AppTheme.Space6: AppTheme.Space10,
+                Bottom: heading ? AppTheme.Space6: AppTheme.Space10
+            },
+            BorderWidth: Edges{Bottom: AppTheme.Border1},
+            BorderColor: heading ? AppTheme.Rule: AppTheme.FaintRule,
             FlexShrink: 0
         }
         for index in 0 ... cells.Length {
             let cell = cells[index]
             let tint = if heading {
-                ui.Dim
+                AppTheme.Dim
             } else if index == 1 {
-                ui.Dim
+                AppTheme.Dim
             } else if index == 2 {
-                ui.Orange
+                AppTheme.Orange
             } else {
                 color
             }
-            let text = Label(ui, heading ? ui.Strings.Get(cell): cell, heading ? 12.0: 13.0, tint, "")
+            let text = Label(
+                ui,
+                heading ? ui.Strings.Get(cell): cell,
+                heading ? AppTheme.Type12: AppTheme.Type13,
+                tint,
+                ""
+            )
             row.Add(
                 Container{
                     FlexGrow: 1,
