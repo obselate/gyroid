@@ -2,7 +2,9 @@ package Gyroid.Views
 
 import Goo
 import Goo.Widgets.Icons
+import Goo.Widgets.Inputs
 import Gyroid.Components
+import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
 import Gyroid.Models
@@ -55,8 +57,7 @@ class SyncPage : Cell[SyncInput] {
         let padX = AppTheme.GetPanelPadding(input.Width)
         let width = input.Fill ? input.Width: Math.Min(760, input.Width - 48)
         let inner = width - padX * 2
-        let card = WalletParts.Card(ui)
-        card.Width = width
+        let card = WalletParts.PageCard(ui, input.Width, input.Height, width, input.Fill)
         card.MinHeight = input.Fill ? 0.0: Math.Min(420, input.Height - 100)
         if input.Fill {
             card.Width = Percent(100)
@@ -306,105 +307,55 @@ class SyncPage : Cell[SyncInput] {
         default: "syncing"
     }
 
-    private func Steps(ui Presentation, node NodeStatus, step int32) Blob {
-        let row = Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: AppTheme.Space8,
-            Accessibility: Accessibility{Role: AccessibilityRole.List}
-        }
-        for index in 0 ... 5 {
-            let done = index < step
-            let marker = Container{
-                Width: 20,
-                Height: 20,
-                FlexShrink: 0,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
-                BorderRadius: AppTheme.Radius10,
-                BorderWidth: index == step ? AppTheme.Border0: AppTheme.Border1,
-                BorderColor: done ? AppTheme.Lime: AppTheme.Edge
-            }
-            if done {
-                marker.Add(MaterialIcons.Create("check", AppTheme.Icon16, AppTheme.Lime))
-            } else if index == step {
-                marker.Add(
-                    Shape{
-                        Width: 20,
-                        Height: 20,
-                        Path: PathBuilder(0, 0, 20, 20)
-                            .MoveTo(10, 1)
-                            .ArcTo(9, 9, 0, false, true, 10, 19)
-                            .ArcTo(9, 9, 0, false, true, 10, 1)
-                            .Build(),
-                        Fit: ShapeFit.Fill,
-                        BorderWidth: AppTheme.Border2,
-                        BorderColor: AppTheme.Lime,
-                        StrokeEnd: 0.75
-                    }
-                )
-            }
-            let line = Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space8,
-                marker
-            }
-            line.Add(
-                Label(
-                    ui,
-                    ui.Strings.Get(StepName(index)),
-                    AppTheme.Type13,
-                    if index == step {
-                        AppTheme.Lime
-                    } else if done {
-                        AppTheme.Ink
-                    } else {
-                        AppTheme.Dim
-                    },
-                    ""
-                )
-            )
-            if index < 4 {
-                line.Add(
-                    Container{
-                        FlexGrow: 1,
-                        Height: 1,
-                        MinWidth: 6,
-                        Margin: Edges{Right: AppTheme.Space6},
-                        BackgroundColor: done ? AppTheme.LimeMuted: AppTheme.Edge
-                    }
-                )
-            }
-            let value = if !done {
-                ""
-            } else if index == 1 && node.CheckpointHeight > 0 {
+    private func Steps(ui Presentation, node NodeStatus, step int32) Blob ->
+    Stepper{
+        Labels: []string{
+            ui.Strings.Get(StepName(0)),
+            ui.Strings.Get(StepName(1)),
+            ui.Strings.Get(StepName(2)),
+            ui.Strings.Get(StepName(3)),
+            ui.Strings.Get(StepName(4))
+        },
+        CurrentIndex: step,
+        AccessibilityName: ui.Strings.Get("syncing"),
+        Gap: AppTheme.Space8,
+        FontSize: AppTheme.Type13,
+        CreateStep: (state, index, label) -> {
+            let done = index < state.CurrentIndex
+            let current = index == state.CurrentIndex
+            let detail = if done && index == 1 && node.CheckpointHeight > 0 {
                 Count(node.CheckpointHeight)
-            } else if index == 3 {
+            } else if done && index == 3 {
                 node.Peers.ToString() + " " + ui.Strings.Get("peers")
             } else {
                 ""
             }
-            row.Add(
+            label.Color = current ? AppTheme.Lime: done ? AppTheme.Ink: AppTheme.Dim
+            return Container{
+                MinWidth: 0,
+                Gap: AppTheme.Space6,
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.ListItem,
+                    Name: ui.Strings.Get(StepName(index)) + " " + ui.Strings.Get(
+                        done ? "completed": current ? "current": "upcoming"
+                    ) +
+                        (detail.Length > 0 ? " " + detail: "")
+                },
                 Container{
-                    FlexGrow: index < 4 ? 1.0: 0.0,
-                    FlexShrink: index < 4 ? 1.0: 0.0,
-                    MinWidth: 0,
-                    Gap: AppTheme.Space6,
-                    Accessibility: Accessibility{
-                        Role: AccessibilityRole.ListItem,
-                        Name: ui.Strings.Get(StepName(index)) + " " + value
-                    },
-                    line,
-                    Container{
-                        Height: 15,
-                        Padding: Edges{Left: AppTheme.Space28},
-                        Label(ui, value, AppTheme.Type12, AppTheme.Dim, "")
-                    }
+                    Height: AppTheme.ControlCompact,
+                    AlignItems: AlignItems.Center,
+                    JustifyContent: JustifyContent.Center,
+                    BorderRadius: AppTheme.Radius8,
+                    BackgroundColor: current ? AppTheme.LimeQuiet: done ? AppTheme.Rule: Color.Transparent,
+                    label
+                },
+                Container{
+                    Height: AppTheme.Type12 + AppTheme.Space2,
+                    Label(ui, detail, AppTheme.Type12, AppTheme.Dim, "")
                 }
-            )
+            }
         }
-        return row
-    }
+    }.Build()
 
     private func Figure(
         ui Presentation,
@@ -418,18 +369,7 @@ class SyncPage : Cell[SyncInput] {
         AlignItems: AlignItems.Baseline,
         Gap: AppTheme.Space4,
         FlexShrink: 0,
-        Cell.Mount[DecodeValueInput, DecodeValue](
-            "figure",
-            DecodeValueInput{
-                Value: value,
-                Name: name,
-                Size: size,
-                Color: color,
-                FractionColor: color,
-                Live: AccessibilityLive.Off,
-                Ui: ui
-            }
-        ),
+        Value(ui, "figure", name, value, size, color),
         Label(ui, unit, AppTheme.GetInsetTextSize(size), AppTheme.Body, "")
     }
 
@@ -438,32 +378,31 @@ class SyncPage : Cell[SyncInput] {
         for index in 0 ... pairs.Length / 2 {
             let label = pairs[index * 2]
             let value = pairs[index * 2 + 1]
-            let row = Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Baseline,
-                Gap: AppTheme.Space22,
-                Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-                Container{
-                    Width: 100,
-                    FlexShrink: 0,
-                    Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, "")
-                }
-            }
             if label == "Height" {
                 let split = value.IndexOf(" / ")
-                row.Add(
-                    Container{
-                        FlexDirection: FlexDirection.Row,
-                        Label(ui, value.Substring(0, split), AppTheme.Type14, AppTheme.Lime, ""),
-                        Label(ui, value.Substring(split), AppTheme.Type14, AppTheme.Dim, "")
-                    }
+                grid.Add(
+                    KeyValue(
+                        ui,
+                        ui.Strings.Get(label),
+                        Container{
+                            FlexDirection: FlexDirection.Row,
+                            Label(ui, value.Substring(0, split), AppTheme.Type12, AppTheme.Lime, ""),
+                            Label(ui, value.Substring(split), AppTheme.Type12, AppTheme.Dim, "")
+                        },
+                        labelWidth: 100
+                    )
                 )
             } else {
-                row.Add(
-                    Label(ui, value, AppTheme.Type14, stalled && label == "Speed" ? AppTheme.Orange: AppTheme.Ink, "")
+                grid.Add(
+                    KeyValue(
+                        ui,
+                        ui.Strings.Get(label),
+                        value,
+                        valueColor: stalled && label == "Speed" ? AppTheme.Orange: AppTheme.Ink,
+                        labelWidth: 100
+                    )
                 )
             }
-            grid.Add(row)
         }
         return grid
     }
@@ -595,33 +534,33 @@ class SyncPage : Cell[SyncInput] {
             )
         }
         bar.Add(
-            Container{
-                Position: PositionType.Absolute,
-                Left: 0,
-                Top: 0,
-                Bottom: 0,
-                Width: Percent(share * 100),
-                BorderRadius: AppTheme.Radius3,
-                BackgroundColor: color
-            }
+            Progress(
+                ui.Strings.Get("syncing"),
+                share,
+                color,
+                0,
+                AppTheme.Track10,
+                Color.Transparent,
+                widthLength: Percent(100)
+            )
         )
         return Container{FlexShrink: 0, bar}
     }
 
     private func Slots(ui Presentation, peers uint64, limit uint64) Blob {
-        let row = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space4}
-        for index in 0 ... int32(limit) {
-            row.Add(
-                Container{
-                    BasedOn: AppTheme.TrackStyle,
-                    FlexGrow: 1,
-                    FlexBasis: 0,
-                    Height: AppTheme.Track10,
-                    BorderRadius: AppTheme.Radius3,
-                    BackgroundColor: uint64(index) < peers ? AppTheme.Lime: AppTheme.FaintRule
-                }
-            )
-        }
+        let row = SegmentGrid(
+            1,
+            int32(limit),
+            index -> Container{
+                BasedOn: AppTheme.TrackStyle,
+                FlexGrow: 1,
+                FlexBasis: 0,
+                BorderRadius: AppTheme.Radius3,
+                BackgroundColor: uint64(index) < peers ? AppTheme.Lime: AppTheme.FaintRule
+            },
+            minHeight: AppTheme.Track10,
+            maxHeight: AppTheme.Track10
+        )
         return Container{
             FlexShrink: 0,
             Gap: AppTheme.Space10,
