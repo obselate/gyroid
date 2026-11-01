@@ -1101,13 +1101,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
 
     private func Stat(input ToolsInput, label string, value string, color Color, info bool) Blob {
         let ui = input.Ui
-        let title = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: AppTheme.Space8,
-            Height: 20,
-            Grow(Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, ""))
-        }
+        let title = WalletParts.Header(Figure(ui, label, value, "", AppTheme.Type20, color, key: "stat-" + label))
         if info {
             title.Add(
                 Info(
@@ -1140,12 +1134,11 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             BorderColor: AppTheme.Rule,
             BackgroundColor: AppTheme.Raised,
             title,
-            Number(input, "stat-" + label, label, value, color, input.Width < 1100 ? 22.0: 28.0)
         }
     }
 
     private func Reading(input ToolsInput, label string, value string, color Color) Blob ->
-    KeyValue(input.Ui, label, value, valueColor: color, size: AppTheme.Type14)
+    KeyValue(input.Ui, label, value, valueColor: color)
 
     private func Row(input ToolsInput, cells[]string, heading bool, color Color) Blob {
         let ui = input.Ui
