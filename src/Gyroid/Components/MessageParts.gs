@@ -110,6 +110,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
                         DelayMs: 0,
                         Placement: PortalPlacement.BottomEnd,
                         Target: Container{
+                            HitTestSelf: true,
                             Accessibility: Accessibility{Role: AccessibilityRole.Text, Name: tip},
                             MaterialIcons.Create(
                                 delivered ? "done_all": message.State == MessageState.InProgress ? "schedule": "done",
