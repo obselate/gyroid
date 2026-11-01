@@ -185,6 +185,11 @@ class AppTheme {
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center
         }
+        let CompactButton ActionButton = Button with{
+            Height = ControlCompact,
+            FontSize = Type12,
+            PaddingHorizontal = Space10
+        }
         let IconButtonStyle Style = Style{
             Width: ControlRegular,
             Height: ControlRegular,
@@ -230,6 +235,19 @@ class AppTheme {
             OnTrackColor: Lime,
             ThumbColor: SwitchThumbColor,
             OnThumbColor: Surface
+        }
+        let FlushSegmentGroupStyle Style = Style{BasedOn: SegmentGroupStyle, Padding: Space0, BorderWidth: Border0}
+        let Checkbox Checkbox = Checkbox{
+            Size: CheckboxSize,
+            BorderRadius: Radius2,
+            BorderWidth: Border1,
+            BackgroundColor: Field,
+            BorderColor: FieldEdge,
+            CheckedBackgroundColor: Lime,
+            CheckedBorderColor: Lime,
+            MarkColor: Black,
+            HitSize: ControlRegular,
+            LabelFontSize: Type14
         }
         let FieldInput TextField = TextField{
             EntryHeight: ControlRegular,
@@ -286,6 +304,11 @@ class AppTheme {
             FontSize: Type12
         }
         let InformationCardStyle Style = Style{BasedOn: TooltipStyle, Padding: Space14, Gap: Space8}
+        let PassiveTooltipStyle Style = Style{
+            BasedOn: TooltipStyle,
+            Padding: Edges{Top: Space10, Bottom: Space10, Left: Space12, Right: Space12},
+            Gap: Space4
+        }
         let MarkerStyle Style = Style{Width: MarkerSize, Height: MarkerSize, BorderRadius: Radius2, Gap: Space8}
         let PresenceStyle Style = Style{BasedOn: MarkerStyle, Width: Space6, Height: Space6, BorderRadius: Radius3}
         let TrackStyle Style = Style{Height: Track8, BorderRadius: Radius2, BackgroundColor: FaintRule}
@@ -299,6 +322,13 @@ class AppTheme {
             Gap: Space6,
             FontFamily: Font,
             FontSize: Type12
+        }
+        let ListRowStyle Style = Style{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: Space10,
+            BorderWidth: Edges{Bottom: Border1},
+            BorderColor: Rule
         }
         let BubbleStyle Style = Style{
             FlexDirection: FlexDirection.Column,
