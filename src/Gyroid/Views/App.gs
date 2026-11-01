@@ -259,17 +259,24 @@ partial class App : Cell {
         configureSend = page -> page.Accept(
             SendPageInput{
                 Session: wallet,
+                Wallet: wallet.Settings.ActiveWallet,
+                Endpoint: wallet.Settings.Endpoint,
+                CoreStarted: wallet.Node.Api.verifiedStart,
                 Rows: sendRows,
-                Ui: ui,
-                Window: window,
-                Snapshot: wallet.Snapshot,
-                Contacts: contacts,
-                Network: wallet.Settings.Network,
-                Privacy: ui.Privacy,
-                Busy: ui.Working(),
-                Language: ui.Strings.Language,
+                Display: SendDisplay{
+                    Ui: ui,
+                    Window: window,
+                    Contacts: contacts,
+                    Network: wallet.Settings.Network,
+                    Privacy: ui.Privacy,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    Height: height
+                },
+                Spendable: wallet.Snapshot.Balance?.Spendable,
+                Address: wallet.Snapshot.Address,
+                Sends: wallet.Snapshot.Sends,
                 Animate: PlaybackActive(),
-                Height: height,
                 OnSent: sendDone
             }
         )

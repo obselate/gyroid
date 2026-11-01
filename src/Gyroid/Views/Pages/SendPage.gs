@@ -30,17 +30,15 @@ class SendRow {
 
 data struct SendPageInput {
     var Session WalletSession
+    var Wallet string
+    var Endpoint string
+    var CoreStarted int64
     var Rows List[SendRow]
-    var Ui Presentation
-    var Window Window?
-    var Snapshot WalletSnapshot
-    var Contacts SortedDictionary[string, string]
-    var Network string
-    var Privacy bool
-    var Busy bool
-    var Language string
+    var Display SendDisplay
+    var Spendable uint64?
+    var Address string
+    var Sends[]WalletSend
     var Animate bool
-    var Height float64
     var OnSent Action
 }
 
@@ -75,18 +73,17 @@ data struct SendEditorInput {
 
 class SendPage : Cell, IDisposable {
     private var input SendPageInput
-    private var rows List[SendRow]
     private var estimate SendEstimate?
     private var sent SendEstimate?
     private var result SendResult?
     private var reviewRows[]SendReviewRow = []SendReviewRow{}
+    private var balanceAmounts[]uint64 = []uint64{}
+    private var balanceRows[]SendReviewRow = []SendReviewRow{}
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var request CancellationTokenSource?
     private var generation int32
-    private var disposed bool
     private var canSubmit bool
     private var reviewFocus bool
-    private var walletName string = ""
     private let changed Action
     private let submit Action
     private let remove Action[SendRow]
@@ -94,26 +91,27 @@ class SendPage : Cell, IDisposable {
 
     init() {
         changed = () -> Rebuild()
-        submit = () -> {
-            if canSubmit {
-                Review()
-            }
-        }
+        submit = () -> Review()
         remove = row -> {
-            rows.Remove(row)
+            input.Rows.Remove(row)
             Rebuild()
         }
         maximum = () -> Maximum()
     }
 
     public func Accept(next SendPageInput) {
+        if next == input && input.Rows.Count > 0 {
+            return
+        }
         if input.Session != next.Session ||
-            input.Network != next.Network ||
-            input.Rows != next.Rows ||
-            walletName != next
-            .Session
-            .Settings
-            .ActiveWallet {
+            input
+            .Display
+            .Network != next
+            .Display
+            .Network ||
+            input.Wallet != next.Wallet ||
+            input.Endpoint != next.Endpoint ||
+            input.CoreStarted != next.CoreStarted {
             generation++
             request?.Cancel()
             estimate = nil
@@ -121,40 +119,27 @@ class SendPage : Cell, IDisposable {
             result = nil
         }
         input = next
-        rows = next.Rows
-        walletName = next.Session.Settings.ActiveWallet
-        if rows.Count == 0 {
-            rows.Add(SendRow())
+        if input.Rows.Count == 0 {
+            input.Rows.Add(SendRow())
         }
         Rebuild()
     }
 
     public func Dispose() {
-        disposed = true
         generation++
         lifetime.Cancel()
-        request?.Cancel()
         request?.Dispose()
         lifetime.Dispose()
     }
 
     override func Build() Blob {
-        let display = SendDisplay{
-            Ui: input.Ui,
-            Window: input.Window,
-            Contacts: input.Contacts,
-            Network: input.Network,
-            Privacy: input.Privacy,
-            Busy: input.Busy,
-            Language: input.Language,
-            Height: input.Height
-        }
-        let ui = input.Ui
-        let spendable = input.Snapshot.Balance?.Spendable ?? uint64(0)
-        let multi = rows.Count > 1
+        let display = input.Display
+        let ui = display.Ui
+        let spendable = input.Spendable ?? uint64(0)
+        let multi = input.Rows.Count > 1
         var total uint64 = 0
-        var ready = !input.Busy
-        for row in rows {
+        var ready = !display.Busy
+        for row in input.Rows {
             let atoms = Atoms(row.Amount)
             total = Add(total, atoms ?? uint64(0))
             ready = ready && atoms != nil && SendRecipientEditor.Kind(display, row.Address)
@@ -164,21 +149,29 @@ class SendPage : Cell, IDisposable {
         }
         let over = total > spendable
         canSubmit = ready && !over && total > 0
-        let maxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
-        let card = WalletParts.PageCard(ui, maxWidth, input.Height, maxWidth, true)
+        let amounts = input.Rows.Select(row -> Atoms(row.Amount) ?? uint64(0)).ToArray()
+        if !balanceAmounts.SequenceEqual(amounts) {
+            balanceAmounts = amounts
+        }
+        let rows = input.Rows.Select(row -> SendReviewRow{Id: row.Id, Address: row.Address}).ToArray()
+        if !balanceRows.SequenceEqual(rows) {
+            balanceRows = rows
+        }
+        let maxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, display.Height - 640) * 0.6, 600.0, 900.0)
+        let card = WalletParts.PageCard(ui, maxWidth, display.Height, maxWidth, true)
         card.Add(
             Cell.Mount[SendSummaryInput, SendSummary](
                 "summary",
                 SendSummaryInput{
                     Ui: ui,
-                    Privacy: input.Privacy,
-                    Language: input.Language,
-                    Spendable: input.Snapshot.Balance?.Spendable
+                    Privacy: display.Privacy,
+                    Language: display.Language,
+                    Spendable: input.Spendable
                 }
             )
         )
         if multi {
-            let size = AppTheme.GetTotalSize(input.Height)
+            let size = AppTheme.GetTotalSize(display.Height)
             let sum = Hidden(ui.Privacy, WalletAmount.Format(total))
             card.Add(SendRecipientEditor.Hero(display, Label(ui, sum, size, AppTheme.Lime, ""), sum.Length, size, nil))
         }
@@ -186,8 +179,8 @@ class SendPage : Cell, IDisposable {
         if multi {
             list.OverflowY = Overflow.Scroll
         }
-        for index in 0 ... rows.Count {
-            let row = rows[index]
+        for index in 0 ... input.Rows.Count {
+            let row = input.Rows[index]
             list.Add(
                 Cell.Mount[SendEditorInput, SendRecipientEditor](
                     row.Id,
@@ -200,8 +193,8 @@ class SendPage : Cell, IDisposable {
                         MemoOpen: row.MemoOpen,
                         Suggest: row.Suggest,
                         Index: index,
-                        Count: rows.Count,
-                        Spendable: spendable,
+                        Count: input.Rows.Count,
+                        Spendable: multi ? uint64(0): spendable,
                         Over: !multi && over,
                         Submit: submit,
                         Changed: changed,
@@ -221,31 +214,30 @@ class SendPage : Cell, IDisposable {
                 "totals",
                 SendBalanceInput{
                     Display: display,
-                    Amounts: rows.Select(row -> Atoms(row.Amount) ?? uint64(0)).ToArray(),
-                    Names: rows.Select(row -> SendRecipientEditor.Name(display, row.Address)).ToArray(),
-                    Ids: rows.Select(row -> row.Id).ToArray(),
+                    Amounts: balanceAmounts,
+                    Rows: balanceRows,
                     Spendable: spendable,
                     Total: total,
                     Remaining: true
                 }
             )
         )
-        let review = Button(ui, "Review", submit, !canSubmit, true, reviewFocus, input.Busy)
+        let review = Button(ui, "Review", submit, !canSubmit, true, reviewFocus, display.Busy)
         reviewFocus = false
         review.MinWidth = 140
         let addRecipient = ControlParts.Button(
             ui,
             "recipient",
             () -> {
-                rows.Add(SendRow())
+                input.Rows.Add(SendRow())
             },
-            input.Busy,
+            display.Busy,
             busy: false,
             appearance: AppTheme.CompactButton with{
                 BackgroundColor = Color.Transparent,
                 BorderWidth = AppTheme.Border0,
                 TextColor = AppTheme.Lime,
-                Leading = MaterialIcons.Create("add", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
+                Leading = MaterialIcons.Create("add", AppTheme.Icon16, display.Busy ? AppTheme.Dim: AppTheme.Lime),
                 AccessibilityName = ui.Strings.Get("Add recipient")
             }
         )
@@ -268,10 +260,10 @@ class SendPage : Cell, IDisposable {
                         Ui: ui,
                         Estimate: shown,
                         Result: outcome,
-                        Sends: input.Snapshot.Sends,
+                        Sends: input.Sends,
                         Animate: input.Animate,
-                        Privacy: input.Privacy,
-                        Language: input.Language,
+                        Privacy: display.Privacy,
+                        Language: display.Language,
                         OnClose: () -> {
                             sent = nil
                             result = nil
@@ -292,11 +284,9 @@ class SendPage : Cell, IDisposable {
                         Spendable: spendable,
                         Submit: () -> Submit(),
                         Close: () -> {
-                            if !input.Busy {
-                                estimate = nil
-                                reviewFocus = true
-                                Rebuild()
-                            }
+                            estimate = nil
+                            reviewFocus = true
+                            Rebuild()
                         }
                     }
                 )
@@ -326,7 +316,7 @@ class SendPage : Cell, IDisposable {
         request?.Dispose()
         let current = CancellationTokenSource.CreateLinkedTokenSource(
             lifetime.Token,
-            input.Window?.Closed ?? default(CancellationToken)
+            input.Display.Window?.Closed ?? default(CancellationToken)
         )
         request = current
         generation++
@@ -334,30 +324,36 @@ class SendPage : Cell, IDisposable {
     }
 
     private func Current(id int32, session WalletSession, network string, wallet string) bool ->
-    !disposed &&
-        id == generation &&
-        input.Session == session &&
-        input.Network == network &&
+    id == generation &&
         session
         .Settings
         .Network == network &&
         session
         .Settings
-        .ActiveWallet == wallet
+        .ActiveWallet == wallet &&
+        session
+        .Settings
+        .Endpoint == input.Endpoint &&
+        session
+        .Node
+        .Api
+        .verifiedStart == input.CoreStarted
 
     private func Review() {
         if !canSubmit {
             return
         }
         let session = input.Session
-        let network = input.Network
-        let wallet = walletName
+        let network = input.Display.Network
+        let wallet = input.Wallet
         let token = BeginRequest()
         let id = generation
-        let drafts = rows.Select(row -> SendReviewRow{Id: row.Id, Address: row.Address}).ToArray()
-        let requests = rows.Select(
+        let drafts = input.Rows.Select(row -> SendReviewRow{Id: row.Id, Address: row.Address}).ToArray()
+        let requests = input
+            .Rows
+            .Select(
             row -> WalletRecipient{
-                Address: AddressBook.Resolve(input.Contacts, row.Address),
+                Address: AddressBook.Resolve(input.Display.Contacts, row.Address),
                 Amount: Atoms(row.Amount) ?? uint64(0),
                 Memo: row.Memo
             }
@@ -365,12 +361,15 @@ class SendPage : Cell, IDisposable {
             .ToArray()
         var found SendEstimate?
         input
+            .Display
             .Ui
             .Actions
             .Run(
             async (ct) -> {
                 using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, ct)
-                found = await session.Send.EstimateAsync(requests, linked.Token)
+                try {
+                    found = await session.Send.EstimateAsync(requests, linked.Token)
+                } catch (error OperationCanceledException) { }
             },
             () -> {
                 if Current(id, session, network, wallet) {
@@ -383,30 +382,33 @@ class SendPage : Cell, IDisposable {
     }
 
     private func Maximum() {
-        let row = rows[0]
-        let display = SendDisplay{Contacts: input.Contacts, Network: input.Network}
+        let row = input.Rows[0]
+        let display = input.Display
         let address = if SendRecipientEditor.Kind(display, row.Address).Length > 0 {
-            AddressBook.Resolve(input.Contacts, row.Address.Trim())
+            AddressBook.Resolve(display.Contacts, row.Address.Trim())
         } else {
-            input.Snapshot.Address
+            input.Address
         }
         let memo = row.Memo
         let session = input.Session
-        let network = input.Network
-        let wallet = walletName
+        let network = display.Network
+        let wallet = input.Wallet
         let token = BeginRequest()
         let id = generation
         var amount uint64
         input
+            .Display
             .Ui
             .Actions
             .Run(
             async (ct) -> {
                 using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, ct)
-                amount = await session.Send.MaximumAsync([]WalletRecipient{}, address, memo, linked.Token)
+                try {
+                    amount = await session.Send.MaximumAsync([]WalletRecipient{}, address, memo, linked.Token)
+                } catch (error OperationCanceledException) { }
             },
             () -> {
-                if Current(id, session, network, wallet) && rows.Contains(row) {
+                if Current(id, session, network, wallet) {
                     row.Amount = WalletAmount.Format(amount)
                     Rebuild()
                 }
@@ -418,19 +420,20 @@ class SendPage : Cell, IDisposable {
         guard let pending = estimate else {
             return
         }
-        if input.Busy {
+        if input.Display.Busy {
             return
         }
         estimate = nil
         let session = input.Session
-        let network = input.Network
-        let wallet = walletName
+        let network = input.Display.Network
+        let wallet = input.Wallet
         let id = generation
-        let drafts = rows
-        let draftIds = rows.Select(row -> row.Id).ToArray()
+        let drafts = input.Rows
+        let draftIds = drafts.Select(row -> row.Id).ToArray()
         let onSent = input.OnSent
         var outcome SendResult?
         input
+            .Display
             .Ui
             .Actions
             .Run(
@@ -508,28 +511,16 @@ class SendRecipientEditor : Cell[SendEditorInput] {
             }
             if let item = editor {
                 let spendable = item.Spendable
+                let fill Action[uint64] = atoms -> {
+                    item.Row.Amount = WalletAmount.Format(atoms)
+                    item.Changed()
+                }
                 hero.Add(
                     Container{
                         FlexDirection: FlexDirection.Row,
                         Gap: AppTheme.Space8,
-                        Share(
-                            input,
-                            "25%",
-                            spendable,
-                            () -> {
-                                item.Row.Amount = WalletAmount.Format(spendable / 4)
-                                item.Changed()
-                            }
-                        ),
-                        Share(
-                            input,
-                            "50%",
-                            spendable,
-                            () -> {
-                                item.Row.Amount = WalletAmount.Format(spendable / 2)
-                                item.Changed()
-                            }
-                        ),
+                        Share(input, "25%", spendable, () -> fill(spendable / 4)),
+                        Share(input, "50%", spendable, () -> fill(spendable / 2)),
                         Share(input, "max", spendable, item.Maximum)
                     }
                 )
@@ -908,8 +899,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
 data struct SendBalanceInput {
     var Display SendDisplay
     var Amounts[]uint64
-    var Names[]string
-    var Ids[]string
+    var Rows[]SendReviewRow
     var Spendable uint64
     var Total uint64
     var Fee uint64
@@ -971,6 +961,7 @@ class SendBalance : Cell[SendBalanceInput] {
             bar.Add(BarSegment(float64(total - spendable), AppTheme.Pink))
             return bar
         }
+        let names = value.Rows.Select(row -> SendRecipientEditor.Name(input, row.Address)).ToArray()
         for index in 0 ... amounts.Length {
             if amounts[index] == 0 {
                 continue
@@ -987,7 +978,7 @@ class SendBalance : Cell[SendBalanceInput] {
                         FlexDirection: FlexDirection.Row,
                         JustifyContent: JustifyContent.SpaceBetween,
                         Gap: AppTheme.Space24,
-                        Label(ui, value.Names[other], AppTheme.Type13, other == index ? AppTheme.Ink: AppTheme.Dim, ""),
+                        Label(ui, names[other], AppTheme.Type13, other == index ? AppTheme.Ink: AppTheme.Dim, ""),
                         Label(
                             ui,
                             WalletAmount.Format(amounts[other]),
@@ -1000,7 +991,7 @@ class SendBalance : Cell[SendBalanceInput] {
             }
             bar.Add(
                 Cell.Mount[TooltipInput, Tooltip](
-                    value.Ids[index],
+                    value.Rows[index].Id,
                     TooltipInput{
                         Window: input.Window,
                         Target: segment,
@@ -1039,12 +1030,15 @@ data struct SendReviewInput {
 
 class SendReview : Cell[SendReviewInput] {
     private var openRow string = ""
+    private var reviewAmounts[]uint64 = []uint64{}
 
-    protected override func Build(input SendReviewInput) Blob -> Confirm(input)
-
-    private func Confirm(value SendReviewInput) Blob {
+    protected override func Build(value SendReviewInput) Blob {
         let input = value.Display
         let pending = value.Estimate
+        let amounts = pending.Recipients.Select(recipient -> recipient.Amount).ToArray()
+        if !reviewAmounts.SequenceEqual(amounts) {
+            reviewAmounts = amounts
+        }
         let spendable = value.Spendable
         let ui = input.Ui
         let compact = input.Height < 700
@@ -1081,9 +1075,8 @@ class SendReview : Cell[SendReviewInput] {
                 "review-totals",
                 SendBalanceInput{
                     Display: input,
-                    Amounts: pending.Recipients.Select(recipient -> recipient.Amount).ToArray(),
-                    Names: value.Rows.Select(row -> SendRecipientEditor.Name(input, row.Address)).ToArray(),
-                    Ids: value.Rows.Select(row -> row.Id).ToArray(),
+                    Amounts: reviewAmounts,
+                    Rows: value.Rows,
                     Fee: pending.Fee,
                     Change: pending.Change,
                     Spendable: spendable
@@ -1135,8 +1128,8 @@ class SendReview : Cell[SendReviewInput] {
                 Content: content,
                 Footer: ActionRow(
                     []Blob{
-                        ControlParts.Button(ui, "Cancel", close, input.Busy, busy: false),
-                        ControlParts.Button(ui, "Send", value.Submit, input.Busy, true, busy: false)
+                        ControlParts.Button(ui, "Cancel", close, busy: false),
+                        ControlParts.Button(ui, "Send", value.Submit, input.Busy, true, busy: input.Busy)
                     }
                 ),
                 ConfirmText: ui.Strings.Get("Send"),
