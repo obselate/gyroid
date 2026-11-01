@@ -41,6 +41,46 @@ class MiningService {
         }
     }
 
+    func PollAsync(previous MiningPollResult, requests chan[MiningPollRequest], ct CancellationToken) MiningPollResult {
+        var state = previous.Request
+        var continuous = previous.Continuous
+        while true {
+            if state.Visible && state.Online {
+                select {
+                    case next <- requests { state = next }
+                    case <- after(TimeSpan.FromSeconds(5)) { }
+                }
+            } else {
+                state = await requests.Reader.ReadAsync(ct)
+            }
+            if !state.Visible || !state.Online {
+                continuous = false
+            }
+            while requests.Reader.TryRead(out let next) {
+                state = next
+                if !state.Visible || !state.Online {
+                    continuous = false
+                }
+            }
+            if state.Visible && state.Online {
+                break
+            }
+        }
+        var report = MiningReport{... previous.Report, Available: false}
+        try {
+            let status = await StatusAsync(ct)
+            let waiting = status.Running && session.Node.Status.Peers == 0
+            report = previous.Report.Record(status, waiting, continuous, DateTimeOffset.Now)
+        } catch (failure OperationCanceledException) when ct.IsCancellationRequested {
+            throw failure
+        } catch (failure Exception) { }
+        return MiningPollResult{
+            Request: state,
+            Report: report,
+            Continuous: report.Available && report.Status.Running && report.Status.Hashes > 0 && !report.Waiting
+        }
+    }
+
     func StartAsync(ct CancellationToken = default(CancellationToken)) Task -> PostAsync("mining/start", nil, ct)
 
     func StopAsync(ct CancellationToken = default(CancellationToken)) Task -> PostAsync("mining/stop", nil, ct)

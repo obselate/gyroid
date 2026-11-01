@@ -10,21 +10,9 @@ import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Services.WalletText
 import System
-import System.Collections.Generic
 import System.Globalization
 import System.Threading
 import System.Threading.Tasks
-
-data struct MiningSample {
-    var Time DateTimeOffset
-    var Hashes uint64
-    var Rate float64
-}
-
-class MiningHistory {
-    var Status MiningStatus
-    let Samples List[MiningSample] = List[MiningSample]()
-}
 
 data struct MiningPageInput {
     var Ui Presentation
@@ -62,6 +50,7 @@ data struct MiningRateInput {
     var Language string
     var Height float64
     var Rate float64
+    var Waiting bool
 }
 
 data struct MiningReadingsInput {
@@ -75,6 +64,7 @@ data struct MiningChartInput {
     var Ui Presentation
     var Language string
     var Samples[]MiningSample
+    var Top float64
 }
 
 class MiningPage : Cell, IDisposable {
@@ -88,13 +78,11 @@ class MiningPage : Cell, IDisposable {
     }
     private var source MiningPageInput
     private var request CancellationTokenSource?
-    private var refreshRequested chan[bool] = chan[bool](1)
+    private var refreshRequested chan[MiningPollRequest] = Chan.Unbounded[MiningPollRequest]()
     private var generation int32
     private var opened bool
+    private var pollRevision int32
     private var unavailable bool
-    private var visible bool
-    private var nodeRunning bool
-    private var samples[]MiningSample = []MiningSample{}
 
     init() {
         toggle = () -> Toggle()
@@ -112,16 +100,13 @@ class MiningPage : Cell, IDisposable {
             source.Endpoint != input.Endpoint
         let stateChanged = source.Visible != input.Visible || source.NodeRunning != input.NodeRunning
         source = input
-        Volatile.Write(ref visible, input.Visible)
-        Volatile.Write(ref nodeRunning, input.NodeRunning)
         if replaced {
-            samples = input.History.Samples.ToArray()
             generation++
             request?.Cancel()
             request?.Dispose()
             if opened {
                 refreshRequested.Writer.TryComplete()
-                refreshRequested = chan[bool](1)
+                refreshRequested = Chan.Unbounded[MiningPollRequest]()
             }
             opened = true
             guard let window = input.Window else {
@@ -129,7 +114,12 @@ class MiningPage : Cell, IDisposable {
             }
             let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
             request = current
-            RunWorkerAsync(input, generation, refreshRequested, Context.FromToken(current.Token))
+            let id = generation
+            let requests = refreshRequested
+            let report = input.History.Report
+            let context = Context.FromToken(current.Token)
+            RunWorkerAsync(input, report, id, requests, context)
+            Refresh()
         } else if stateChanged {
             Refresh()
         }
@@ -139,7 +129,9 @@ class MiningPage : Cell, IDisposable {
     override func Build() Blob {
         let input = source
         let ui = input.Ui
-        let status = input.History.Status
+        let report = input.History.Report
+        let status = report.Status
+        let samples = report.Samples
         let running = status.Running && input.NodeRunning && !unavailable
         let card = WalletParts.PageCard(ui, height: input.Height, maxWidth: running ? 1180.0: 620.0, fill: true)
         let head = WalletParts.Header(
@@ -187,13 +179,19 @@ class MiningPage : Cell, IDisposable {
             card.Add(
                 Cell.Mount[MiningRateInput, MiningRate](
                     "rate",
-                    MiningRateInput{Ui: ui, Language: input.Language, Height: input.Height, Rate: rate}
+                    MiningRateInput{
+                        Ui: ui,
+                        Language: input.Language,
+                        Height: input.Height,
+                        Rate: rate,
+                        Waiting: report.Waiting
+                    }
                 )
             )
             card.Add(
                 Cell.Mount[MiningChartInput, MiningChart](
                     "chart",
-                    MiningChartInput{Ui: ui, Language: input.Language, Samples: samples}
+                    MiningChartInput{Ui: ui, Language: input.Language, Samples: samples, Top: report.Top}
                 )
             )
             card.Add(
@@ -225,7 +223,7 @@ class MiningPage : Cell, IDisposable {
             return
         }
         let mining = source.Session.Mining
-        if source.History.Status.Running {
+        if source.History.Report.Status.Running {
             Act(ct -> mining.StopAsync(ct))
         } else {
             Act(ct -> mining.StartAsync(ct))
@@ -256,13 +254,16 @@ class MiningPage : Cell, IDisposable {
     }
 
     private func Refresh() {
-        refreshRequested.Writer.TryWrite(true)
+        pollRevision++
+        refreshRequested.Writer.TryWrite(
+            MiningPollRequest{Visible: source.Visible, Online: source.NodeRunning, Revision: pollRevision}
+        )
     }
 
-    private async func RunWorkerAsync(input MiningPageInput, id int32, requests chan[bool], parentContext Context) {
+    private async func RunWorkerAsync(input MiningPageInput, report MiningReport, id int32, requests chan[MiningPollRequest], parentContext Context) {
         try {
             scope {
-                go Poll(input, id, requests, ctx)
+                go Poll(input, report, id, requests, ctx)
             }
         } catch (failure OperationCanceledException) when parentContext.IsCancelled { } catch (failure Exception) {
             Console.Error.WriteLine("Mining background task failed: " + failure.GetType().Name)
@@ -276,82 +277,26 @@ class MiningPage : Cell, IDisposable {
         }
     }
 
-    private func Poll(input MiningPageInput, id int32, requests chan[bool], pageContext Context) {
-        var running = false
+    private func Poll(input MiningPageInput, initial MiningReport, id int32, requests chan[MiningPollRequest], pageContext Context) {
+        var observation = MiningPollResult{Report: initial}
+        let mining = input.Session.Mining
+        let token = pageContext.Token
         while !pageContext.IsCancelled {
-            if Volatile.Read(ref visible) && Volatile.Read(ref nodeRunning) {
-                running = await Load(input, id, pageContext.Token)
-            }
-            if Volatile.Read(ref visible) && Volatile.Read(ref nodeRunning) && running {
-                select {
-                    case <- requests { }
-                    case <- after(TimeSpan.FromSeconds(5)) { }
-                }
-            } else {
-                select {
-                    case <- requests { }
-                }
-            }
-        }
-    }
-
-    private async func Load(input MiningPageInput, id int32, token CancellationToken) bool {
-        var status MiningStatus? = nil
-        try {
-            status = await input.Session.Mining.StatusAsync(token)
-        } catch (failure OperationCanceledException) when token.IsCancellationRequested {
-            return false
-        } catch (failure Exception) { }
-        input.Window?.TryPost(
-            () -> {
-                if id != generation || !source.Visible || !source.NodeRunning {
-                    return
-                }
-                let previous = input.History.Status
-                let recovered = unavailable
-                unavailable = status == nil
-                if let value = status {
-                    Record(input.History, value)
-                    let sampled = value.Running && value.Hashes > 0
-                    if sampled || samples.Length != input.History.Samples.Count {
-                        samples = input.History.Samples.ToArray()
+            observation = await mining.PollAsync(observation, requests, token)
+            let report = observation.Report
+            let revision = observation.Request.Revision
+            input.Window?.TryPost(
+                () -> {
+                    if id != generation || revision != pollRevision || !source.Visible || !source.NodeRunning {
+                        return
                     }
-                    if sampled || value != previous || recovered {
+                    if input.History.Report != report {
+                        input.History.Report = report
+                        unavailable = !report.Available
                         Rebuild()
                     }
-                } else if !recovered {
-                    input.History.Samples.Clear()
-                    samples = []MiningSample{}
-                    Rebuild()
                 }
-            }
-        )
-        return status?.Running == true
-    }
-
-    private func Record(history MiningHistory, status MiningStatus) {
-        let samples = history.Samples
-        if !status.Running || status.Started != history.Status.Started {
-            samples.Clear()
-        }
-        history.Status = status
-        if !status.Running || status.Hashes == 0 {
-            return
-        }
-        let now = DateTimeOffset.Now
-        var rate = status.Hashrate
-        for sample in samples {
-            let seconds = (now - sample.Time).TotalSeconds
-            if seconds <= 30 {
-                if seconds >= 4 && status.Hashes >= sample.Hashes {
-                    rate = float64(status.Hashes - sample.Hashes) / seconds
-                }
-                break
-            }
-        }
-        samples.Add(MiningSample{Time: now, Hashes: status.Hashes, Rate: rate})
-        if samples.Count > 720 {
-            samples.RemoveAt(0)
+            )
         }
     }
 }
@@ -496,6 +441,9 @@ class MiningSetup : Cell[MiningSetupInput] {
 class MiningRate : Cell[MiningRateInput] {
     protected override func Build(input MiningRateInput) Blob {
         let ui = input.Ui
+        if input.Waiting {
+            return Label(ui, ui.Strings.Get("Waiting for peers"), AppTheme.Type16, AppTheme.Body, "")
+        }
         let text = input.Rate.ToString("F1", CultureInfo.InvariantCulture)
         return Container{
             FlexDirection: FlexDirection.Row,
@@ -553,13 +501,7 @@ class MiningChart : Cell[MiningChartInput] {
     protected override func Build(input MiningChartInput) Blob {
         let ui = input.Ui
         let samples = input.Samples
-        var peak = 0.0
-        for sample in samples {
-            peak = Math.Max(peak, sample.Rate)
-        }
-        let raw = Math.Max(peak, 0.1) * 1.3 / 4
-        let magnitude = Math.Pow(10, Math.Floor(Math.Log10(raw)))
-        let top = Math.Ceiling(raw / magnitude) * magnitude * 4
+        let top = input.Top
         let axis = Container{FlexGrow: 1, JustifyContent: JustifyContent.SpaceBetween, AlignItems: AlignItems.FlexEnd}
         for step in 0 ... 5 {
             axis.Add(Tick(ui, (top * (4 - step) / 4).ToString("0.##", CultureInfo.InvariantCulture)))
@@ -596,11 +538,14 @@ class MiningChart : Cell[MiningChartInput] {
             let format = span >= 300 ? "HH:mm": "HH:mm:ss"
             let line = PathBuilder(0, 0, 1000, 1000)
             let fill = PathBuilder(0, 0, 1000, 1000)
-            fill.MoveTo(0, 1000)
             for index in 0 ... samples.Length {
-                let x = (samples[index].Time - first).TotalSeconds / span * 1000
-                let y = 1000 - samples[index].Rate / top * 1000
-                if index == 0 {
+                let x = samples[index].X * 1000
+                let y = samples[index].Y * 1000
+                if index == 0 || samples[index].Break {
+                    if index > 0 {
+                        fill.LineTo(samples[index - 1].X * 1000, 1000).Close()
+                    }
+                    fill.MoveTo(x, 1000)
                     line.MoveTo(x, y)
                 } else {
                     line.LineTo(x, y)
@@ -635,14 +580,14 @@ class MiningChart : Cell[MiningChartInput] {
             area.Add(
                 ChartParts.Point(
                     Percent(100),
-                    Percent((1 - samples[samples.Length - 1].Rate / top) * 100),
+                    Percent(samples[samples.Length - 1].Y * 100),
                     AppTheme.Lime
                 )
             )
             if hover >= 0 && hover < samples.Length {
                 let sample = samples[hover]
-                let x = (sample.Time - first).TotalSeconds / span
-                let y = 1 - sample.Rate / top
+                let x = sample.X
+                let y = sample.Y
                 area.Add(
                     Container{
                         Position: PositionType.Absolute,
@@ -699,11 +644,9 @@ class MiningChart : Cell[MiningChartInput] {
     private func Track(samples[]MiningSample, position float64) {
         var nearest = -1
         if position >= 0 && samples.Length > 1 {
-            let first = samples[0].Time
-            let span = Math.Max(1.0, (samples[samples.Length - 1].Time - first).TotalSeconds)
             var distance = 2.0
             for index in 0 ... samples.Length {
-                let gap = Math.Abs((samples[index].Time - first).TotalSeconds / span - position)
+                let gap = Math.Abs(samples[index].X - position)
                 if gap < distance {
                     distance = gap
                     nearest = index
