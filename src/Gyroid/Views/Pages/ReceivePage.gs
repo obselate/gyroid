@@ -122,6 +122,7 @@ class ReceivePage : Cell {
         }
         input = next
         Prepare()
+        Rebuild()
     }
 
     private func Prepare() {
