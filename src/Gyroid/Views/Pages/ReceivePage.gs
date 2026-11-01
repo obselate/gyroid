@@ -29,6 +29,8 @@ class ReceiveRequest {
 
 data struct ReceivePageInput {
     var Ui Presentation
+    var Wallet string
+    var Network string
     var Request ReceiveRequest
     var Address string
     var History[]WalletOutput
@@ -72,6 +74,8 @@ data struct ReceiveStatusInput {
 
 data struct ReceivePresentationInput {
     var Ui Presentation
+    var Wallet string
+    var Network string
     var Draft ReceiveDraft
     var Address string
     var Format string
@@ -178,6 +182,8 @@ class ReceivePage : Cell {
         }
         presentation = ReceivePresentationInput{
             Ui: input.Ui,
+            Wallet: input.Wallet,
+            Network: input.Network,
             Draft: draft,
             Address: input.Address,
             Format: request.Format,
@@ -344,8 +350,15 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
     private var qrCode QrCode?
     private var qrPath VectorPath = VectorPath.Empty
     private var generation int32
+    private var sourceWallet string = ""
+    private var sourceNetwork string = ""
 
     protected override func Build(input ReceivePresentationInput) Blob {
+        if input.Wallet != sourceWallet || input.Network != sourceNetwork {
+            generation++
+            sourceWallet = input.Wallet
+            sourceNetwork = input.Network
+        }
         let ui = input.Ui
         let draft = input.Draft
         let empty = draft.Amount.Length == 0 && draft.Memo.Length == 0
