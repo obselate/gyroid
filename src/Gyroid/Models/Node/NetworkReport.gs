@@ -7,8 +7,6 @@ data class NetworkBlock {
     var Timestamp int64
     var Transactions uint64
     var Difficulty uint64
-    var Seconds int64
-    var Age int64
     var Own int32
 }
 
@@ -32,10 +30,8 @@ data class NetworkReport {
     var Hashrate float64
     var Difficulty uint64
     var Emitted float64
-    var Average float64
-    var MaximumTransactions float64 = 6
+    var MaximumTransactions float64
     var Tcp int32
-    var IdentityHours int32
     var Peers[]NetworkPeer = []NetworkPeer{}
     var Banned[]BannedPeer = []BannedPeer{}
     var Blocks[]NetworkBlock = []NetworkBlock{}
@@ -46,6 +42,6 @@ data struct NetworkRow {
     var Peer NetworkPeer?
     var Ban BannedPeer?
     var Language string
-    var Width float64
+    var Wide bool
     var Hovered bool
 }

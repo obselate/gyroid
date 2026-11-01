@@ -267,7 +267,6 @@ class NodeSession : IDisposable {
         using let peers = await Api.JsonAsync("peers", ct: ct)
         using let bans = await Api.JsonAsync("peers/banned", ct: ct)
         let connected = List[NetworkPeer]()
-        var tcp = 0
         for peer in peers.RootElement.GetProperty("peers").EnumerateArray() {
             let addresses = peer.GetProperty("addrs")
             let parts = if addresses.GetArrayLength() > 0 {
@@ -295,9 +294,6 @@ class NodeSession : IDisposable {
                     Family: parts.Length > 1 ? parts[1]: ""
                 }
             )
-            if connected[connected.Count - 1].Transport != "quic" {
-                tcp++
-            }
         }
         let banned = List[BannedPeer]()
         for ban in bans.RootElement.GetProperty("banned").EnumerateArray() {
@@ -326,9 +322,42 @@ class NodeSession : IDisposable {
             Status: Status,
             Peers: Enumerable.SequenceEqual(Network.Peers, peerRows) ? Network.Peers: peerRows,
             Banned: Enumerable.SequenceEqual(Network.Banned, banRows) ? Network.Banned: banRows,
-            Tcp: tcp
+            Tcp: Enumerable.Count(peerRows, peer -> peer.Transport != "quic")
         }
         return Network
+    }
+
+    func PrepareNetwork(
+        report NetworkReport,
+        history[]WalletOutput,
+        sends[]WalletSend,
+        token CancellationToken
+    ) NetworkReport {
+        let own = Dictionary[uint64, int32]()
+        let blocks = report.Blocks
+        let tip = blocks.Length > 0 ? blocks[blocks.Length - 1].Height: 0
+        for send in sends {
+            token.ThrowIfCancellationRequested()
+            if send.Confirmations > 0 && send.Confirmations <= tip + 1 {
+                own[tip + 1 - send.Confirmations] = 2
+            }
+        }
+        for output in history {
+            token.ThrowIfCancellationRequested()
+            own[output.BlockHeight] = 1
+        }
+        let prepared = [blocks.Length]NetworkBlock
+        var maximum = 6.0
+        for index in 0 ... blocks.Length {
+            token.ThrowIfCancellationRequested()
+            let block = blocks[index]
+            let elapsed = blocks[blocks.Length - 1].Timestamp - block.Timestamp
+            prepared[index] = NetworkBlock{... block, Own: own.TryGetValue(block.Height, out let kind) ? kind: 0}
+            if elapsed < 7200 {
+                maximum = Math.Max(maximum, float64(block.Transactions))
+            }
+        }
+        return NetworkReport{... report, Blocks: prepared, MaximumTransactions: maximum}
     }
 
     private async func ReadBlocksAsync(status NodeStatus, previous NetworkReport, ct CancellationToken)[]NetworkBlock {

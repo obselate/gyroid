@@ -149,8 +149,9 @@ class NetworkParts {
             ":" +
             (seconds % 60).ToString("00", CultureInfo.InvariantCulture)
 
-        func Rate(hashes float64) string -> NodeText.Positive(
-            hashes / Math.Pow(1000, Math.Clamp(Math.Floor(Math.Log10(Math.Max(hashes, 1)) / 3), 0, 3))
+        func Rate(hashes float64) string -> NodeText.FixedPoint(
+            hashes / Math.Pow(1000, Math.Clamp(Math.Floor(Math.Log10(Math.Max(hashes, 1)) / 3), 0, 3)),
+            2
         )
 
         func Unit(hashes float64) string -> switch int32(

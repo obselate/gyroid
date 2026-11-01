@@ -73,11 +73,10 @@ class NetworkPage : Cell, IDisposable {
         configurePeers = cell -> cell.Accept(
             NetworkPeersInput{
                 Ui: input.Ui,
-                Window: input.Window,
                 Peers: report.Peers,
                 Banned: report.Banned,
                 Tcp: report.Tcp,
-                IdentityHours: report.IdentityHours,
+                IdentityAge: report.Status.IdentityAge,
                 PeerId: report.Status.PeerId,
                 Online: report.Status.Running,
                 Width: input.Width,
@@ -144,9 +143,8 @@ class NetworkPage : Cell, IDisposable {
             let token = current.Token
             let history = next.History
             let sends = next.Sends
-            let age = next.Node.IdentityAge
             let previous = report
-            go Load(node, window, id, token, history, sends, age, previous)
+            go Load(node, window, id, token, history, sends, previous)
         }
     }
 
@@ -190,7 +188,6 @@ class NetworkPage : Cell, IDisposable {
                     NetworkBlocksInput{
                         Ui: input.Ui,
                         Blocks: report.Blocks,
-                        Average: report.Average,
                         MaximumTransactions: report.MaximumTransactions,
                         Language: input.Language,
                         Height: input.Height
@@ -216,14 +213,13 @@ class NetworkPage : Cell, IDisposable {
         token CancellationToken,
         history[]WalletOutput,
         sends[]WalletSend,
-        age string,
         previous NetworkReport
     ) {
         try {
             while !token.IsCancellationRequested {
                 var result NetworkReport? = nil
                 try {
-                    let prepared = NodeText.Prepare(await node.ReadNetworkAsync(token), history, sends, age, token)
+                    let prepared = node.PrepareNetwork(await node.ReadNetworkAsync(token), history, sends, token)
                     if Enumerable.SequenceEqual[NetworkBlock](previous.Blocks, prepared.Blocks) {
                         prepared.Blocks = previous.Blocks
                     }
@@ -319,7 +315,7 @@ class NetworkSummary : Cell[NetworkSummaryInput] {
                     " KB"
             )
         )
-        figures.Add(Figure(input, "Emitted", NodeText.Positive(input.Emitted), "%"))
+        figures.Add(Figure(input, "Emitted", NodeText.FixedPoint(input.Emitted, 1), "%"))
         return figures
     }
 
@@ -330,7 +326,6 @@ class NetworkSummary : Cell[NetworkSummaryInput] {
 data struct NetworkBlocksInput {
     var Ui Presentation
     var Blocks[]NetworkBlock
-    var Average float64
     var MaximumTransactions float64
     var Language string
     var Height float64
@@ -342,7 +337,6 @@ data struct NetworkChartInput {
     var Language string
     var Height float64
     var Selected uint64
-    var Average float64
     var MaximumTransactions float64
     var Select Action[uint64]
 }
@@ -366,7 +360,6 @@ class NetworkBlocks : Cell[NetworkBlocksInput] {
             Language: input.Language,
             Height: input.Height,
             Selected: selected,
-            Average: input.Average,
             MaximumTransactions: input.MaximumTransactions,
             Select: chooseBlock
         }
@@ -398,7 +391,9 @@ class NetworkTimeChart : Cell[NetworkChartInput] {
 
     protected override func Build(input NetworkChartInput) Blob {
         let blocks = input.Blocks
-        let average = input.Average
+        let average = blocks.Length > 1 ? float64(blocks[blocks.Length - 1].Timestamp - blocks[0].Timestamp) / (
+            blocks.Length - 1
+        ): 0.0
         let card = WalletParts.Card(
             input.Ui,
             Edges{Left: AppTheme.Space16, Right: AppTheme.Space16, Top: AppTheme.Space14, Bottom: AppTheme.Space12},
@@ -462,12 +457,8 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
         let chart = input.Chart
         let blocks = chart.Blocks
         let tip = blocks.Length > 0 ? blocks[blocks.Length - 1]: NetworkBlock()
-        let index = chart.Selected > 0 &&
-            blocks.Length > 0 &&
-            chart.Selected >= blocks[0].Height &&
-            chart.Selected <= tip.Height ?
-        int32(chart.Selected - blocks[0].Height): -1
-        let shown = index >= 0 ? blocks[index]: tip
+        let shown = chart.Selected > 0 && Array.Exists(blocks, block -> block.Height == chart.Selected) ?
+        Array.Find(blocks, block -> block.Height == chart.Selected): tip
         let card = WalletParts.Card(
             chart.Ui,
             Edges{Left: AppTheme.Space16, Right: AppTheme.Space16, Top: AppTheme.Space14, Bottom: AppTheme.Space12},
@@ -543,9 +534,9 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
         )
         for index in 1 ... blocks.Length {
             let block = blocks[index]
-            let age = float64(block.Age)
+            let age = float64(tip.Timestamp - block.Timestamp)
             let right = Offset(age, width)
-            let start = Math.Max(2.0, Offset(age + float64(block.Seconds), width)) + 1
+            let start = Math.Max(2.0, Offset(age + float64(block.Timestamp - blocks[index - 1].Timestamp), width)) + 1
             if right <= 2 {
                 continue
             }
@@ -644,15 +635,16 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
         if block.Hash.Length == 0 {
             return row
         }
+        let index = Array.FindIndex(input.Chart.Blocks, item -> item.Height == block.Height)
         let confirmations = tip.Height - block.Height + 1
         row.Add(Label(ui, "#" + Count(block.Height), AppTheme.Type13, AppTheme.Lime, ""))
         row.Add(Label(ui, Clock(block.Timestamp), AppTheme.Type13, AppTheme.Body, ""))
-        if block.Height > input.Chart.Blocks[0].Height {
+        if index > 0 {
             row.Add(
                 KeyValue(
                     ui,
                     ui.Strings.Get("took"),
-                    Duration(block.Seconds),
+                    Duration(block.Timestamp - input.Chart.Blocks[index - 1].Timestamp),
                     AppTheme.Space6,
                     AppTheme.Dim,
                     AppTheme.Body,
@@ -702,25 +694,22 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
 data struct NetworkPeersInput {
     var Ui Presentation
     var Online bool
-    var Window Window?
     var Peers[]NetworkPeer
     var Banned[]BannedPeer
     var PeerId string
     var Width float64
     var Language string
     var Tcp int32
-    var IdentityHours int32
+    var IdentityAge string
 }
 
-class NetworkPeers : Cell, IDisposable {
+class NetworkPeers : Cell {
     private var tab string = "peers"
     private var hovered string = ""
     private var revealed bool
     private let hoverPeer Action[string]
     private var current NetworkPeersInput
     private var rows[]NetworkRow = []NetworkRow{}
-    private var generation int32
-    private var lifetime CancellationTokenSource? = nil
     private let rowKey Func[NetworkRow, string] = (row NetworkRow) -> row.Key
     private let rowBuilder Func[NetworkRow, Blob]
 
@@ -739,54 +728,35 @@ class NetworkPeers : Cell, IDisposable {
             return
         }
         if !next.Online || next.PeerId != current.PeerId {
-            rows = []NetworkRow{}
             hovered = ""
         }
         current = next
-        if lifetime == nil {
-            lifetime = CancellationTokenSource.CreateLinkedTokenSource(next.Window?.Closed ?? CancellationToken.None)
-        }
         PrepareRows()
         Rebuild()
     }
 
-    public func Dispose() {
-        generation++
-        lifetime?.Cancel()
-        lifetime?.Dispose()
-    }
-
     private func PrepareRows() {
-        generation++
-        let input = current
-        let window = input.Window
-        let id = generation
-        let token = lifetime?.Token ?? CancellationToken.None
-        let selected = hovered
-        let banned = tab == "banned"
-        go LoadRows(input, window, id, token, selected, banned)
-    }
-
-    private func LoadRows(
-        input NetworkPeersInput,
-        window Window?,
-        id int32,
-        token CancellationToken,
-        selected string,
-        banned bool
-    ) {
-        try {
-            let result = NodeText.Rows(input.Peers, input.Banned, input.Language, input.Width, selected, banned, token)
-            window?.TryPost(
-                () -> {
-                    if id == generation {
-                        rows = result
-                        Rebuild()
-                    }
+        let next = if tab == "banned" {
+            current
+                .Banned
+                .Select(ban -> NetworkRow{Key: "ban:" + ban.Id, Ban: ban, Language: current.Language})
+                .ToArray()
+        } else {
+            current
+                .Peers
+                .Select(
+                peer -> NetworkRow{
+                    Key: "peer:" + peer.Id,
+                    Peer: peer,
+                    Language: current.Language,
+                    Wide: current.Width >= 1100,
+                    Hovered: peer.Id == hovered
                 }
             )
-        } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
-            Console.Error.WriteLine("Network rows failed: " + failure.GetType().Name)
+                .ToArray()
+        }
+        if !Enumerable.SequenceEqual(rows, next) {
+            rows = next
         }
     }
 
@@ -812,7 +782,6 @@ class NetworkPeers : Cell, IDisposable {
             tab,
             value -> {
                 tab = value
-                rows = []NetworkRow{}
                 PrepareRows()
                 Rebuild()
             }
@@ -870,7 +839,11 @@ class NetworkPeers : Cell, IDisposable {
         let viewport = ListParts.Viewport(list, Style{MinHeight: 0, MaxHeight: Percent(45)}, grow: rows.Length > 0)
         card.Add(viewport)
         let identity = input.PeerId
-        let hours = input.IdentityHours
+        var hours = 0
+        let separator = input.IdentityAge.IndexOf('h')
+        if separator > 0 {
+            int32.TryParse(input.IdentityAge.Substring(0, separator), out hours)
+        }
         let identityRow = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
@@ -1068,7 +1041,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
             }
         )
         plot.Add(Dot(x, y, 3, input.Online ? AppTheme.Lime: AppTheme.Dim))
-        for index in 0 ... input.Banned.Length {
+        for index in 0 ... Math.Min(input.Banned.Length, 50) {
             let angle = 0.78 * Math.PI + index * 0.84 * Math.PI
             let mark = MaterialIcons.Create("close", AppTheme.Icon14, AppTheme.Pink)
             plot.Add(Place(x + Math.Cos(angle) * outer - 7, y + Math.Sin(angle) * outer - 7, mark))
