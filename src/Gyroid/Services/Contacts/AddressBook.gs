@@ -8,6 +8,23 @@ import System.Threading.Tasks
 
 class AddressBook {
     shared {
+        func IsDestination(value string) bool {
+            try {
+                WalletValidation.ValidateDestination(value)
+                return true
+            } catch (error WalletException) {
+                return false
+            }
+        }
+
+        func Resolve(contacts SortedDictionary[string, string], value string) string {
+            let text = value.Trim()
+            if let payment = PaymentLink.Parse(text) {
+                return payment.Address
+            }
+            return !IsDestination(text) && contacts.TryGetValue(text, out let destination) ? destination: text
+        }
+
         private func ContactsPath() string {
             let directory = Path.GetDirectoryName(SettingsStore.ConfigurationPath()) ??
                 throw WalletException("Settings file must have a parent directory")

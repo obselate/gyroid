@@ -302,6 +302,7 @@ class Strings {
             case "Edit": "编辑"
             case "Delete": "删除"
             case "Name already exists": "名称已存在"
+            case "Name cannot be an address": "名称不能是地址"
             case "Spend public key": "支出公钥"
             case "View private key": "观察私钥"
             case "Sync": "同步"

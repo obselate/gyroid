@@ -152,7 +152,13 @@ class ContactsPage : Cell[ContactsInput] {
         let ui = input.Ui
         let label = contactName.Trim()
         let taken = label != original && input.Contacts.ContainsKey(label)
-        let form = WalletForm(ui, !input.Busy && !taken, () -> Save(input), []string{label, contactAddress})
+        let destinationName = AddressBook.IsDestination(label)
+        let form = WalletForm(
+            ui,
+            !input.Busy && !taken && !destinationName,
+            () -> Save(input),
+            []string{label, contactAddress}
+        )
         let fields = Container{
             FlexDirection: FlexDirection.Row,
             Gap: 10,
@@ -167,8 +173,10 @@ class ContactsPage : Cell[ContactsInput] {
                         Value: contactName,
                         Controlled: true,
                         Disabled: input.Busy,
-                        Invalid: taken,
-                        IssueText: if taken {
+                        Invalid: taken || destinationName,
+                        IssueText: if destinationName {
+                            ui.Strings.Get("Name cannot be an address")
+                        } else if taken {
                             ui.Strings.Get("Name already exists")
                         } else {
                             nil

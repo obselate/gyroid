@@ -274,7 +274,7 @@ class SendPage : Cell[SendPageInput] {
         let row = rows[0]
         let text = row.Address.Trim()
         let address = if Kind(input, text).Length > 0 {
-            input.Contacts.TryGetValue(text, out let destination) ? destination: text
+            AddressBook.Resolve(input.Contacts, text)
         } else {
             input.Snapshot.Address
         }
@@ -746,7 +746,7 @@ class SendPage : Cell[SendPageInput] {
         let expanded = openRow == index
         let typed = rows[index].Address.Trim()
         let head = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 10, MinWidth: 0}
-        if input.Contacts.ContainsKey(typed) {
+        if Kind(input, typed) == "contact" {
             head.Add(Label(ui, Hidden(ui.Privacy, typed), 14, ui.Ink, ""))
         }
         if handle.Length > 0 {
@@ -838,7 +838,7 @@ class SendPage : Cell[SendPageInput] {
 
     private func Name(input SendPageInput, value string) string {
         let text = value.Trim()
-        return if input.Contacts.ContainsKey(text) || text.StartsWith("$", StringComparison.Ordinal) {
+        return if Kind(input, text) == "contact" || text.StartsWith("$", StringComparison.Ordinal) {
             text
         } else {
             Short(text)
@@ -849,7 +849,9 @@ class SendPage : Cell[SendPageInput] {
         let text = value.Trim()
         return if text.Length == 0 || Issue(input, text).Length > 0 {
             ""
-        } else if input.Contacts.ContainsKey(text) {
+        } else if !AddressBook.IsDestination(text) && PaymentLink.Parse(text) == nil && input.Contacts.ContainsKey(
+            text
+        ) {
             "contact"
         } else if text.StartsWith("$", StringComparison.Ordinal) {
             "handle"
@@ -868,7 +870,7 @@ class SendPage : Cell[SendPageInput] {
             .Any((name string) -> name.StartsWith(text, StringComparison.OrdinalIgnoreCase)) {
             return ""
         }
-        let destination = input.Contacts.TryGetValue(text, out let address) ? address: text
+        let destination = AddressBook.Resolve(input.Contacts, text)
         try {
             if destination.StartsWith("$", StringComparison.Ordinal) {
                 BlocknetIdService.Normalize(destination)
@@ -897,11 +899,7 @@ class SendPage : Cell[SendPageInput] {
     private func Review(input SendPageInput) {
         let requests = rows.Select(
             (row SendRow) -> WalletRecipient{
-                Address: if input.Contacts.TryGetValue(row.Address.Trim(), out let destination) {
-                    destination
-                } else {
-                    row.Address.Trim()
-                },
+                Address: AddressBook.Resolve(input.Contacts, row.Address),
                 Amount: Atoms(row.Amount) ?? uint64(0),
                 Memo: row.Memo
             }
