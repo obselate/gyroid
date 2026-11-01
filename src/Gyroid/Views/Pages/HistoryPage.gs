@@ -83,6 +83,7 @@ data struct HistoryListInput {
     var OnMark Action[uint64]
     var RequestTimes Action[IEnumerable[uint64]]
     var LoadMore Action
+    var SelectionKey string
     var SelectionTx string
     var SelectionRevision int32
 }
@@ -131,6 +132,7 @@ class HistoryPage : Cell, IDisposable {
     private var preparationGeneration int32
     private var preparedExport[]HistoryRow = []HistoryRow{}
     private var preparedExportCount int32
+    private var selectedKey string = ""
     private var preparationRequest CancellationTokenSource?
     private var fetching bool
     private var loading bool
@@ -218,11 +220,13 @@ class HistoryPage : Cell, IDisposable {
             failedPeriod = nil
             paginationIssue = ""
             resolvedPeriod = ""
+            selectedKey = ""
             timesRevision++
             from = 0
             to = 0
         }
         if input.SelectionRevision != current.SelectionRevision && input.SelectionTx.Length > 0 {
+            selectedKey = ""
             period = "all"
             from = 0
             to = 0
@@ -328,6 +332,7 @@ class HistoryPage : Cell, IDisposable {
             Times: times,
             Privacy: current.Privacy,
             Language: current.Language,
+            SelectionTx: current.SelectionTx,
             Width: current.Width,
             Complete: current.SelectionTx.Length > 0,
         }
@@ -358,11 +363,21 @@ class HistoryPage : Cell, IDisposable {
                     if disposed || generation != preparationGeneration || !Active(id) {
                         return
                     }
+                    if allRows == result.Rows &&
+                        shown == result.Shown &&
+                        preparedExport == result.Export &&
+                        low == result.Low &&
+                        span == result.Span &&
+                        preparedExportCount == result.ExportCount &&
+                        selectedKey == result.SelectionKey {
+                        return
+                    }
                     allRows = result.Rows
                     shown = result.Shown
                     preparedExport = result.Export
                     low = result.Low
                     preparedExportCount = result.ExportCount
+                    selectedKey = result.SelectionKey
                     span = result.Span
                     received = result.Summary.Received
                     sent = result.Summary.Sent
@@ -515,6 +530,7 @@ class HistoryPage : Cell, IDisposable {
             Privacy: input.Privacy,
             Language: input.Language,
             SelectionTx: input.SelectionTx,
+            SelectionKey: selectedKey,
             SelectionRevision: input.SelectionRevision,
             Width: input.Width,
             Period: period,
@@ -1273,14 +1289,14 @@ class HistoryTransactions : Cell, IDisposable {
             proofKey = ""
         }
         let selected = input.SelectionTx.Length > 0 && input.SelectionRevision != selectedRevision ?
-        input.Rows.FirstOrDefault(row -> row.TxId == input.SelectionTx): HistoryRow{}
-        if selected.Key != nil && selected.Key.Length > 0 {
+        input.SelectionKey: ""
+        if selected.Length > 0 {
             proofGeneration++
             proofRequest?.Cancel()
             proofFor = ""
             proofKey = ""
             proofRecipient = 0
-            expanded = selected.Key
+            expanded = selected
             selectedRevision = input.SelectionRevision
             tab = "details"
         }
@@ -1296,9 +1312,9 @@ class HistoryTransactions : Cell, IDisposable {
         }
         input.RequestTimes(input.Rows.Skip(Math.Max(0, firstVisible - 10)).Take(50).Select(row -> row.Height))
         RefreshRows()
-        if selected.Key != nil && selected.Key.Length > 0 {
+        if selected.Length > 0 {
             selectionTimer?.Dispose()
-            let key = selected.Key
+            let key = selected
             let revision = selectedRevision
             selectionTimer = input.Window?.SetTimeout(
                 () -> {

@@ -106,6 +106,7 @@ data struct HistoryPreparation {
     var Language string
     var Width float64
     var Complete bool
+    var SelectionTx string
 }
 
 data struct HistorySummary {
@@ -132,6 +133,7 @@ data struct HistoryPrepared {
     var Summary HistorySummary
     var Low uint64
     var ExportCount int32
+    var SelectionKey string
     var Span uint64
 }
 

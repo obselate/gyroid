@@ -517,6 +517,8 @@ class HistoryService {
             ct
         )
         return HistoryPrepared{
+            SelectionKey: input.SelectionTx.Length > 0 ?
+            rows.FirstOrDefault(row -> row.TxId == input.SelectionTx).Key ?? "": "",
             Rows: rows.SequenceEqual(input.Previous) ? input.Previous: rows,
             Shown: shown.SequenceEqual(input.PreviousShown) ? input.PreviousShown: shown,
             Export: export.SequenceEqual(input.PreviousExport) ? input.PreviousExport: export,
