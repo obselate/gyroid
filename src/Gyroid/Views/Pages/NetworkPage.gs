@@ -70,7 +70,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             average = float64(tip.Timestamp - blocks[0].Timestamp) / (blocks.Length - 1)
         }
         let change = tip.Difficulty > 0 ? (float64(report.Difficulty) / tip.Difficulty - 1) * 100: 0.0
-        let figures = WalletParts.Card(ui, Edges{Left: 22, Right: 22, Top: 14, Bottom: 14}, 20, 14)
+        let figures = WalletParts.Card(
+            ui,
+            Edges{Left: AppTheme.Space22, Right: AppTheme.Space22, Top: AppTheme.Space14, Bottom: AppTheme.Space14},
+            AppTheme.Space20,
+            AppTheme.Radius14
+        )
         figures.FlexDirection = FlexDirection.Row
         figures.FlexShrink = 0
         figures.Add(Figure(input, "Height", Count(node.Height), ""))
@@ -100,7 +105,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             )
         )
         figures.Add(Figure(input, "Emitted", report.Emitted.ToString("0.0", CultureInfo.InvariantCulture), "%"))
-        let times = WalletParts.Card(ui, Edges{Left: 18, Right: 18, Top: 14, Bottom: 12}, 8, 14)
+        let times = WalletParts.Card(
+            ui,
+            Edges{Left: AppTheme.Space16, Right: AppTheme.Space16, Top: AppTheme.Space14, Bottom: AppTheme.Space12},
+            AppTheme.Space8,
+            AppTheme.Radius14
+        )
         times.FlexGrow = 1
         times.FlexBasis = 0
         times.Add(
@@ -129,15 +139,22 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         } else {
             tip
         }
-        let last = WalletParts.Card(ui, Edges{Left: 18, Right: 18, Top: 14, Bottom: 12}, 8, 14)
+        let last = WalletParts.Card(
+            ui,
+            Edges{Left: AppTheme.Space16, Right: AppTheme.Space16, Top: AppTheme.Space14, Bottom: AppTheme.Space12},
+            AppTheme.Space8,
+            AppTheme.Radius14
+        )
         last.FlexGrow = 1.15
         last.FlexBasis = 0
         last.Add(ChartHeader(input, "Last block", "last", tip.Timestamp > 0 ? Clock(tip.Timestamp): "-", Container{}))
         last.Add(Ribbon(input, tip))
         last.Add(Details(input, shown, tip))
-        let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: 12}
+        let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: AppTheme.Space12}
         if failed {
-            page.Add(Banner{Tone: Tone.Danger, Content: ui.Strings.Get("Refresh failed"), FontFamily: ui.Font}.Build())
+            page.Add(
+                Banner{Tone: Tone.Danger, Content: ui.Strings.Get("Refresh failed"), FontFamily: AppTheme.Font}.Build()
+            )
         }
         page.Add(figures)
         page.Add(
@@ -146,8 +163,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 FlexBasis: 0,
                 MinHeight: 0,
                 FlexDirection: FlexDirection.Row,
-                Gap: 12,
-                Container{FlexGrow: 1.32, FlexBasis: 0, MinWidth: 0, MinHeight: 0, Gap: 12, times, last},
+                Gap: AppTheme.Space12,
+                Container{FlexGrow: 1.32, FlexBasis: 0, MinWidth: 0, MinHeight: 0, Gap: AppTheme.Space12, times, last},
                 Peers(input)
             }
         )
@@ -211,22 +228,22 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     }
 
     private func Figure(input NetworkInput, label string, value string, unit string) Blob ->
-    NetworkParts.Figure(input.Ui, label, value, unit, Math.Clamp(input.Height * 0.027, 20, 24), input.Ui.Ink)
+    NetworkParts.Figure(input.Ui, label, value, unit, AppTheme.GetFigureSize(input.Height), AppTheme.Ink)
 
     private func ChartHeader(input NetworkInput, label string, key string, value string, trailing Blob) Blob {
         let ui = input.Ui
         return WalletParts.Header(
-            Label(ui, ui.Strings.Get(label), 13, ui.Body, ""),
-            12,
+            Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, ""),
+            AppTheme.Space8,
             trailing,
             Cell.Mount[DecodeValueInput, DecodeValue](
                 key,
                 DecodeValueInput{
                     Value: value,
                     Name: ui.Strings.Get(label) + " " + value,
-                    Size: Math.Clamp(input.Height * 0.032, 20, 30),
-                    Color: ui.Ink,
-                    FractionColor: ui.Ink,
+                    Size: AppTheme.GetSecondaryFigureSize(input.Height),
+                    Color: AppTheme.Ink,
+                    FractionColor: AppTheme.Ink,
                     Live: AccessibilityLive.Off,
                     Ui: ui
                 }
@@ -276,19 +293,25 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     Top: bottom + 3,
                     Width: 1,
                     Height: seconds % 12 == 0 ? 6.0: 3.0,
-                    BackgroundColor: seconds % 12 == 0 ? ui.Dim: ui.StrongRule
+                    BackgroundColor: seconds % 12 == 0 ? AppTheme.Dim: AppTheme.StrongRule
                 }
             )
         }
-        plot.Add(Rule(2, bottom, width, ui.Edge))
-        plot.Add(Place(2, height - 13, Label(ui, ui.Strings.Get("−2h"), 11, ui.Dim, "")))
-        plot.Add(Place(Offset(3600, width) - 12, height - 13, Label(ui, ui.Strings.Get("−1h"), 11, ui.Dim, "")))
+        plot.Add(Rule(2, bottom, width, AppTheme.Edge))
+        plot.Add(Place(2, height - 13, Label(ui, ui.Strings.Get("−2h"), AppTheme.Type11, AppTheme.Dim, "")))
+        plot.Add(
+            Place(
+                Offset(3600, width) - 12,
+                height - 13,
+                Label(ui, ui.Strings.Get("−1h"), AppTheme.Type11, AppTheme.Dim, "")
+            )
+        )
         plot.Add(
             Container{
                 Position: PositionType.Absolute,
                 Right: 2,
                 Top: height - 13,
-                Label(ui, Clock(tip.Timestamp), 11, ui.Dim, "")
+                Label(ui, Clock(tip.Timestamp), AppTheme.Type11, AppTheme.Dim, "")
             }
         )
         for index in 1 ... blocks.Length {
@@ -325,15 +348,15 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Fit: ShapeFit.Fill,
                         CornerRadius: 2,
                         BackgroundColor: if chosen {
-                            pending ? Color.Parse("#734d00"): ui.SuccessStroke
+                            pending ? AppTheme.PendingEdge: AppTheme.SuccessStroke
                         } else {
-                            pending ? ui.WarningFill: ui.SuccessFill
+                            pending ? AppTheme.WarningFill: AppTheme.SuccessFill
                         },
-                        BorderWidth: chosen ? 1.4: 1.0,
+                        BorderWidth: chosen ? AppTheme.Border1_4: AppTheme.Border1,
                         BorderColor: if chosen {
-                            ui.Ink
+                            AppTheme.Ink
                         } else {
-                            pending ? ui.PendingStroke: Color.Parse("#77b300")
+                            pending ? AppTheme.PendingStroke: AppTheme.SuccessHighlight
                         },
                         Dashes: pending && !chosen ? DashPattern([]float64{3, 2}, 0): nil
                     }
@@ -347,7 +370,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Top: bottom - rise - 10.2,
                         Width: 6.4,
                         Height: 6.4,
-                        BorderRadius: 3.2,
+                        BorderRadius: AppTheme.Radius3_2,
                         HitTestSelf: false,
                         BackgroundColor: mine
                     }
@@ -362,11 +385,15 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Width: 1,
                         Height: bottom - 12,
                         HitTestSelf: false,
-                        BackgroundColor: ui.PendingStroke
+                        BackgroundColor: AppTheme.PendingStroke
                     }
                 )
                 plot.Add(
-                    Place(Math.Min(right + 5, width - 58), 10, Label(ui, ui.Strings.Get("10 conf"), 11, ui.Orange, ""))
+                    Place(
+                        Math.Min(right + 5, width - 58),
+                        10,
+                        Label(ui, ui.Strings.Get("10 conf"), AppTheme.Type11, AppTheme.Orange, "")
+                    )
                 )
             }
         }
@@ -378,12 +405,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     private func Own(input NetworkInput, height uint64, tip uint64) Color? {
         for output in input.History {
             if output.BlockHeight == height {
-                return input.Ui.Mint
+                return AppTheme.Mint
             }
         }
         for send in input.Sends {
             if send.Confirmations > 0 && tip + 1 - send.Confirmations == height {
-                return input.Ui.Orange
+                return AppTheme.Orange
             }
         }
         return nil
@@ -394,7 +421,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let row = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 18,
+            Gap: AppTheme.Space16,
             Height: 20,
             FlexShrink: 0,
             Overflow: Overflow.Hidden,
@@ -405,25 +432,33 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         }
         let index = Array.FindIndex(report.Blocks, item -> item.Height == block.Height)
         let confirmations = tip.Height - block.Height + 1
-        row.Add(Label(ui, "#" + Count(block.Height), 12.5, ui.Lime, ""))
-        row.Add(Label(ui, Clock(block.Timestamp), 12.5, ui.Body, ""))
+        row.Add(Label(ui, "#" + Count(block.Height), AppTheme.Type13, AppTheme.Lime, ""))
+        row.Add(Label(ui, Clock(block.Timestamp), AppTheme.Type13, AppTheme.Body, ""))
         if index > 0 {
             row.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
-                    Gap: 6,
-                    Label(ui, ui.Strings.Get("took"), 12.5, ui.Dim, ""),
-                    Label(ui, Duration(block.Timestamp - report.Blocks[index - 1].Timestamp), 12.5, ui.Body, "")
+                    Gap: AppTheme.Space6,
+                    Label(ui, ui.Strings.Get("took"), AppTheme.Type13, AppTheme.Dim, ""),
+                    Label(
+                        ui,
+                        Duration(block.Timestamp - report.Blocks[index - 1].Timestamp),
+                        AppTheme.Type13,
+                        AppTheme.Body,
+                        ""
+                    )
                 }
             )
         }
-        row.Add(Label(ui, block.Transactions.ToString() + " " + ui.Strings.Get("tx"), 12.5, ui.Body, ""))
+        row.Add(
+            Label(ui, block.Transactions.ToString() + " " + ui.Strings.Get("tx"), AppTheme.Type13, AppTheme.Body, "")
+        )
         row.Add(
             Label(
                 ui,
                 confirmations.ToString() + " " + ui.Strings.Get("conf"),
-                12.5,
-                confirmations < 10 ? ui.Orange: ui.Body,
+                AppTheme.Type13,
+                confirmations < 10 ? AppTheme.Orange: AppTheme.Body,
                 ""
             )
         )
@@ -432,22 +467,28 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 2,
+                Gap: AppTheme.Space2,
                 Label(
                     ui,
                     block.Hash.Substring(0, 6) + "…" + block.Hash.Substring(block.Hash.Length - 4),
-                    12.5,
-                    ui.Dim,
+                    AppTheme.Type13,
+                    AppTheme.Dim,
                     ""
                 ),
-                IconButton{
-                    Icon: MaterialIcons.Create(copied ? "check": "content_copy", 14, copied ? ui.Lime: ui.Dim),
-                    AccessibilityName: ui.Strings.Get("copy hash"),
-                    OnClick: () -> {
-                        ui.Actions.Copy(block.Hash, 120000)
-                        Rebuild()
+                (
+                    AppTheme.IconButton with{
+                        Icon = MaterialIcons.Create(
+                            copied ? "check": "content_copy",
+                            AppTheme.Icon14,
+                            copied ? AppTheme.Lime: AppTheme.Dim
+                        ),
+                        AccessibilityName = ui.Strings.Get("copy hash"),
+                        OnClick = () -> {
+                            ui.Actions.Copy(block.Hash, 120000)
+                            Rebuild()
+                        }
                     }
-                }.Build()
+                ).Build()
             }
         )
         return row
@@ -455,10 +496,15 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
 
     private func Peers(input NetworkInput) Blob {
         let ui = input.Ui
-        let card = WalletParts.Card(ui, Edges{Left: 14, Right: 14, Top: 12, Bottom: 12}, 8, 14)
+        let card = WalletParts.Card(
+            ui,
+            Edges{Left: AppTheme.Space14, Right: AppTheme.Space14, Top: AppTheme.Space12, Bottom: AppTheme.Space12},
+            AppTheme.Space8,
+            AppTheme.Radius14
+        )
         card.FlexGrow = 1
         card.FlexBasis = 0
-        let tabs = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.TabList}, ui.Field)
+        let tabs = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.TabList}, AppTheme.Field)
         for index in 0 ... 2 {
             let key = index == 0 ? "peers": "banned"
             let count = key == "peers" ? report.Peers.Length: report.Banned.Length
@@ -473,7 +519,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Rebuild()
                     },
                     Accessibility{Role: AccessibilityRole.Tab, Name: text, Selected: tab == key},
-                    Edges{Left: 12, Right: 12, Top: 5, Bottom: 5}
+                    Edges{
+                        Left: AppTheme.Space12,
+                        Right: AppTheme.Space12,
+                        Top: AppTheme.Space6,
+                        Bottom: AppTheme.Space6
+                    }
                 )
             )
         }
@@ -509,11 +560,11 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 JustifyContent: JustifyContent.Center,
-                Gap: 16,
+                Gap: AppTheme.Space16,
                 FlexShrink: 0,
-                Legend(ui, "tcp", tcp, ui.Blue),
-                Legend(ui, "quic", report.Peers.Length - tcp, ui.Mint),
-                Legend(ui, "banned", report.Banned.Length, ui.Pink)
+                Legend(ui, "tcp", tcp, AppTheme.Blue),
+                Legend(ui, "quic", report.Peers.Length - tcp, AppTheme.Mint),
+                Legend(ui, "banned", report.Banned.Length, AppTheme.Pink)
             }
         )
         let list = Container{
@@ -541,50 +592,58 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let identityRow = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
-            Label(ui, ui.Strings.Get("This node"), 12.5, ui.Body, ""),
+            Gap: AppTheme.Space10,
+            Label(ui, ui.Strings.Get("This node"), AppTheme.Type13, AppTheme.Body, ""),
             Label(
                 ui,
                 String.Format(
                     ui.Strings.Get(hours >= 24 ? "identity {0} d": "identity {0} h"),
                     hours >= 24 ? hours / 24: hours
                 ),
-                12.5,
-                ui.Dim,
+                AppTheme.Type13,
+                AppTheme.Dim,
                 ""
             ),
             Container{FlexGrow: 1},
-            IconButton{
-                Icon: MaterialIcons.Create(revealed ? "visibility_off": "visibility", 15, ui.Body),
-                AccessibilityName: ui.Strings.Get(revealed ? "Hide node ID": "Show node ID"),
-                OnClick: () -> {
-                    revealed = !revealed
-                    Rebuild()
+            (
+                AppTheme.IconButton with{
+                    Icon = MaterialIcons.Create(
+                        revealed ? "visibility_off": "visibility",
+                        AppTheme.Icon16,
+                        AppTheme.Body
+                    ),
+                    AccessibilityName = ui.Strings.Get(revealed ? "Hide node ID": "Show node ID"),
+                    OnClick = () -> {
+                        revealed = !revealed
+                        Rebuild()
+                    }
                 }
-            }.Build()
+            ).Build()
         }
         let identityPanel = Container{
-            Gap: 6,
+            Gap: AppTheme.Space6,
             FlexShrink: 0,
-            Padding: Edges{Top: 8},
-            BorderWidth: Edges{Top: 1},
-            BorderColor: ui.Rule,
+            Padding: Edges{Top: AppTheme.Space8},
+            BorderWidth: Edges{Top: AppTheme.Border1},
+            BorderColor: AppTheme.Rule,
             identityRow
         }
         if revealed {
             identityRow.Add(
-                IconButton{
-                    Icon: MaterialIcons.Create("content_copy", 15, ui.Body),
-                    AccessibilityName: ui.Strings.Get("Copy node ID"),
-                    OnClick: () -> ui.Actions.Copy(identity, 120000)
-                }.Build()
+                (
+                    AppTheme.IconButton with{
+                        Icon = MaterialIcons.Create("content_copy", AppTheme.Icon16, AppTheme.Body),
+                        AccessibilityName = ui.Strings.Get("Copy node ID"),
+                        OnClick = () -> ui.Actions.Copy(identity, 120000)
+                    }
+                ).Build()
             )
             identityPanel.Add(
                 Text{
                     Content: Grouped(identity),
-                    FontFamily: ui.Font,
-                    FontSize: 12.5,
-                    Color: ui.Ink,
+                    FontFamily: AppTheme.Font,
+                    FontSize: AppTheme.Type13,
+                    Color: AppTheme.Ink,
                     TextWrap: TextWrap.Wrap,
                     Accessibility: Accessibility{Name: identity}
                 }
@@ -596,17 +655,17 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
 
     private func Legend(ui Presentation, label string, count int32, color Color) Blob {
         let mark Blob = if label == "banned" {
-            MaterialIcons.Create("close", 12, color)
+            MaterialIcons.Create("close", AppTheme.Icon12, color)
         } else {
-            Container{Width: 8, Height: 8, BorderRadius: 4, BackgroundColor: color}
+            Container{BasedOn: AppTheme.MarkerStyle, BorderRadius: AppTheme.Radius4, BackgroundColor: color}
         }
         return Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 6,
+            Gap: AppTheme.Space6,
             mark,
-            Label(ui, ui.Strings.Get(label), 12, ui.Body, ""),
-            Label(ui, count.ToString(), 12, ui.Ink, "")
+            Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, ""),
+            Label(ui, count.ToString(), AppTheme.Type12, AppTheme.Ink, "")
         }
     }
 
@@ -630,8 +689,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let y = height / 2
         let outer = Math.Min(width, height) / 2 - 4
         let ring = outer * 0.62
-        plot.Add(Circle(x, y, outer, Color.Parse("#40002b"), DashPattern([]float64{2, 4}, 0)))
-        plot.Add(Circle(x, y, ring, Color.Parse("#171717"), nil))
+        plot.Add(Circle(x, y, outer, AppTheme.PeerBlockedFill, DashPattern([]float64{2, 4}, 0)))
+        plot.Add(Circle(x, y, ring, AppTheme.PeerRing, nil))
         let tcp = PathBuilder(0, 0, width, height)
         let quic = PathBuilder(0, 0, width, height)
         for index in 0 ... report.Peers.Length {
@@ -642,8 +701,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 y + Math.Sin(angle) * ring
             )
         }
-        plot.Add(Lines(width, height, tcp, Color.Parse("#003047")))
-        plot.Add(Lines(width, height, quic, Color.Parse("#004730")))
+        plot.Add(Lines(width, height, tcp, AppTheme.TransportBlueLine))
+        plot.Add(Lines(width, height, quic, AppTheme.TransportMintLine))
         let hexagon = PathBuilder(0, 0, 28, 28)
         for corner in 0 ... 7 {
             let angle = Math.PI / 6 + corner * Math.PI / 3
@@ -662,15 +721,15 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 Height: 28,
                 Path: hexagon.Close().Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: ui.Surface,
-                BorderWidth: 1.5,
-                BorderColor: ui.Lime
+                BackgroundColor: AppTheme.Surface,
+                BorderWidth: AppTheme.Border1_5,
+                BorderColor: AppTheme.Lime
             }
         )
-        plot.Add(Dot(x, y, 3, ui.Lime))
+        plot.Add(Dot(x, y, 3, AppTheme.Lime))
         for index in 0 ... report.Banned.Length {
             let angle = 0.78 * Math.PI + index * 0.84 * Math.PI
-            let mark = MaterialIcons.Create("close", 14, ui.Pink)
+            let mark = MaterialIcons.Create("close", AppTheme.Icon14, AppTheme.Pink)
             plot.Add(Place(x + Math.Cos(angle) * outer - 7, y + Math.Sin(angle) * outer - 7, mark))
         }
         for index in 0 ... report.Peers.Length {
@@ -678,36 +737,31 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             let angle = -Math.PI / 2 + index * 2.39996
             let px = x + Math.Cos(angle) * ring
             let py = y + Math.Sin(angle) * ring
-            let color = peer.Transport == "quic" ? ui.Mint: ui.Blue
+            let color = peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
             let active = peer.Id == hovered
             let radius = active ? 7.0: 5.5
             if active {
                 plot.Add(Lines(width, height, PathBuilder(0, 0, width, height).MoveTo(x, y).LineTo(px, py), color))
             }
             let dot = Dot(px, py, radius, color)
-            dot.BorderWidth = active ? 1.5: 0.0
-            dot.BorderColor = ui.Ink
+            dot.BorderWidth = active ? AppTheme.Border1_5: AppTheme.Border0
+            dot.BorderColor = AppTheme.Ink
             dot.OnPointerEnter = (event PointerEvent) -> Hover(peer.Id)
             dot.OnPointerLeave = (event PointerEvent) -> Hover("")
             plot.Add(dot)
             if active {
                 plot.Add(
                     Container{
+                        BasedOn: AppTheme.PassiveTooltipStyle,
                         Position: PositionType.Absolute,
                         Left: px + 14 + 250 > width ? Math.Max(0.0, px - 264): px + 14,
                         Top: Math.Max(0.0, py - 34),
                         ZIndex: 4,
                         HitTestSelf: false,
-                        Padding: Edges{Left: 12, Right: 12, Top: 10, Bottom: 10},
-                        Gap: 5,
-                        BackgroundColor: ui.Control,
-                        BorderWidth: 1,
-                        BorderColor: ui.Edge,
-                        BorderRadius: 10,
-                        BoxShadows: []BoxShadow{BoxShadow{OffsetY: 10, Blur: 30, Color: ui.Black}},
-                        Tip(ui, "peer ID", Short(peer.Id), ui.Ink),
+                        BoxShadows: []BoxShadow{BoxShadow{OffsetY: 10, Blur: 30, Color: AppTheme.Black}},
+                        Tip(ui, "peer ID", Short(peer.Id), AppTheme.Ink),
                         Tip(ui, "via", peer.Transport + " · " + peer.Family, color),
-                        Tip(ui, "address", peer.Address, ui.Ink)
+                        Tip(ui, "address", peer.Address, AppTheme.Ink)
                     }
                 )
             }
@@ -717,9 +771,9 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
 
     private func Tip(ui Presentation, label string, value string, color Color) Blob -> Container{
         FlexDirection: FlexDirection.Row,
-        Gap: 14,
-        Container{Width: 60, Label(ui, ui.Strings.Get(label), 12.5, ui.Dim, "")},
-        Label(ui, value, 12.5, color, "")
+        Gap: AppTheme.Space14,
+        Container{Width: 60, Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Dim, "")},
+        Label(ui, value, AppTheme.Type13, color, "")
     }
 
     private func Circle(x float64, y float64, radius float64, color Color, dashes DashPattern?) Blob -> Shape{
@@ -734,7 +788,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             .ArcTo(radius, radius, 0, false, true, radius, 0)
             .Build(),
         Fit: ShapeFit.Fill,
-        BorderWidth: 1,
+        BorderWidth: AppTheme.Border1,
         BorderColor: color,
         Dashes: dashes
     }
@@ -745,7 +799,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         Height: height,
         Path: path.Build(),
         Fit: ShapeFit.Fill,
-        BorderWidth: 1,
+        BorderWidth: AppTheme.Border1,
         BorderColor: color
     }
 
@@ -769,14 +823,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     private func PeerRow(input NetworkInput, peer NetworkPeer) Blob {
         let ui = input.Ui
         let row = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 10,
+            BasedOn: AppTheme.ListRowStyle,
             Height: 30,
             FlexShrink: 0,
-            Padding: Edges{Left: 8, Right: 8},
-            BorderRadius: 7,
-            BackgroundColor: peer.Id == hovered ? ui.Rule: Color.Transparent,
+            Padding: Edges{Left: AppTheme.Space8, Right: AppTheme.Space8},
+            BorderRadius: AppTheme.Radius8,
+            BackgroundColor: peer.Id == hovered ? AppTheme.Rule: Color.Transparent,
             Accessibility: Accessibility{Name: Short(peer.Id) + " " + peer.Transport + " " + peer.Address},
             OnPointerEnter: (event PointerEvent) -> Hover(peer.Id),
             OnPointerLeave: (event PointerEvent) -> Hover(""),
@@ -784,39 +836,38 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 Width: 12,
                 AlignItems: AlignItems.Center,
                 Container{
-                    Width: 8,
-                    Height: 8,
-                    BorderRadius: 4,
-                    BackgroundColor: peer.Transport == "quic" ? ui.Mint: ui.Blue
+                    BasedOn: AppTheme.MarkerStyle,
+                    BorderRadius: AppTheme.Radius4,
+                    BackgroundColor: peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
                 }
             },
-            Grow(Label(ui, Short(peer.Id), 12.5, ui.Ink, ""))
+            Grow(Label(ui, Short(peer.Id), AppTheme.Type13, AppTheme.Ink, ""))
         }
         if input.Width >= 1100 {
-            row.Add(Label(ui, peer.Address, 12.5, ui.Body, ""))
+            row.Add(Label(ui, peer.Address, AppTheme.Type13, AppTheme.Body, ""))
         }
         return row
     }
 
     private func BanRow(ui Presentation, ban BannedPeer) Blob -> Container{
-        Gap: 4,
+        Gap: AppTheme.Space4,
         MinHeight: 44,
         FlexShrink: 0,
-        Padding: Edges{Left: 8, Right: 8},
+        Padding: Edges{Left: AppTheme.Space8, Right: AppTheme.Space8},
         Accessibility: Accessibility{Name: Short(ban.Id) + " " + ban.Reason},
         Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
-            MaterialIcons.Create("close", 12, ui.Pink),
-            Label(ui, Short(ban.Id), 12.5, ui.Ink, ""),
-            Grow(Label(ui, ban.Reason, 12.5, ui.Body, "")),
-            Label(ui, ban.Count.ToString() + "×", 12.5, ui.Dim, "")
+            Gap: AppTheme.Space10,
+            MaterialIcons.Create("close", AppTheme.Icon12, AppTheme.Pink),
+            Label(ui, Short(ban.Id), AppTheme.Type13, AppTheme.Ink, ""),
+            Grow(Label(ui, ban.Reason, AppTheme.Type13, AppTheme.Body, "")),
+            Label(ui, ban.Count.ToString() + "×", AppTheme.Type13, AppTheme.Dim, "")
         },
         if ban.Permanent {
-            Label(ui, ui.Strings.Get("permanent"), 12.5, ui.Pink, "")
+            Label(ui, ui.Strings.Get("permanent"), AppTheme.Type13, AppTheme.Pink, "")
         } else {
-            Label(ui, String.Format(ui.Strings.Get("until {0}"), Time(ban.Expires)), 12.5, ui.Body, "")
+            Label(ui, String.Format(ui.Strings.Get("until {0}"), Time(ban.Expires)), AppTheme.Type13, AppTheme.Body, "")
         }
     }
 

@@ -52,7 +52,7 @@ class SyncPage : Cell[SyncInput] {
             Record(input, step, now)
         }
         let stalled = step == 4 && now - heightSince >= 60
-        let padX = Math.Clamp(input.Width * 0.03, 20, 32)
+        let padX = AppTheme.GetPanelPadding(input.Width)
         let width = input.Fill ? input.Width: Math.Min(760, input.Width - 48)
         let inner = width - padX * 2
         let card = WalletParts.Card(ui)
@@ -63,23 +63,23 @@ class SyncPage : Cell[SyncInput] {
             card.FlexGrow = 1
             card.FlexBasis = 0
         }
-        card.BorderRadius = 14
+        card.BorderRadius = AppTheme.Radius14
         card.Padding = Edges{
             Left: padX,
             Right: padX,
-            Top: Math.Clamp(input.Height * 0.034, 18, 30),
-            Bottom: Math.Clamp(input.Height * 0.034, 18, 30)
+            Top: AppTheme.GetPanelBlockPadding(input.Height),
+            Bottom: AppTheme.GetPanelBlockPadding(input.Height)
         }
-        card.Gap = Math.Clamp(input.Height * 0.032, 16, 28)
+        card.Gap = AppTheme.GetPanelGap(input.Height)
         card.Accessibility = Accessibility{Live: AccessibilityLive.Polite}
         card.Add(Steps(ui, node, step))
-        let size = Math.Clamp(input.Height * (input.Fill ? 0.18: 0.11), 48, input.Fill ? 240: 92)
+        let size = AppTheme.GetStatusFigureSize(input.Height, input.Fill)
         let mid = Container{
             FlexGrow: input.Fill ? 0.0: 1.0,
             FlexDirection: FlexDirection.Row,
             FlexWrap: FlexWrap.Wrap,
             AlignItems: AlignItems.Center,
-            Gap: Math.Clamp(input.Width * 0.04, 20, 52)
+            Gap: AppTheme.GetFigureGap(input.Width)
         }
         card.Add(mid)
         if step < 2 {
@@ -90,13 +90,13 @@ class SyncPage : Cell[SyncInput] {
                     percent.ToString(),
                     "%",
                     ui.Strings.Get(StepName(step)) + " " + percent.ToString() + "%",
-                    ui.Lime,
+                    AppTheme.Lime,
                     size
                 )
             )
-            card.Add(Track(ui, percent / 100.0, 0, ui.Lime))
+            card.Add(Track(ui, percent / 100.0, 0, AppTheme.Lime))
         } else if step == 2 {
-            mid.Add(Label(ui, ui.Strings.Get("starting"), 18, ui.Body, ""))
+            mid.Add(Label(ui, ui.Strings.Get("starting"), AppTheme.Type18, AppTheme.Body, ""))
         } else if step == 3 {
             let limit = Math.Max(node.MaxOutbound, uint64(1))
             mid.Add(
@@ -105,7 +105,7 @@ class SyncPage : Cell[SyncInput] {
                     node.Peers.ToString(),
                     "/ " + limit.ToString() + " " + ui.Strings.Get("peers"),
                     node.Peers.ToString() + " / " + limit.ToString() + " " + ui.Strings.Get("peers"),
-                    ui.Lime,
+                    AppTheme.Lime,
                     size
                 )
             )
@@ -135,8 +135,8 @@ class SyncPage : Cell[SyncInput] {
                     now,
                     15,
                     limit,
-                    ui.Lime,
-                    ui.SyncFill,
+                    AppTheme.Lime,
+                    AppTheme.SyncFill,
                     "peers · 15 s",
                     inner,
                     input.Height,
@@ -148,14 +148,14 @@ class SyncPage : Cell[SyncInput] {
             let done = node.SyncProgress ?? node.Height
             let share = node.ChainHeight > 0 ? Math.Min(1.0, float64(done) / node.ChainHeight): 0.0
             let percent = (Math.Floor(share * 1000) / 10).ToString("0.0", CultureInfo.InvariantCulture)
-            let color = stalled ? ui.Orange: ui.Lime
+            let color = stalled ? AppTheme.Orange: AppTheme.Lime
             mid.Add(
                 Figure(
                     ui,
                     percent,
                     "%",
                     ui.Strings.Get("syncing") + " " + percent + "%",
-                    stalled ? ui.Ink: ui.Lime,
+                    stalled ? AppTheme.Ink: AppTheme.Lime,
                     size
                 )
             )
@@ -195,7 +195,7 @@ class SyncPage : Cell[SyncInput] {
                     120,
                     top,
                     color,
-                    stalled ? Color.Parse("#261c09"): ui.SyncFill,
+                    stalled ? AppTheme.StalledFill: AppTheme.SyncFill,
                     "blk/s · 2 min",
                     inner,
                     input.Height,
@@ -207,8 +207,15 @@ class SyncPage : Cell[SyncInput] {
                 float64(node.CheckpointHeight) / node.ChainHeight
             ): 0.0
             let track = Track(ui, share, checkpoint, color)
-            track.Padding = Edges{Bottom: 22}
-            track.Add(Container{Position: PositionType.Absolute, Left: 0, Top: 20, Label(ui, "#0", 12, ui.Dim, "")})
+            track.Padding = Edges{Bottom: AppTheme.Space22}
+            track.Add(
+                Container{
+                    Position: PositionType.Absolute,
+                    Left: 0,
+                    Top: 20,
+                    Label(ui, "#0", AppTheme.Type12, AppTheme.Dim, "")
+                }
+            )
             if node.CheckpointHeight > 0 {
                 track.Add(
                     Container{
@@ -216,15 +223,15 @@ class SyncPage : Cell[SyncInput] {
                         Right: 0,
                         Top: 20,
                         FlexDirection: FlexDirection.Row,
-                        Gap: 6,
-                        Label(ui, ui.Strings.Get("checkpoint"), 12, ui.Body, ""),
-                        Label(ui, Count(node.CheckpointHeight), 12, ui.Blue, "")
+                        Gap: AppTheme.Space6,
+                        Label(ui, ui.Strings.Get("checkpoint"), AppTheme.Type12, AppTheme.Body, ""),
+                        Label(ui, Count(node.CheckpointHeight), AppTheme.Type12, AppTheme.Blue, "")
                     }
                 )
             }
             card.Add(track)
         }
-        let foot = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 12}
+        let foot = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: AppTheme.Space12}
         foot.Add(
             Grow(
                 if stalled {
@@ -234,12 +241,12 @@ class SyncPage : Cell[SyncInput] {
                             ui.Strings.Get("no new blocks since {0}"),
                             Clock(DateTimeOffset.UtcNow.AddSeconds(heightSince - now).ToUnixTimeSeconds())
                         ),
-                        12,
-                        ui.Orange,
+                        AppTheme.Type12,
+                        AppTheme.Orange,
                         ""
                     )
                 } else {
-                    Label(ui, ui.Strings.Get(node.Network), 12, ui.Dim, "")
+                    Label(ui, ui.Strings.Get(node.Network), AppTheme.Type12, AppTheme.Dim, "")
                 }
             )
         )
@@ -302,7 +309,7 @@ class SyncPage : Cell[SyncInput] {
     private func Steps(ui Presentation, node NodeStatus, step int32) Blob {
         let row = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: 8,
+            Gap: AppTheme.Space8,
             Accessibility: Accessibility{Role: AccessibilityRole.List}
         }
         for index in 0 ... 5 {
@@ -313,12 +320,12 @@ class SyncPage : Cell[SyncInput] {
                 FlexShrink: 0,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.Center,
-                BorderRadius: 10,
-                BorderWidth: index == step ? 0.0: 1.0,
-                BorderColor: done ? ui.Lime: ui.Edge
+                BorderRadius: AppTheme.Radius10,
+                BorderWidth: index == step ? AppTheme.Border0: AppTheme.Border1,
+                BorderColor: done ? AppTheme.Lime: AppTheme.Edge
             }
             if done {
-                marker.Add(MaterialIcons.Create("check", 13, ui.Lime))
+                marker.Add(MaterialIcons.Create("check", AppTheme.Icon16, AppTheme.Lime))
             } else if index == step {
                 marker.Add(
                     Shape{
@@ -330,24 +337,29 @@ class SyncPage : Cell[SyncInput] {
                             .ArcTo(9, 9, 0, false, true, 10, 1)
                             .Build(),
                         Fit: ShapeFit.Fill,
-                        BorderWidth: 2,
-                        BorderColor: ui.Lime,
+                        BorderWidth: AppTheme.Border2,
+                        BorderColor: AppTheme.Lime,
                         StrokeEnd: 0.75
                     }
                 )
             }
-            let line = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, marker}
+            let line = Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: AppTheme.Space8,
+                marker
+            }
             line.Add(
                 Label(
                     ui,
                     ui.Strings.Get(StepName(index)),
-                    12.5,
+                    AppTheme.Type13,
                     if index == step {
-                        ui.Lime
+                        AppTheme.Lime
                     } else if done {
-                        ui.Ink
+                        AppTheme.Ink
                     } else {
-                        ui.Dim
+                        AppTheme.Dim
                     },
                     ""
                 )
@@ -358,8 +370,8 @@ class SyncPage : Cell[SyncInput] {
                         FlexGrow: 1,
                         Height: 1,
                         MinWidth: 6,
-                        Margin: Edges{Right: 6},
-                        BackgroundColor: done ? ui.SuccessStroke: ui.Edge
+                        Margin: Edges{Right: AppTheme.Space6},
+                        BackgroundColor: done ? AppTheme.SuccessStroke: AppTheme.Edge
                     }
                 )
             }
@@ -377,13 +389,17 @@ class SyncPage : Cell[SyncInput] {
                     FlexGrow: index < 4 ? 1.0: 0.0,
                     FlexShrink: index < 4 ? 1.0: 0.0,
                     MinWidth: 0,
-                    Gap: 6,
+                    Gap: AppTheme.Space6,
                     Accessibility: Accessibility{
                         Role: AccessibilityRole.ListItem,
                         Name: ui.Strings.Get(StepName(index)) + " " + value
                     },
                     line,
-                    Container{Height: 15, Padding: Edges{Left: 28}, Label(ui, value, 12, ui.Dim, "")}
+                    Container{
+                        Height: 15,
+                        Padding: Edges{Left: AppTheme.Space28},
+                        Label(ui, value, AppTheme.Type12, AppTheme.Dim, "")
+                    }
                 }
             )
         }
@@ -400,7 +416,7 @@ class SyncPage : Cell[SyncInput] {
     ) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Baseline,
-        Gap: 4,
+        Gap: AppTheme.Space4,
         FlexShrink: 0,
         Cell.Mount[DecodeValueInput, DecodeValue](
             "figure",
@@ -414,32 +430,38 @@ class SyncPage : Cell[SyncInput] {
                 Ui: ui
             }
         ),
-        Label(ui, unit, Math.Round(size * 0.36), ui.Body, "")
+        Label(ui, unit, AppTheme.GetInsetTextSize(size), AppTheme.Body, "")
     }
 
     private func Readings(ui Presentation, pairs[]string, stalled bool = false) Blob {
-        let grid = Container{Gap: 10, FlexShrink: 0}
+        let grid = Container{Gap: AppTheme.Space10, FlexShrink: 0}
         for index in 0 ... pairs.Length / 2 {
             let label = pairs[index * 2]
             let value = pairs[index * 2 + 1]
             let row = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Baseline,
-                Gap: 22,
+                Gap: AppTheme.Space22,
                 Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-                Container{Width: 100, FlexShrink: 0, Label(ui, ui.Strings.Get(label), 13, ui.Body, "")}
+                Container{
+                    Width: 100,
+                    FlexShrink: 0,
+                    Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, "")
+                }
             }
             if label == "Height" {
                 let split = value.IndexOf(" / ")
                 row.Add(
                     Container{
                         FlexDirection: FlexDirection.Row,
-                        Label(ui, value.Substring(0, split), 14, ui.Lime, ""),
-                        Label(ui, value.Substring(split), 14, ui.Dim, "")
+                        Label(ui, value.Substring(0, split), AppTheme.Type14, AppTheme.Lime, ""),
+                        Label(ui, value.Substring(split), AppTheme.Type14, AppTheme.Dim, "")
                     }
                 )
             } else {
-                row.Add(Label(ui, value, 14, stalled && label == "Speed" ? ui.Orange: ui.Ink, ""))
+                row.Add(
+                    Label(ui, value, AppTheme.Type14, stalled && label == "Speed" ? AppTheme.Orange: AppTheme.Ink, "")
+                )
             }
             grid.Add(row)
         }
@@ -490,13 +512,13 @@ class SyncPage : Cell[SyncInput] {
                 Bottom: 1,
                 Width: plot,
                 Height: 1,
-                BackgroundColor: ui.Edge
+                BackgroundColor: AppTheme.Edge
             },
             Container{
                 Position: PositionType.Absolute,
                 Left: 0,
                 Top: -4,
-                Label(ui, ui.Strings.Get(label), 11, ui.Dim, "")
+                Label(ui, ui.Strings.Get(label), AppTheme.Type11, AppTheme.Dim, "")
             }
         }
         if stretch {
@@ -526,7 +548,7 @@ class SyncPage : Cell[SyncInput] {
                     Height: height,
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: 1.6,
+                    BorderWidth: AppTheme.Border1_6,
                     BorderColor: color
                 }
             )
@@ -538,7 +560,7 @@ class SyncPage : Cell[SyncInput] {
                     Label(
                         ui,
                         Math.Round(samples[samples.Count - 1].Value).ToString(CultureInfo.InvariantCulture),
-                        12,
+                        AppTheme.Type12,
                         color,
                         ""
                     )
@@ -549,7 +571,7 @@ class SyncPage : Cell[SyncInput] {
     }
 
     private func Track(ui Presentation, share float64, checkpoint float64, color Color) Container {
-        let bar = Container{Height: 10, BorderRadius: 3, BackgroundColor: ui.FaintRule}
+        let bar = Container{BasedOn: AppTheme.TrackStyle, Height: AppTheme.Track10, BorderRadius: AppTheme.Radius3}
         if checkpoint > 0 {
             bar.Add(
                 Container{
@@ -558,7 +580,7 @@ class SyncPage : Cell[SyncInput] {
                     Top: 4,
                     Height: 2,
                     Width: Percent(checkpoint * 100),
-                    BackgroundColor: Color.Parse("#253807")
+                    BackgroundColor: AppTheme.CheckpointFill
                 }
             )
             bar.Add(
@@ -568,7 +590,7 @@ class SyncPage : Cell[SyncInput] {
                     Top: -7,
                     Bottom: -7,
                     Width: 2,
-                    BackgroundColor: ui.Blue
+                    BackgroundColor: AppTheme.Blue
                 }
             )
         }
@@ -579,7 +601,7 @@ class SyncPage : Cell[SyncInput] {
                 Top: 0,
                 Bottom: 0,
                 Width: Percent(share * 100),
-                BorderRadius: 3,
+                BorderRadius: AppTheme.Radius3,
                 BackgroundColor: color
             }
         )
@@ -587,21 +609,22 @@ class SyncPage : Cell[SyncInput] {
     }
 
     private func Slots(ui Presentation, peers uint64, limit uint64) Blob {
-        let row = Container{FlexDirection: FlexDirection.Row, Gap: 4}
+        let row = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space4}
         for index in 0 ... int32(limit) {
             row.Add(
                 Container{
+                    BasedOn: AppTheme.TrackStyle,
                     FlexGrow: 1,
                     FlexBasis: 0,
-                    Height: 10,
-                    BorderRadius: 3,
-                    BackgroundColor: uint64(index) < peers ? ui.Lime: ui.FaintRule
+                    Height: AppTheme.Track10,
+                    BorderRadius: AppTheme.Radius3,
+                    BackgroundColor: uint64(index) < peers ? AppTheme.Lime: AppTheme.FaintRule
                 }
             )
         }
         return Container{
             FlexShrink: 0,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Image,
                 Name: ui.Strings.Get("outbound slots") + " " + peers.ToString() + " / " + limit.ToString()
@@ -609,9 +632,9 @@ class SyncPage : Cell[SyncInput] {
             row,
             Container{
                 FlexDirection: FlexDirection.Row,
-                Grow(Label(ui, ui.Strings.Get("outbound slots"), 13, ui.Body, "")),
-                Label(ui, Math.Min(peers, limit).ToString(), 12, ui.Lime, ""),
-                Label(ui, " / " + limit.ToString(), 12, ui.Dim, "")
+                Grow(Label(ui, ui.Strings.Get("outbound slots"), AppTheme.Type13, AppTheme.Body, "")),
+                Label(ui, Math.Min(peers, limit).ToString(), AppTheme.Type12, AppTheme.Lime, ""),
+                Label(ui, " / " + limit.ToString(), AppTheme.Type12, AppTheme.Dim, "")
             }
         }
     }
