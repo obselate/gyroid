@@ -804,12 +804,7 @@ class WalletSession : IDisposable {
                 if settings.ActiveWallet.Length == 0 {
                     throw WalletException("Choose a wallet first")
                 }
-                Library.WalletPath(settings.ActiveWallet)
-                using let result = await Node.Api.JsonAsync(
-                    "wallet/load",
-                    writer -> WriteCredentials(writer, password, "filepath", settings.ActiveWallet),
-                    ct
-                )
+                await LoadWalletCoreAsync(Library.WalletPath(settings.ActiveWallet), password, ct)
                 managed = true
             } else {
                 RequireManaged()
@@ -836,6 +831,17 @@ class WalletSession : IDisposable {
         } finally {
             End()
         }
+    }
+
+    async func LoadWalletCoreAsync(path string, password[]char, ct CancellationToken) {
+        if Encoding.UTF8.GetByteCount(password) < 3 {
+            throw WalletException("Password must contain at least 3 UTF-8 bytes")
+        }
+        using let result = await Node.Api.JsonAsync(
+            "wallet/load",
+            writer -> WriteCredentials(writer, password, "filepath", path),
+            ct
+        )
     }
 
     async func LockAsync(ct CancellationToken = default(CancellationToken)) {
@@ -1015,7 +1021,7 @@ class WalletSession : IDisposable {
         }
     }
 
-    private async func RefreshCoreAsync(ct CancellationToken) {
+    async func RefreshCoreAsync(ct CancellationToken) {
         RequireUnlocked()
         let previousHeight = snapshot.Balance?.ScanHeight
         await Send.RecoverAsync(ct, false)
@@ -1199,7 +1205,7 @@ class WalletSession : IDisposable {
             writer.WriteEndObject()
         }
 
-        private func WriteEmpty(writer Utf8JsonWriter) {
+        func WriteEmpty(writer Utf8JsonWriter) {
             writer.WriteStartObject()
             writer.WriteEndObject()
         }
