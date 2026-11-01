@@ -723,6 +723,9 @@ class HistoryService {
                     output.WriteString("memo", row.Memo)
                 }
                 output.WriteEndObject()
+                if output.BytesPending >= 65536 {
+                    output.Flush()
+                }
             } else if let csv = text {
                 csv.Write(kind)
                 csv.Write(',')
