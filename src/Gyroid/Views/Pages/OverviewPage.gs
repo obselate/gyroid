@@ -475,7 +475,7 @@ class OverviewPage : Cell[OverviewInput] {
         let unconfirmed = balance?.Unconfirmed ?? uint64(0)
         let confirming = (balance?.Pending ?? uint64(0)) - unconfirmed
         let known = balance?.Balance != nil
-        let scanning = balance?.Scanning == true
+        let scanning = input.Snapshot.ScanBehind(input.Node.Height)
         let value = if masked {
             "••••••••"
         } else if known {
@@ -582,6 +582,21 @@ class OverviewPage : Cell[OverviewInput] {
                 figure
             }
         )
+        if scanning {
+            card.Add(
+                Label(
+                    ui,
+                    ui.Strings.Get("scan height") +
+                        " " +
+                        Count(balance?.ScanHeight ?? uint64(0)) +
+                        " / " +
+                        Count(balance?.ChainHeight ?? input.Node.Height),
+                    14,
+                    ui.Orange,
+                    ""
+                )
+            )
+        }
         let height = Math.Clamp(input.Height * 0.018, 12, 20)
         let bar = Container{
             FlexDirection: FlexDirection.Row,

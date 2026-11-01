@@ -42,6 +42,8 @@ class WalletSession : IDisposable {
     var eventsHealthy bool
     var nextRestart DateTimeOffset
     var lastActivity int64 = WalletLockScheduler.Now()
+    var scanUnchangedSince DateTimeOffset
+    var scanRestarted bool
 
     prop Settings WalletSettings -> settings.Copy()
     prop Snapshot WalletSnapshot -> snapshot
@@ -973,6 +975,7 @@ class WalletSession : IDisposable {
 
     private async func RefreshCoreAsync(ct CancellationToken) {
         RequireUnlocked()
+        let previousHeight = snapshot.Balance?.ScanHeight
         await Send.RecoverAsync(ct, false)
         try {
             using let balance = await Node.Api.JsonAsync("wallet/balance", ct: ct)
@@ -1037,6 +1040,21 @@ class WalletSession : IDisposable {
             }
             throw WalletException("Daemon returned invalid wallet data")
         }
+        if let balance = snapshot.Balance {
+            if Node
+                .Status
+                .Syncing ||
+                balance.ScanHeight >= balance.ChainHeight ||
+                balance.ScanHeight != previousHeight {
+                scanUnchangedSince = default(DateTimeOffset)
+                scanRestarted = false
+            } else if scanUnchangedSince == default(DateTimeOffset) {
+                scanUnchangedSince = DateTimeOffset.UtcNow
+            } else if !scanRestarted && (DateTimeOffset.UtcNow - scanUnchangedSince).TotalSeconds >= 60 {
+                scanRestarted = true
+                using let response = await Node.Api.JsonAsync("wallet/sync", WriteEmpty, ct)
+            }
+        }
     }
 
     func PublishHistory(outputs[]WalletOutput) {
@@ -1074,6 +1092,8 @@ class WalletSession : IDisposable {
     }
 
     func PublishEmpty() {
+        scanUnchangedSince = default(DateTimeOffset)
+        scanRestarted = false
         History.Reset()
         if state == WalletState.Locked || state == WalletState.Unloaded {
             Messages.Reset()
