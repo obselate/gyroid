@@ -574,8 +574,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         confirmation = ""
         if form == "Phrase" {
             let words = phrase.ToCharArray()
-            phrase = ""
-            input.Ui.Actions.Run(ct -> session.ImportPhraseAsync(filename, words, secret, ct), nil, secret, words)
+            input.Ui.Actions.Run(ct -> session.ImportPhraseAsync(filename, words, secret, ct), Clear, secret, words)
         } else if form == "ViewOnly" {
             let key = viewKey.ToCharArray()
             input
