@@ -13,7 +13,6 @@ import System
 import System.Collections.Generic
 import System.Diagnostics
 import System.Globalization
-import System.Threading
 
 data struct SyncInput {
     var Ui Presentation
@@ -42,7 +41,6 @@ data struct SyncState {
     var Rate float64
     var Listen string
     var Network string
-    var Endpoint string
 }
 
 class SyncPage : Cell, IDisposable {
@@ -56,13 +54,10 @@ class SyncPage : Cell, IDisposable {
     private var accepted bool
     private var now float64
     private var stalled bool
-    private var generation int32
-    private var lifetime CancellationTokenSource?
     private var stallTimer WindowTimer?
     private var updateTimer WindowTimer?
     private var samples[]SyncSample = []SyncSample{}
     private var peak float64 = 1
-    private var chartWidth float64
     private var connectedAt int64
     private var progressAt int64
 
@@ -76,7 +71,8 @@ class SyncPage : Cell, IDisposable {
                 Step: state.Step,
                 Peak: peak,
                 Stalled: stalled,
-                Width: chartWidth,
+                Width: (input.Fill ? input.Width: Math.Min(760, input.Width - 48)) -
+                AppTheme.GetPagePadding(input.Width, input.Height) * 2,
                 Height: input.Height,
                 Fill: input.Fill
             }
@@ -84,6 +80,9 @@ class SyncPage : Cell, IDisposable {
     }
 
     func Accept(next SyncInput) {
+        if accepted && input == next {
+            return
+        }
         let node = next.Node
         let value = SyncState{
             Step: Step(node),
@@ -97,8 +96,7 @@ class SyncPage : Cell, IDisposable {
             CheckpointHeight: node.CheckpointHeight,
             Rate: node.SyncRate,
             Listen: node.Listen,
-            Network: node.Network,
-            Endpoint: node.Endpoint
+            Network: node.Network
         }
         let layoutChanged = !accepted ||
             input.Language != next.Language ||
@@ -106,40 +104,20 @@ class SyncPage : Cell, IDisposable {
             input.Height != next.Height ||
             input.Fill != next.Fill
         input = next
-        let width = next.Fill ? next.Width: Math.Min(760, next.Width - 48)
-        chartWidth = width - AppTheme.GetPagePadding(next.Width, next.Height) * 2
-        if lifetime == nil {
-            if let window = next.Ui.Actions.window {
-                lifetime = CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
-            }
-        }
-        if !accepted ||
-            state.Network != value.Network ||
-            state.Endpoint != value.Endpoint ||
-            state.Step != value.Step ||
-            state.ExecutedPhases != value.ExecutedPhases {
-            updateTimer?.Dispose()
-            updateTimer = nil
+        pending = value
+        if !accepted {
             Apply(value)
-        } else if state != value {
-            pending = value
-            if updateTimer == nil {
-                let current = generation
-                updateTimer = input
-                    .Ui
-                    .Actions
-                    .Delay(
-                    100,
-                    () -> {
-                        if current == generation && lifetime?.IsCancellationRequested != true {
-                            updateTimer = nil
-                            Apply(pending)
-                        }
-                    }
-                )
-            }
-        } else {
-            pending = value
+        } else if state != value && updateTimer == nil {
+            updateTimer = input
+                .Ui
+                .Actions
+                .Delay(
+                100,
+                () -> {
+                    updateTimer = nil
+                    Apply(pending)
+                }
+            )
         }
         if layoutChanged {
             Rebuild()
@@ -150,20 +128,8 @@ class SyncPage : Cell, IDisposable {
         if accepted && state == value {
             return
         }
-        let restarted = accepted &&
-            (
-            state.Network != value.Network ||
-                state.Endpoint != value.Endpoint ||
-                value.Step <= 2 &&
-                value.Step < state.Step
-        )
-        if restarted {
-            connectedAt = 0
-            peerSamples.Clear()
-            rateSamples.Clear()
-        }
         now = Stopwatch.GetElapsedTime(started).TotalSeconds
-        let progressChanged = !accepted || restarted || state.Progress != value.Progress || state.Step != value.Step
+        let progressChanged = !accepted || state.Progress != value.Progress || state.Step != value.Step
         state = value
         accepted = true
         if state.Step != 3 {
@@ -176,20 +142,16 @@ class SyncPage : Cell, IDisposable {
             stalled = false
             stallTimer?.Dispose()
             stallTimer = nil
-            generation++
             if state.Step == 4 {
-                let current = generation
                 stallTimer = input
                     .Ui
                     .Actions
                     .Delay(
                     60000,
                     () -> {
-                        if current == generation && lifetime?.IsCancellationRequested != true {
-                            stallTimer = nil
-                            stalled = true
-                            Rebuild()
-                        }
+                        stallTimer = nil
+                        stalled = true
+                        Rebuild()
                     }
                 )
             }
@@ -211,11 +173,8 @@ class SyncPage : Cell, IDisposable {
     }
 
     public func Dispose() {
-        generation++
-        lifetime?.Cancel()
         stallTimer?.Dispose()
         updateTimer?.Dispose()
-        lifetime?.Dispose()
     }
 
     override func Build() Blob {
@@ -429,8 +388,6 @@ data struct SyncStepsInput {
 }
 
 class SyncSteps : Cell[SyncStepsInput] {
-    protected override func Build(input SyncStepsInput) Blob -> Steps(input.Ui, input, input.Step)
-
     private func StepName(step int32) string -> switch step {
         case 0: "core download"
         case 1: "checkpoints"
@@ -439,57 +396,59 @@ class SyncSteps : Cell[SyncStepsInput] {
         default: "syncing"
     }
 
-    private func Steps(ui Presentation, node SyncStepsInput, step int32) Blob ->
-    Stepper{
-        Labels: []string{
-            ui.Strings.Get(StepName(0)),
-            ui.Strings.Get(StepName(1)),
-            ui.Strings.Get(StepName(2)),
-            ui.Strings.Get(StepName(3)),
-            ui.Strings.Get(StepName(4))
-        },
-        CurrentIndex: step,
-        AccessibilityName: ui.Strings.Get("syncing"),
-        Gap: AppTheme.Space8,
-        FontSize: AppTheme.Type13,
-        CreateStep: (state, index, label) -> {
-            let current = index == state.CurrentIndex
-            let skipped = index < state.CurrentIndex &&
-                (node.ExecutedPhases & (1 << (index + int32(NodePhase.Core)))) == 0
-            let done = index < state.CurrentIndex && !skipped
-            let detail = if done && index == 1 && node.CheckpointHeight > 0 {
-                Count(node.CheckpointHeight)
-            } else if done && index == 3 {
-                node.Peers.ToString() + " " + ui.Strings.Get("peers")
-            } else {
-                ""
-            }
-            label.Color = current ? AppTheme.Lime: done ? AppTheme.Ink: AppTheme.Dim
-            return Container{
-                MinWidth: 0,
-                Gap: AppTheme.Space6,
-                Accessibility: Accessibility{
-                    Role: AccessibilityRole.ListItem,
-                    Name: ui.Strings.Get(StepName(index)) + " " + ui.Strings.Get(
-                        done ? "completed": current ? "current": skipped ? "skipped": "upcoming"
-                    ) +
-                        (detail.Length > 0 ? " " + detail: "")
-                },
-                Container{
-                    Height: AppTheme.ControlCompact,
-                    AlignItems: AlignItems.Center,
-                    JustifyContent: JustifyContent.Center,
-                    BorderRadius: AppTheme.Radius8,
-                    BackgroundColor: current ? AppTheme.LimeQuiet: done ? AppTheme.Rule: Color.Transparent,
-                    label
-                },
-                Container{
-                    Height: AppTheme.Type12 + AppTheme.Space2,
-                    Label(ui, detail, AppTheme.Type12, AppTheme.Dim, "")
+    protected override func Build(node SyncStepsInput) Blob {
+        let ui = node.Ui
+        return Stepper{
+            Labels: []string{
+                ui.Strings.Get(StepName(0)),
+                ui.Strings.Get(StepName(1)),
+                ui.Strings.Get(StepName(2)),
+                ui.Strings.Get(StepName(3)),
+                ui.Strings.Get(StepName(4))
+            },
+            CurrentIndex: node.Step,
+            AccessibilityName: ui.Strings.Get("syncing"),
+            Gap: AppTheme.Space8,
+            FontSize: AppTheme.Type13,
+            CreateStep: (state, index, label) -> {
+                let current = index == state.CurrentIndex
+                let skipped = index < state.CurrentIndex &&
+                    (node.ExecutedPhases & (1 << (index + int32(NodePhase.Core)))) == 0
+                let done = index < state.CurrentIndex && !skipped
+                let detail = if done && index == 1 && node.CheckpointHeight > 0 {
+                    Count(node.CheckpointHeight)
+                } else if done && index == 3 {
+                    node.Peers.ToString() + " " + ui.Strings.Get("peers")
+                } else {
+                    ""
+                }
+                label.Color = current ? AppTheme.Lime: done ? AppTheme.Ink: AppTheme.Dim
+                return Container{
+                    MinWidth: 0,
+                    Gap: AppTheme.Space6,
+                    Accessibility: Accessibility{
+                        Role: AccessibilityRole.ListItem,
+                        Name: ui.Strings.Get(StepName(index)) + " " + ui.Strings.Get(
+                            done ? "completed": current ? "current": skipped ? "skipped": "upcoming"
+                        ) +
+                            (detail.Length > 0 ? " " + detail: "")
+                    },
+                    Container{
+                        Height: AppTheme.ControlCompact,
+                        AlignItems: AlignItems.Center,
+                        JustifyContent: JustifyContent.Center,
+                        BorderRadius: AppTheme.Radius8,
+                        BackgroundColor: current ? AppTheme.LimeQuiet: done ? AppTheme.Rule: Color.Transparent,
+                        label
+                    },
+                    Container{
+                        Height: AppTheme.Type12 + AppTheme.Space2,
+                        Label(ui, detail, AppTheme.Type12, AppTheme.Dim, "")
+                    }
                 }
             }
-        }
-    }.Build()
+        }.Build()
+    }
 }
 
 data struct SyncChartInput {
@@ -508,7 +467,6 @@ data struct SyncChartInput {
 class SyncChart : Cell {
     private let spark ElementHandle = ElementHandle()
     private var input SyncChartInput
-    private var accepted bool
     private var chart Blob = Container{}
     private var measuredHeight float64
 
@@ -522,9 +480,8 @@ class SyncChart : Cell {
     }
 
     func Accept(next SyncChartInput) {
-        if !accepted || input != next {
+        if input != next {
             input = next
-            accepted = true
             Prepare()
         }
     }
@@ -669,18 +626,17 @@ data struct SyncReadingsInput {
 }
 
 class SyncReadings : Cell[SyncReadingsInput] {
-    protected override func Build(input SyncReadingsInput) Blob {
-        let ui = input.Ui
-        let node = input
-        let step = input.Step
-        let stalled = input.Stalled
-        let size = AppTheme.GetStatusFigureSize(input.Height, input.Fill)
+    protected override func Build(node SyncReadingsInput) Blob {
+        let ui = node.Ui
+        let step = node.Step
+        let stalled = node.Stalled
+        let size = AppTheme.GetStatusFigureSize(node.Height, node.Fill)
         let mid = Container{
-            FlexGrow: input.Fill ? 0.0: 1.0,
+            FlexGrow: node.Fill ? 0.0: 1.0,
             FlexDirection: FlexDirection.Row,
             FlexWrap: FlexWrap.Wrap,
             AlignItems: AlignItems.Center,
-            Gap: AppTheme.GetFigureGap(input.Width)
+            Gap: AppTheme.GetFigureGap(node.Width)
         }
         if step < 2 {
             let percent = node.DownloadPercent
@@ -689,7 +645,7 @@ class SyncReadings : Cell[SyncReadingsInput] {
                     ui,
                     percent.ToString(),
                     "%",
-                    ui.Strings.Get(StepName(step)) + " " + percent.ToString() + "%",
+                    ui.Strings.Get(step == 0 ? "core download": "checkpoints") + " " + percent.ToString() + "%",
                     AppTheme.Lime,
                     size
                 )
@@ -714,7 +670,7 @@ class SyncReadings : Cell[SyncReadingsInput] {
                     ui,
                     []string{
                         "Since",
-                        Clock(input.Since),
+                        Clock(node.Since),
                         "Port",
                         if port.Length > 4 {
                             port[3] + " " + port[4]
@@ -766,14 +722,6 @@ class SyncReadings : Cell[SyncReadingsInput] {
             )
         }
         return mid
-    }
-
-    private func StepName(step int32) string -> switch step {
-        case 0: "core download"
-        case 1: "checkpoints"
-        case 2: "starting"
-        case 3: "connecting"
-        default: "syncing"
     }
 
     private func Figure(

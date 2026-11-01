@@ -116,13 +116,6 @@ class NodeSession : IDisposable {
             using let status = await Api.JsonAsync("status", ct: ct)
             let root = status.RootElement
             let version = NodeJson.Text(root, "version")
-            let phase = if Supervisor.Phase != NodePhase.None {
-                Supervisor.Phase
-            } else if NodeJson.Flag(root, "syncing") {
-                NodePhase.ChainSync
-            } else {
-                NodePhase.None
-            }
             let current = NodeStatus{
                 Source: Supervisor.Source,
                 Owned: Supervisor.Owned,
@@ -146,11 +139,17 @@ class NodeSession : IDisposable {
                 Endpoint: Settings.Endpoint,
                 DataDirectory: Settings.DataDirectory,
                 Executable: Supervisor.Executable,
-                Phase: phase,
+                Phase: if Supervisor.Phase != NodePhase.None {
+                    Supervisor.Phase
+                } else if NodeJson.Flag(root, "syncing") {
+                    NodePhase.ChainSync
+                } else {
+                    NodePhase.None
+                },
                 DownloadPercent: Supervisor.DownloadPercent,
-                ExecutedPhases: Supervisor.ObservePhase(Settings, phase),
+                ExecutedPhases: Supervisor.ObservePhase(Settings, Supervisor.Phase),
             }
-            if current.Peers == 0 && (phase == NodePhase.None || phase == NodePhase.ChainSync) {
+            if (current.Peers == 0 || current.Owned) && Supervisor.Phase == NodePhase.None {
                 current.ExecutedPhases = Supervisor.ObservePhase(Settings, NodePhase.Connecting)
             }
             if Settings.Network == "mainnet" && root.TryGetProperty("network_upgrade", out let upgrade) &&

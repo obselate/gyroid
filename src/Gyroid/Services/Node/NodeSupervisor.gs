@@ -291,7 +291,6 @@ class NodeSupervisor : IDisposable {
             executable
         }
         CoreProcess.VerifyNetwork(pid, settings.Network)
-        ObservePhase(settings, NodePhase.None)
         if !Owned {
             settings.OwnedProcessId = 0
         } else if settings.OwnedProcessId != pid {
@@ -307,7 +306,6 @@ class NodeSupervisor : IDisposable {
     }
 
     async func TryAttachAsync(settings WalletSettings, ct CancellationToken) bool {
-        ObservePhase(settings, NodePhase.None)
         if await ReachableAsync(settings.Endpoint, ct) {
             Attach(settings)
             return true
@@ -406,11 +404,8 @@ class NodeSupervisor : IDisposable {
     }
 
     func ReportProgress(phase NodePhase, percent int32?) {
-        lock ownership {
-            RecordPhase(phase)
-            Phase = phase
-            DownloadPercent = percent
-        }
+        Phase = phase
+        DownloadPercent = percent
         Progress?.Invoke()
     }
 
@@ -421,15 +416,11 @@ class NodeSupervisor : IDisposable {
                 progressEndpoint = settings.Endpoint
                 executedPhases = 0
             }
-            return RecordPhase(phase)
+            if phase != NodePhase.None && phase != NodePhase.Detecting {
+                executedPhases |= 1 << int32(phase)
+            }
+            return executedPhases
         }
-    }
-
-    private func RecordPhase(phase NodePhase) int32 {
-        if phase != NodePhase.None && phase != NodePhase.Detecting {
-            executedPhases |= 1 << int32(phase)
-        }
-        return executedPhases
     }
 
     private async func SaveCheckpointsAsync(settings WalletSettings, ct CancellationToken) bool {
