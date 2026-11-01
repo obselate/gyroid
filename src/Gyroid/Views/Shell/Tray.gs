@@ -10,7 +10,6 @@ import System
 import System.Collections.Generic
 import System.Globalization
 import System.Linq
-import System.Threading.Tasks
 
 partial class App {
     private var tray TrayIcon?
@@ -23,7 +22,6 @@ partial class App {
     private var hidden bool
 
     private var quitting bool
-    private var closePending bool
     private var closeReady bool
 
     func Start() {
@@ -91,12 +89,9 @@ partial class App {
             if closeReady {
                 return true
             }
-            if !closePending {
-                closePending = true
+            if !closed {
                 host.Hide()
                 Close()
-                let drain = closeDrain
-                go FinishClose(host, drain)
             }
             return false
         }
@@ -113,16 +108,6 @@ partial class App {
         UpdatePlayback()
         Rebuild()
         return false
-    }
-
-    private async func FinishClose(host Window, drain Task) {
-        await drain
-        host.TryPost(
-            () -> {
-                closeReady = true
-                host.RequestClose()
-            }
-        )
     }
 
     private func TraySettings() TrayOptions -> TrayOptions{

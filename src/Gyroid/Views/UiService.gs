@@ -57,7 +57,7 @@ class UiService : IDisposable {
     private var activeCopy ClipboardPublication?
     private var pendingCopy ClipboardPublication?
     private var releaseTask TaskCompletionSource?
-    private var releaseOwners[]ReadOnlyMemory[uint8] = []ReadOnlyMemory[uint8]{}
+    private let releaseOwners List[ReadOnlyMemory[uint8]] = List[ReadOnlyMemory[uint8]](2)
     private var copyGeneration int32
     private var readingClipboard bool
     private var disposed bool
@@ -114,9 +114,8 @@ class UiService : IDisposable {
         }
         if let completion = releaseTask {
             readingClipboard = true
-            let generation = copyGeneration
             let pending = host.ReadClipboardDataAsync([]string{"application/x-gyroid-clipboard-owner"})
-            Background(ct -> CompleteRelease(host, pending, generation, completion))
+            Background(ct -> CompleteRelease(host, pending, completion))
         } else if !disposed {
             if let request = pendingCopy {
                 pendingCopy = nil
@@ -137,27 +136,29 @@ class UiService : IDisposable {
     ) {
         var succeeded = false
         try {
-            succeeded = (await pending).Status == DataTransferStatus.Success
+            succeeded = (await pending.WaitAsync(host.Closed)).Status == DataTransferStatus.Success
         } catch (failure Exception) { }
         if !host.TryPost(
             () -> {
                 activeCopy = nil
-                if succeeded && generation == copyGeneration && !disposed {
+                if succeeded && !disposed {
                     ClearClipboardState()
-                    ClipboardText = request.Text
-                    clipboardBytes = request.Bytes
-                    clipboardOwner = request.Marker
-                    request.Text = []char{}
-                    request.Bytes = []uint8{}
-                    let owner = ClipboardOwner
-                    clipboardTimer = host.SetTimeout(
-                        () -> {
-                            ReleaseClipboard(owner)
-                        },
-                        request.ClearAfterMs
-                    )
+                    if generation == copyGeneration {
+                        ClipboardText = request.Text
+                        clipboardBytes = request.Bytes
+                        clipboardOwner = request.Marker
+                        request.Text = []char{}
+                        request.Bytes = []uint8{}
+                        let owner = ClipboardOwner
+                        clipboardTimer = host.SetTimeout(
+                            () -> {
+                                ReleaseClipboard(owner)
+                            },
+                            request.ClearAfterMs
+                        )
+                    }
                     ClipboardChanged?.Invoke()
-                } else if !succeeded && !disposed {
+                } else if !succeeded && generation == copyGeneration && !disposed {
                     Report("Copy failed")
                 }
                 request.Dispose()
@@ -198,70 +199,66 @@ class UiService : IDisposable {
         if !active.IsEmpty && (all || owner.Equals(active)) {
             copyGeneration++
         }
+        if all {
+            AddReleaseOwner(current)
+            AddReleaseOwner(active)
+        } else {
+            AddReleaseOwner(owner)
+        }
         if let pending = releaseTask {
-            if all {
-                if !active.IsEmpty {
-                    releaseOwners = []ReadOnlyMemory[uint8]{current, active}
-                } else if !current.IsEmpty && !Array.Exists(releaseOwners, marker -> marker.Equals(current)) {
-                    releaseOwners = []ReadOnlyMemory[uint8]{releaseOwners[0], current}
-                }
-            } else if !Array.Exists(releaseOwners, marker -> marker.Equals(owner)) {
-                releaseOwners = []ReadOnlyMemory[uint8]{releaseOwners[0], owner}
-            }
             return pending.Task
         }
-        if current.IsEmpty && active.IsEmpty {
+        if releaseOwners.Count == 0 {
             return Task.CompletedTask
         }
-        releaseOwners = all ? []ReadOnlyMemory[uint8]{current, active}: []ReadOnlyMemory[uint8]{owner}
         let completion = TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
         releaseTask = completion
         ContinueClipboard(host)
         return completion.Task
     }
 
+    private func AddReleaseOwner(owner ReadOnlyMemory[uint8]) {
+        if !owner.IsEmpty && !releaseOwners.Contains(owner) {
+            releaseOwners.Add(owner)
+        }
+    }
+
     private async func CompleteRelease(
         host Window,
         pending Task[ClipboardDataResult],
-        generation int32,
         completion TaskCompletionSource
     ) {
         var result ClipboardDataResult?
         try {
-            result = await pending
+            result = await pending.WaitAsync(host.Closed)
         } catch (failure Exception) { }
         if !host.TryPost(
             () -> {
-                if generation == copyGeneration {
-                    try {
-                        if let current = result {
-                            for item in current.Data.Representations {
-                                if Array.Exists(
-                                    releaseOwners,
-                                    marker -> !marker.IsEmpty && item.Bytes.Span.SequenceEqual(marker.Span)
-                                ) {
-                                    host.SetClipboardText("")
-                                    break
-                                }
+                try {
+                    if let current = result {
+                        for item in current.Data.Representations {
+                            if releaseOwners.Any(marker -> item.Bytes.Span.SequenceEqual(marker.Span)) {
+                                host.SetClipboardText("")
+                                break
                             }
-                        } else if !disposed {
-                            Report("Clipboard could not be cleared")
                         }
-                    } catch (failure Exception) {
-                        if !disposed {
-                            Report("Clipboard could not be cleared")
-                        }
+                    } else if !disposed {
+                        Report("Clipboard could not be cleared")
                     }
-                    if Array.Exists(releaseOwners, marker -> marker.Equals(ClipboardOwner)) {
-                        ClearClipboardState()
-                        if !disposed {
-                            ClipboardChanged?.Invoke()
-                        }
+                } catch (failure Exception) {
+                    if !disposed {
+                        Report("Clipboard could not be cleared")
+                    }
+                }
+                if releaseOwners.Contains(ClipboardOwner) {
+                    ClearClipboardState()
+                    if !disposed {
+                        ClipboardChanged?.Invoke()
                     }
                 }
                 readingClipboard = false
                 releaseTask = nil
-                releaseOwners = []ReadOnlyMemory[uint8]{}
+                releaseOwners.Clear()
                 completion.TrySetResult()
                 if disposed {
                     window = nil

@@ -448,17 +448,11 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         )
         field.MinHeight = 72
         field.Accessibility = Accessibility{Role: AccessibilityRole.Status}
-        let previewControl Blob = if shown == "link" {
-            TextParts.Copy(
-                ui,
-                payload,
-                ui.Strings.Get("Copy link"),
-                disabled: input.Busy || draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0,
-                content: field,
-                key: "payload"
-            )
-        } else {
-            field
+        if shown == "link" {
+            field.Accessibility = Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Copy link")}
+            field.Disabled = input.Busy || draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0
+            field.OnClick = () -> ui.Actions.Copy(payload, 120000)
+            WidgetKeyBindings.BindActivation(field)
         }
         let disabled = input.Busy || shown != "address" && (draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0)
         let action = if input.Paid {
@@ -505,7 +499,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                             Change: input.Change
                         }
                     ),
-                    Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, previewControl, action}
+                    Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, field, action}
                 }
             )
         }

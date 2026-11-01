@@ -72,7 +72,6 @@ partial class App : Cell, IDisposable {
     private let workers chan[WindowWork] = Chan.Unbounded[WindowWork]()
     private var lifetime CancellationTokenSource?
     private var workerTask Task = Task.CompletedTask
-    private var closeDrain Task = Task.CompletedTask
     private var closed bool
 
     private var width float64 = 1280
@@ -568,8 +567,8 @@ partial class App : Cell, IDisposable {
         closed = true
         ui.Actions.Dispose()
         let drain = Task.WhenAny(ui.Actions.Released(), Task.Delay(500))
-        closeDrain = drain
-        go StopWorkers(drain)
+        let host = window
+        go StopWorkers(host, drain)
         lifetime?.Cancel()
         lifetime?.Dispose()
         lifetime = nil
@@ -590,9 +589,17 @@ partial class App : Cell, IDisposable {
 
     func Stopped() Task -> workerTask
 
-    private async func StopWorkers(drain Task) {
+    private async func StopWorkers(host Window?, drain Task) {
         await drain
         workers.Writer.TryComplete()
+        if let owner = host {
+            owner.TryPost(
+                () -> {
+                    closeReady = true
+                    owner.RequestClose()
+                }
+            )
+        }
     }
 
     private func Touch() {

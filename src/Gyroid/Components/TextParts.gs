@@ -1,15 +1,14 @@
 package Gyroid.Components
 
 import Goo
-import Goo.Widgets
 import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Services.WalletText
 import Gyroid.Views
 import System
 import System.Collections.Generic
+import System.Diagnostics
 
 class TextParts {
     shared {
@@ -281,12 +280,10 @@ class TextParts {
             iconSize float64? = nil,
             color Color? = nil,
             style Style? = nil,
-            clearAfterMs float64 = 120000,
-            content Container? = nil,
-            key string = ""
+            clearAfterMs float64 = 120000
         ) Blob -> Cell
             .Mount[CopyControlInput, CopyControl](
-            "copy-" + (key.Length > 0 ? key: label),
+            "copy-" + label,
             CopyControlInput{
                 Ui: ui,
                 Value: value,
@@ -298,7 +295,6 @@ class TextParts {
                 Color: color ?? AppTheme.Body,
                 Style: style,
                 ClearAfterMs: clearAfterMs,
-                Content: content,
                 Language: ui.Strings.Language
             }
         )
@@ -316,16 +312,26 @@ data struct CopyControlInput {
     var Color Color
     var Style Style?
     var ClearAfterMs float64
-    var Content Container?
     var Language string
 }
 
 class CopyControl : Cell[CopyControlInput], IDisposable {
     private var actions UiService?
     private let changed Action
+    private var value string = ""
+    private var wasCopied bool
 
     init() {
-        changed = () -> Rebuild()
+        changed = () -> {
+            if let source = actions {
+                let copied = value.Length > 0 && ReadOnlySpan[char](source.ClipboardText).SequenceEqual(
+                    System.MemoryExtensions.AsSpan(value)
+                )
+                if copied != wasCopied {
+                    Rebuild()
+                }
+            }
+        }
     }
 
     public func Dispose() {
@@ -344,18 +350,12 @@ class CopyControl : Cell[CopyControlInput], IDisposable {
             input.Ui.Actions.ClipboardChanged += changed
         }
         let ui = input.Ui
-        let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
+        let copied = input.Value.Length > 0 && ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
             System.MemoryExtensions.AsSpan(input.Value)
         )
+        value = input.Value
+        wasCopied = copied
         let copy = () -> ui.Actions.Copy(input.Value, input.ClearAfterMs)
-        if let content = input.Content {
-            content.BorderColor = copied ? AppTheme.Mint: AppTheme.Edge
-            content.Disabled = input.Disabled
-            content.OnClick = copy
-            content.Accessibility = Accessibility{Role: AccessibilityRole.Button, Name: input.Label}
-            WidgetKeyBindings.BindActivation(content)
-            return content
-        }
         if input.Text {
             let color = copied ? AppTheme.Mint: AppTheme.Lime
             return ControlParts.Button(
@@ -411,15 +411,7 @@ class DecodeLabel : Cell[DecodeLabelInput] {
     protected override func Build(input DecodeLabelInput) Blob {
         if revision != input.Revision {
             revision = input.Revision
-            if input
-                .Ui
-                .Actions
-                .playbackActive() &&
-                System
-                .Diagnostics
-                .Stopwatch
-                .GetElapsedTime(input.Revision)
-                .TotalMilliseconds < 250 {
+            if input.Ui.Actions.playbackActive() && Stopwatch.GetElapsedTime(input.Revision).TotalMilliseconds < 250 {
                 progress.Snap(0)
                 progress.To(1, Motion.Tween(250))
             } else {
