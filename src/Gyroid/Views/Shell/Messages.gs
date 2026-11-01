@@ -16,10 +16,22 @@ import System.Linq
 partial class App {
     private let messagesState MessagesViewState = MessagesViewState()
     private var messageOverlay MessageOverlay?
+    private var messagesWallet string = ""
+    private var messagesAddress string = ""
     private let configureMessages Action[MessagesPage]
     private let configureMessageOverlay Action[MessageOverlay]
 
     private func ObserveMessages() {
+        let identity = wallet.Settings.ActiveWallet
+        let address = wallet.Messages.OwnAddress
+        if messagesWallet != identity || messagesAddress != address {
+            messagesWallet = identity
+            messagesAddress = address
+            messagesState.ConversationId = ""
+            messagesState.MessageId = ""
+            messagesState.NewConversation = nil
+            messagesState.Drafts.Clear()
+        }
         messagesState.Revision++
         messageOverlay?.Accept(MessageOverlayInput())
     }
@@ -157,10 +169,6 @@ class MessageOverlay : Cell, IDisposable {
             ownAddress = service.OwnAddress
             observed.Clear()
             CloseDrawer()
-            next.State.ConversationId = ""
-            next.State.MessageId = ""
-            next.State.NewConversation = nil
-            next.State.Drafts.Clear()
         }
         if reset || revision != next.Revision {
             for conversation in service.Conversations {
