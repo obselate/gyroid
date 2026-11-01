@@ -306,7 +306,7 @@ class ReceivePage : Cell[ReceivePageInput] {
         let card = WalletParts.Card(
             ui,
             input.Height < 700 ? AppTheme.Space16: AppTheme.Space22,
-            radius: AppTheme.Space14
+            radius: AppTheme.Radius14
         )
         let form = WalletForm(ui, false, nil, []string{})
         card.Width = Percent(100)
