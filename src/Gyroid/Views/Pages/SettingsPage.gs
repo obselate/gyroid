@@ -944,7 +944,15 @@ class SettingsStartup : Cell {
                     Rebuild()
                 }
             ),
-            form.Row("Node URL", value.Endpoint, text -> value.Endpoint = text, disabled: Pinned("ENDPOINT")),
+            form.Row(
+                "Node URL",
+                value.Endpoint,
+                text -> {
+                    value.Endpoint = text
+                    Rebuild()
+                },
+                disabled: Pinned("ENDPOINT")
+            ),
             PathRow(
                 input,
                 form,
@@ -985,6 +993,7 @@ class SettingsStartup : Cell {
                     text -> {
                         value.ListenAddress = text
                         listenIssue = ""
+                        Rebuild()
                     },
                     issue: listenIssue,
                     disabled: Pinned("LISTEN")
@@ -1008,7 +1017,18 @@ class SettingsStartup : Cell {
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.FlexStart,
         Gap: AppTheme.Space8,
-        Grow(form.Row(label, value, changed, issue: issue, disabled: Pinned(variable))),
+        Grow(
+            form.Row(
+                label,
+                value,
+                text -> {
+                    changed.Invoke(text)
+                    Rebuild()
+                },
+                issue: issue,
+                disabled: Pinned(variable)
+            )
+        ),
         Button(
             input.Ui,
             "Browse",
@@ -1037,10 +1057,12 @@ class SettingsStartup : Cell {
             ""
         }
         if listenIssue.Length > 0 || programIssue.Length > 0 {
+            Rebuild()
             return
         }
         if input.Snapshot.State != WalletState.Unloaded && !applyPending {
             applyPending = true
+            Rebuild()
             return
         }
         applyPending = false
@@ -1148,6 +1170,7 @@ class SettingsWallet : Cell, IDisposable {
         }
         syncing = true
         generation++
+        Rebuild()
         go Sync(input.Session, state.Wallet, owner, generation, lifetime.Token)
     }
 
@@ -2036,7 +2059,7 @@ class SettingsKeysDialog : Cell, IDisposable {
         if let keys = viewKeys {
             return Keys(input, keys)
         }
-        let form = WalletForm(ui, !input.Busy && !loading, () -> Reveal(input), []string{password})
+        let form = WalletForm(ui, !input.Busy && !loading, () -> Reveal(input), []string{password}, () -> Rebuild())
         let title = dialog == "phrase" ? "recovery phrase": "view keys"
         return WalletParts.Modal(
             ui,
@@ -2077,6 +2100,7 @@ class SettingsKeysDialog : Cell, IDisposable {
         }
         loading = true
         generation++
+        Rebuild()
         go LoadKeys(input.Session, input.Session.Settings.ActiveWallet, owner, buffer, generation, lifetime.Token)
     }
 
@@ -2257,6 +2281,7 @@ class SettingsKeysDialog : Cell, IDisposable {
                     ui.Strings.Get(viewPrivateShown ? "Hide": "Reveal"),
                     () -> {
                         viewPrivateShown = !viewPrivateShown
+                        Rebuild()
                     },
                     size: AppTheme.ControlCompact,
                     style: AppTheme.DisclosureStyle
@@ -2334,7 +2359,8 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
             ui,
             !input.Busy && !creating,
             () -> CreateViewOnly(input),
-            []string{viewOnlyName.Trim(), password, viewOnlyPassword}
+            []string{viewOnlyName.Trim(), password, viewOnlyPassword},
+            () -> Rebuild()
         )
         let content = Container{Gap: AppTheme.Space14}
         let actions = List[Blob]()
@@ -2487,6 +2513,7 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         }
         Array.Clear(candidate)
         if passwordIssue.Length > 0 {
+            Rebuild()
             return
         }
         guard let owner = input.Window, let lifetime = lifetime else {
@@ -2496,6 +2523,7 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         let secret = viewOnlyPassword.ToCharArray()
         creating = true
         generation++
+        Rebuild()
         go CreateFile(
             input.Session,
             input.Session.Settings.ActiveWallet,
@@ -2674,7 +2702,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
                 StartPurge(input)
             }
         }
-        let form = WalletForm(ui, typed && !input.Busy, confirm, []string{})
+        let form = WalletForm(ui, typed && !input.Busy, confirm, []string{}, () -> Rebuild())
         if issue.Length > 0 {
             content.Add(Label(ui, ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
         }
@@ -2737,6 +2765,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
         }
         purging = true
         generation++
+        Rebuild()
         go PurgeData(input.Session, state.Network, state.Directory, owner, generation, lifetime.Token)
     }
 
