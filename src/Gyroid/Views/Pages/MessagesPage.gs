@@ -53,29 +53,23 @@ class MessagesPage : Cell, IDisposable {
     private var input MessagesInput
     private var conversation Conversation?
     private var selected string = ""
-    private var lifetime CancellationTokenSource?
     private var selection CancellationTokenSource?
     private var generation int64
     private var operationGeneration int64
-    private var walletId string = ""
-    private var ownAddress string = ""
-    private var walletNetwork string = ""
-    private var disposed bool
     private let configureThread Action[MessageThread]
     private let measureDraft Func[string, MessageEstimate]
+    private var threadWidth float64
 
     init() {
-        measureDraft = text -> {
-            if let current = conversation {
-                return input.Session.Messages.Measure(current, text)
-            }
-            throw InvalidOperationException("No conversation selected")
-        }
+        measureDraft = text -> input
+            .Session
+            .Messages
+            .Measure(conversation ?? throw InvalidOperationException("No conversation selected"), text)
         configureThread = child -> child.Accept(
             MessageThreadInput{
                 Ui: input.Ui,
                 Conversation: conversation,
-                Width: input.Drawer ? input.Width: input.Width - Math.Clamp(input.Width * 0.25, 200.0, 300.0),
+                Width: threadWidth,
                 Revision: input.Revision,
                 Privacy: input.Privacy,
                 Language: input.Language,
@@ -97,14 +91,11 @@ class MessagesPage : Cell, IDisposable {
     }
 
     func Accept(next MessagesInput) {
-        if disposed || next == input {
+        if next == input {
             return
         }
-        let reset = walletId != next.Wallet || ownAddress != next.Address || walletNetwork != next.Network
+        let reset = input.Wallet != next.Wallet || input.Address != next.Address || input.Network != next.Network
         if reset {
-            walletId = next.Wallet
-            ownAddress = next.Address
-            walletNetwork = next.Network
             operationGeneration++
             busy = false
             issue = ""
@@ -112,10 +103,6 @@ class MessagesPage : Cell, IDisposable {
             detail = nil
         }
         input = next
-        let owner = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(
-            next.Ui.Actions.window?.Closed ?? CancellationToken.None
-        )
-        lifetime = owner
         let current = next
             .Session
             .Messages
@@ -132,7 +119,9 @@ class MessagesPage : Cell, IDisposable {
             detail = nil
             selection?.Cancel()
             selection?.Dispose()
-            let active = CancellationTokenSource.CreateLinkedTokenSource(owner.Token)
+            let active = CancellationTokenSource.CreateLinkedTokenSource(
+                next.Ui.Actions.window?.Closed ?? CancellationToken.None
+            )
             selection = active
             generation++
             if let value = conversation {
@@ -168,14 +157,13 @@ class MessagesPage : Cell, IDisposable {
             let error = failure.Message
             window?.TryPost(
                 () -> {
-                    if !disposed &&
-                        version == generation &&
-                        service.OwnAddress == ownAddress &&
-                        service.Network == walletNetwork &&
+                    if version == generation &&
+                        service.OwnAddress == input.Address &&
+                        service.Network == input.Network &&
                         input
                         .Session
                         .Settings
-                        .ActiveWallet == walletId {
+                        .ActiveWallet == input.Wallet {
                         issue = error
                         Rebuild()
                     }
@@ -190,13 +178,10 @@ class MessagesPage : Cell, IDisposable {
     private var busy bool
 
     func Dispose() {
-        disposed = true
         generation++
         operationGeneration++
         selection?.Cancel()
         selection?.Dispose()
-        lifetime?.Cancel()
-        lifetime?.Dispose()
     }
 
     private func Run(input MessagesInput, action Func[CancellationToken, Task]) {
@@ -204,8 +189,7 @@ class MessagesPage : Cell, IDisposable {
         issue = ""
         operationGeneration++
         let version = operationGeneration
-        let identity = ownAddress
-        input.Ui.Actions.Background(ct -> Execute(input, action, version, identity, ct))
+        input.Ui.Actions.Background(ct -> Execute(input, action, version, ct))
         Rebuild()
     }
 
@@ -213,7 +197,6 @@ class MessagesPage : Cell, IDisposable {
         input MessagesInput,
         action Func[CancellationToken, Task],
         version int64,
-        identity string,
         ct CancellationToken
     ) {
         var error = ""
@@ -228,21 +211,19 @@ class MessagesPage : Cell, IDisposable {
             .window
             ?.TryPost(
             () -> {
-                if disposed ||
-                    version != operationGeneration ||
-                    identity != ownAddress ||
+                if version != operationGeneration ||
                     input
                     .Session
                     .Settings
-                    .ActiveWallet != walletId ||
+                    .ActiveWallet != input.Wallet ||
                     input
                     .Session
                     .Messages
-                    .Network != walletNetwork ||
+                    .Network != input.Network ||
                     input
                     .Session
                     .Messages
-                    .OwnAddress != identity {
+                    .OwnAddress != input.Address {
                     return
                 }
                 busy = false
@@ -252,8 +233,8 @@ class MessagesPage : Cell, IDisposable {
         )
     }
 
-    private func Select(input MessagesInput, conversation Conversation) {
-        input.State.ConversationId = conversation.Id
+    private func Select(input MessagesInput, conversation Conversation?) {
+        input.State.ConversationId = conversation?.Id ?? ""
         input.State.MessageId = ""
         input.State.NewConversation = conversation
         input.State.Request++
@@ -265,7 +246,7 @@ class MessagesPage : Cell, IDisposable {
         let service = input.Session.Messages
         let conversations = service.Conversations
         let listWidth = Math.Clamp(input.Width * 0.25, 200.0, 300.0)
-        let threadWidth = input.Drawer ? input.Width: input.Width - listWidth
+        threadWidth = input.Drawer ? input.Width: input.Width - listWidth - AppTheme.Space12
         let root = Container{
             Width: Percent(100),
             Height: Percent(100),
@@ -310,20 +291,23 @@ class MessagesPage : Cell, IDisposable {
                     MessageComposerInput{
                         Ui: ui,
                         Revision: input.Revision,
-                        ConversationId: current.Id,
                         Recipients: current.Members.Count(member -> member != input.Address),
                         CanSend: input.Mode == MessengerMode.Send,
                         Unavailable: input.Locked ? "Wallet is locked":
                         input.ViewOnly ? "View-only wallet": "Node not connected",
                         Measure: measureDraft,
-                        Privacy: input.Privacy,
                         Language: input.Language,
                         Draft: draft,
                         Width: threadWidth,
                         OnDraft: value -> {
-                            input.State.Drafts[current.Id] = value
+                            input.State.Drafts[selected] = value
                         },
-                        OnSend: text -> Run(input, ct -> service.Send(current, text, ct))
+                        OnSend: text -> {
+                            if let current = conversation {
+                                let service = input.Session.Messages
+                                Run(input, ct -> service.Send(current, text, ct))
+                            }
+                        }
                     }
                 )
             )
@@ -368,9 +352,8 @@ class MessagesPage : Cell, IDisposable {
                         Ui: ui,
                         Session: input.Session,
                         Revision: input.Revision,
-                        Working: input.Working,
-                        WalletId: walletId,
-                        Network: walletNetwork,
+                        WalletId: input.Wallet,
+                        Network: input.Network,
                         Contacts: input.Contacts,
                         Conversation: conversation,
                         Kind: dialog,
@@ -380,14 +363,7 @@ class MessagesPage : Cell, IDisposable {
                         OnContacts: input.OnContacts,
                         OnSelect: current -> {
                             dialog = ""
-                            if current == nil {
-                                input.State.ConversationId = ""
-                                input.State.NewConversation = nil
-                                input.State.Request++
-                                Accept(MessagesInput{... input, Request: input.State.Request})
-                            } else {
-                                Select(input, current)
-                            }
+                            Select(input, current)
                         },
                         OnClose: () -> {
                             dialog = ""
@@ -405,7 +381,6 @@ class MessagesPage : Cell, IDisposable {
                         Ui: ui,
                         Message: message,
                         Revision: input.Revision,
-                        Working: input.Working,
                         CanAddContact: !message.Outgoing &&
                             message
                             .SenderAddress
@@ -421,9 +396,9 @@ class MessagesPage : Cell, IDisposable {
                             Rebuild()
                         },
                         OnContact: () -> {
-                            detail = nil
                             Begin("contact")
-                            address = message.SenderAddress
+                            address = detail?.SenderAddress ?? ""
+                            detail = nil
                         }
                     }
                 )
@@ -632,7 +607,15 @@ class MessageConversationList : Cell[MessagesListInput] {
                     Gap: AppTheme.Space8,
                     Padding: Edges{Left: AppTheme.Space22},
                     MinWidth: 0,
-                    Grow(MessageParts.Preview(ui, latest?.Text ?? conversation.Handle, AppTheme.Type11, AppTheme.Dim)),
+                    Grow(
+                        Label(
+                            ui,
+                            Hidden(ui.Privacy, MessagesPage.Preview(latest?.Text ?? conversation.Handle)),
+                            AppTheme.Type11,
+                            AppTheme.Dim,
+                            ""
+                        )
+                    ),
                     Label(
                         ui,
                         conversation.Unread > 0 ? conversation.Unread.ToString(): "",
@@ -823,7 +806,6 @@ data struct MessageDialogInput {
     var Privacy bool
     var Language string
     var Revision int64
-    var Working bool
     var OnContacts Action
     var OnSelect Action[Conversation?]
     var OnClose Action
@@ -836,15 +818,10 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
     private var busy bool
     private var issue string = ""
     private let members List[string] = List[string]()
-    private var lifetime CancellationTokenSource?
     private var generation int64
-    private var disposed bool
 
     func Dispose() {
-        disposed = true
         generation++
-        lifetime?.Cancel()
-        lifetime?.Dispose()
     }
 
     private func Submit(input MessageDialogInput) {
@@ -853,21 +830,13 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
         }
         busy = true
         issue = ""
-        let owner = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(
-            input.Ui.Actions.window?.Closed ?? CancellationToken.None
-        )
-        lifetime = owner
         generation++
         let title = name
         let destination = address
         let recipients = List[string](members)
         let identity = input.Session.Messages.OwnAddress
         let version = generation
-        let observer = owner.Token
-        input
-            .Ui
-            .Actions
-            .Background(ct -> Execute(input, title, destination, recipients, version, identity, observer, ct))
+        input.Ui.Actions.Background(ct -> Execute(input, title, destination, recipients, version, identity, ct))
         Rebuild()
     }
 
@@ -878,7 +847,6 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
         recipients List[string],
         version int64,
         identity string,
-        observer CancellationToken,
         token CancellationToken
     ) {
         var result Conversation?
@@ -906,9 +874,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
             .window
             ?.TryPost(
             () -> {
-                if disposed ||
-                    observer.IsCancellationRequested ||
-                    version != generation ||
+                if version != generation ||
                     service.OwnAddress != identity ||
                     service.Network != input.Network ||
                     input
@@ -1073,7 +1039,6 @@ data struct MessageDetailsInput {
     var Privacy bool
     var Language string
     var Revision int64
-    var Working bool
     var OnClose Action
     var OnContact Action
 }

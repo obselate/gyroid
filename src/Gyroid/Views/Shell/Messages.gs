@@ -35,29 +35,12 @@ partial class App {
             messagesState.NewConversation = nil
             messagesState.Drafts.Clear()
         }
-        messageOverlay?.Accept(MessageOverlayInput())
     }
 
     private func MessageOverlayInput() MessagesOverlayInput -> MessagesOverlayInput{
-        Ui: ui,
-        Session: wallet,
-        Network: wallet.Messages.Network,
-        Address: wallet.Messages.OwnAddress,
-        Mode: wallet.Messages.Mode,
-        Locked: wallet.Snapshot.State == WalletState.Locked,
-        ViewOnly: wallet.Snapshot.ViewOnly,
-        Working: ui.Working(),
-        Error: wallet.Messages.Error,
-        State: messagesState,
-        Contacts: contacts,
-        Width: width,
+        Messages: MessagesPageInput(),
         Page: screen,
-        WalletId: wallet.Settings.ActiveWallet,
-        Revision: wallet.Messages.Revision,
-        Privacy: ui.Privacy,
-        Language: ui.Strings.Language,
-        OnOpen: openMessages,
-        OnContacts: reloadMessageContacts
+        Width: width
     }
 
     private func MessagesPageInput() MessagesInput -> MessagesInput{
@@ -88,7 +71,6 @@ partial class App {
             messagesState.ConversationId = reference.ConversationId
             messagesState.MessageId = reference.MessageId
             messagesState.Request++
-            messageOverlay?.CloseDrawer()
             Open(AppPage.Messages)
         }
     }
@@ -97,25 +79,9 @@ partial class App {
 }
 
 data struct MessagesOverlayInput {
-    var Ui Presentation
-    var Session WalletSession
-    var Network string
-    var Address string
-    var Mode MessengerMode
-    var Locked bool
-    var ViewOnly bool
-    var Working bool
-    var Error string
-    var State MessagesViewState
-    var Contacts SortedDictionary[string, string]
-    var Width float64
+    var Messages MessagesInput
     var Page AppPage
-    var WalletId string
-    var Revision int64
-    var Privacy bool
-    var Language string
-    var OnOpen Action
-    var OnContacts Action
+    var Width float64
 }
 
 class MessageOverlay : Cell, IDisposable {
@@ -131,29 +97,7 @@ class MessageOverlay : Cell, IDisposable {
 
     init() {
         configureDrawer = child -> child.Accept(
-            MessagesInput{
-                Ui: input.Ui,
-                Session: input.Session,
-                Wallet: input.WalletId,
-                Network: input.Network,
-                Address: input.Address,
-                Mode: input.Mode,
-                Locked: input.Locked,
-                ViewOnly: input.ViewOnly,
-                Working: input.Working,
-                Error: input.Error,
-                Request: input.State.Request,
-                State: input.State,
-                Contacts: input.Contacts,
-                Width: Math.Min(480.0, input.Width - 112),
-                Drawer: true,
-                Revision: input.Revision,
-                Privacy: input.Privacy,
-                Language: input.Language,
-                OnOpen: input.OnOpen,
-                OnClose: () -> CloseDrawer(),
-                OnContacts: input.OnContacts
-            }
+            MessagesInput{... input.Messages, Width: Math.Min(480.0, input.Width - 112), Drawer: true}
         )
     }
 
@@ -171,7 +115,7 @@ class MessageOverlay : Cell, IDisposable {
             toast = nil
             timer?.Dispose()
             timer = nil
-            input.Session.Messages.ClearSelection()
+            input.Messages.Session.Messages.ClearSelection()
             Rebuild()
         }
     }
@@ -180,10 +124,24 @@ class MessageOverlay : Cell, IDisposable {
         if disposed || next == input {
             return
         }
-        let changedMessages = input.Revision != next.Revision
-        let reset = input.WalletId != next.WalletId || input.Address != next.Address || input.Network != next.Network
+        let changedMessages = input.Messages.Revision != next.Messages.Revision
+        let reset = input
+            .Messages
+            .Wallet != next
+            .Messages
+            .Wallet ||
+            input
+            .Messages
+            .Address != next
+            .Messages
+            .Address ||
+            input
+            .Messages
+            .Network != next
+            .Messages
+            .Network
         input = next
-        let service = next.Session.Messages
+        let service = next.Messages.Session.Messages
         if reset {
             observed.Clear()
             CloseDrawer()
@@ -200,6 +158,7 @@ class MessageOverlay : Cell, IDisposable {
                         toast = conversation
                         timer?.Dispose()
                         timer = next
+                            .Messages
                             .Ui
                             .Actions
                             .Delay(
@@ -217,7 +176,7 @@ class MessageOverlay : Cell, IDisposable {
     }
 
     override func Build() Blob {
-        let ui = input.Ui
+        let ui = input.Messages.Ui
         if input.Page == AppPage.Messages {
             return Container{}
         }
@@ -254,10 +213,10 @@ class MessageOverlay : Cell, IDisposable {
                     Name: ui.Strings.Get("Reply") + " " + Hidden(ui.Privacy, conversation.Title)
                 },
                 OnClick: () -> {
-                    input.State.ConversationId = conversation.Id
-                    input.State.MessageId = ""
-                    input.State.NewConversation = conversation
-                    input.State.Request++
+                    input.Messages.State.ConversationId = conversation.Id
+                    input.Messages.State.MessageId = ""
+                    input.Messages.State.NewConversation = conversation
+                    input.Messages.State.Request++
                     drawer = true
                     toast = nil
                     timer?.Dispose()
@@ -281,7 +240,7 @@ class MessageOverlay : Cell, IDisposable {
                     },
                     leading: MaterialIcons.Create("chat_bubble", AppTheme.Icon16, AppTheme.Lime)
                 ),
-                MessageParts.Preview(ui, latest.Text, AppTheme.Type12, AppTheme.Body)
+                Label(ui, Hidden(ui.Privacy, MessagesPage.Preview(latest.Text)), AppTheme.Type12, AppTheme.Body, "")
             }
             WidgetKeyBindings.BindActivation(notification)
             root.Add(notification)

@@ -17,16 +17,6 @@ import System.Linq
 
 class MessageParts {
     shared {
-        func Preview(ui Presentation, text string, size float64, color Color) Blob -> Text{
-            Content: Hidden(ui.Privacy, text.ReplaceLineEndings(" ")),
-            FontFamily: AppTheme.Font,
-            FontSize: size,
-            Color: color,
-            TextWrap: TextWrap.NoWrap,
-            TextTrimming: TextTrimming.Ellipsis,
-            MinWidth: 0
-        }
-
         func Problem(ui Presentation, issue string) Blob -> Banner{
             Content: ui.Strings.Explain(issue),
             AccessibilityName: ui.Strings.Explain(issue),
@@ -229,12 +219,10 @@ class MessageBubble : Cell[MessageBubbleInput] {
 
 data struct MessageComposerInput {
     var Ui Presentation
-    var ConversationId string
     var Recipients int32
     var CanSend bool
     var Unavailable string
     var Measure Func[string, MessageEstimate]
-    var Privacy bool
     var Language string
     var Revision int64
     var Draft string
@@ -251,7 +239,6 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
     private var initialized bool
     private var timer WindowTimer?
     private var draft string = ""
-    private var conversationId string = ""
 
     init() {
         arrow = AnimateValue(Point{X: 0, Y: 36})
@@ -299,8 +286,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
     }
 
     protected override func Build(input MessageComposerInput) Blob {
-        if conversationId != input.ConversationId {
-            conversationId = input.ConversationId
+        if !initialized {
             draft = input.Draft
         }
         let ui = input.Ui
