@@ -146,6 +146,12 @@ data struct SettingsPurgeInput {
     var Wallets int32
 }
 
+class SettingsStartupDraft {
+    var Value WalletSettings?
+    var Source WalletSettings?
+    var Open bool
+}
+
 class SettingsPage : Cell {
     private var state SettingsCompositionInput
     private var generalOwner SettingsGeneral?
@@ -154,6 +160,7 @@ class SettingsPage : Cell {
     private var dialogs SettingsDialogs?
     private var advancedOwner SettingsAdvanced?
     private var nodeOwner SettingsNode?
+    private let startupDraft SettingsStartupDraft = SettingsStartupDraft()
     private let openDialog Action[string]
     private let openPurge Action[string, string, int32]
     private let refreshNodeData Action
@@ -173,7 +180,7 @@ class SettingsPage : Cell {
         }
         configureNode = region -> {
             nodeOwner = region
-            region.Accept(current)
+            region.Accept(current, startupDraft)
         }
         configureWallet = region -> {
             walletOwner = region
@@ -190,9 +197,15 @@ class SettingsPage : Cell {
     }
 
     func Accept(input SettingsPageInput) {
+        if input.Section != current.Section {
+            generalOwner = nil
+            nodeOwner = nil
+            walletOwner = nil
+            advancedOwner = nil
+        }
         current = input with{Settings = input.Session.Settings}
         generalOwner?.Accept(current)
-        nodeOwner?.Accept(current)
+        nodeOwner?.Accept(current, startupDraft)
         walletOwner?.Accept(current, openDialog)
         advancedOwner?.Accept(current, openPurge)
         dialogs?.Accept(current)
@@ -301,45 +314,12 @@ class SettingsPage : Cell {
             header
         }
         pane.Add(
-            Container{
-                Key: "general",
-                Display: section == "general" ? Display.Flex: Display.None,
-                MinHeight: 0,
-                Cell.Mount[SettingsGeneral]("general", configureGeneral)
-            }
-        )
-        pane.Add(
-            Container{
-                Key: "security",
-                Display: section == "security" ? Display.Flex: Display.None,
-                MinHeight: 0,
-                Security(current)
-            }
-        )
-        pane.Add(
-            Container{
-                Key: "node",
-                Display: section == "node" ? Display.Flex: Display.None,
-                MinHeight: 0,
-                Cell.Mount[SettingsNode]("node", configureNode)
-            }
-        )
-        pane.Add(
-            Container{
-                Key: "wallet",
-                Display: section == "wallet" ? Display.Flex: Display.None,
-                MinHeight: 0,
-                Cell.Mount[SettingsWallet]("wallet", configureWallet)
-            }
-        )
-        pane.Add(
-            Container{
-                Key: "advanced",
-                Display: section == "advanced" ? Display.Flex: Display.None,
-                FlexGrow: 1,
-                FlexBasis: 0,
-                MinHeight: 0,
-                Cell.Mount[SettingsAdvanced]("advanced", configureAdvanced)
+            switch section {
+                case "general": Cell.Mount[SettingsGeneral]("general", configureGeneral)
+                case "security": Security(current)
+                case "node": Cell.Mount[SettingsNode]("node", configureNode)
+                case "wallet": Cell.Mount[SettingsWallet]("wallet", configureWallet)
+                default: Cell.Mount[SettingsAdvanced]("advanced", configureAdvanced)
             }
         )
         let root = Container{
@@ -620,7 +600,7 @@ class SettingsNode : Cell, IDisposable {
     private var state SettingsNodeInput
     private var context SettingsPageInput
     private var rowHeight float64
-    private var startupOpen bool
+    private var draft SettingsStartupDraft
     private var startupOwner SettingsStartup?
     private var directoryRead string = ""
     private var directoryExists bool
@@ -630,13 +610,14 @@ class SettingsNode : Cell, IDisposable {
     init() {
         configureStartup = region -> {
             startupOwner = region
-            region.Accept(context)
+            region.Accept(context, draft)
         }
     }
 
-    func Accept(input SettingsPageInput) {
+    func Accept(input SettingsPageInput, draft SettingsStartupDraft) {
         context = input
-        startupOwner?.Accept(input)
+        this.draft = draft
+        startupOwner?.Accept(input, draft)
         rowHeight = RowHeight(input.Height)
         let settings = input.Settings
         let status = input.Node
@@ -813,20 +794,20 @@ class SettingsNode : Cell, IDisposable {
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get("startup"),
-                Expanded: startupOpen
+                Expanded: draft.Open
             },
             OnClick: () -> {
-                startupOpen = !startupOpen
+                draft.Open = !draft.Open
             },
             Grow(Label(ui, ui.Strings.Get("startup"), AppTheme.Type14, AppTheme.Body, "")),
-            MaterialIcons.Create(startupOpen ? "expand_less": "expand_more", AppTheme.Icon18, AppTheme.Dim)
+            MaterialIcons.Create(draft.Open ? "expand_less": "expand_more", AppTheme.Icon18, AppTheme.Dim)
         }
         WidgetKeyBindings.BindActivation(startup)
         let content = Container{MinHeight: 0, Gap: AppTheme.Space8}
-        list.Display = startupOpen ? Display.None: Display.Flex
+        list.Display = draft.Open ? Display.None: Display.Flex
         content.Add(list)
         let startupPane = Container{
-            Display: startupOpen ? Display.Flex: Display.None,
+            Display: draft.Open ? Display.Flex: Display.None,
             MinHeight: 0,
             Cell.Mount[SettingsStartup]("startup", configureStartup)
         }
@@ -846,26 +827,28 @@ class SettingsNode : Cell, IDisposable {
 class SettingsStartup : Cell, IDisposable {
     private var state SettingsStartupInput
     private var context SettingsPageInput
-    private var draft WalletSettings?
-    private var source WalletSettings?
+    private var draft SettingsStartupDraft
     private var applyPending bool
     private var generation int32
     private var validated WalletSettings?
     private var validationIssue string = ""
     private var lifetime CancellationTokenSource?
 
-    func Accept(input SettingsPageInput) {
+    func Accept(input SettingsPageInput, draft SettingsStartupDraft) {
         context = input
+        this.draft = draft
         let settings = input.Settings
-        if source?.StartupDiffers(settings) != false {
+        if lifetime == nil || draft.Source?.StartupDiffers(settings) != false {
             lifetime?.Cancel()
             lifetime?.Dispose()
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
             generation++
             validated = nil
             validationIssue = ""
-            source = settings
-            draft = settings.Copy()
+            if draft.Source?.StartupDiffers(settings) != false {
+                draft.Source = settings
+                draft.Value = settings.Copy()
+            }
             applyPending = false
         }
         let next = SettingsStartupInput{
@@ -893,7 +876,7 @@ class SettingsStartup : Cell, IDisposable {
     }
 
     override func Build() Blob {
-        guard let value = draft else {
+        guard let value = draft.Value else {
             return Container{}
         }
         let content = Container{MinHeight: 0, Gap: AppTheme.Space8, Startup(context, value)}
@@ -1036,7 +1019,7 @@ class SettingsStartup : Cell, IDisposable {
     }
 
     private func SaveSettings(input SettingsPageInput) {
-        guard let value = draft, let owner = input.Window else {
+        guard let value = draft.Value, let owner = input.Window else {
             return
         }
         if applyPending {
@@ -1075,7 +1058,7 @@ class SettingsStartup : Cell, IDisposable {
         }
         owner.TryPost(
             () -> {
-                guard let current = draft else {
+                guard let current = draft.Value else {
                     return
                 }
                 if request != generation || value.StartupDiffers(current) {
