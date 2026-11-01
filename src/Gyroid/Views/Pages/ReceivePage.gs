@@ -466,13 +466,23 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         }
         let disabled = input.Busy || shown != "address" && (draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0)
         let action = if input.Paid {
-            Action("add", "New request", AppTheme.Ink, AppTheme.Edge, AppTheme.Raised, disabled, input.Reset)
+            Action(ui, "add", "New request", AppTheme.Ink, AppTheme.Edge, AppTheme.Raised, disabled, input.Reset)
         } else if copied {
-            Action("check", "Copied", AppTheme.Mint, AppTheme.Mint, AppTheme.MintQuiet, disabled, () -> { })
+            Action(ui, "check", "Copied", AppTheme.Mint, AppTheme.Mint, AppTheme.MintQuiet, disabled, () -> { })
         } else if shown == "qr" {
-            Action("download", "Save QR image", AppTheme.Lime, AppTheme.Lime, AppTheme.LimeQuiet, disabled, SaveQr)
+            Action(
+                ui,
+                "download",
+                "Save QR image",
+                AppTheme.Lime,
+                AppTheme.Lime,
+                AppTheme.LimeQuiet,
+                disabled,
+                () -> SaveQr(input)
+            )
         } else {
             Action(
+                ui,
                 "content_copy",
                 shown == "link" ? "Copy link": "Copy address",
                 AppTheme.Lime,
@@ -517,6 +527,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
     }
 
     private func Action(
+        ui Presentation,
         icon string,
         label string,
         color Color,
@@ -526,7 +537,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         click Action
     ) Blob -> ControlParts
         .Button(
-        Input.Ui,
+        ui,
         label,
         click,
         disabled,
@@ -539,11 +550,10 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         }
     )
 
-    private func SaveQr() {
+    private func SaveQr(input ReceivePresentationInput) {
         guard let code = qrCode else {
             return
         }
-        let input = Input
         let ui = input.Ui
         let current = generation
         input.ChooseFile.Invoke(
