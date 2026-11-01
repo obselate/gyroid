@@ -13,6 +13,8 @@ data struct InfoTipInput {
     var Lines[]string
     var Language string
     var Width float64
+    var Placement PopoverPlacement? = nil
+    var TakeFocus bool = true
 }
 
 class InfoTip : Cell[InfoTipInput] {
@@ -52,7 +54,8 @@ class InfoTip : Cell[InfoTipInput] {
                 PopoverInput{
                     Open: visible,
                     Anchor: anchor,
-                    Placement: PopoverPlacement.BottomEnd,
+                    Placement: input.Placement ?? PopoverPlacement.BottomEnd,
+                    TakeFocus: input.TakeFocus,
                     Width: input.Width,
                     Padding: AppTheme.Space14,
                     BackgroundColor: AppTheme.Raised,

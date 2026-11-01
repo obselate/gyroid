@@ -21,6 +21,39 @@ class LayoutParts {
             BackgroundColor: color
         }
 
+        func SegmentGrid(
+            rows int32,
+            columns int32,
+            cell Func[int32, Blob],
+            gap float64 = 4,
+            rowGap float64 = 8,
+            minHeight float64 = 8,
+            maxHeight float64 = 44,
+            label Func[int32, Blob]? = nil
+        ) Container {
+            let grid = Container{FlexGrow: 1, MinHeight: 0, Gap: rowGap, JustifyContent: JustifyContent.Center}
+            for row in 0 ... Math.Max(0, rows) {
+                let line = Container{
+                    FlexDirection: FlexDirection.Row,
+                    Gap: AppTheme.Space10,
+                    FlexGrow: 1,
+                    FlexBasis: 0,
+                    MinHeight: minHeight,
+                    MaxHeight: maxHeight
+                }
+                if let buildLabel = label {
+                    line.Add(buildLabel(row))
+                }
+                let cells = Container{FlexDirection: FlexDirection.Row, Gap: gap, FlexGrow: 1, MinWidth: 0}
+                for column in 0 ... Math.Max(0, columns) {
+                    cells.Add(cell(row * columns + column))
+                }
+                line.Add(cells)
+                grid.Add(line)
+            }
+            return grid
+        }
+
         func Grow(blob Blob) Blob {
             blob.FlexGrow = 1
             blob.FlexBasis = 0

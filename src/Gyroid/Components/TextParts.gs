@@ -3,6 +3,7 @@ package Gyroid.Components
 import Goo
 import Goo.Widgets.Actions
 import Goo.Widgets.Icons
+import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Services.WalletText
 import Gyroid.Views
@@ -16,12 +17,24 @@ class TextParts {
             label string,
             value string,
             gap float64 = 8,
-            color Color? = nil
-        ) Blob -> Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: gap,
-            Label(ui, label, AppTheme.Type12, color ?? AppTheme.Body, ""),
-            Label(ui, value, AppTheme.Type12, AppTheme.Ink, "")
+            color Color? = nil,
+            valueColor Color? = nil,
+            size float64 = 12,
+            labelWidth float64? = nil
+        ) Blob {
+            let name = Label(ui, label, size, color ?? AppTheme.Body, "")
+            if let width = labelWidth {
+                name.Width = width
+                name.FlexShrink = 0
+            }
+            return Container{
+                FlexDirection: FlexDirection.Row,
+                Gap: gap,
+                AlignItems: AlignItems.Baseline,
+                MinWidth: 0,
+                name,
+                Label(ui, value, size, valueColor ?? AppTheme.Ink, "")
+            }
         }
 
         func ChainState(ui Presentation, state string, confirmations uint64) string -> if state == "confirmed" {
@@ -136,6 +149,60 @@ class TextParts {
             TextParts.Label(ui, value, size, color, channel)
         }
 
+        func Figure(
+            ui Presentation,
+            label string,
+            value string,
+            unit string,
+            size float64,
+            color Color,
+            weight float64 = 1,
+            fractionColor Color? = nil,
+            live AccessibilityLive = AccessibilityLive.Off,
+            key string = ""
+        ) Blob -> Container{
+            FlexGrow: weight,
+            FlexBasis: 0,
+            MinWidth: 0,
+            Gap: AppTheme.Space6,
+            Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value + " " + unit},
+            Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Dim, ""),
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Baseline,
+                Gap: AppTheme.Space6,
+                Overflow: Overflow.Hidden,
+                Cell.Mount[DecodeValueInput, DecodeValue](
+                    key.Length > 0 ? key: label,
+                    DecodeValueInput{
+                        Value: value,
+                        Name: ui.Strings.Get(label) + " " + value,
+                        Size: size,
+                        Color: color,
+                        FractionColor: fractionColor ?? color,
+                        Live: live,
+                        Ui: ui
+                    }
+                ),
+                Label(ui, unit, AppTheme.Type11, color, "")
+            }
+        }
+
+        func Legend(ui Presentation, label string, color Color, trailing Blob? = nil) Container {
+            let row = Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: AppTheme.Space8,
+                MinWidth: 0,
+                Container{BasedOn: AppTheme.MarkerStyle, BackgroundColor: color, FlexShrink: 0},
+                Label(ui, label, AppTheme.Type12, AppTheme.Body, "")
+            }
+            if let value = trailing {
+                row.Add(value)
+            }
+            return row
+        }
+
         func Badge(ui Presentation, content string, color Color, icon string = "") Container {
             let badge = Container{BasedOn: AppTheme.BadgeStyle, BorderColor: color, FlexShrink: 0}
             if icon.Length > 0 {
@@ -159,42 +226,50 @@ class TextParts {
             return status
         }
 
-        func Copyable(ui Presentation, label string, value string, shown string, clearAfterMs float64 = 120000) Blob {
+        func Copyable(
+            ui Presentation,
+            label string,
+            value string,
+            shown string,
+            clearAfterMs float64 = 120000,
+            labelled bool = true,
+            wrap bool = true
+        ) Blob {
             let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
                 System.MemoryExtensions.AsSpan(value)
+            )
+            let content = Container{Gap: AppTheme.Space6}
+            if labelled {
+                content.Add(TextParts.Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body))
+            }
+            content.Add(
+                Text{
+                    Content: shown,
+                    FontFamily: AppTheme.Font,
+                    FontSize: AppTheme.Type13,
+                    Color: AppTheme.Ink,
+                    TextWrap: wrap ? TextWrap.Wrap: TextWrap.NoWrap
+                }
             )
             return Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.FlexStart,
                 Gap: AppTheme.Space8,
                 FlexShrink: 0,
-                Grow(
-                    Container{
-                        Gap: AppTheme.Space6,
-                        TextParts.Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body),
-                        Text{
-                            Content: shown,
-                            FontFamily: AppTheme.Font,
-                            FontSize: AppTheme.Type13,
-                            Color: AppTheme.Ink,
-                            TextWrap: TextWrap.Wrap
-                        }
+                Grow(content),
+                ControlParts.Icon(
+                    ui,
+                    MaterialIcons.Create(
+                        copied ? "check": "content_copy",
+                        AppTheme.Icon16,
+                        copied ? AppTheme.Lime: AppTheme.Body
+                    ),
+                    ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
+                    () -> {
+                        ui.Actions.Copy(value, clearAfterMs)
+                        ui.Actions.rebuild()
                     }
-                ),
-                (
-                    AppTheme.IconButton with{
-                        Icon = MaterialIcons.Create(
-                            copied ? "check": "content_copy",
-                            AppTheme.Icon16,
-                            copied ? AppTheme.Lime: AppTheme.Body
-                        ),
-                        AccessibilityName = ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
-                        OnClick = () -> {
-                            ui.Actions.Copy(value, clearAfterMs)
-                            ui.Actions.rebuild()
-                        }
-                    }
-                ).Build()
+                )
             }
         }
     }

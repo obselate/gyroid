@@ -443,6 +443,8 @@ class Strings {
             case "Close": "关闭"
             case "Dismiss": "关闭"
             case "Hide password": "隐藏密码"
+            case "Show password": "显示密码"
+            case "Message exceeds the size limit": "消息超过大小限制"
             case "Starting": "启动中"
             case "Core download": "节点程序下载"
             case "Checkpoints": "检查点"

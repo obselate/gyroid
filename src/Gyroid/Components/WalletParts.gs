@@ -38,22 +38,39 @@ class WalletParts {
             MinHeight: 0
         }
 
-        func PageCard(ui Presentation, width float64, height float64) Container {
+        func PageCard(
+            ui Presentation,
+            width float64,
+            height float64,
+            maxWidth float64 = 900,
+            fill bool = false
+        ) Container {
             let card = Card(ui, AppTheme.GetPagePadding(width, height), AppTheme.GetPageGap(height), AppTheme.Radius14)
-            card.Width = 900
-            card.MaxWidth = Percent(100)
+            card.Width = fill ? Percent(100): maxWidth
+            card.MaxWidth = fill ? maxWidth: Percent(100)
             card.MaxHeight = Percent(100)
             return card
         }
 
-        func Header(label Blob, gap float64 = 8, trailing Blob? = nil, value Blob? = nil) Container {
+        func Header(
+            label Blob,
+            gap float64 = 8,
+            trailing Blob? = nil,
+            value Blob? = nil,
+            leading Blob? = nil,
+            alignment AlignItems = AlignItems.Center
+        ) Container {
             let header = Container{
                 FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
+                AlignItems: alignment,
                 Gap: gap,
                 FlexShrink: 0,
-                label
+                MinWidth: 0
             }
+            if let part = leading {
+                header.Add(part)
+            }
+            header.Add(label)
             if let figure = value {
                 header.Add(figure)
             }

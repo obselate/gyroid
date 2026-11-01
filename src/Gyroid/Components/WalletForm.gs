@@ -61,27 +61,49 @@ class WalletForm {
         issue string = "",
         disabled bool = false,
         labelled bool = true,
-        hidden bool = false
+        hidden bool = false,
+        leading Blob? = nil,
+        trailing Blob? = nil
     ) Blob -> Bind(
-        AppTheme.FieldInput with{
-            Label = labelled ? ui.Strings.Get(label): nil,
-            AccessibilityName = ui.Strings.Get(label),
-            Value = value,
-            Controlled = true,
-            Password = secret || hidden,
-            RevealButton = secret,
-            IssueText = issue.Length > 0 ? ui.Strings.Explain(issue): nil,
-            Invalid = issue.Length > 0,
-            Disabled = disabled || ui.Working(),
-            Width = Percent(100),
-            FontFamily = AppTheme.Font,
-            ContentDirection = Direction.LeftToRight,
-            OnChange = text -> {
+        FieldInput(
+            label,
+            value,
+            text -> {
                 changed(text)
                 edited?.Invoke()
-            }
+            },
+            secret,
+            issue,
+            disabled || ui.Working()
+        ) with{
+            Label = labelled ? ui.Strings.Get(label): nil,
+            Password = secret || hidden,
+            Leading = leading,
+            Trailing = trailing
         }
     ).Build()
+
+    private func FieldInput(
+        label string,
+        value string,
+        changed Action[string],
+        secret bool,
+        issue string,
+        disabled bool
+    ) TextField -> AppTheme.FieldInput with{
+        AccessibilityName = ui.Strings.Get(label),
+        Value = value,
+        Controlled = true,
+        Password = secret,
+        RevealButton = secret,
+        IssueText = issue.Length > 0 ? ui.Strings.Explain(issue): nil,
+        Invalid = issue.Length > 0,
+        Disabled = disabled,
+        Width = Percent(100),
+        FontFamily = AppTheme.Font,
+        ContentDirection = Direction.LeftToRight,
+        OnChange = changed
+    }
 
     func Row(
         label string,
@@ -89,27 +111,18 @@ class WalletForm {
         changed Action[string],
         secret bool = false,
         issue string = "",
-        disabled bool = false
+        disabled bool = false,
+        leading Blob? = nil,
+        trailing Blob? = nil
     ) Blob -> FormField{
         Content: Grow(
             Container{
                 MinWidth: 0,
-                ControlParts.Entry(
-                    ui,
-                    Bind(
-                        TextField{
-                            AccessibilityName: ui.Strings.Get(label),
-                            Value: value,
-                            Controlled: true,
-                            Password: secret,
-                            RevealButton: secret,
-                            Invalid: issue.Length > 0,
-                            IssueText: issue.Length > 0 ? ui.Strings.Explain(issue): nil,
-                            Disabled: disabled,
-                            ContentDirection: Direction.LeftToRight,
-                            OnChange: changed
-                        }
-                    )
+                Entry(
+                    FieldInput(label, value, changed, secret, issue, disabled) with{
+                        Leading = leading,
+                        Trailing = trailing
+                    }
                 )
             }
         ),
@@ -130,6 +143,14 @@ class WalletForm {
             return root
         }
     }.Build()
+
+    func Amount(field TextField) Blob -> Entry(
+        field with{
+            Controlled = true,
+            ContentDirection = Direction.LeftToRight,
+            Trailing = Label(ui, "BNT", AppTheme.Type12, AppTheme.Dim, "")
+        }
+    )
 
     func PasswordPair(
         card Container,

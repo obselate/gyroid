@@ -2,12 +2,14 @@ package Gyroid.Components
 
 import Goo
 import Goo.Widgets
+import Goo.Widgets.Actions
 import Goo.Widgets.Feedback
 import Goo.Widgets.Inputs
 import Goo.Widgets.Navigation
 import Gyroid.Components.TextParts
 import Gyroid.Views
 import System
+import System.Collections.Generic
 
 class ControlParts {
     shared {
@@ -62,64 +64,120 @@ class ControlParts {
             selected string,
             disabled bool,
             chosen Action[string],
-            enabledCount int32 = Int32.MaxValue
+            enabledCount int32 = Int32.MaxValue,
+            equalWidth bool = false,
+            key string = ""
         ) Blob {
-            let group = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.Group, Name: ui.Strings.Get(label)})
-            group.FlexShrink = 0
+            let items = List[ToggleOption](ids.Length)
             for index in 0 ... ids.Length {
-                let id = ids[index]
-                let on = id == selected
-                let button = Choice(
-                    ui,
-                    ui.Strings.Get(names[index]),
-                    on,
-                    () -> {
-                        if !on {
-                            chosen(id)
-                        }
-                    },
-                    Accessibility{
-                        Role: AccessibilityRole.Radio,
-                        Name: ui.Strings.Get(names[index]),
-                        Checked: on ? AccessibilityChecked.True: AccessibilityChecked.False
-                    },
-                    Edges{Left: AppTheme.Space12, Right: AppTheme.Space12},
-                    size: AppTheme.Type12,
-                    disabled: disabled || index >= enabledCount
+                items.Add(
+                    ToggleOption{
+                        Id: ids[index],
+                        Label: ui.Strings.Get(names[index]),
+                        Disabled: disabled || index >= enabledCount
+                    }
                 )
-                button.Height = AppTheme.ControlCompact
-                button.AlignItems = AlignItems.Center
-                button.JustifyContent = JustifyContent.Center
-                button.Opacity = index >= enabledCount ? 0.4: 1.0
-                group.Add(button)
             }
-            return group
+            return Cell.Mount[ToggleGroupInput, ToggleGroup](
+                key.Length > 0 ? key: label,
+                ToggleGroupInput{
+                    Items: items.ToArray(),
+                    SelectedIds: []string{selected},
+                    AccessibilityName: ui.Strings.Get(label),
+                    CreateRoot: (_, root) -> {
+                        root.BasedOn = AppTheme.SegmentGroupStyle
+                        root.FlexShrink = 0
+                        return root
+                    },
+                    CreateItem: (_, item, button) -> {
+                        let active = item.Id == selected
+                        button.BasedOn = AppTheme.SegmentStyle
+                        button.Height = AppTheme.ControlCompact
+                        button.MinHeight = AppTheme.ControlCompact
+                        button.BackgroundColor = active ? AppTheme.Rule: Color.Transparent
+                        button.Hover = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
+                        button.Focus = Theme.Read().FocusStyle
+                        button.BorderWidth = AppTheme.Border0
+                        button.BoxShadow = BoxShadow{}
+                        button.Opacity = item.Disabled ? 0.4: 1.0
+                        if equalWidth {
+                            button.FlexGrow = 1
+                            button.FlexBasis = 0
+                            button.MinWidth = 0
+                        }
+                        button.Children.Clear()
+                        button.Add(
+                            Label(ui, item.Label ?? item.Id, AppTheme.Type12, active ? AppTheme.Ink: AppTheme.Body, "")
+                        )
+                        return button
+                    },
+                    OnChange: values -> {
+                        if values.Length > 0 && values[0] != selected {
+                            chosen(values[0])
+                        }
+                    }
+                }
+            )
         }
 
-        func ExpandButton(ui Presentation, icon Blob, label string, active bool, disabled bool, action Action) Blob {
-            let button = Goo
-                .Button{
+        func Icon(
+            ui Presentation,
+            icon Blob,
+            label string,
+            action Action,
+            disabled bool = false,
+            active bool = false,
+            size float64 = 38,
+            style Style? = nil,
+            expanded bool? = nil
+        ) Blob -> (
+            AppTheme.IconButton with{
+                Icon = icon,
+                AccessibilityName = label,
+                OnClick = action,
+                Disabled = disabled,
+                Active = active,
+                Width = size,
+                Height = size,
+                DisabledOpacity = 1,
+                RootStyle = style ?? AppTheme.IconButtonStyle,
+                CreateRoot = (value, content) -> Goo
+                    .Button{
+                    BasedOn: style ?? AppTheme.IconButtonStyle,
+                    Width: size,
+                    Height: size,
+                    FlexShrink: 0,
+                    AlignItems: AlignItems.Center,
+                    JustifyContent: JustifyContent.Center,
+                    Disabled: value.Disabled,
+                    OnClick: value.OnClick,
+                    Hover: Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule},
+                    BorderColor: active ? AppTheme.Lime: AppTheme.Edge,
+                    Focus: Theme.Read().FocusStyle,
+                    Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
+                    content
+                }
+            }
+        ).Build()
+
+        func ExpandButton(ui Presentation, icon Blob, label string, active bool, disabled bool, action Action) Blob ->
+        Icon(
+            ui,
+            icon,
+            ui.Strings.Get(label),
+            action,
+            disabled,
+            active,
+            AppTheme.ControlCompact,
+            Style{
                 BasedOn: AppTheme.DisclosureStyle,
                 Margin: Edges{Top: AppTheme.Space4},
                 FlexShrink: 0,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
                 BorderRadius: AppTheme.Radius8,
-                BackgroundColor: active ? AppTheme.Rule: Color.Transparent,
-                Disabled: disabled,
-                Hover: Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule},
-                Focus: Theme.Read().FocusStyle,
-                Accessibility: Accessibility{
-                    Role: AccessibilityRole.Button,
-                    Name: ui.Strings.Get(label),
-                    Expanded: active
-                },
-                OnClick: action,
-                icon
-            }
-            WidgetKeyBindings.BindActivation(button)
-            return button
-        }
+                BackgroundColor: active ? AppTheme.Rule: Color.Transparent
+            },
+            active
+        )
 
         func Tabs(
             ui Presentation,
@@ -127,7 +185,8 @@ class ControlParts {
             label string,
             items[]NavigationItem,
             selected string,
-            chosen Action[string]
+            chosen Action[string],
+            equalWidth bool = false
         ) Blob ->
         Cell.Mount[TabBarInput, TabBar](
             key,
@@ -140,6 +199,11 @@ class ControlParts {
                     button.BasedOn = item.Id == bar.SelectedId ? AppTheme.SelectedTabStyle: AppTheme.TabStyle
                     button.Focus = Theme.Read().FocusStyle
                     button.Overflow = Overflow.Hidden
+                    if equalWidth {
+                        button.FlexGrow = 1
+                        button.FlexBasis = 0
+                        button.MinWidth = 0
+                    }
                     return button
                 },
                 OnSelect: chosen
@@ -152,46 +216,25 @@ class ControlParts {
             action Action,
             disabled bool = false,
             primary bool = false,
-            autoFocus bool = false
+            autoFocus bool = false,
+            busy bool? = nil,
+            appearance ActionButton? = nil
         ) Blob {
-            let style = if primary {
-                AppTheme.PrimaryButton
-            } else {
-                AppTheme.Button
-            }
-            let busy = primary && ui.Working()
+            let style = appearance ?? (primary ? AppTheme.PrimaryButton: AppTheme.Button)
+            let loading = busy ?? (primary && ui.Working())
             let button = (
                 style with{
                     Content = ui.Strings.Get(content),
                     OnClick = action,
-                    Disabled = disabled || busy,
-                    DisabledBackgroundColor = busy ? style.BackgroundColor: style.DisabledBackgroundColor,
-                    DisabledTextColor = busy ? Color.Transparent: AppTheme.Dim,
+                    Loading = loading,
+                    Disabled = disabled,
+                    DisabledBackgroundColor = loading ? style.BackgroundColor: style.DisabledBackgroundColor,
+                    DisabledTextColor = AppTheme.Dim,
                     FontFamily = AppTheme.Font
                 }
             ).Build()
             button.AutoFocus = autoFocus
-            return Container{
-                Position: PositionType.Relative,
-                button,
-                if busy && ui.Actions.playbackActive() {
-                    Container{
-                        Position: PositionType.Absolute,
-                        Left: 0,
-                        Right: 0,
-                        Top: 0,
-                        Bottom: 0,
-                        AlignItems: AlignItems.Center,
-                        JustifyContent: JustifyContent.Center,
-                        Cell.Mount[SpinnerInput, Spinner](
-                            "busy",
-                            SpinnerInput{Size: 20, StrokeWidth: AppTheme.Stroke3, Color: style.TextColor}
-                        )
-                    }
-                } else {
-                    Container{}
-                }
-            }
+            return button
         }
 
         func Entry(ui Presentation, field TextField) Blob -> (
@@ -237,43 +280,81 @@ class ControlParts {
             return meter
         }
 
-        func Ring(share float64, color Color, trackColor Color) Blob {
-            let track = PathBuilder(0, 0, 18, 18)
-            let arc = PathBuilder(0, 0, 18, 18)
+        func Ring(share float64, color Color, trackColor Color, size float64 = 18, thickness float64 = 2) Blob {
+            let track = PathBuilder(0, 0, size, size)
+            let arc = PathBuilder(0, 0, size, size)
+            let middle = size / 2
+            let radius = middle - thickness
             for step in 0 ... 33 {
                 let turn = step / 32.0 * Math.PI * 2
                 let sweep = turn * Math.Clamp(share, 0.0, 1.0) - Math.PI / 2
                 if step == 0 {
-                    track.MoveTo(16, 9)
-                    arc.MoveTo(9 + 7 * Math.Cos(sweep), 9 + 7 * Math.Sin(sweep))
+                    track.MoveTo(middle + radius, middle)
+                    arc.MoveTo(middle + radius * Math.Cos(sweep), middle + radius * Math.Sin(sweep))
                 } else {
-                    track.LineTo(9 + 7 * Math.Cos(turn), 9 + 7 * Math.Sin(turn))
-                    arc.LineTo(9 + 7 * Math.Cos(sweep), 9 + 7 * Math.Sin(sweep))
+                    track.LineTo(middle + radius * Math.Cos(turn), middle + radius * Math.Sin(turn))
+                    arc.LineTo(middle + radius * Math.Cos(sweep), middle + radius * Math.Sin(sweep))
                 }
             }
             return Container{
-                Width: 18,
-                Height: 18,
+                Width: size,
+                Height: size,
                 FlexShrink: 0,
                 Shape{
                     Position: PositionType.Absolute,
-                    Width: 18,
-                    Height: 18,
+                    Width: size,
+                    Height: size,
                     Path: track.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: AppTheme.Border2,
+                    BorderWidth: thickness,
                     BorderColor: trackColor
                 },
                 Shape{
                     Position: PositionType.Absolute,
-                    Width: 18,
-                    Height: 18,
+                    Width: size,
+                    Height: size,
                     Path: arc.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: AppTheme.Border2,
+                    BorderWidth: thickness,
                     BorderColor: share > 0 ? color: Color.Transparent
                 }
             }
         }
+
+        func Progress(
+            name string,
+            share float64,
+            color Color,
+            width float64,
+            height float64 = 8,
+            track Color? = nil
+        ) Blob ->
+        ProgressBar{
+            AccessibilityName: name,
+            Value: share,
+            Width: width,
+            Height: height,
+            BorderRadius: AppTheme.Radius2,
+            FillColor: color,
+            TrackColor: track ?? AppTheme.Rule
+        }.Build()
+
+        func Navigation(ui Presentation, key string, input NavigationRailInput) Blob ->
+        Cell.Mount[NavigationRailInput, NavigationRail](
+            key,
+            input with{
+                FontFamily = AppTheme.Font,
+                FontSize = AppTheme.Type13,
+                ItemBorderRadius = AppTheme.Radius8,
+                ItemGap = AppTheme.Space10,
+                ItemPaddingHorizontal = AppTheme.Space12,
+                ItemBackgroundColor = Color.Transparent,
+                BackgroundColor = Color.Transparent,
+                TextColor = AppTheme.Body,
+                SelectedTextColor = AppTheme.Ink,
+                SelectedBackgroundColor = AppTheme.Rule,
+                HoverBackgroundColor = AppTheme.Rule
+            }
+        )
     }
 }

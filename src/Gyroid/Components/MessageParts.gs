@@ -2,6 +2,7 @@ package Gyroid.Components
 
 import Goo
 import Goo.Widgets
+import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
@@ -14,6 +15,25 @@ import Gyroid.Views
 import System
 import System.Collections.Generic
 import System.Linq
+
+class MessageParts {
+    shared {
+        func Problem(ui Presentation, issue string) Blob -> Banner{
+            Content: ui.Strings.Explain(issue),
+            AccessibilityName: ui.Strings.Explain(issue),
+            BackgroundColor: AppTheme.PinkQuiet,
+            BorderColor: AppTheme.Pink,
+            TextColor: AppTheme.Pink,
+            BorderRadius: AppTheme.Radius8,
+            BorderWidth: AppTheme.Border1,
+            FontFamily: AppTheme.Font,
+            FontSize: AppTheme.Type12,
+            MinHeight: AppTheme.Space0,
+            PaddingHorizontal: AppTheme.Space10,
+            PaddingVertical: AppTheme.Space8
+        }.Build()
+    }
+}
 
 class MessageSlide(From float64, Delay float64) : Simulation {
     override func Position(time float64) float64 {
@@ -405,6 +425,22 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
             estimate.Fits ? color: AppTheme.Pink,
             estimate.Fits ? track: AppTheme.Pink
         )
+        let details = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: AppTheme.Space8,
+            ring,
+            Label(
+                ui,
+                estimate.Outputs.ToString() + " " + ui.Strings.Get(estimate.Outputs == 1 ? "memo": "memos"),
+                AppTheme.Type11,
+                estimate.Fits ? AppTheme.Dim: AppTheme.Pink,
+                ""
+            )
+        }
+        if !estimate.Fits {
+            details.Add(Label(ui, ui.Strings.Get("Message exceeds the size limit"), AppTheme.Type11, AppTheme.Pink, ""))
+        }
         return Container{
             Padding: AppTheme.Space14,
             Gap: AppTheme.Space6,
@@ -412,19 +448,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
             BorderWidth: Edges{Top: AppTheme.Border1},
             BorderColor: AppTheme.Rule,
             field,
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space8,
-                ring,
-                Label(
-                    ui,
-                    estimate.Outputs.ToString() + " " + ui.Strings.Get(estimate.Outputs == 1 ? "memo": "memos"),
-                    AppTheme.Type11,
-                    estimate.Fits ? AppTheme.Dim: AppTheme.Pink,
-                    ""
-                )
-            }
+            details
         }
     }
 }
