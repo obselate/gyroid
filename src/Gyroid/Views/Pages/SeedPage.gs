@@ -13,6 +13,7 @@ data struct SeedPageInput {
     var Session WalletSession
     var Ui Presentation
     var Words[]char
+    var ClipboardOwner ReadOnlyMemory[uint8]
     var FromWallet bool
     var Busy bool
     var Language string
@@ -91,7 +92,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                 }
             )
         )
-        let copied = !copiedOwner.IsEmpty && copiedOwner.Equals(ui.Actions.ClipboardOwner)
+        let copied = !copiedOwner.IsEmpty && copiedOwner.Equals(input.ClipboardOwner)
         actions.Add(
             Button(
                 ui,

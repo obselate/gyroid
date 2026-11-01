@@ -967,6 +967,7 @@ partial class App : Cell {
                     Session: wallet,
                     Ui: ui,
                     Words: words,
+                    ClipboardOwner: ui.Actions.ClipboardOwner,
                     FromWallet: seedFromWallet,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
