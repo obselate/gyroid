@@ -341,7 +341,6 @@ partial class App : Cell, IDisposable {
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
                     Height: height,
-                    ChooseFile: chooseFile,
                     Request: receiveRequest
                 }
             )

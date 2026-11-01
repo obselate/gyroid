@@ -30,7 +30,6 @@ data struct ReceivePageInput {
     var Busy bool
     var Language string
     var Height float64
-    var ChooseFile Action[FileDialogKind, string, string, Action[string]]
 }
 
 data struct ReceiveFormInput {
@@ -314,12 +313,14 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                 TextAlign: TextAlign.Right,
                 FlexBasis: 0,
                 MinWidth: 0,
-                form.Amount(
+                form.Entry(
                     TextField{
                         AccessibilityName: ui.Strings.Get("Amount"),
                         Placeholder: ui.Strings.Get("amount"),
                         Value: request.Amount,
-                        Controlled: true,
+                        Controlled: false,
+                        ContentDirection: Direction.LeftToRight,
+                        Trailing: Label(ui, "BNT", AppTheme.Type12, AppTheme.Dim, ""),
                         Password: input.Privacy,
                         Disabled: input.Disabled,
                         Invalid: draft.AmountIssue.Length > 0,
@@ -335,22 +336,26 @@ class ReceiveForm : Cell[ReceiveFormInput] {
             Grow(
                 Container{
                     MinWidth: 0,
-                    form.Field(
-                        "Memo",
-                        request.Memo,
-                        value -> input.Change.Invoke("memo", value),
-                        issue: draft.MemoIssue,
-                        disabled: input.Disabled,
-                        labelled: false,
-                        hidden: input.Privacy,
-                        placeholder: ui.Strings.Get("memo"),
-                        leading: MaterialIcons.Create("notes", AppTheme.Icon16, AppTheme.Dim),
-                        trailing: Container{
-                            FlexDirection: FlexDirection.Row,
-                            AlignItems: AlignItems.Center,
-                            Gap: AppTheme.Space8,
-                            Label(ui, Hidden(input.Privacy, draft.Reference), AppTheme.Type14, AppTheme.Dim, ""),
-                            Meter(ui, Encoding.UTF8.GetByteCount(draft.FullMemo), WalletValidation.MemoLimit, true)
+                    form.Entry(
+                        TextField{
+                            AccessibilityName: ui.Strings.Get("Memo"),
+                            Value: request.Memo,
+                            Controlled: false,
+                            ContentDirection: Direction.LeftToRight,
+                            OnChange: value -> input.Change.Invoke("memo", value),
+                            Invalid: draft.MemoIssue.Length > 0,
+                            IssueText: draft.MemoIssue.Length > 0 ? ui.Strings.Explain(draft.MemoIssue): nil,
+                            Disabled: input.Disabled,
+                            Password: input.Privacy,
+                            Placeholder: ui.Strings.Get("memo"),
+                            Leading: MaterialIcons.Create("notes", AppTheme.Icon16, AppTheme.Dim),
+                            Trailing: Container{
+                                FlexDirection: FlexDirection.Row,
+                                AlignItems: AlignItems.Center,
+                                Gap: AppTheme.Space8,
+                                Label(ui, Hidden(input.Privacy, draft.Reference), AppTheme.Type14, AppTheme.Dim, ""),
+                                Meter(ui, Encoding.UTF8.GetByteCount(draft.FullMemo), WalletValidation.MemoLimit, true)
+                            }
                         }
                     )
                 }
