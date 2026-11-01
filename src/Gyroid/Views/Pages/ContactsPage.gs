@@ -30,8 +30,6 @@ class ContactsPage : Cell[ContactsInput] {
 
     private var deleting string = ""
 
-    private var editorDestination string = ""
-
     private let editorHandle ElementHandle = ElementHandle{}
 
     private let listHandle ElementHandle = ElementHandle{}
@@ -50,7 +48,7 @@ class ContactsPage : Cell[ContactsInput] {
                     ui,
                     MaterialIcons.Create("person_add", AppTheme.Icon16, editing == "" ? AppTheme.Lime: AppTheme.Body),
                     ui.Strings.Get("Add contact"),
-                    () -> Edit(input, "", ""),
+                    () -> Edit(input, ""),
                     input.Busy,
                     editing == "",
                     AppTheme.ControlRegular
@@ -71,7 +69,7 @@ class ContactsPage : Cell[ContactsInput] {
         for (label, destination) in input.Contacts {
             list.Add(
                 if label == editing {
-                    Editor(input, label, editorDestination)
+                    Editor(input, label, destination)
                 } else {
                     Row(input, label, destination)
                 }
@@ -84,13 +82,12 @@ class ContactsPage : Cell[ContactsInput] {
         return card
     }
 
-    private func Edit(input ContactsInput, label string, destination string) {
+    private func Edit(input ContactsInput, label string) {
         if editing != nil || input.Contacts.Count == 0 {
             editorHandle.ScrollIntoView()
             return
         }
         editing = label
-        editorDestination = destination
         if label == "" {
             listHandle.JumpTo(0, 0)
         }
@@ -98,7 +95,6 @@ class ContactsPage : Cell[ContactsInput] {
 
     private func Reset() {
         editing = nil
-        editorDestination = ""
         Rebuild()
     }
 
@@ -133,7 +129,7 @@ class ContactsPage : Cell[ContactsInput] {
                 ui,
                 MaterialIcons.Create("edit", AppTheme.Icon16, AppTheme.Body),
                 ui.Strings.Get("Edit") + " " + label,
-                () -> Edit(input, label, destination),
+                () -> Edit(input, label),
                 input.Busy,
                 size: AppTheme.ControlRegular
             ),
@@ -310,7 +306,6 @@ class ContactEditor : Cell[ContactEditorInput] {
         }
         return Container{
             BasedOn: AppTheme.TileStyle,
-            Key: "edit",
             Handle: input.Handle,
             Gap: AppTheme.Space12,
             Padding: AppTheme.Space12,
