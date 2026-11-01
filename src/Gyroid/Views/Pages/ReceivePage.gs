@@ -297,9 +297,16 @@ class ReceiveStatus : Cell[ReceiveStatusInput] {
 }
 
 class ReceiveForm : Cell[ReceiveFormInput] {
+    private var accepted ReceiveDraft
+    private var draft ReceiveDraft
+
     protected override func Build(input ReceiveFormInput) Blob {
         let ui = input.Ui
-        let draft = input.Draft
+        if accepted != input.Draft {
+            accepted = input.Draft
+            this.draft = input.Draft
+        }
+        let draft = this.draft
         let form = WalletForm(ui, false, nil, []string{})
         return Container{
             FlexDirection: FlexDirection.Row,
@@ -324,7 +331,10 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                         } else {
                             nil
                         },
-                        OnChange: value -> input.Change.Invoke("amount", value)
+                        OnChange: value -> {
+                            this.draft.Amount = value
+                            input.Change.Invoke("amount", value)
+                        }
                     }
                 )
             },
@@ -334,7 +344,10 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                     form.Field(
                         "Memo",
                         draft.Memo,
-                        value -> input.Change.Invoke("memo", value),
+                        value -> {
+                            this.draft.Memo = value
+                            input.Change.Invoke("memo", value)
+                        },
                         issue: draft.MemoIssue,
                         disabled: input.Disabled,
                         labelled: false,
