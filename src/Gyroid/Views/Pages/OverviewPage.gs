@@ -12,6 +12,7 @@ import Gyroid.Components.TextParts
 import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Services.WalletText
+import Gyroid.Views.OverviewParts
 import System
 import System.Collections.Generic
 import System.Globalization
@@ -55,277 +56,132 @@ data struct Activity {
     var Timestamp int64
 }
 
-class OverviewPage : Cell[OverviewInput] {
-    private let hero ElementHandle = ElementHandle()
-    private let strip ElementHandle = ElementHandle()
-    private var heroWidth float64
-    private var stripWidth float64
-    private var hovering bool
-    private var peeking bool
-    private var expanded string = ""
-    private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
-    private let requested HashSet[uint64] = HashSet[uint64]()
-    private var fetching bool
-    private var failedSnapshot WalletSnapshot? = nil
+data struct OverviewBalanceInput {
+    var Ui Presentation
+    var Balance WalletBalance?
+    var NodeHeight uint64
+    var Privacy bool
+    var Height float64
+    var Width float64
+    var Language string
+    var Arrivals List[Arrival]
+}
 
-    private let networkPlot ElementHandle = ElementHandle()
-    private var networkLoaded NodeStatus? = nil
-    private var networkLoading bool
+data struct OverviewNetworkInput {
+    var Ui Presentation
+    var Session NodeSession
+    var Api NodeApi
+    var Window Window?
+    var Node NodeStatus
+    var Report NetworkReport
+    var Width float64
+    var Language string
+    var Wallet string
+    var Network string
+    var OnNavigate Action[AppPage]
+}
+
+data struct OverviewRecentInput {
+    var Ui Presentation
+    var Snapshot WalletSnapshot
+    var History HistoryService
+    var Messages MessagingService
+    var Api NodeApi
+    var Contacts SortedDictionary[string, string]
+    var Window Window?
+    var Chain uint64
+    var Privacy bool
+    var Width float64
+    var Language string
+    var Network string
+    var Arrivals List[Arrival]
+    var OnNavigate Action[AppPage]
+}
+
+data struct OverviewUpgradeInput {
+    var Ui Presentation
+    var Node NodeStatus
+    var Language string
+    var OnUpgrade Action
+}
+
+class OverviewPage : Cell[OverviewInput] {
+    private var networkInput OverviewNetworkInput
+    private var recentInput OverviewRecentInput
+    private let configureNetwork Action[OverviewNetwork]
+    private let configureRecent Action[OverviewRecent]
+
     init() {
-        hero.MetricsChanged += _ -> if hero.BorderBox.Width != heroWidth {
-            Rebuild()
-        }
-        strip.MetricsChanged += _ -> if strip.BorderBox.Width != stripWidth {
-            Rebuild()
-        }
-        networkPlot.MetricsChanged += _ -> Rebuild()
+        configureNetwork = cell -> cell.Accept(networkInput)
+        configureRecent = cell -> cell.Accept(recentInput)
     }
 
     protected override func Build(input OverviewInput) Blob {
-        heroWidth = hero.BorderBox.Width
-        stripWidth = strip.BorderBox.Width
-        let snapshot = input.Snapshot
-        let chain = snapshot.Balance?.ChainHeight ?? input.Node.Height
-        RequestTimes(input)
-        RequestNetwork(input)
+        let chain = input.Snapshot.Balance?.ChainHeight ?? input.Node.Height
+        let language = input.Ui.Strings.Language
         let arrivals = Arrivals(input, chain)
+        networkInput = OverviewNetworkInput{
+            Ui: input.Ui,
+            Session: input.Session.Node,
+            Api: input.Session.Node.Api,
+            Window: input.Window,
+            Node: input.Node,
+            Report: input.Session.Node.Network,
+            Width: input.Width,
+            Language: language,
+            Wallet: input.Snapshot.Address,
+            Network: input.Session.Node.Settings.Network,
+            OnNavigate: input.OnNavigate
+        }
+        recentInput = OverviewRecentInput{
+            Ui: input.Ui,
+            Snapshot: input.Snapshot,
+            History: input.Session.History,
+            Messages: input.Session.Messages,
+            Api: input.Session.Node.Api,
+            Contacts: input.Contacts,
+            Window: input.Window,
+            Chain: chain,
+            Privacy: input.Privacy,
+            Width: input.Width,
+            Language: language,
+            Network: input.Session.Node.Settings.Network,
+            Arrivals: arrivals,
+            OnNavigate: input.OnNavigate
+        }
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Gap: AppTheme.Space12}
         if input.Node.UpgradeDate.Length > 0 {
-            page.Add(Upgrade(input))
-        }
-        let top = Container{
-            Height: Math.Clamp(Math.Min(input.Height * 0.32, input.Width * 0.09 + 151), 260, 352),
-            FlexShrink: 0,
-            FlexDirection: FlexDirection.Row,
-            Gap: AppTheme.Space16
-        }
-        let balance = Hero(input, arrivals)
-        balance.Width = input.Width < 1200 ? 400.0: Percent(39)
-        balance.FlexGrow = 0
-        balance.FlexShrink = 0
-        top.Add(balance)
-        top.Add(Network(input))
-        page.Add(top)
-        page.Add(Recent(input, chain, arrivals))
-        return page
-    }
-
-    private func RequestNetwork(input OverviewInput) {
-        let blocks = input.Session.Node.Network.Blocks
-        if blocks.Length > 0 &&
-            blocks[blocks.Length - 1].Height == input
-            .Node
-            .Height &&
-            blocks[blocks.Length - 1]
-            .Hash
-            .StartsWith(input.Node.BestHash, StringComparison.Ordinal) {
-            return
-        }
-        if networkLoading || !input.Node.Running || networkLoaded == input.Node {
-            return
-        }
-        guard let window = input.Window else {
-            return
-        }
-        networkLoaded = input.Node
-        networkLoading = true
-        input.Ui.Actions.Background(ct -> LoadNetwork(input, window, ct))
-    }
-
-    private async func LoadNetwork(input OverviewInput, window Window, ct CancellationToken) {
-        try {
-            await input.Session.Node.ReadNetworkSummaryAsync(ct)
-        } catch (error Exception) { } finally {
-            window.TryPost(
-                () -> {
-                    networkLoading = false
-                    Rebuild()
-                }
+            page.Add(
+                Cell.Mount[OverviewUpgradeInput, OverviewUpgrade](
+                    "upgrade",
+                    OverviewUpgradeInput{Ui: input.Ui, Node: input.Node, Language: language, OnUpgrade: input.OnUpgrade}
+                )
             )
         }
-    }
-
-    private func Network(input OverviewInput) Blob {
-        let ui = input.Ui
-        let node = input.Node
-        let report = input.Session.Node.Network
-        let online = node.Running
-        let size = input.Width < 1200 ? AppTheme.Type20: AppTheme.Type24
-        let color = online ? AppTheme.Ink: AppTheme.Dim
-        let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space10)
-        card.FlexGrow = 1
-        card.FlexBasis = 0
-        card.OnPointerDown = (event PointerEvent) -> if !event.IsFromInteractiveChild {
-            input.OnNavigate(AppPage.Network)
-        }
-        let height = !online ? ui.Strings.Get("offline"): Count(node.Height)
-        let sync = !online ? "": node.Syncing ? "/ " + Count(node.ChainHeight): ui.Strings.Get("synced")
-        let age = Math.Max(0L, DateTimeOffset.Now.ToUnixTimeSeconds() - node.LastBlockTime)
-        let last = node.LastBlockTime == 0 ? "-": String.Format(
-            ui.Strings.Get(age < 3600 ? "{0}m ago": "{0}h ago"),
-            age < 3600 ? age / 60: age / 3600
-        )
-        let first = Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: AppTheme.Space10,
-            TextParts.Figure(
-                ui,
-                "height",
-                height,
-                sync,
-                size,
-                !online ? AppTheme.Pink: node.Syncing ? AppTheme.Orange: AppTheme.Lime,
-                1.85
-            ),
-            TextParts.Figure(ui, "peers", Count(node.Peers), "", size, color),
-            TextParts.Figure(ui, "last block", last, "", size, online && age > 900 ? AppTheme.Orange: color)
-        }
-        card.Add(first)
-        let second = Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: AppTheme.Space10,
-            TextParts.Figure(ui, "hashrate", Rate(report.Hashrate), Unit(report.Hashrate), size, color, 1.85),
-            TextParts.Figure(ui, "difficulty", Compact(report.Difficulty), "", size, color),
-            TextParts.Figure(
-                ui,
-                "mempool",
-                Count(node.Mempool),
-                ui.Strings.Get("tx") + " · " + (node.MempoolBytes / 1000.0).ToString(
-                    "0.0",
-                    CultureInfo.InvariantCulture
-                ) +
-                    " KB",
-                size,
-                color
-            )
-        }
-        card.Add(second)
-        card.Add(NetworkParts.TimeChart(ui, report.Blocks, networkPlot, 0, _ -> { }, true, !online))
-        let blocks = report.Blocks
-        let count = blocks.Length - 1
-        let average = count > 0 ? Duration(
-            (blocks[blocks.Length - 1].Timestamp - blocks[blocks.Length - count - 1].Timestamp) / count
-        ): "-"
-        card.Add(
-            WalletParts.Header(
-                Label(ui, ui.Strings.Get("block time") + " " + average, AppTheme.Type12, color, ""),
-                AppTheme.Space8,
-                Link(ui, "network", () -> input.OnNavigate(AppPage.Network))
-            )
-        )
-        return card
-    }
-
-    private func RequestTimes(input OverviewInput) {
-        if fetching {
-            return
-        }
-        if failedSnapshot != nil && failedSnapshot != input.Snapshot {
-            requested.IntersectWith(times.Keys)
-            failedSnapshot = nil
-        }
-        guard let window = input.Window else {
-            return
-        }
-        let missing = input
-            .Snapshot
-            .History
-            .Take(50)
-            .Select((output WalletOutput) -> output.BlockHeight)
-            .Where((height uint64) -> height > 0 && !requested.Contains(height))
-            .Distinct()
-            .ToArray()
-        if missing.Length == 0 {
-            return
-        }
-        for height in missing {
-            requested.Add(height)
-        }
-        fetching = true
-        input.Ui.Actions.Background(ct -> FetchTimes(window, input.Session.History, input.Snapshot, missing, ct))
-    }
-
-    private async func FetchTimes(
-        window Window,
-        history HistoryService,
-        snapshot WalletSnapshot,
-        heights[]uint64,
-        ct CancellationToken
-    ) {
-        var fetched = Dictionary[uint64, int64]()
-        var failed = false
-        try {
-            fetched = await history.BlockTimesAsync(heights, ct)
-        } catch (error Exception) {
-            failed = true
-        } finally {
-            window.TryPost(
-                () -> {
-                    for entry in fetched {
-                        times[entry.Key] = entry.Value
+        page.Add(
+            Container{
+                Height: Math.Clamp(Math.Min(input.Height * 0.32, input.Width * 0.09 + 151), 260, 352),
+                FlexShrink: 0,
+                FlexDirection: FlexDirection.Row,
+                Gap: AppTheme.Space16,
+                Cell.Mount[OverviewBalanceInput, OverviewBalance](
+                    "balance",
+                    OverviewBalanceInput{
+                        Ui: input.Ui,
+                        Balance: input.Snapshot.Balance,
+                        NodeHeight: input.Node.Height,
+                        Privacy: input.Privacy,
+                        Height: input.Height,
+                        Width: input.Width,
+                        Language: language,
+                        Arrivals: arrivals
                     }
-                    fetching = false
-                    if failed {
-                        failedSnapshot = snapshot
-                    }
-                    if fetched.Count > 0 {
-                        Rebuild()
-                    }
-                }
-            )
-        }
-    }
-
-    private func Fixed(units uint64) string ->
-    (units / 100000000).ToString(CultureInfo.InvariantCulture) + "." + (units % 100000000 / 10000).ToString(
-        "D4",
-        CultureInfo.InvariantCulture
-    )
-
-    private func Wait(input OverviewInput, blocks uint64) string {
-        let minutes = blocks * 5
-        return if minutes < 60 {
-            String.Format(input.Ui.Strings.Get("~{0}m"), minutes)
-        } else if minutes % 60 == 0 {
-            String.Format(input.Ui.Strings.Get("~{0}h"), minutes / 60)
-        } else {
-            String.Format(input.Ui.Strings.Get("~{0}h{1}m"), minutes / 60, minutes % 60)
-        }
-    }
-
-    private func Short(txid string) string -> if txid.Length > 8 {
-        "tx " + txid.Substring(0, 4) + "…" + txid.Substring(txid.Length - 4)
-    } else {
-        "tx " + txid
-    }
-
-    private func Contact(input OverviewInput, send WalletSend?) string {
-        guard let value = send else {
-            return ""
-        }
-        let memo = value
-            .Recipients
-            .Select((recipient WalletRecipient) -> recipient.Memo)
-            .FirstOrDefault((text string) -> text.Length > 0) ??
-            ""
-        if input.Session.Messages.Lookup(value.TxId) != nil {
-            return memo
-        }
-        for (name, destination) in input.Contacts {
-            if value.Recipients.Any((recipient WalletRecipient) -> recipient.Address == destination) {
-                return name
+                ),
+                Cell.Mount[OverviewNetwork]("network", configureNetwork)
             }
-        }
-        return memo
-    }
-
-    private func Change(input OverviewInput, send WalletSend?) string {
-        let name = Contact(input, send)
-        return input.Ui.Strings.Get("change") + if name.Length > 0 {
-            " · " + name
-        } else {
-            ""
-        }
+        )
+        page.Add(Cell.Mount[OverviewRecent]("recent", configureRecent))
+        return page
     }
 
     private func Arrivals(input OverviewInput, chain uint64) List[Arrival] {
@@ -346,13 +202,13 @@ class OverviewPage : Cell[OverviewInput] {
                     Self: send?.IsSelf(input.Snapshot.Address) ?? false,
                     Amount: output.Amount,
                     Source: if output.IsChange {
-                        Change(input, send)
+                        Change(input.Ui, input.Contacts, input.Session.Messages, send)
                     } else if output.Coinbase {
                         ui.Strings.Get("mined") + " · " + ui.Strings.Get("block") + " " + Count(output.BlockHeight)
                     } else if output.Memo.Length > 0 {
                         output.Memo
                     } else {
-                        Short(output.TxId)
+                        OverviewParts.Short(output.TxId)
                     },
                     Confirmations: maturity.Count,
                     Required: maturity.Required,
@@ -370,7 +226,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Kind: "pool",
                     Self: pending?.IsSelf(input.Snapshot.Address) ?? false,
                     Amount: balance.Unconfirmed,
-                    Source: Change(input, pending),
+                    Source: Change(input.Ui, input.Contacts, input.Session.Messages, pending),
                     Required: 10,
                     Blocks: 11,
                     TxId: ""
@@ -380,40 +236,116 @@ class OverviewPage : Cell[OverviewInput] {
         arrivals.Sort((a Arrival, b Arrival) -> a.Blocks.CompareTo(b.Blocks))
         return arrivals
     }
+}
 
-    private func Number(ui Presentation, masked bool, text string, color Color, fraction Color) Blob {
-        if masked {
-            return Label(ui, "••••••••", AppTheme.Type14, fraction, "")
+class OverviewParts {
+    shared {
+        func Fixed(units uint64) string ->
+        (units / 100000000).ToString(CultureInfo.InvariantCulture) + "." + (units % 100000000 / 10000).ToString(
+            "D4",
+            CultureInfo.InvariantCulture
+        )
+
+        func Wait(ui Presentation, blocks uint64) string {
+            let minutes = blocks * 5
+            return if minutes < 60 {
+                String.Format(ui.Strings.Get("~{0}m"), minutes)
+            } else if minutes % 60 == 0 {
+                String.Format(ui.Strings.Get("~{0}h"), minutes / 60)
+            } else {
+                String.Format(ui.Strings.Get("~{0}h{1}m"), minutes / 60, minutes % 60)
+            }
         }
-        let point = text.IndexOf('.')
-        return Text{
-            Content: text,
-            StyleRanges: []TextStyleRange{
-                TextStyleRange(TextRange(point, text.Length - point), Style{Color: fraction})
-            },
-            FontSize: AppTheme.Type14,
-            Color: color,
-            TextWrap: TextWrap.NoWrap,
-            FlexShrink: 0
+
+        func Short(txid string) string -> if txid.Length > 8 {
+            "tx " + txid.Substring(0, 4) + "…" + txid.Substring(txid.Length - 4)
+        } else {
+            "tx " + txid
+        }
+
+        func Contact(contacts SortedDictionary[string, string], messages MessagingService, send WalletSend?) string {
+            guard let value = send else {
+                return ""
+            }
+            let memo = value
+                .Recipients
+                .Select((recipient WalletRecipient) -> recipient.Memo)
+                .FirstOrDefault((text string) -> text.Length > 0) ??
+                ""
+            if messages.Lookup(value.TxId) != nil {
+                return memo
+            }
+            for (name, destination) in contacts {
+                if value.Recipients.Any((recipient WalletRecipient) -> recipient.Address == destination) {
+                    return name
+                }
+            }
+            return memo
+        }
+
+        func Change(
+            ui Presentation,
+            contacts SortedDictionary[string, string],
+            messages MessagingService,
+            send WalletSend?
+        ) string {
+            let name = Contact(contacts, messages, send)
+            return ui.Strings.Get("change") + if name.Length > 0 {
+                " · " + name
+            } else {
+                ""
+            }
+        }
+
+        func Number(ui Presentation, masked bool, text string, color Color, fraction Color) Blob {
+            if masked {
+                return Label(ui, "••••••••", AppTheme.Type14, fraction, "")
+            }
+            let point = text.IndexOf('.')
+            return Text{
+                Content: text,
+                StyleRanges: []TextStyleRange{
+                    TextStyleRange(TextRange(point, text.Length - point), Style{Color: fraction})
+                },
+                FontSize: AppTheme.Type14,
+                Color: color,
+                TextWrap: TextWrap.NoWrap,
+                FlexShrink: 0
+            }
+        }
+
+        func Link(ui Presentation, label string, action Action) Blob {
+            let button = Goo
+                .Button{
+                FlexShrink: 0,
+                BorderRadius: AppTheme.Radius3,
+                BackgroundColor: Color.Transparent,
+                Focus: Theme.Read().FocusStyle,
+                Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get(label)},
+                OnClick: action,
+                Label(ui, ui.Strings.Get(label) + " ›", AppTheme.Type12, AppTheme.Lime, "")
+            }
+            WidgetKeyBindings.BindActivation(button)
+            return button
+        }
+    }
+}
+
+class OverviewUpgrade : Cell[OverviewUpgradeInput] {
+    private let strip ElementHandle = ElementHandle()
+    private var stripWidth float64
+
+    init() {
+        strip.MetricsChanged += _ -> {
+            let width = strip.BorderBox.Width
+            if width != stripWidth {
+                stripWidth = width
+                Rebuild()
+            }
         }
     }
 
-    private func Link(ui Presentation, label string, action Action) Blob {
-        let button = Goo
-            .Button{
-            FlexShrink: 0,
-            BorderRadius: AppTheme.Radius3,
-            BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get(label)},
-            OnClick: action,
-            Label(ui, ui.Strings.Get(label) + " ›", AppTheme.Type12, AppTheme.Lime, "")
-        }
-        WidgetKeyBindings.BindActivation(button)
-        return button
-    }
-
-    private func Upgrade(input OverviewInput) Blob {
+    protected override func Build(input OverviewUpgradeInput) Blob {
         let ui = input.Ui
         let node = input.Node
         let bar = WalletParts.Card(
@@ -463,10 +395,28 @@ class OverviewPage : Cell[OverviewInput] {
         )
         return bar
     }
+}
 
-    private func Hero(input OverviewInput, arrivals List[Arrival]) Blob {
+class OverviewBalance : Cell[OverviewBalanceInput] {
+    private let hero ElementHandle = ElementHandle()
+    private var heroWidth float64
+    private var peeking bool
+    private var hovering bool
+
+    init() {
+        hero.MetricsChanged += _ -> {
+            let width = hero.BorderBox.Width
+            if width != heroWidth {
+                heroWidth = width
+                Rebuild()
+            }
+        }
+    }
+
+    protected override func Build(input OverviewBalanceInput) Blob {
+        let arrivals = input.Arrivals
         let ui = input.Ui
-        let balance = input.Snapshot.Balance
+        let balance = input.Balance
         let masked = input.Privacy && !peeking
         let total = balance?.Balance ?? uint64(0)
         let ready = balance?.Spendable ?? uint64(0)
@@ -493,8 +443,10 @@ class OverviewPage : Cell[OverviewInput] {
             Edges{Top: AppTheme.Space16, Bottom: AppTheme.Space16, Left: AppTheme.Space20, Right: AppTheme.Space20},
             AppTheme.Space14
         )
+        card.Width = input.Width < 1200 ? 400.0: Percent(39)
+        card.FlexShrink = 0
         card.Handle = hero
-        card.FlexGrow = 1
+        card.FlexGrow = 0
         if peeking {
             card.BorderColor = AppTheme.StrongRule
         }
@@ -506,7 +458,6 @@ class OverviewPage : Cell[OverviewInput] {
             let press = (event PointerEvent) -> if !event.IsFromInteractiveChild {
                 event.Capture()
                 peeking = true
-                Rebuild()
             }
             header.Height = AppTheme.ControlCompact
             header.Add(
@@ -531,7 +482,6 @@ class OverviewPage : Cell[OverviewInput] {
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Show amounts")},
                     OnKeyDown: (event KeyEvent) -> if !peeking && (event.Key == Key.Space || event.Key == Key.Enter) {
                         peeking = true
-                        Rebuild()
                     },
                     OnKeyUp: (event KeyEvent) -> Hide(),
                     OnBlur: (event FocusEvent) -> Hide(),
@@ -589,7 +539,7 @@ class OverviewPage : Cell[OverviewInput] {
                         Content: String.Format(
                             ui.Strings.Get("Syncing {0} / {1} · balance may be inaccurate"),
                             Count(balance?.ScanHeight ?? uint64(0)),
-                            Count(balance?.ChainHeight ?? input.Node.Height)
+                            Count(balance?.ChainHeight ?? input.NodeHeight)
                         ),
                         FontFamily: AppTheme.Font,
                         FontSize: AppTheme.Type12,
@@ -650,11 +600,9 @@ class OverviewPage : Cell[OverviewInput] {
                 )
                 segment.OnPointerEnter = (event PointerEvent) -> {
                     hovering = true
-                    Rebuild()
                 }
                 segment.OnPointerLeave = (event PointerEvent) -> {
                     hovering = false
-                    Rebuild()
                 }
                 if hovering {
                     segment.BoxShadows = []BoxShadow{
@@ -676,7 +624,7 @@ class OverviewPage : Cell[OverviewInput] {
                 Gap: AppTheme.Space4,
                 KeyValue(ui, ui.Strings.Get("confirming"), Fixed(confirming)),
                 KeyValue(ui, ui.Strings.Get("outputs"), outputs.ToString()),
-                KeyValue(ui, ui.Strings.Get("all ready"), Wait(input, last))
+                KeyValue(ui, ui.Strings.Get("all ready"), Wait(input.Ui, last))
             }
             wrap.Add(ChartParts.Tooltip(0, 0, content, right: 20, bottom: height + AppTheme.Space8, zIndex: 5))
         }
@@ -688,12 +636,11 @@ class OverviewPage : Cell[OverviewInput] {
     private func Hide() {
         if peeking {
             peeking = false
-            Rebuild()
         }
     }
 
     private func Legend(
-        input OverviewInput,
+        input OverviewBalanceInput,
         masked bool,
         ready uint64,
         confirming uint64,
@@ -773,25 +720,289 @@ class OverviewPage : Cell[OverviewInput] {
             TakeFocus: false
         }
     )
+}
 
-    private func Fade(color Color, faded bool) Color -> if faded {
-        Color.FromNormalized(color.R * 0.3F + 0.014F, color.G * 0.3F + 0.014F, color.B * 0.3F + 0.014F, 1F)
-    } else {
-        color
+class OverviewNetwork : Cell, IDisposable {
+    private var source OverviewNetworkInput
+    private var report NetworkReport = NetworkReport()
+    private let networkPlot ElementHandle = ElementHandle()
+    private var plotWidth float64
+    private var plotHeight float64
+    private let lifetime CancellationTokenSource = CancellationTokenSource()
+    private var request CancellationTokenSource? = nil
+    private var generation int32
+    private var loaded NodeStatus? = nil
+
+    init() {
+        networkPlot.MetricsChanged += _ -> {
+            let bounds = networkPlot.BorderBox
+            if bounds.Width != plotWidth || bounds.Height != plotHeight {
+                plotWidth = bounds.Width
+                plotHeight = bounds.Height
+                Rebuild()
+            }
+        }
     }
 
-    private func Arrive(input OverviewInput, item Arrival) Blob {
+    func Accept(next OverviewNetworkInput) {
+        let replaced = source.Session != next.Session ||
+            source.Api != next.Api ||
+            source.Wallet != next.Wallet ||
+            source.Network != next.Network ||
+            source.Window != next.Window
+        if replaced || source.Node != next.Node {
+            generation++
+            request?.Cancel()
+            request?.Dispose()
+            request = nil
+            loaded = nil
+        }
+        if source != next {
+            source = next
+            report = next.Report
+            Rebuild()
+        }
+        let blocks = report.Blocks
+        if blocks.Length > 0 &&
+            blocks[blocks.Length - 1].Height == next
+            .Node
+            .Height &&
+            blocks[blocks.Length - 1]
+            .Hash
+            .StartsWith(next.Node.BestHash, StringComparison.Ordinal) {
+            return
+        }
+        if !next.Node.Running || loaded == next.Node {
+            return
+        }
+        guard let window = next.Window else {
+            return
+        }
+        request?.Cancel()
+        request?.Dispose()
+        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
+        request = current
+        loaded = next.Node
+        generation++
+        go Load(next.Session, next.Api, next.Wallet, next.Network, window, generation, current.Token)
+    }
+
+    private async func Load(
+        session NodeSession,
+        api NodeApi,
+        wallet string,
+        network string,
+        window Window,
+        id int32,
+        token CancellationToken
+    ) {
+        try {
+            let result = await session.ReadNetworkSummaryAsync(token)
+            window.TryPost(
+                () -> {
+                    if id == generation &&
+                        source.Session == session &&
+                        source.Api == api &&
+                        source.Wallet == wallet &&
+                        source.Network == network &&
+                        report != result {
+                        report = result
+                        Rebuild()
+                    }
+                }
+            )
+        } catch (error OperationCanceledException) { } catch (error Exception) { }
+    }
+
+    public func Dispose() {
+        generation++
+        lifetime.Cancel()
+        request?.Dispose()
+        lifetime.Dispose()
+    }
+
+    override func Build() Blob {
+        let input = source
         let ui = input.Ui
-        let faded = hovering && item.Kind == "pool"
+        let node = input.Node
+        let online = node.Running
+        let size = input.Width < 1200 ? AppTheme.Type20: AppTheme.Type24
+        let color = online ? AppTheme.Ink: AppTheme.Dim
+        let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space10)
+        card.FlexGrow = 1
+        card.FlexBasis = 0
+        card.OnPointerDown = (event PointerEvent) -> if !event.IsFromInteractiveChild {
+            input.OnNavigate(AppPage.Network)
+        }
+        let height = !online ? ui.Strings.Get("offline"): Count(node.Height)
+        let sync = !online ? "": node.Syncing ? "/ " + Count(node.ChainHeight): ui.Strings.Get("synced")
+        let age = Math.Max(0L, DateTimeOffset.Now.ToUnixTimeSeconds() - node.LastBlockTime)
+        let last = node.LastBlockTime == 0 ? "-": String.Format(
+            ui.Strings.Get(age < 3600 ? "{0}m ago": "{0}h ago"),
+            age < 3600 ? age / 60: age / 3600
+        )
+        let first = Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: AppTheme.Space10,
+            TextParts.Figure(
+                ui,
+                "height",
+                height,
+                sync,
+                size,
+                !online ? AppTheme.Pink: node.Syncing ? AppTheme.Orange: AppTheme.Lime,
+                1.85
+            ),
+            TextParts.Figure(ui, "peers", Count(node.Peers), "", size, color),
+            TextParts.Figure(ui, "last block", last, "", size, online && age > 900 ? AppTheme.Orange: color)
+        }
+        card.Add(first)
+        let second = Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: AppTheme.Space10,
+            TextParts.Figure(ui, "hashrate", Rate(report.Hashrate), Unit(report.Hashrate), size, color, 1.85),
+            TextParts.Figure(ui, "difficulty", Compact(report.Difficulty), "", size, color),
+            TextParts.Figure(
+                ui,
+                "mempool",
+                Count(node.Mempool),
+                ui.Strings.Get("tx") + " · " + (node.MempoolBytes / 1000.0).ToString(
+                    "0.0",
+                    CultureInfo.InvariantCulture
+                ) +
+                    " KB",
+                size,
+                color
+            )
+        }
+        card.Add(second)
+        card.Add(NetworkParts.TimeChart(ui, report.Blocks, networkPlot, 0, _ -> { }, true, !online))
+        let blocks = report.Blocks
+        let count = blocks.Length - 1
+        let average = count > 0 ? Duration(
+            (blocks[blocks.Length - 1].Timestamp - blocks[blocks.Length - count - 1].Timestamp) / count
+        ): "-"
+        card.Add(
+            WalletParts.Header(
+                Label(ui, ui.Strings.Get("block time") + " " + average, AppTheme.Type12, color, ""),
+                AppTheme.Space8,
+                Link(ui, "network", () -> input.OnNavigate(AppPage.Network))
+            )
+        )
+        return card
+    }
+}
+
+class OverviewRecent : Cell, IDisposable {
+    private var source OverviewRecentInput
+    private var expanded string = ""
+    private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
+    private let requested HashSet[uint64] = HashSet[uint64]()
+    private let lifetime CancellationTokenSource = CancellationTokenSource()
+    private var request CancellationTokenSource? = nil
+    private var generation int32
+
+    func Accept(next OverviewRecentInput) {
+        let replaced = source.History != next.History ||
+            source.Api != next.Api ||
+            source
+            .Snapshot
+            ?.Address != next
+            .Snapshot
+            .Address ||
+            source.Network != next.Network ||
+            source.Window != next.Window
+        let changed = replaced || source.Snapshot != next.Snapshot
+        if replaced {
+            times.Clear()
+            requested.Clear()
+            expanded = ""
+        }
+        if source != next {
+            source = next
+            Rebuild()
+        }
+        if !changed {
+            return
+        }
+        generation++
+        request?.Cancel()
+        request?.Dispose()
+        request = nil
+        requested.IntersectWith(times.Keys)
+        guard let window = next.Window else {
+            return
+        }
+        let missing = next
+            .Snapshot
+            .History
+            .Take(50)
+            .Select((output WalletOutput) -> output.BlockHeight)
+            .Where((height uint64) -> height > 0 && !requested.Contains(height))
+            .Distinct()
+            .ToArray()
+        if missing.Length == 0 {
+            return
+        }
+        for height in missing {
+            requested.Add(height)
+        }
+        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
+        request = current
+        go FetchTimes(window, next.History, next.Snapshot, next.Api, next.Network, missing, generation, current.Token)
+    }
+
+    private async func FetchTimes(
+        window Window,
+        history HistoryService,
+        snapshot WalletSnapshot,
+        api NodeApi,
+        network string,
+        heights[]uint64,
+        id int32,
+        token CancellationToken
+    ) {
+        try {
+            let fetched = await history.BlockTimesAsync(heights, token)
+            window.TryPost(
+                () -> {
+                    if id != generation ||
+                        source.History != history ||
+                        source.Snapshot != snapshot ||
+                        source.Api != api ||
+                        source.Network != network {
+                        return
+                    }
+                    for entry in fetched {
+                        times[entry.Key] = entry.Value
+                    }
+                    if fetched.Count > 0 {
+                        Rebuild()
+                    }
+                }
+            )
+        } catch (error OperationCanceledException) { } catch (error Exception) { }
+    }
+
+    public func Dispose() {
+        generation++
+        lifetime.Cancel()
+        request?.Dispose()
+        lifetime.Dispose()
+    }
+
+    private func Arrive(input OverviewRecentInput, item Arrival) Blob {
+        let ui = input.Ui
         let key = item.TxId + ":" + item.OutputIndex.ToString()
         let unfolded = item.TxId.Length > 0 && expanded == key
         let glyph Blob = switch item.Kind {
-            case "mined": Label(ui, "◆", AppTheme.Type14, Fade(AppTheme.Lime, faded), "")
-            case "in": Label(ui, "↓", AppTheme.Type14, Fade(AppTheme.Mint, faded), "")
-            default: MaterialIcons.Create("replay", AppTheme.Icon14, Fade(AppTheme.Blue, faded))
+            case "mined": Label(ui, "◆", AppTheme.Type14, AppTheme.Lime, "")
+            case "in": Label(ui, "↓", AppTheme.Type14, AppTheme.Mint, "")
+            default: MaterialIcons.Create("replay", AppTheme.Icon14, AppTheme.Blue)
         }
         let row = Goo
             .Button{
+            Key: key,
             BasedOn: AppTheme.ListRowStyle,
             FlexDirection: FlexDirection.Column,
             AlignItems: AlignItems.Stretch,
@@ -803,13 +1014,12 @@ class OverviewPage : Cell[OverviewInput] {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
-                Name: Hidden(input.Privacy, SafeText(item.Source, 512)) + " " + Wait(input, item.Blocks),
+                Name: Hidden(input.Privacy, SafeText(item.Source, 512)) + " " + Wait(input.Ui, item.Blocks),
                 Expanded: item.TxId.Length > 0 ? unfolded: nil
             },
             OnClick: () -> {
                 if item.TxId.Length > 0 {
                     expanded = unfolded ? "": key
-                    Rebuild()
                 }
             },
             Container{
@@ -817,19 +1027,8 @@ class OverviewPage : Cell[OverviewInput] {
                 AlignItems: AlignItems.Center,
                 Gap: AppTheme.Space12,
                 Container{Width: 16, AlignItems: AlignItems.Center, glyph},
-                Container{
-                    Width: 120,
-                    Number(ui, input.Privacy, Fixed(item.Amount), Fade(AppTheme.Ink, faded), Fade(AppTheme.Dim, faded))
-                },
-                Grow(
-                    Label(
-                        ui,
-                        Hidden(input.Privacy, SafeText(item.Source, 512)),
-                        AppTheme.Type13,
-                        Fade(AppTheme.Dim, faded),
-                        ""
-                    )
-                ),
+                Container{Width: 120, Number(ui, input.Privacy, Fixed(item.Amount), AppTheme.Ink, AppTheme.Dim)},
+                Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Source, 512)), AppTheme.Type13, AppTheme.Dim, "")),
                 Container{
                     Width: input.Width < 1200 ? 110.0: 160.0,
                     Gap: AppTheme.Space6,
@@ -842,24 +1041,24 @@ class OverviewPage : Cell[OverviewInput] {
                             .Required
                             .ToString(),
                         AppTheme.Type11,
-                        Fade(item.Kind == "pool" ? AppTheme.Blue: AppTheme.Orange, faded),
+                        item.Kind == "pool" ? AppTheme.Blue: AppTheme.Orange,
                         ""
                     ),
                     Container{
                         Width: Percent(100),
                         Height: 3,
-                        BackgroundColor: Fade(AppTheme.Rule, faded),
+                        BackgroundColor: AppTheme.Rule,
                         Container{
                             Width: Percent(100.0 * item.Confirmations / item.Required),
                             Height: 3,
-                            BackgroundColor: Fade(AppTheme.Orange, faded)
+                            BackgroundColor: AppTheme.Orange
                         }
                     }
                 },
                 Container{
                     Width: 60,
                     AlignItems: AlignItems.FlexEnd,
-                    Label(ui, Wait(input, item.Blocks), AppTheme.Type11, Fade(AppTheme.Dim, faded), "")
+                    Label(ui, Wait(input.Ui, item.Blocks), AppTheme.Type11, AppTheme.Dim, "")
                 }
             }
         }
@@ -878,7 +1077,7 @@ class OverviewPage : Cell[OverviewInput] {
                     RowGap: AppTheme.Space6,
                     Padding: Edges{Left: AppTheme.Space28, Top: AppTheme.Space4},
                     KeyValue(ui, ui.Strings.Get("block"), Count(item.Height), AppTheme.Space6, AppTheme.Dim),
-                    KeyValue(ui, "tx", Short(item.TxId).Substring(3), AppTheme.Space6, AppTheme.Dim),
+                    KeyValue(ui, "tx", OverviewParts.Short(item.TxId).Substring(3), AppTheme.Space6, AppTheme.Dim),
                     KeyValue(ui, ui.Strings.Get("ready at"), ready, AppTheme.Space6, AppTheme.Dim),
                     Container{FlexGrow: 1},
                     Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions))
@@ -888,7 +1087,7 @@ class OverviewPage : Cell[OverviewInput] {
         return row
     }
 
-    private func Activities(input OverviewInput, chain uint64) List[Activity] {
+    private func Activities(input OverviewRecentInput, chain uint64) List[Activity] {
         let ui = input.Ui
         let snapshot = input.Snapshot
         let items = List[Activity]()
@@ -911,7 +1110,7 @@ class OverviewPage : Cell[OverviewInput] {
                     } else if output.Coinbase {
                         ui.Strings.Get("block") + " " + Count(output.BlockHeight)
                     } else {
-                        Short(output.TxId)
+                        OverviewParts.Short(output.TxId)
                     },
                     Status: if output.BlockHeight == 0 {
                         "mempool"
@@ -928,7 +1127,7 @@ class OverviewPage : Cell[OverviewInput] {
             }
         }
         for send in snapshot.Sends.Take(50) {
-            let label = Contact(input, send)
+            let label = Contact(input.Contacts, input.Messages, send)
             let self = selfSends.Contains(send.TxId)
             let maturity = WalletMaturity(send.Confirmations, 10)
             items.Add(
@@ -936,7 +1135,9 @@ class OverviewPage : Cell[OverviewInput] {
                     Kind: self ? "self": "out",
                     Amount: self ? send.Fee: send.Amount,
                     Label: self ? ui.Strings.Get("To self") +
-                        (label.Length > 0 ? " · " + label: ""): label.Length > 0 ? label: Short(send.TxId),
+                        (label.Length > 0 ? " · " + label: ""): label.Length > 0 ? label: OverviewParts.Short(
+                        send.TxId
+                    ),
                     Status: send.Status == "not_found" ? ui.Strings.Get(
                         "not found"
                     ): send.Status == "mempool" ? "mempool": maturity
@@ -955,7 +1156,10 @@ class OverviewPage : Cell[OverviewInput] {
         return items.OrderByDescending((item Activity) -> item.Order).Take(50).ToList()
     }
 
-    private func Recent(input OverviewInput, chain uint64, arrivals List[Arrival]) Blob {
+    override func Build() Blob {
+        let input = source
+        let chain = input.Chain
+        let arrivals = input.Arrivals
         let ui = input.Ui
         let incoming = arrivals.Where(item -> !item.Self).ToArray()
         let card = WalletParts.Card(
@@ -983,7 +1187,7 @@ class OverviewPage : Cell[OverviewInput] {
             header.Add(
                 Label(
                     ui,
-                    ui.Strings.Get("all ready") + " " + Wait(input, incoming.Max((item Arrival) -> item.Blocks)),
+                    ui.Strings.Get("all ready") + " " + Wait(input.Ui, incoming.Max((item Arrival) -> item.Blocks)),
                     AppTheme.Type11,
                     AppTheme.Dim,
                     ""
