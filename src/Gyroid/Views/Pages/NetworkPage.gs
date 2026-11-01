@@ -455,8 +455,9 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
         let chart = input.Chart
         let blocks = chart.Blocks
         let tip = blocks.Length > 0 ? blocks[blocks.Length - 1]: NetworkBlock()
-        let shown = chart.Selected > 0 && Array.Exists(blocks, block -> block.Height == chart.Selected) ?
-        Array.Find(blocks, block -> block.Height == chart.Selected): tip
+        let index = chart.Selected > 0 && blocks.Length > 0 && chart.Selected >= blocks[0].Height && chart.Selected <= tip.Height ?
+        int32(chart.Selected - blocks[0].Height): -1
+        let shown = index >= 0 ? blocks[index]: tip
         let card = WalletParts.Card(
             chart.Ui,
             Edges{Left: AppTheme.Space16, Right: AppTheme.Space16, Top: AppTheme.Space14, Bottom: AppTheme.Space12},
@@ -634,11 +635,10 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
         if block.Hash.Length == 0 {
             return row
         }
-        let index = Array.FindIndex(input.Chart.Blocks, item -> item.Height == block.Height)
         let confirmations = tip.Height - block.Height + 1
         row.Add(Label(ui, "#" + Count(block.Height), AppTheme.Type13, AppTheme.Lime, ""))
         row.Add(Label(ui, Clock(block.Timestamp), AppTheme.Type13, AppTheme.Body, ""))
-        if index > 0 {
+        if block.Height > input.Chart.Blocks[0].Height {
             row.Add(
                 KeyValue(
                     ui,
@@ -729,7 +729,7 @@ class NetworkPeers : Cell, IDisposable {
         if next == current {
             return
         }
-        if next.Peers != current.Peers || next.Banned != current.Banned {
+        if !next.Online || next.PeerId != current.PeerId {
             rows = []NetworkRow{}
             hovered = ""
         }
@@ -847,6 +847,8 @@ class NetworkPeers : Cell, IDisposable {
         let list = rows.Length == 0 && tab == "banned" ?
         ListParts.Empty(ui, "no banned peers"): VirtualRows(rows, tab == "peers" ? 30: 44, rowKey, rowBuilder, false)
         list.MinHeight = 0
+        list.FlexGrow = 1
+        list.FlexBasis = 0
         let viewport = ListParts.Viewport(list, Style{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, MaxHeight: Percent(45)})
         card.Add(viewport)
         let identity = input.PeerId
