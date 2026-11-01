@@ -130,25 +130,25 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             ui.Actions.Delay(0, () -> ui.Actions.Run(ct -> LoadChain(input.Session, ct)))
         }
         let navWidth = input.Width < 1100 ? 132.0: 168.0
-        let nav = WalletParts.Card(ui, 8, 2, 14)
+        let nav = WalletParts.Card(ui, AppTheme.Space8, AppTheme.Space2, AppTheme.Radius14)
         nav.Width = navWidth
         nav.FlexShrink = 0
         nav.Accessibility = Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("settings")}
         for id in sections {
             let selected = id == section
-            let fill = selected ? ui.Active: Color.Transparent
+            let fill = selected ? AppTheme.Active: Color.Transparent
             let button = Goo
                 .Button{
+                BasedOn: AppTheme.TabStyle,
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.FlexStart,
-                Gap: 10,
-                Height: 38,
+                Gap: AppTheme.Space10,
+                Height: AppTheme.ControlRegular,
                 FlexShrink: 0,
-                Padding: Edges{Left: 12, Right: 12},
-                BorderRadius: 8,
+                BorderRadius: AppTheme.Radius8,
                 BackgroundColor: fill,
-                Hover: Style{BackgroundColor: selected ? fill: ui.Rule},
+                Hover: Style{BackgroundColor: selected ? fill: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{Role: AccessibilityRole.Tab, Name: ui.Strings.Get(id), Selected: selected},
                 OnClick: () -> input.OnSection.Invoke(id),
@@ -160,10 +160,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         case "advanced": "build"
                         default: "notes"
                     },
-                    18,
-                    selected ? ui.Lime: ui.Body
+                    AppTheme.Icon18,
+                    selected ? AppTheme.Lime: AppTheme.Body
                 ),
-                Label(ui, ui.Strings.Get(id), 14, selected ? ui.Lime: ui.Body, "")
+                Label(ui, ui.Strings.Get(id), AppTheme.Type14, selected ? AppTheme.Lime: AppTheme.Body, "")
             }
             WidgetKeyBindings.BindActivation(button)
             nav.Add(button)
@@ -175,15 +175,28 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let header = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             FlexShrink: 0,
-            Padding: Edges{Top: 6, Left: 2, Right: 2, Bottom: 2},
-            Label(ui, ui.Strings.Get(section), 17, ui.Ink, "")
+            Padding: Edges{
+                Top: AppTheme.Space6,
+                Left: AppTheme.Space2,
+                Right: AppTheme.Space2,
+                Bottom: AppTheme.Space2
+            },
+            Label(ui, ui.Strings.Get(section), AppTheme.Type17, AppTheme.Ink, "")
         }
         if section == "wallet" && input.Snapshot.ViewOnly {
-            header.Add(Badge(ui, ui.Strings.Get("view-only"), ui.Blue, "key"))
+            header.Add(Badge(ui, ui.Strings.Get("view-only"), AppTheme.Blue, "key"))
         }
-        let pane = Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, MaxWidth: 820, MinHeight: 0, Gap: 12, header}
+        let pane = Container{
+            FlexGrow: 1,
+            FlexBasis: 0,
+            MinWidth: 0,
+            MaxWidth: 820,
+            MinHeight: 0,
+            Gap: AppTheme.Space12,
+            header
+        }
         if section == "security" {
             pane.Add(Security(input, settings))
         } else if section == "node" {
@@ -197,7 +210,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         }
         let root = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: 16,
+            Gap: AppTheme.Space16,
             Width: Percent(100),
             MaxWidth: Math.Min(900, navWidth + 836),
             Height: Percent(100),
@@ -366,7 +379,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 rowHeight,
                 "hide values on start",
                 []Blob{
-                    MaterialIcons.Create("visibility_off", 16, ui.Dim),
+                    MaterialIcons.Create("visibility_off", AppTheme.Icon16, AppTheme.Dim),
                     Toggle(
                         input,
                         "hide values on start",
@@ -383,7 +396,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     rowHeight,
                     "recovery phrase",
                     []Blob{
-                        Label(ui, ui.Strings.Get("12 words"), 14, ui.Dim, ""),
+                        Label(ui, ui.Strings.Get("12 words"), AppTheme.Type14, AppTheme.Dim, ""),
                         Button(ui, "Show", () -> Open("phrase"), input.Busy),
                         Info(
                             input,
@@ -404,28 +417,28 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let automatic = settings.NodeMode == "automatic"
         let height = List[Blob]()
         if status.Running {
-            height.Add(Value(input, "height", "Height", Count(status.Height), 14, ui.Mint))
+            height.Add(Value(input, "height", "Height", Count(status.Height), 14, AppTheme.Mint))
             if status.Syncing {
-                height.Add(Label(ui, "/ " + Count(status.ChainHeight), 14, ui.Dim, ""))
+                height.Add(Label(ui, "/ " + Count(status.ChainHeight), AppTheme.Type14, AppTheme.Dim, ""))
             }
             height.Add(
                 Label(
                     ui,
                     Count(status.Peers) + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers"),
-                    14,
-                    ui.Dim,
+                    AppTheme.Type14,
+                    AppTheme.Dim,
                     ""
                 )
             )
         } else {
-            height.Add(Label(ui, ui.Strings.Get("Stopped"), 14, ui.Dim, ""))
+            height.Add(Label(ui, ui.Strings.Get("Stopped"), AppTheme.Type14, AppTheme.Dim, ""))
             if automatic && status.Phase == NodePhase.None {
                 height.Add(
                     Button(ui, "Start", () -> ui.Actions.Run(ct -> input.Session.StartNodeAsync(ct)), input.Busy)
                 )
             }
         }
-        let core = List[Blob]{Label(ui, "blocknet-core", 14, ui.Ink, "")}
+        let core = List[Blob]{Label(ui, "blocknet-core", AppTheme.Type14, AppTheme.Ink, "")}
         if status.Owned && automatic {
             core.Add(
                 Button(
@@ -436,9 +449,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             )
         }
-        let upgrade = List[Blob]{Label(ui, Count(CoreRelease.UpgradeHeight), 14, ui.Orange, "")}
+        let upgrade = List[Blob]{Label(ui, Count(CoreRelease.UpgradeHeight), AppTheme.Type14, AppTheme.Orange, "")}
         if status.UpgradeDate.Length > 0 {
-            upgrade.Add(Label(ui, status.UpgradeDate, 14, ui.Dim, ""))
+            upgrade.Add(Label(ui, status.UpgradeDate, AppTheme.Type14, AppTheme.Dim, ""))
         }
         if status.UpgradeNotice.Length > 0 {
             upgrade.Add(
@@ -488,7 +501,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     rowHeight,
                     "data folder",
                     []Blob{
-                        Label(ui, Shorten(folder), 14, ui.Dim, ""),
+                        Label(ui, Shorten(folder), AppTheme.Type14, AppTheme.Dim, ""),
                         Button(
                             ui,
                             "Open",
@@ -516,13 +529,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         )
         let startup = Goo
             .Button{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 10,
+            BasedOn: AppTheme.ListRowStyle,
             Height: 52,
             FlexShrink: 0,
-            BorderWidth: Edges{Top: 1},
-            BorderColor: ui.FaintRule,
+            BorderWidth: Edges{Top: AppTheme.Border1, Bottom: AppTheme.Border0},
+            BorderColor: AppTheme.FaintRule,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -533,8 +544,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 startupOpen = !startupOpen
                 Rebuild()
             },
-            Grow(Label(ui, ui.Strings.Get("startup"), 14, ui.Body, "")),
-            MaterialIcons.Create(startupOpen ? "expand_less": "expand_more", 18, ui.Dim)
+            Grow(Label(ui, ui.Strings.Get("startup"), AppTheme.Type14, AppTheme.Body, "")),
+            MaterialIcons.Create(startupOpen ? "expand_less": "expand_more", AppTheme.Icon18, AppTheme.Dim)
         }
         WidgetKeyBindings.BindActivation(startup)
         list.Add(startup)
@@ -556,9 +567,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             () -> Rebuild()
         )
         let fields = Container{
-            Gap: 14,
+            Gap: AppTheme.Space14,
             FlexShrink: 0,
-            Padding: Edges{Bottom: 14},
+            Padding: Edges{Bottom: AppTheme.Space14},
             Segment(
                 ui,
                 "Network",
@@ -626,13 +637,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let scan = List[Blob]()
         if let balance = input.Snapshot.Balance {
-            scan.Add(Value(input, "scan", "scan height", Count(balance.ScanHeight), 14, ui.Ink))
+            scan.Add(Value(input, "scan", "scan height", Count(balance.ScanHeight), AppTheme.Type14, AppTheme.Ink))
         }
         if rescan?.IsCompleted == false {
             scan.Add(
                 Cell.Mount[SpinnerInput, Spinner](
                     "rescan-spinner",
-                    SpinnerInput{Size: 16, Color: ui.Lime, Label: ui.Strings.Get("Syncing")}
+                    SpinnerInput{Size: AppTheme.Icon16, Color: AppTheme.Lime, Label: ui.Strings.Get("Syncing")}
                 )
             )
         }
@@ -685,7 +696,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     rowHeight,
                     "view key",
                     []Blob{
-                        Label(ui, "••••••••", 14, ui.Dim, ""),
+                        Label(ui, "••••••••", AppTheme.Type14, AppTheme.Dim, ""),
                         Button(ui, "Show", () -> Open("view-key"), input.Busy)
                     }
                 )
@@ -734,20 +745,32 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 rowHeight,
                 "wallet file",
                 []Blob{
-                    Label(ui, Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)), 14, ui.Dim, ""),
+                    Label(
+                        ui,
+                        Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)),
+                        AppTheme.Type14,
+                        AppTheme.Dim,
+                        ""
+                    ),
                     Button(ui, "Switch wallet", () -> input.OnNavigate(AppPage.Library), input.Busy)
                 }
             )
         )
         pane.Add(WalletParts.Rows(ui, rows.ToArray()))
         if input.Snapshot.ViewOnly {
-            let note = WalletParts.Card(ui, 16, 10, 14)
+            let note = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space10, AppTheme.Radius14)
             note.FlexDirection = FlexDirection.Row
             note.AlignItems = AlignItems.Center
             note.FlexShrink = 0
-            note.Add(MaterialIcons.Create("warning", 16, ui.Body))
+            note.Add(MaterialIcons.Create("warning", AppTheme.Icon16, AppTheme.Body))
             note.Add(
-                Label(ui, ui.Strings.Get("Balance counts received coins. Spends need the spend key"), 13, ui.Ink, "")
+                Label(
+                    ui,
+                    ui.Strings.Get("Balance counts received coins. Spends need the spend key"),
+                    AppTheme.Type13,
+                    AppTheme.Ink,
+                    ""
+                )
             )
             pane.Add(note)
         }
@@ -756,7 +779,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private func Advanced(input SettingsPageInput, pane Container) {
         let ui = input.Ui
         let status = input.Node
-        let figure = Math.Clamp(input.Height * 0.065, 26.0, 64.0)
+        let figure = AppTheme.GetInstrumentSize(input.Height)
         let used = if dataSize > 0 {
             Math.Max(1, int32(Math.Round(40.0 * float64(dataSize) / float64(dataSize + freeSpace))))
         } else {
@@ -767,15 +790,15 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Baseline,
-                Gap: 12,
+                Gap: AppTheme.Space12,
                 FlexShrink: 0,
-                Value(input, "size", "chain data", sizeText, figure, ui.Ink),
-                Label(ui, sizeUnit, 15, ui.Body, ""),
+                Value(input, "size", "chain data", sizeText, figure, AppTheme.Ink),
+                Label(ui, sizeUnit, AppTheme.Type14, AppTheme.Body, ""),
                 Label(
                     ui,
                     ui.Strings.Get("{0} GB free").Replace("{0}", (freeSpace / 1000000000).ToString()),
-                    12.5,
-                    ui.Dim,
+                    AppTheme.Type13,
+                    AppTheme.Dim,
                     ""
                 )
             }
@@ -786,10 +809,15 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 ui.Strings.Get("chain data") + " " + sizeText + " " + sizeUnit,
                 4,
                 nil,
-                index -> Slot(ui, index < used ? ui.Blue: ui.Rule, 1)
+                index -> Slot(ui, index < used ? AppTheme.Blue: AppTheme.Rule, 1)
             )
         )
-        let purgeRow = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexShrink: 0}
+        let purgeRow = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: AppTheme.Space8,
+            FlexShrink: 0
+        }
         if dataWallets > 0 {
             purgeRow.Add(
                 Status(
@@ -798,7 +826,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         .Strings
                         .Get(dataWallets == 1 ? "{0} wallet inside": "{0} wallets inside")
                         .Replace("{0}", dataWallets.ToString()),
-                    ui.Orange,
+                    AppTheme.Orange,
                     "warning"
                 )
             )
@@ -806,16 +834,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         purgeRow.Add(Container{FlexGrow: 1})
         purgeRow.Add(
             (
-                Theme.Read()
-                    .Button with{
+                AppTheme.DangerButton with{
                     Content = ui.Strings.Get("Purge…"),
                     OnClick = () -> {
                         purgeText = ""
                         Open("purge")
                     },
-                    Disabled = input.Busy || !status.Owned || dataSize < 0,
-                    BorderColor = ui.Pink,
-                    FontFamily = ui.Font
+                    Disabled = input.Busy || !status.Owned || dataSize < 0
                 }
             ).Build()
         )
@@ -837,10 +862,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let verdict = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
-            Gap: 12,
+            Gap: AppTheme.Space12,
             FlexShrink: 0
         }
-        let wide = Math.Clamp(input.Height * 0.05, 22.0, 48.0)
+        let wide = AppTheme.GetVerdictSize(input.Height)
         var note = ""
         if let result = certificate {
             let clean = result.Violations.Length == 0
@@ -850,7 +875,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     ui,
                     clean ? ui.Strings.Get("clean"): Violations(ui, result.Violations.Length),
                     wide,
-                    clean ? ui.Mint: ui.Pink,
+                    clean ? AppTheme.Mint: AppTheme.Pink,
                     ""
                 )
             )
@@ -858,13 +883,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Label(
                     ui,
                     Count(result.Height) + " · " + result.Time.ToString("HH:mm", CultureInfo.InvariantCulture),
-                    12.5,
-                    ui.Dim,
+                    AppTheme.Type13,
+                    AppTheme.Dim,
                     ""
                 )
             )
         } else {
-            verdict.Add(Label(ui, ui.Strings.Get("not checked"), wide, ui.Dim, ""))
+            verdict.Add(Label(ui, ui.Strings.Get("not checked"), wide, AppTheme.Dim, ""))
         }
         checks.Add(verdict)
         let checked = certificate?.Height ?? uint64(0)
@@ -881,11 +906,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     ) ==
                     true
                     return if bad {
-                        Slot(ui, ui.Pink, 1)
+                        Slot(ui, AppTheme.Pink, 1)
                     } else if checked > first {
-                        Slot(ui, Color.Parse("#048f5f"), Math.Min(1.0, float64(checked - first) / float64(step)))
+                        Slot(ui, AppTheme.VerifiedSlot, Math.Min(1.0, float64(checked - first) / float64(step)))
                     } else {
-                        Slot(ui, ui.Rule, 0)
+                        Slot(ui, AppTheme.Rule, 0)
                     }
                 }
             )
@@ -894,9 +919,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 FlexShrink: 0,
-                Label(ui, note, 12.5, ui.Dim, ""),
+                Label(ui, note, AppTheme.Type13, AppTheme.Dim, ""),
                 Container{FlexGrow: 1},
                 Button(
                     ui,
@@ -918,7 +943,15 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             }
         )
         pane.Add(
-            Container{FlexDirection: FlexDirection.Row, Gap: 12, FlexGrow: 1, FlexBasis: 0, MinHeight: 0, data, checks}
+            Container{
+                FlexDirection: FlexDirection.Row,
+                Gap: AppTheme.Space12,
+                FlexGrow: 1,
+                FlexBasis: 0,
+                MinHeight: 0,
+                data,
+                checks
+            }
         )
         pane.Add(Checkpoint(input, figure))
     }
@@ -927,15 +960,15 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let tip = input.Node.Height
         let start = localCheckpoint - localCheckpoint % 1000
-        let card = WalletParts.Card(ui, 16, 12, 14)
+        let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space12, AppTheme.Radius14)
         card.FlexShrink = 0
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 FlexShrink: 0,
-                Label(ui, ui.Strings.Get("checkpoint"), 12, ui.Body, ""),
+                Label(ui, ui.Strings.Get("checkpoint"), AppTheme.Type12, AppTheme.Body, ""),
                 Container{FlexGrow: 1},
                 Info(
                     input,
@@ -949,15 +982,15 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.FlexEnd,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 FlexShrink: 0,
-                Value(input, "checkpoint", "checkpoint", Count(localCheckpoint), figure, ui.Ink),
+                Value(input, "checkpoint", "checkpoint", Count(localCheckpoint), figure, AppTheme.Ink),
                 Container{FlexGrow: 1},
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 8,
-                    Label(ui, ui.Strings.Get("auto save"), 12, ui.Body, ""),
+                    Gap: AppTheme.Space8,
+                    Label(ui, ui.Strings.Get("auto save"), AppTheme.Type12, AppTheme.Body, ""),
                     Toggle(
                         input,
                         "auto save",
@@ -996,17 +1029,17 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Right: 0,
             Height: 10,
             FlexDirection: FlexDirection.Row,
-            Gap: 4
+            Gap: AppTheme.Space4
         }
         for index in 0 ... 10 {
             let first = start + uint64(index) * 100
             slots.Add(
                 if localCheckpoint >= first + 100 {
-                    Slot(ui, Color.Parse("#598304"), 1)
+                    Slot(ui, AppTheme.VerifiedIndex, 1)
                 } else if tip > first {
-                    Slot(ui, ui.Orange, Math.Min(1.0, float64(tip - first) / 100))
+                    Slot(ui, AppTheme.Orange, Math.Min(1.0, float64(tip - first) / 100))
                 } else {
-                    Slot(ui, ui.Rule, 0)
+                    Slot(ui, AppTheme.Rule, 0)
                 }
             )
         }
@@ -1019,7 +1052,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     Left: Percent(Math.Min(1.0, float64(tip - start) / 1000) * 100),
                     Width: 2,
                     Height: 20,
-                    BackgroundColor: ui.Ink
+                    BackgroundColor: AppTheme.Ink
                 }
             )
         }
@@ -1029,7 +1062,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     Position: PositionType.Absolute,
                     Bottom: 0,
                     Left: 0,
-                    Label(ui, ui.Strings.Get("trusted") + " " + Count(trustedCheckpoint), 12, ui.Blue, "")
+                    Label(
+                        ui,
+                        ui.Strings.Get("trusted") + " " + Count(trustedCheckpoint),
+                        AppTheme.Type12,
+                        AppTheme.Blue,
+                        ""
+                    )
                 }
             )
         }
@@ -1038,7 +1077,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Position: PositionType.Absolute,
                 Bottom: 0,
                 Right: 0,
-                Label(ui, ui.Strings.Get("next") + " " + Count(localCheckpoint + 100), 12, ui.Dim, "")
+                Label(
+                    ui,
+                    ui.Strings.Get("next") + " " + Count(localCheckpoint + 100),
+                    AppTheme.Type12,
+                    AppTheme.Dim,
+                    ""
+                )
             }
         )
         card.Add(bar)
@@ -1059,16 +1104,16 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func Instrument(input SettingsPageInput, title string, key string, topic string, line string) Container {
         let ui = input.Ui
-        let card = WalletParts.Card(ui, 16, 12, 14)
+        let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space12, AppTheme.Radius14)
         card.FlexGrow = 1
         card.FlexBasis = 0
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 FlexShrink: 0,
-                Label(ui, ui.Strings.Get(title), 12, ui.Body, ""),
+                Label(ui, ui.Strings.Get(title), AppTheme.Type12, AppTheme.Body, ""),
                 Container{FlexGrow: 1},
                 Info(input, key, topic, line)
             }
@@ -1081,13 +1126,13 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             FlexGrow: 1,
             MinHeight: 0,
             JustifyContent: JustifyContent.Center,
-            Gap: Math.Clamp(input.Height * 0.01, 4.0, 8.0),
+            Gap: AppTheme.GetDetailGap(input.Height),
             Accessibility: Accessibility{Role: AccessibilityRole.Image, Name: name}
         }
         for row in 0 ... rows {
             let line = Container{
                 FlexDirection: FlexDirection.Row,
-                Gap: 10,
+                Gap: AppTheme.Space10,
                 FlexGrow: 1,
                 FlexBasis: 0,
                 MinHeight: 8,
@@ -1099,11 +1144,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         Width: 34,
                         AlignItems: AlignItems.FlexEnd,
                         JustifyContent: JustifyContent.Center,
-                        Label(input.Ui, names[row], 11, input.Ui.Dim, "")
+                        Label(input.Ui, names[row], AppTheme.Type11, AppTheme.Dim, "")
                     }
                 )
             }
-            let cells = Container{FlexDirection: FlexDirection.Row, Gap: 4, FlexGrow: 1}
+            let cells = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space4, FlexGrow: 1}
             for column in 0 ... 10 {
                 cells.Add(slot(row * 10 + column))
             }
@@ -1116,9 +1161,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private func Slot(ui Presentation, color Color, share float64) Blob -> Container{
         FlexGrow: 1,
         FlexBasis: 0,
-        BorderRadius: 1,
+        BorderRadius: AppTheme.Radius1,
         Overflow: Overflow.Hidden,
-        BackgroundColor: ui.Rule,
+        BackgroundColor: AppTheme.Rule,
         Container{Width: Percent(share * 100), Height: Percent(100), BackgroundColor: color}
     }
 
@@ -1223,7 +1268,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "password",
             title,
             420,
-            Label(ui, ui.Strings.Get(title), 17, ui.Ink, ""),
+            Label(ui, ui.Strings.Get(title), AppTheme.Type17, AppTheme.Ink, ""),
             form.Field(
                 "Password",
                 password,
@@ -1280,23 +1325,23 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private func Keys(input SettingsPageInput, keys WalletViewKeys) Blob {
         let ui = input.Ui
         let content = Container{
-            Gap: 10,
+            Gap: AppTheme.Space10,
             Key(input, "spend public", "", keys.SpendPublic, false),
             Key(input, "view private", "private", keys.ViewPrivate, true),
             Key(input, "view public", "", keys.ViewPublic, false),
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 8,
-                Padding: Edges{Top: 4},
-                MaterialIcons.Create("warning", 14, ui.Dim),
+                Gap: AppTheme.Space8,
+                Padding: Edges{Top: AppTheme.Space4},
+                MaterialIcons.Create("warning", AppTheme.Icon14, AppTheme.Dim),
                 Text{
                     Content: ui.Strings.Get(
                         "Anyone with these keys sees every payment and message to this wallet. They cannot spend"
                     ),
-                    FontFamily: ui.Font,
-                    FontSize: 12,
-                    Color: ui.Dim,
+                    FontFamily: AppTheme.Font,
+                    FontSize: AppTheme.Type12,
+                    Color: AppTheme.Dim,
                     TextWrap: TextWrap.Wrap,
                     FlexGrow: 1,
                     FlexBasis: 0,
@@ -1311,7 +1356,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "keys",
             "view keys",
             640,
-            Label(ui, ui.Strings.Get("view keys"), 17, ui.Ink, ""),
+            Label(ui, ui.Strings.Get("view keys"), AppTheme.Type17, AppTheme.Ink, ""),
             content,
             ActionRow(
                 []Blob{
@@ -1360,9 +1405,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let ui = input.Ui
         let masked = !viewPrivateShown && (secret || input.Privacy)
         let text = String(key)
-        let name = Container{Width: 130, FlexShrink: 0, Gap: 2, Label(ui, ui.Strings.Get(label), 12.5, ui.Body, "")}
+        let name = Container{
+            Width: AppTheme.LabelColumn,
+            FlexShrink: 0,
+            Gap: AppTheme.Space2,
+            Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, "")
+        }
         if note.Length > 0 {
-            name.Add(Label(ui, ui.Strings.Get(note), 11, ui.Orange, ""))
+            name.Add(Label(ui, ui.Strings.Get(note), AppTheme.Type11, AppTheme.Orange, ""))
         }
         let field = FieldBox(
             ui,
@@ -1375,45 +1425,55 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 } else {
                     text
                 },
-                12.5,
-                masked ? ui.Dim: ui.Body,
+                AppTheme.Type13,
+                masked ? AppTheme.Dim: AppTheme.Body,
                 ""
             ),
-            Edges{Left: 12, Right: 12}
+            Edges{Left: AppTheme.Space12, Right: AppTheme.Space12}
         )
-        field.Height = 34
+        field.Height = AppTheme.ControlRegular
         field.JustifyContent = JustifyContent.Center
         let row = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             FlexShrink: 0,
             name,
             Grow(field)
         }
         if secret {
             row.Add(
-                IconButton{
-                    Icon: MaterialIcons.Create(
-                        viewPrivateShown ? "visibility": "visibility_off",
-                        14,
-                        viewPrivateShown ? ui.Body: ui.Lime
-                    ),
-                    AccessibilityName: ui.Strings.Get(viewPrivateShown ? "Hide": "Reveal"),
-                    OnClick: () -> {
-                        viewPrivateShown = !viewPrivateShown
-                        Rebuild()
+                (
+                    AppTheme.IconButton with{
+                        RootStyle = AppTheme.DisclosureStyle,
+                        Icon = MaterialIcons.Create(
+                            viewPrivateShown ? "visibility": "visibility_off",
+                            AppTheme.Icon14,
+                            viewPrivateShown ? AppTheme.Body: AppTheme.Lime
+                        ),
+                        AccessibilityName = ui.Strings.Get(viewPrivateShown ? "Hide": "Reveal"),
+                        OnClick = () -> {
+                            viewPrivateShown = !viewPrivateShown
+                            Rebuild()
+                        }
                     }
-                }.Build()
+                ).Build()
             )
         }
         let copied = ReadOnlySpan[char](input.Clipboard).SequenceEqual(ReadOnlySpan[char](key))
         row.Add(
-            IconButton{
-                Icon: MaterialIcons.Create(copied ? "check": "content_copy", 14, copied ? ui.Lime: ui.Body),
-                AccessibilityName: ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
-                OnClick: () -> ui.Actions.Copy(text, 30000)
-            }.Build()
+            (
+                AppTheme.IconButton with{
+                    RootStyle = AppTheme.DisclosureStyle,
+                    Icon = MaterialIcons.Create(
+                        copied ? "check": "content_copy",
+                        AppTheme.Icon14,
+                        copied ? AppTheme.Lime: AppTheme.Body
+                    ),
+                    AccessibilityName = ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
+                    OnClick = () -> ui.Actions.Copy(text, 30000)
+                }
+            ).Build()
         )
         return row
     }
@@ -1427,16 +1487,16 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             () -> CreateViewOnly(input),
             []string{viewOnlyName.Trim(), password, viewOnlyPassword}
         )
-        let content = Container{Gap: 14}
+        let content = Container{Gap: AppTheme.Space14}
         let actions = List[Blob]()
         if viewOnlyCreated.Length > 0 {
             content.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 8,
-                    MaterialIcons.Create("check_circle", 18, ui.Lime),
-                    Label(ui, viewOnlyCreated, 15, ui.Ink, "")
+                    Gap: AppTheme.Space8,
+                    MaterialIcons.Create("check_circle", AppTheme.Icon18, AppTheme.Lime),
+                    Label(ui, viewOnlyCreated, AppTheme.Type14, AppTheme.Ink, "")
                 }
             )
             actions.Add(Button(ui, "Done", close, false, true))
@@ -1444,7 +1504,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             content.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
-                    Gap: 12,
+                    Gap: AppTheme.Space12,
                     FlexShrink: 0,
                     Ability(
                         ui,
@@ -1487,7 +1547,16 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             )
             content.Add(
-                form.Labelled("", Label(ui, ui.Strings.Get("Must differ from this wallet's password"), 12, ui.Dim, ""))
+                form.Labelled(
+                    "",
+                    Label(
+                        ui,
+                        ui.Strings.Get("Must differ from this wallet's password"),
+                        AppTheme.Type12,
+                        AppTheme.Dim,
+                        ""
+                    )
+                )
             )
             content.Add(
                 form.Labelled(
@@ -1509,11 +1578,11 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 6,
+                    Gap: AppTheme.Space6,
                     FlexGrow: 1,
                     MinWidth: 0,
-                    MaterialIcons.Create("folder", 14, ui.Dim),
-                    Label(ui, Tail(settings.WalletDirectory), 12, ui.Dim, "")
+                    MaterialIcons.Create("folder", AppTheme.Icon14, AppTheme.Dim),
+                    Label(ui, Tail(settings.WalletDirectory), AppTheme.Type12, AppTheme.Dim, "")
                 }
             )
             actions.Add(Button(ui, "Cancel", close))
@@ -1526,7 +1595,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             "view-only",
             "create view-only wallet",
             620,
-            Label(ui, ui.Strings.Get("create view-only wallet"), 17, ui.Ink, ""),
+            Label(ui, ui.Strings.Get("create view-only wallet"), AppTheme.Type17, AppTheme.Ink, ""),
             content,
             ActionRow(actions.ToArray()),
             close
@@ -1535,24 +1604,34 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     private func Ability(ui Presentation, title string, items[]string, allowed bool) Blob {
         let box = Container{
+            BasedOn: AppTheme.TileStyle,
+            BackgroundColor: Color.Transparent,
+            BackdropBlur: AppTheme.Space0,
             FlexGrow: 1,
             FlexBasis: 0,
             MinWidth: 0,
-            Gap: 8,
-            Padding: Edges{Top: 12, Bottom: 12, Left: 14, Right: 14},
-            BorderRadius: 10,
-            BorderWidth: 1,
-            BorderColor: ui.Rule,
-            Label(ui, ui.Strings.Get(title), 12, ui.Dim, "")
+            Gap: AppTheme.Space8,
+            Padding: Edges{
+                Top: AppTheme.Space12,
+                Bottom: AppTheme.Space12,
+                Left: AppTheme.Space14,
+                Right: AppTheme.Space14
+            },
+            BorderColor: AppTheme.Rule,
+            Label(ui, ui.Strings.Get(title), AppTheme.Type12, AppTheme.Dim, "")
         }
         for item in items {
             box.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 8,
-                    MaterialIcons.Create(allowed ? "check": "close", 14, allowed ? ui.Mint: ui.Pink),
-                    Label(ui, ui.Strings.Get(item), 12.5, ui.Ink, "")
+                    Gap: AppTheme.Space8,
+                    MaterialIcons.Create(
+                        allowed ? "check": "close",
+                        AppTheme.Icon14,
+                        allowed ? AppTheme.Mint: AppTheme.Pink
+                    ),
+                    Label(ui, ui.Strings.Get(item), AppTheme.Type13, AppTheme.Ink, "")
                 }
             )
         }
@@ -1623,29 +1702,29 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 "purging",
                 "purging",
                 620,
-                Label(ui, ui.Strings.Get("purging"), 17, ui.Ink, ""),
+                Label(ui, ui.Strings.Get("purging"), AppTheme.Type17, AppTheme.Ink, ""),
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 12,
+                    Gap: AppTheme.Space12,
                     Cell.Mount[SpinnerInput, Spinner](
                         "purging",
-                        SpinnerInput{Size: 20, Color: ui.Lime, Label: ui.Strings.Get("purging")}
+                        SpinnerInput{Size: AppTheme.Icon20, Color: AppTheme.Lime, Label: ui.Strings.Get("purging")}
                     ),
-                    Label(ui, ui.Strings.Get("delete data folder"), 14, ui.Ink, "")
+                    Label(ui, ui.Strings.Get("delete data folder"), AppTheme.Type14, AppTheme.Ink, "")
                 },
                 Container{},
                 () -> { }
             )
         }
         let size = sizeText + " " + sizeUnit
-        let deleted = Column(ui, "deleted", ui.Pink)
+        let deleted = Column(ui, "deleted", AppTheme.Pink)
         deleted.Add(Item(ui, false, "chain database", size))
         deleted.Add(Item(ui, false, "checkpoints.dat", "restored on start"))
         deleted.Add(Item(ui, false, "send retry record", ""))
         deleted.Add(Item(ui, false, "api.cookie", "new on start"))
         deleted.Add(Item(ui, false, "identity.key", "new peer key"))
-        let kept = Column(ui, "kept", ui.Mint)
+        let kept = Column(ui, "kept", AppTheme.Mint)
         if dataWallets > 0 {
             kept.Add(
                 Item(
@@ -1661,21 +1740,21 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         }
         kept.Add(Item(ui, true, "settings.json", ""))
         let content = Container{
-            Gap: 14,
-            Container{FlexDirection: FlexDirection.Row, Gap: 12, FlexShrink: 0, deleted, kept}
+            Gap: AppTheme.Space14,
+            Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space12, FlexShrink: 0, deleted, kept}
         }
         if dataWallets > 0 {
             content.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 8,
-                    MaterialIcons.Create("folder", 14, ui.Dim),
+                    Gap: AppTheme.Space8,
+                    MaterialIcons.Create("folder", AppTheme.Icon14, AppTheme.Dim),
                     Label(
                         ui,
                         ui.Strings.Get("wallets move to") + " " + Tail(SettingsStore.DefaultWallets(settings.Network)),
-                        12,
-                        ui.Dim,
+                        AppTheme.Type12,
+                        AppTheme.Dim,
                         ""
                     )
                 }
@@ -1692,8 +1771,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let footer = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
-            Label(ui, ui.Strings.Get("type purge"), 12.5, ui.Body, ""),
+            Gap: AppTheme.Space10,
+            Label(ui, ui.Strings.Get("type purge"), AppTheme.Type13, AppTheme.Body, ""),
             Container{
                 Width: 220,
                 FlexShrink: 1,
@@ -1710,18 +1789,16 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             }
         }
         if typed {
-            footer.Add(MaterialIcons.Create("check", 16, ui.Mint))
+            footer.Add(MaterialIcons.Create("check", AppTheme.Icon16, AppTheme.Mint))
         }
         footer.Add(Container{FlexGrow: 1})
         footer.Add(Button(ui, "Cancel", close))
         footer.Add(
             (
-                Theme.Read()
-                    .DangerButton with{
+                AppTheme.DangerButton with{
                     Content = ui.Strings.Get("Purge {0}").Replace("{0}", size),
                     OnClick = form.Submit,
-                    Disabled = !form.CanSubmit,
-                    FontFamily = ui.Font
+                    Disabled = !form.CanSubmit
                 }
             ).Build()
         )
@@ -1735,9 +1812,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 10,
-                MaterialIcons.Create("warning", 20, ui.Pink),
-                Label(ui, ui.Strings.Get("purge chain data"), 17, ui.Ink, "")
+                Gap: AppTheme.Space10,
+                MaterialIcons.Create("warning", AppTheme.Icon20, AppTheme.Pink),
+                Label(ui, ui.Strings.Get("purge chain data"), AppTheme.Type17, AppTheme.Ink, "")
             },
             content,
             footer,
@@ -1756,24 +1833,30 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     }
 
     private func Column(ui Presentation, title string, color Color) Container -> Container{
+        BasedOn: AppTheme.TileStyle,
+        BackgroundColor: Color.Transparent,
+        BackdropBlur: AppTheme.Space0,
         FlexGrow: 1,
         FlexBasis: 0,
         MinWidth: 0,
-        Gap: 8,
-        Padding: Edges{Top: 12, Bottom: 12, Left: 14, Right: 14},
-        BorderRadius: 10,
-        BorderWidth: 1,
-        BorderColor: ui.Rule,
-        Label(ui, ui.Strings.Get(title), 12, color, "")
+        Gap: AppTheme.Space8,
+        Padding: Edges{
+            Top: AppTheme.Space12,
+            Bottom: AppTheme.Space12,
+            Left: AppTheme.Space14,
+            Right: AppTheme.Space14
+        },
+        BorderColor: AppTheme.Rule,
+        Label(ui, ui.Strings.Get(title), AppTheme.Type12, color, "")
     }
 
     private func Item(ui Presentation, kept bool, label string, note string) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Center,
-        Gap: 8,
-        MaterialIcons.Create(kept ? "check": "close", 14, kept ? ui.Mint: ui.Pink),
-        Grow(Label(ui, ui.Strings.Get(label), 13, ui.Ink, "")),
-        Label(ui, note.Length > 0 ? ui.Strings.Get(note): "", 12, ui.Dim, "")
+        Gap: AppTheme.Space8,
+        MaterialIcons.Create(kept ? "check": "close", AppTheme.Icon14, kept ? AppTheme.Mint: AppTheme.Pink),
+        Grow(Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Ink, "")),
+        Label(ui, note.Length > 0 ? ui.Strings.Get(note): "", AppTheme.Type12, AppTheme.Dim, "")
     }
 
     private func SaveSettings(input SettingsPageInput) {
@@ -1810,31 +1893,34 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         return WalletParts.Modal(
             ui,
             "apply",
-            ModalDialog{
-                Open: true,
-                Preset: ModalDialogPreset.Confirm,
-                AccessibilityName: ui.Strings.Get("Apply settings"),
-                Width: Math.Min(input.Width - 48, 440),
-                Padding: 22,
-                BackgroundColor: ui.Raised,
-                BorderRadius: 14,
-                Content: Container{
-                    Gap: 10,
-                    Label(ui, ui.Strings.Get("Apply settings"), 17, ui.Ink, ""),
-                    Label(ui, ui.Strings.Get("The wallet locks and the node reconnects"), 13, ui.Body, "")
+            AppTheme.Dialog with{
+                Open = true,
+                Preset = ModalDialogPreset.Confirm,
+                AccessibilityName = ui.Strings.Get("Apply settings"),
+                Width = Math.Min(input.Width - 48, 440),
+                Content = Container{
+                    Gap: AppTheme.Space10,
+                    Label(ui, ui.Strings.Get("Apply settings"), AppTheme.Type17, AppTheme.Ink, ""),
+                    Label(
+                        ui,
+                        ui.Strings.Get("The wallet locks and the node reconnects"),
+                        AppTheme.Type13,
+                        AppTheme.Body,
+                        ""
+                    )
                 },
-                ConfirmText: ui.Strings.Get(
+                ConfirmText = ui.Strings.Get(
                     if input.Snapshot.State == WalletState.Unlocked {
                         "Lock and apply"
                     } else {
                         "Apply"
                     }
                 ),
-                CancelText: ui.Strings.Get("Cancel"),
-                ConfirmDisabled: input.Busy,
-                OnConfirm: () -> SaveSettings(input),
-                OnCancel: close,
-                OnClose: close
+                CancelText = ui.Strings.Get("Cancel"),
+                ConfirmDisabled = input.Busy,
+                OnConfirm = () -> SaveSettings(input),
+                OnCancel = close,
+                OnClose = close
             }
         )
     }
@@ -1847,19 +1933,14 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     ui.Strings.Get(count == 1 ? "{0} violation": "{0} violations").Replace("{0}", count.ToString())
 
     private func Toggle(input SettingsPageInput, label string, on bool, changed Action, disabled bool = false) Blob ->
-    ToggleSwitch{
-        Checked: on,
-        Disabled: disabled || input.Busy,
-        AccessibilityName: input.Ui.Strings.Get(label),
-        OnClick: changed,
-        Width: 36,
-        Height: 20,
-        ThumbSize: 14,
-        OffTrackColor: input.Ui.Edge,
-        OnTrackColor: input.Ui.Lime,
-        ThumbColor: Color.Parse("#8c8c8c"),
-        OnThumbColor: input.Ui.Surface
-    }.Build()
+    (
+        AppTheme.Switch with{
+            Checked = on,
+            Disabled = disabled || input.Busy,
+            AccessibilityName = input.Ui.Strings.Get(label),
+            OnClick = changed
+        }
+    ).Build()
 
     private func Info(input SettingsPageInput, key string, topic string, line string) Blob ->
     Cell.Mount[InfoTipInput, InfoTip](
@@ -1883,7 +1964,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Size: size,
             Color: color,
             FractionColor: if size > 20 {
-                input.Ui.Dim
+                AppTheme.Dim
             } else {
                 color
             },

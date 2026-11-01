@@ -33,14 +33,14 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
 
     protected override func Build(input SeedPageInput) Blob {
         let ui = input.Ui
-        let card = WalletParts.Card(ui, gap: 14, radius: 14)
+        let card = WalletParts.Card(ui, gap: AppTheme.Space14, radius: AppTheme.Radius14)
         card.Width = Percent(100)
         card.MaxWidth = 760
         card.MaxHeight = Percent(100)
-        card.Add(Label(ui, ui.Strings.Get("recovery phrase"), 17, ui.Ink, ""))
+        card.Add(Label(ui, ui.Strings.Get("recovery phrase"), AppTheme.Type17, AppTheme.Ink, ""))
         if input.Words.Length == 0 {
             if input.Issue.Length > 0 {
-                card.Add(Label(ui, ui.Strings.Explain(input.Issue), 13, ui.Pink, ""))
+                card.Add(Label(ui, ui.Strings.Explain(input.Issue), AppTheme.Type13, AppTheme.Pink, ""))
                 card.Add(Button(ui, "Retry", input.OnRetry, input.Busy, true))
             }
             return card
@@ -52,7 +52,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             saved = false
             hold = Random.Shared.Next()
         }
-        let grid = Container{Gap: 6, FlexShrink: 0}
+        let grid = Container{Gap: AppTheme.Space6, FlexShrink: 0}
         var line = Container{}
         var start = 0
         var index = 1
@@ -61,7 +61,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             if position == words.Length || words[position] == ' ' {
                 if position > start {
                     if index % 4 == 1 {
-                        line = Container{FlexDirection: FlexDirection.Row, Gap: 6}
+                        line = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space6}
                         grid.Add(line)
                     }
                     line.Add(Word(ui, index, words, start, position - start))
@@ -72,7 +72,12 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             position++
         }
         card.Add(grid)
-        let actions = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 8, FlexShrink: 0}
+        let actions = Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: AppTheme.Space8,
+            FlexShrink: 0
+        }
         actions.Add(
             Button(
                 ui,
@@ -91,14 +96,16 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         actions.Add(Container{FlexGrow: 1})
         if !input.FromWallet {
             actions.Add(
-                Checkbox{
-                    Label: ui.Strings.Get("I saved these words"),
-                    State: saved ? AccessibilityChecked.True: AccessibilityChecked.False,
-                    OnChange: state -> {
-                        saved = state == AccessibilityChecked.True
-                        Rebuild()
+                (
+                    AppTheme.Checkbox with{
+                        Label = ui.Strings.Get("I saved these words"),
+                        State = saved ? AccessibilityChecked.True: AccessibilityChecked.False,
+                        OnChange = state -> {
+                            saved = state == AccessibilityChecked.True
+                            Rebuild()
+                        }
                     }
-                }.Build()
+                ).Build()
             )
         }
         actions.Add(
@@ -138,18 +145,17 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             }
         }
         return Container{
+            BasedOn: AppTheme.FieldStyle,
             FlexGrow: 1,
             FlexBasis: 0,
             MinWidth: 0,
             Height: 36,
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
-            Padding: Edges{Left: 10, Right: 10},
-            BorderWidth: 1,
-            BorderRadius: 8,
-            BorderColor: ui.Rule,
-            BackgroundColor: ui.Surface,
+            Gap: AppTheme.Space10,
+            Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
+            BorderColor: AppTheme.Rule,
+            BackgroundColor: AppTheme.Surface,
             Accessibility: Accessibility{
                 Name: if visible {
                     word
@@ -157,11 +163,11 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                     index.ToString() + " " + ui.Strings.Get("hidden")
                 }
             },
-            Label(ui, index.ToString(), 12, ui.Dim, ""),
+            Label(ui, index.ToString(), AppTheme.Type12, AppTheme.Dim, ""),
             if visible {
-                Label(ui, word, 14, ui.Lime, "")
+                Label(ui, word, AppTheme.Type14, AppTheme.Lime, "")
             } else {
-                Frame(ui, String('x', length), 0, hold ^ index, Random(hold ^ index), 14, ui.Body)
+                Frame(ui, String('x', length), 0, hold ^ index, Random(hold ^ index), AppTheme.Type14, AppTheme.Body)
             }
         }
     }
