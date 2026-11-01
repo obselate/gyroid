@@ -94,7 +94,6 @@ class ReceivePage : Cell {
     private let change Action[string, string]
     private let selectFormat Action[string]
     private let reset Action
-    private let configurePresentation Action[ReceivePresentation]
 
     init() {
         change = (amount, memo) -> {
@@ -115,20 +114,14 @@ class ReceivePage : Cell {
             Prepare()
             Rebuild()
         }
-        configurePresentation = cell -> cell.Accept(presentation)
     }
 
     public func Accept(next ReceivePageInput) {
         if input == next {
             return
         }
-        let previousPresentation = presentation
-        let previousStatus = status
         input = next
         Prepare()
-        if presentation != previousPresentation || status != previousStatus {
-            Rebuild()
-        }
     }
 
     private func Prepare() {
@@ -209,7 +202,7 @@ class ReceivePage : Cell {
                 Cell.Mount[ReceiveStatusInput, ReceiveStatus]("payment-status", status)
             )
         )
-        card.Add(Cell.Mount[ReceivePresentation]("request-presentation", configurePresentation))
+        card.Add(Cell.Mount[ReceivePresentationInput, ReceivePresentation]("request-presentation", presentation))
         return card
     }
 
@@ -345,24 +338,17 @@ class ReceiveForm : Cell[ReceiveFormInput] {
     }
 }
 
-class ReceivePresentation : Cell, IDisposable {
-    private var input ReceivePresentationInput
+class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
     private var qrText string = ""
     private var qrCode QrCode?
     private var qrPath VectorPath = VectorPath.Empty
     private var generation int32
-    private var link string = ""
-    private var shown string = ""
-    private var dim[]TextStyleRange = []TextStyleRange{}
 
-    public func Accept(next ReceivePresentationInput) {
-        if input == next {
-            return
-        }
-        input = next
+    protected override func Build(input ReceivePresentationInput) Blob {
+        let ui = input.Ui
         let draft = input.Draft
         let empty = draft.Amount.Length == 0 && draft.Memo.Length == 0
-        shown = if empty && input.Format == "link" {
+        let shown = if empty && input.Format == "link" {
             "address"
         } else {
             input.Format
@@ -374,7 +360,7 @@ class ReceivePresentation : Cell, IDisposable {
         if draft.FullMemo.Length > 0 && draft.MemoIssue.Length == 0 {
             query.Add("memo=" + Uri.EscapeDataString(draft.FullMemo))
         }
-        link = "blocknet://" + input.Address + if query.Count > 0 {
+        let link = "blocknet://" + input.Address + if query.Count > 0 {
             "?" + String.Join("&", query)
         } else {
             ""
@@ -385,7 +371,7 @@ class ReceivePresentation : Cell, IDisposable {
             ranges.Add(TextStyleRange(TextRange(start, part.IndexOf('=') + 2), Style{Color: AppTheme.Dim}))
             start += part.Length + 1
         }
-        dim = ranges.ToArray()
+        let dim = ranges.ToArray()
         let payload = shown == "address" ? input.Address: link
         if payload != qrText {
             generation++
@@ -394,14 +380,6 @@ class ReceivePresentation : Cell, IDisposable {
             qrCode = encoded
             qrPath = QrPath(encoded)
         }
-        Rebuild()
-    }
-
-    override func Build() Blob {
-        let ui = input.Ui
-        let draft = input.Draft
-        let empty = draft.Amount.Length == 0 && draft.Memo.Length == 0
-        let payload = qrText
         let side = Math.Clamp(input.Height - 340, 180.0, 400.0)
         let code = Container{
             Width: side,
@@ -548,7 +526,7 @@ class ReceivePresentation : Cell, IDisposable {
         click Action
     ) Blob -> ControlParts
         .Button(
-        input.Ui,
+        Input.Ui,
         label,
         click,
         disabled,
@@ -565,6 +543,7 @@ class ReceivePresentation : Cell, IDisposable {
         guard let code = qrCode else {
             return
         }
+        let input = Input
         let ui = input.Ui
         let current = generation
         input.ChooseFile.Invoke(
