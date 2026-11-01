@@ -144,6 +144,9 @@ class ContactsPage : Cell, IDisposable {
             maxWidth: Math.Clamp(640 + Math.Max(0, input.Height - 640) * 0.6, 640.0, 900.0),
             fill: true
         )
+        if rows.Length > 0 {
+            card.Height = Percent(100)
+        }
         card.Add(
             WalletParts.Header(
                 Label(ui, ui.Strings.Get("contacts"), AppTheme.Type17, AppTheme.Ink, ""),
@@ -202,6 +205,7 @@ class ContactsPage : Cell, IDisposable {
             Key: "contact-row-" + label,
             Height: 48,
             FlexShrink: 0,
+            Margin: Edges{Bottom: AppTheme.Space8},
             Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space8},
             BorderWidth: AppTheme.Border1,
             BorderRadius: AppTheme.Radius10,
