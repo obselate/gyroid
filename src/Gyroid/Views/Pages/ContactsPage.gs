@@ -184,7 +184,7 @@ class ContactsPage : Cell[ContactsInput] {
                     labelled: false,
                     leading: MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
                     placeholder: ui.Strings.Get("Name"),
-                    contentDirection: nil
+                    inheritDirection: true
                 )
             },
             Grow(
