@@ -25,6 +25,7 @@ data struct NetworkInput {
     var Node NodeStatus
     var History[]WalletOutput
     var Sends[]WalletSend
+    var Clipboard[]char
     var Language string
     var Width float64
     var Height float64
@@ -70,7 +71,7 @@ class NetworkPage : Cell, IDisposable {
         Rebuild()
     }
 
-    protected override func Build() Blob {
+    override func Build() Blob {
         let input = this.input
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: AppTheme.Space12}
         if failed {
@@ -113,6 +114,7 @@ class NetworkPage : Cell, IDisposable {
                         Blocks: report.Blocks,
                         History: input.History,
                         Sends: input.Sends,
+                        Clipboard: input.Clipboard,
                         Language: input.Language,
                         Height: input.Height
                     }
@@ -125,6 +127,7 @@ class NetworkPage : Cell, IDisposable {
                         Banned: report.Banned,
                         PeerId: input.Node.PeerId,
                         IdentityAge: input.Node.IdentityAge,
+                        Clipboard: input.Clipboard,
                         Width: input.Width,
                         Language: input.Language
                     }
@@ -245,6 +248,7 @@ data struct NetworkBlocksInput {
     var Blocks[]NetworkBlock
     var History[]WalletOutput
     var Sends[]WalletSend
+    var Clipboard[]char
     var Language string
     var Height float64
 }
@@ -262,6 +266,7 @@ data struct NetworkRibbonInput {
     var Chart NetworkChartInput
     var History[]WalletOutput
     var Sends[]WalletSend
+    var Clipboard[]char
 }
 
 class NetworkBlocks : Cell[NetworkBlocksInput] {
@@ -290,7 +295,7 @@ class NetworkBlocks : Cell[NetworkBlocksInput] {
             Cell.Mount[NetworkChartInput, NetworkTimeChart]("network-times", chart),
             Cell.Mount[NetworkRibbonInput, NetworkRibbon](
                 "network-ribbon",
-                NetworkRibbonInput{Chart: chart, History: input.History, Sends: input.Sends}
+                NetworkRibbonInput{Chart: chart, History: input.History, Sends: input.Sends, Clipboard: input.Clipboard}
             )
         }
     }
@@ -645,6 +650,7 @@ data struct NetworkPeersInput {
     var Banned[]BannedPeer
     var PeerId string
     var IdentityAge string
+    var Clipboard[]char
     var Width float64
     var Language string
 }
@@ -703,7 +709,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
                 )
             }
         )
-        card.Add(Map(ui))
+        card.Add(Map(input))
         var tcp = 0
         for peer in input.Peers {
             if peer.Transport != "quic" {
@@ -814,7 +820,8 @@ class NetworkPeers : Cell[NetworkPeersInput] {
     private func Legend(ui Presentation, label string, count int32, color Color) Blob ->
     TextParts.Legend(ui, ui.Strings.Get(label), color, Label(ui, count.ToString(), AppTheme.Type12, AppTheme.Ink, ""))
 
-    private func Map(ui Presentation) Blob {
+    private func Map(input NetworkPeersInput) Blob {
+        let ui = input.Ui
         let plot = Container{
             Handle: peerMap,
             FlexGrow: 1.5,
@@ -822,7 +829,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             MinHeight: 140,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Image,
-                Name: String.Format(ui.Strings.Get("{0} peers, {1} banned"), Input.Peers.Length, Input.Banned.Length)
+                Name: String.Format(ui.Strings.Get("{0} peers, {1} banned"), input.Peers.Length, input.Banned.Length)
             }
         }
         let width = peerMap.BorderBox.Width
@@ -838,8 +845,8 @@ class NetworkPeers : Cell[NetworkPeersInput] {
         plot.Add(Circle(x, y, ring, AppTheme.FaintRule, nil))
         let tcp = PathBuilder(0, 0, width, height)
         let quic = PathBuilder(0, 0, width, height)
-        for index in 0 ... Input.Peers.Length {
-            let peer = Input.Peers[index]
+        for index in 0 ... input.Peers.Length {
+            let peer = input.Peers[index]
             let angle = -Math.PI / 2 + index * 2.39996
             (peer.Transport == "quic" ? quic: tcp).MoveTo(x, y).LineTo(
                 x + Math.Cos(angle) * ring,
@@ -872,13 +879,13 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             }
         )
         plot.Add(Dot(x, y, 3, AppTheme.Lime))
-        for index in 0 ... Input.Banned.Length {
+        for index in 0 ... input.Banned.Length {
             let angle = 0.78 * Math.PI + index * 0.84 * Math.PI
             let mark = MaterialIcons.Create("close", AppTheme.Icon14, AppTheme.Pink)
             plot.Add(Place(x + Math.Cos(angle) * outer - 7, y + Math.Sin(angle) * outer - 7, mark))
         }
-        for index in 0 ... Input.Peers.Length {
-            let peer = Input.Peers[index]
+        for index in 0 ... input.Peers.Length {
+            let peer = input.Peers[index]
             let angle = -Math.PI / 2 + index * 2.39996
             let px = x + Math.Cos(angle) * ring
             let py = y + Math.Sin(angle) * ring

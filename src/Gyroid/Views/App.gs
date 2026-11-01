@@ -139,6 +139,7 @@ partial class App : Cell {
                 Node: wallet.Node.Status,
                 History: wallet.Snapshot.History,
                 Sends: wallet.Snapshot.Sends,
+                Clipboard: ui.Actions.ClipboardText,
                 Language: ui.Strings.Language,
                 Width: width,
                 Height: height
