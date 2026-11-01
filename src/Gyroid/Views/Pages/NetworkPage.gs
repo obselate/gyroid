@@ -422,7 +422,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space16,
-            Height: 20,
+            Height: AppTheme.ControlCompact,
             FlexShrink: 0,
             Overflow: Overflow.Hidden,
             Accessibility: Accessibility{Live: AccessibilityLive.Polite}
@@ -477,6 +477,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 ),
                 (
                     AppTheme.IconButton with{
+                        RootStyle = AppTheme.DisclosureStyle,
                         Icon = MaterialIcons.Create(
                             copied ? "check": "content_copy",
                             AppTheme.Icon14,
