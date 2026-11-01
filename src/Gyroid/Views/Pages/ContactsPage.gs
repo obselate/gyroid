@@ -48,7 +48,7 @@ class ContactsPage : Cell[ContactsInput] {
                 Label(ui, ui.Strings.Get("contacts"), AppTheme.Type17, AppTheme.Ink, ""),
                 trailing: Icon(
                     ui,
-                    MaterialIcons.Create("person_add", AppTheme.Icon16, input.Busy ? AppTheme.Body: AppTheme.Lime),
+                    MaterialIcons.Create("person_add", AppTheme.Icon16, editing == "" ? AppTheme.Lime: AppTheme.Body),
                     ui.Strings.Get("Add contact"),
                     () -> Edit("", ""),
                     input.Busy,
@@ -128,7 +128,7 @@ class ContactsPage : Cell[ContactsInput] {
             },
             Icon(
                 ui,
-                MaterialIcons.Create("edit", AppTheme.Icon16, input.Busy ? AppTheme.Body: AppTheme.Lime),
+                MaterialIcons.Create("edit", AppTheme.Icon16, AppTheme.Body),
                 ui.Strings.Get("Edit") + " " + label,
                 () -> Edit(label, destination),
                 input.Busy,
@@ -136,7 +136,7 @@ class ContactsPage : Cell[ContactsInput] {
             ),
             Icon(
                 ui,
-                MaterialIcons.Create("delete", AppTheme.Icon16, input.Busy ? AppTheme.Body: AppTheme.Lime),
+                MaterialIcons.Create("delete", AppTheme.Icon16, AppTheme.Body),
                 ui.Strings.Get("Delete") + " " + label,
                 () -> {
                     deleting = label

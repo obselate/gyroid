@@ -75,7 +75,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Label(ui, ui.Strings.Get("wallets"), AppTheme.Type17, AppTheme.Ink, ""),
             trailing: Icon(
                 ui,
-                MaterialIcons.Create("settings", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
+                MaterialIcons.Create("settings", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Body),
                 ui.Strings.Get("Settings"),
                 () -> input.OnNavigate(AppPage.Settings),
                 input.Busy
@@ -109,7 +109,11 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                     FlexShrink: 0,
                     Icon(
                         ui,
-                        MaterialIcons.Create("add", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
+                        MaterialIcons.Create(
+                            "add",
+                            AppTheme.Icon16,
+                            menu ? AppTheme.Lime: input.Busy ? AppTheme.Dim: AppTheme.Body
+                        ),
                         ui.Strings.Get("Add wallet"),
                         () -> {
                             menu = !menu
@@ -347,7 +351,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             head.Add(
                 Icon(
                     ui,
-                    MaterialIcons.Create("download", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
+                    MaterialIcons.Create("download", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Body),
                     ui.Strings.Get("Unload"),
                     () -> ui.Actions.Run(ct -> input.Session.UnloadAsync(ct)),
                     input.Busy
@@ -478,7 +482,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 ),
                 leading: Icon(
                     ui,
-                    MaterialIcons.Create("arrow_back", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
+                    MaterialIcons.Create("arrow_back", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Body),
                     ui.Strings.Get("Back"),
                     () -> {
                         Clear()
