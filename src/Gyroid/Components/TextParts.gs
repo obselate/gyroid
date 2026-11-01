@@ -195,8 +195,6 @@ class TextParts {
             size float64,
             color Color,
             weight float64 = 1,
-            fractionColor Color? = nil,
-            live AccessibilityLive = AccessibilityLive.Off,
             key string = ""
         ) Blob -> Container{
             FlexGrow: weight,
@@ -210,16 +208,7 @@ class TextParts {
                 AlignItems: AlignItems.Baseline,
                 Gap: AppTheme.Space6,
                 Overflow: Overflow.Hidden,
-                Value(
-                    ui,
-                    key.Length > 0 ? key: label,
-                    ui.Strings.Get(label) + " " + value,
-                    value,
-                    size,
-                    color,
-                    fractionColor,
-                    live
-                ),
+                Value(ui, key.Length > 0 ? key: label, ui.Strings.Get(label) + " " + value, value, size, color),
                 Label(ui, unit, AppTheme.Type11, color, "")
             }
         }
@@ -237,15 +226,6 @@ class TextParts {
                 row.Add(value)
             }
             return row
-        }
-
-        func Badge(ui Presentation, content string, color Color, icon string = "") Container {
-            let badge = Container{BasedOn: AppTheme.BadgeStyle, BorderColor: color, FlexShrink: 0}
-            if icon.Length > 0 {
-                badge.Add(MaterialIcons.Create(icon, AppTheme.Icon12, color))
-            }
-            badge.Add(TextParts.Label(ui, content, AppTheme.Type12, color, ""))
-            return badge
         }
 
         func Status(ui Presentation, content string, color Color, icon string = "") Container {
@@ -267,18 +247,15 @@ class TextParts {
             label string,
             value string,
             shown string,
-            clearAfterMs float64 = 120000,
-            labelled bool = true,
-            wrap bool = true,
             valueColor Color? = nil,
             disabled bool = false
         ) Blob {
             let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
                 System.MemoryExtensions.AsSpan(value)
             )
-            let content = Container{Gap: AppTheme.Space6}
-            if labelled {
-                content.Add(TextParts.Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body))
+            let content = Container{
+                Gap: AppTheme.Space6,
+                TextParts.Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body)
             }
             content.Add(
                 Text{
@@ -286,7 +263,7 @@ class TextParts {
                     FontFamily: AppTheme.Font,
                     FontSize: AppTheme.Type13,
                     Color: valueColor ?? AppTheme.Ink,
-                    TextWrap: wrap ? TextWrap.Wrap: TextWrap.NoWrap
+                    TextWrap: TextWrap.Wrap
                 }
             )
             return Container{
@@ -304,7 +281,7 @@ class TextParts {
                     ),
                     ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
                     () -> {
-                        ui.Actions.Copy(value, clearAfterMs)
+                        ui.Actions.Copy(value, 120000)
                         ui.Actions.rebuild()
                     },
                     disabled: disabled

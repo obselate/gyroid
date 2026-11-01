@@ -349,12 +349,6 @@ class AppTheme {
 
         func GetDetailGap(height float64) float64 -> Math.Clamp(height * 0.01, 4.0, 8.0)
 
-        func GetPanelPadding(width float64) float64 -> Math.Clamp(width * 0.03, 20, 32)
-
-        func GetPanelBlockPadding(height float64) float64 -> Math.Clamp(height * 0.034, 18, 30)
-
-        func GetPanelGap(height float64) float64 -> Math.Clamp(height * 0.032, 16, 28)
-
         func GetStatusFigureSize(height float64, fill bool) float64 -> Math.Clamp(
             height * (fill ? 0.18: 0.11),
             48,

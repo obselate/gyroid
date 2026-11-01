@@ -10,42 +10,6 @@ import System.Globalization
 
 class NetworkParts {
     shared {
-        func Figure(
-            ui Presentation,
-            label string,
-            value string,
-            unit string,
-            size float64,
-            color Color,
-            weight float64 = 1
-        ) Blob -> Container{
-            FlexGrow: weight,
-            FlexBasis: 0,
-            MinWidth: 0,
-            Gap: AppTheme.Space6,
-            Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value + " " + unit},
-            Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Dim, ""),
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Baseline,
-                Gap: AppTheme.Space6,
-                Overflow: Overflow.Hidden,
-                Cell.Mount[DecodeValueInput, DecodeValue](
-                    label,
-                    DecodeValueInput{
-                        Value: value,
-                        Name: ui.Strings.Get(label) + " " + value,
-                        Size: size,
-                        Color: color,
-                        FractionColor: color,
-                        Live: AccessibilityLive.Off,
-                        Ui: ui
-                    }
-                ),
-                Label(ui, unit, AppTheme.Type11, color, "")
-            }
-        }
-
         func TimeChart(
             ui Presentation,
             blocks[]NetworkBlock,

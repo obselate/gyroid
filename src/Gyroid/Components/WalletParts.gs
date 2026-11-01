@@ -2,7 +2,6 @@ package Gyroid.Components
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
@@ -97,44 +96,6 @@ class WalletParts {
             return row
         }
 
-        func Square(
-            ui Presentation,
-            icon string,
-            label string,
-            active bool,
-            disabled bool,
-            click Action,
-            size float64 = 38,
-            disabledColor Color? = nil,
-            radius float64 = 8,
-            iconSize float64 = 16,
-            iconColor Color? = nil,
-            shrink float64 = 0
-        ) Blob {
-            let button = Goo
-                .Button{
-                BasedOn: AppTheme.IconButtonStyle,
-                Width: size,
-                Height: size,
-                FlexShrink: shrink,
-                BorderRadius: radius,
-                BorderColor: active ? AppTheme.Lime: AppTheme.Edge,
-                BackgroundColor: AppTheme.Raised,
-                Disabled: disabled,
-                Hover: Style{BackgroundColor: AppTheme.Rule},
-                Focus: Theme.Read().FocusStyle,
-                Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label},
-                OnClick: click,
-                MaterialIcons.Create(
-                    icon,
-                    iconSize,
-                    iconColor ?? (active ? AppTheme.Lime: disabled ? disabledColor ?? AppTheme.Dim: AppTheme.Body)
-                )
-            }
-            WidgetKeyBindings.BindActivation(button)
-            return button
-        }
-
         func Modal(ui Presentation, key string, dialog ModalDialog) Blob -> Cell.Mount[ModalDialog, ModalDialogHost](
             key,
             dialog with{
@@ -179,7 +140,7 @@ class WalletParts {
             }
         )
 
-        func PageContent(ui Presentation, title string, maxWidth float64 = 520, trailing Blob? = nil) Container {
+        func PageContent(ui Presentation, title string, maxWidth float64 = 520) Container {
             let card = Card(ui)
             card.Width = Percent(100)
             card.MaxWidth = maxWidth
@@ -187,9 +148,6 @@ class WalletParts {
             let header = Header(Label(ui, title, AppTheme.Type17, AppTheme.Ink), AppTheme.Space8)
             header.AlignItems = AlignItems.Baseline
             header.JustifyContent = JustifyContent.SpaceBetween
-            if let value = trailing {
-                header.Add(value)
-            }
             card.Add(header)
             return card
         }

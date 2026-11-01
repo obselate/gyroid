@@ -117,21 +117,9 @@ class WalletForm {
         changed Action[string],
         secret bool = false,
         issue string = "",
-        disabled bool = false,
-        leading Blob? = nil,
-        trailing Blob? = nil
+        disabled bool = false
     ) Blob -> FormField{
-        Content: Grow(
-            Container{
-                MinWidth: 0,
-                Entry(
-                    FieldInput(label, value, changed, secret, issue, disabled) with{
-                        Leading = leading,
-                        Trailing = trailing
-                    }
-                )
-            }
-        ),
+        Content: Grow(Container{MinWidth: 0, Entry(FieldInput(label, value, changed, secret, issue, disabled))}),
         CreateRoot: (_, root) -> {
             root.FlexDirection = FlexDirection.Row
             root.Gap = AppTheme.Space12

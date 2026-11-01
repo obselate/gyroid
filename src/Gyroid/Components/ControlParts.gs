@@ -20,41 +20,6 @@ class ControlParts {
             content
         }
 
-        func ChoiceGroup(ui Presentation, accessibility Accessibility, background Color? = nil) Container -> Container{
-            BasedOn: AppTheme.SegmentGroupStyle,
-            BackgroundColor: background ?? AppTheme.Black,
-            BorderWidth: AppTheme.Border1,
-            BorderColor: AppTheme.Rule,
-            Accessibility: accessibility
-        }
-
-        func Choice(
-            ui Presentation,
-            content string,
-            selected bool,
-            action Action,
-            accessibility Accessibility,
-            padding Edges,
-            size float64 = 14,
-            disabled bool = false
-        ) Goo
-            .Button {
-            let button = Goo
-                .Button{
-                BasedOn: AppTheme.SegmentStyle,
-                Padding: padding,
-                BackgroundColor: selected ? AppTheme.Rule: Color.Transparent,
-                Hover: Style{BackgroundColor: selected ? AppTheme.StrongRule: AppTheme.Rule},
-                Focus: Theme.Read().FocusStyle,
-                Disabled: disabled,
-                Accessibility: accessibility,
-                OnClick: action,
-                Label(ui, content, size, selected ? AppTheme.Ink: AppTheme.Body, "")
-            }
-            WidgetKeyBindings.BindActivation(button)
-            return button
-        }
-
         func Segment(
             ui Presentation,
             label string,
@@ -64,7 +29,6 @@ class ControlParts {
             disabled bool,
             chosen Action[string],
             enabledCount int32 = Int32.MaxValue,
-            equalWidth bool = false,
             key string = ""
         ) Blob {
             let items = [ids.Length]ToggleOption
@@ -97,11 +61,6 @@ class ControlParts {
                         button.BorderWidth = AppTheme.Border0
                         button.BoxShadow = BoxShadow{}
                         button.Opacity = item.Disabled ? 0.4: 1.0
-                        if equalWidth {
-                            button.FlexGrow = 1
-                            button.FlexBasis = 0
-                            button.MinWidth = 0
-                        }
                         button.Children.Clear()
                         button.Add(
                             Label(ui, item.Label ?? item.Id, AppTheme.Type12, active ? AppTheme.Ink: AppTheme.Body, "")
@@ -157,25 +116,6 @@ class ControlParts {
             }
         ).Build()
 
-        func ExpandButton(ui Presentation, icon Blob, label string, active bool, disabled bool, action Action) Blob ->
-        Icon(
-            ui,
-            icon,
-            ui.Strings.Get(label),
-            action,
-            disabled,
-            active,
-            AppTheme.ControlCompact,
-            Style{
-                BasedOn: AppTheme.DisclosureStyle,
-                Margin: Edges{Top: AppTheme.Space4},
-                FlexShrink: 0,
-                BorderRadius: AppTheme.Radius8,
-                BackgroundColor: active ? AppTheme.Rule: Color.Transparent
-            },
-            active
-        )
-
         func Tabs(
             ui Presentation,
             key string,
@@ -192,6 +132,11 @@ class ControlParts {
                 SelectedId: selected,
                 AccessibilityName: ui.Strings.Get(label),
                 ItemHeight: AppTheme.ControlCompact,
+                CreateRoot: (_, root) -> {
+                    root.FlexShrink = 1
+                    root.MinWidth = 0
+                    return root
+                },
                 CreateItem: (bar TabBarInput, item NavigationItem, button Button) -> {
                     button.BasedOn = item.Id == bar.SelectedId ? AppTheme.SelectedTabStyle: AppTheme.TabStyle
                     button.Focus = Theme.Read().FocusStyle
@@ -216,7 +161,6 @@ class ControlParts {
             autoFocus bool = false,
             busy bool? = nil,
             appearance ActionButton? = nil,
-            handle ElementHandle? = nil,
             hasPopup bool? = nil,
             expanded bool? = nil
         ) Blob {
@@ -234,9 +178,6 @@ class ControlParts {
                 }
             ).Build()
             button.AutoFocus = autoFocus
-            if let anchor = handle {
-                button.Handle = anchor
-            }
             if hasPopup.HasValue || expanded.HasValue {
                 let semantics = button.Accessibility ?? Accessibility{}
                 button.Accessibility = Accessibility{

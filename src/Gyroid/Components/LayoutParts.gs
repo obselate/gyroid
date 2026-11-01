@@ -73,14 +73,6 @@ class LayoutParts {
             OnWheel: (event WheelEvent) -> ui.Actions.touch()
         }
 
-        func Accent(color Color, content Blob) Blob -> Container{
-            BorderWidth: Edges{Left: AppTheme.Border3},
-            BorderColor: color,
-            Padding: Edges{Left: AppTheme.Space12},
-            MinWidth: 0,
-            content
-        }
-
         func ActionRow(children[]Blob) Blob {
             let row = Container{
                 FlexDirection: FlexDirection.Row,

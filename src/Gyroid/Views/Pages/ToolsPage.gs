@@ -948,7 +948,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
         card.Add(
             WalletParts.Header(
-                Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, tabs},
+                tabs,
                 AppTheme.Space16,
                 if tab == "health" {
                     Info(

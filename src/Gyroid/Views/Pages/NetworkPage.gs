@@ -519,7 +519,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 FlexShrink: 0,
-                Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, tabs},
+                tabs,
                 Cell.Mount[InfoTipInput, InfoTip](
                     "peers-info",
                     InfoTipInput{

@@ -8,17 +8,17 @@ class ChartParts {
             left Length,
             top Length,
             content Blob,
-            width float64? = nil,
             right Length? = nil,
             bottom Length? = nil,
             margin Edges? = nil,
             zIndex int32 = 0
         ) Container {
-            let surface = Container{BasedOn: AppTheme.PassiveTooltipStyle, HitTestSelf: false, content}
-            if let size = width {
-                surface.Width = size
+            let placed = Container{
+                Position: PositionType.Absolute,
+                HitTestSelf: false,
+                ZIndex: zIndex,
+                Container{BasedOn: AppTheme.PassiveTooltipStyle, HitTestSelf: false, content}
             }
-            let placed = Container{Position: PositionType.Absolute, HitTestSelf: false, ZIndex: zIndex, surface}
             if let edge = right {
                 placed.Right = edge
             } else {
