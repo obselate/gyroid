@@ -125,21 +125,16 @@ class SendPage : Cell, IDisposable {
     }
 
     public func Accept(next SendPageInput) {
-        if (next with{Sends = sent == nil ? input.Sends: next.Sends}) == input && input.Rows.Count > 0 {
+        let draftsChanged = !SameDrafts(next.Rows, editorRows)
+        if (next with{Sends = sent == nil ? input.Sends: next.Sends}) == input && !draftsChanged {
             return
         }
-        let validate = input
-            .Display
-            .Network != next
-            .Display
-            .Network ||
-            input
-            .Display
-            .Contacts != next
-            .Display
-            .Contacts ||
-            input.Rows != next.Rows ||
-            editorRows.Length == 0
+        let validate = input.Display.Network != next.Display.Network || input.Display.Contacts != next.Display.Contacts
+        if draftsChanged || validate {
+            generation++
+            estimate = nil
+            reading = false
+        }
         if input.Display.Network != next.Display.Network || input.Wallet != next.Wallet {
             generation++
             request?.Cancel()
@@ -153,12 +148,33 @@ class SendPage : Cell, IDisposable {
         if input.Rows.Count == 0 {
             input.Rows.Add(SendRow())
         }
-        if validate {
-            for row in input.Rows {
+        for index in 0 ... input.Rows.Count {
+            let row = input.Rows[index]
+            if validate || index >= editorRows.Length || !SameDraft(row, editorRows[index]) {
                 SendService.PrepareDraft(row, input.Display.Contacts, input.Display.Network)
             }
         }
         Refresh()
+    }
+
+    private func SameDraft(row SendRow, snapshot SendEditorInput) bool ->
+    row.Id == snapshot
+        .Row
+        .Id &&
+        row.Address == snapshot.Address &&
+        row.Amount == snapshot.Amount &&
+        row.Memo == snapshot.Memo
+
+    private func SameDrafts(rows List[SendRow], snapshots[]SendEditorInput) bool {
+        if rows.Count != snapshots.Length {
+            return false
+        }
+        for index in 0 ... rows.Count {
+            if !SameDraft(rows[index], snapshots[index]) {
+                return false
+            }
+        }
+        return true
     }
 
     private func Refresh() {
@@ -495,16 +511,7 @@ class SendPage : Cell, IDisposable {
                         if session.Settings.Network != network || session.Settings.ActiveWallet != wallet {
                             return
                         }
-                        let unchanged = drafts.Count == submitted.Length && drafts.Select(
-                            (row SendRow, index int32) -> row.Id == submitted[index]
-                                .Row
-                                .Id &&
-                                row.Address == submitted[index].Address &&
-                                row.Amount == submitted[index].Amount &&
-                                row.Memo == submitted[index].Memo
-                        )
-                            .All(value -> value)
-                        if unchanged {
+                        if SameDrafts(drafts, submitted) {
                             drafts.Clear()
                             drafts.Add(SendRow())
                         }
