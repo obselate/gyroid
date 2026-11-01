@@ -71,24 +71,14 @@ class UiService : IDisposable {
     }
 
     func Copy(content string, clearAfterMs float64) {
-        guard let host = window else {
-            return
+        let text = content.ToCharArray()
+        let previous = ClipboardOwner
+        Copy(text, clearAfterMs)
+        if !previous.Equals(ClipboardOwner) {
+            ClipboardText = text
+        } else {
+            Array.Clear(text)
         }
-        try {
-            host.SetClipboardText(content)
-        } catch (failure Exception) {
-            Report("Copy failed")
-            return
-        }
-        ReleaseClipboard(clear: false)
-        ClipboardText = content.ToCharArray()
-        ClipboardTimer = host.SetTimeout(
-            () -> {
-                ReleaseClipboard()
-            },
-            clearAfterMs
-        )
-        ClipboardChanged?.Invoke()
     }
 
     func Copy(content[]char, clearAfterMs float64) {
@@ -159,18 +149,6 @@ class UiService : IDisposable {
                         host.SetClipboardText("")
                         break
                     }
-                }
-            } else if clear {
-                let current = host.GetClipboardText()
-                if System
-                    .Security
-                    .Cryptography
-                    .CryptographicOperations
-                    .FixedTimeEquals(
-                    System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](System.MemoryExtensions.AsSpan(current)),
-                    System.Runtime.InteropServices.MemoryMarshal.AsBytes[char](ReadOnlySpan[char](ClipboardText))
-                ) {
-                    host.SetClipboardText("")
                 }
             }
         } catch (failure Exception) {
