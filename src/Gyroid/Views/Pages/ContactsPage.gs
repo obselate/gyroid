@@ -85,7 +85,7 @@ class ContactsPage : Cell[ContactsInput] {
     }
 
     private func Edit(label string, destination string) {
-        if editing != nil || Input.Contacts.Count == 0 {
+        if editing != nil || ContactsInput(Input).Contacts.Count == 0 {
             editorHandle.ScrollIntoView()
             return
         }
@@ -167,7 +167,7 @@ class ContactsPage : Cell[ContactsInput] {
     )
 
     private func Save(label string, destination string) {
-        let input = Input
+        let input = ContactsInput(Input)
         let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
         next.Remove(editing ?? "")
         next[label] = destination
@@ -319,7 +319,7 @@ class ContactEditor : Cell[ContactEditorInput] {
     }
 
     private func Save() {
-        let input = Input
+        let input = ContactEditorInput(Input)
         try {
             let destination = WalletValidation.ValidateDestination(contactAddress ?? input.Destination)
             if !destination.StartsWith("$", StringComparison.Ordinal) {
