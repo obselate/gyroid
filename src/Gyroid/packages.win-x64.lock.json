@@ -4,9 +4,9 @@
     "net10.0": {
       "Goo": {
         "type": "Direct",
-        "requested": "[0.26.0, 0.26.0]",
-        "resolved": "0.26.0",
-        "contentHash": "57wVoDpY7kae2tKiGPP0nO3IN0E9COpB5HlH0pCQ/IxxPKituYhgLMBh+E+GFu+VhhfEINKTJp3PvvYt8N1atQ==",
+        "requested": "[0.26.1, 0.26.1]",
+        "resolved": "0.26.1",
+        "contentHash": "Uvxl/yjFU+DOcnNprJhTw0wsb8N9LypXEQg5tG8Br1XSyouUQv270nYno83k244SPiYiqRkFTyhxu9tdJ87yaA==",
         "dependencies": {
           "Hexa.NET.SDL3": "1.2.17",
           "Tmds.DBus.Protocol": "0.95.1",
@@ -15,9 +15,9 @@
       },
       "Goo.Accessibility": {
         "type": "Direct",
-        "requested": "[0.26.0, 0.26.0]",
-        "resolved": "0.26.0",
-        "contentHash": "pqlP6pKij7MT1qJgy94fwrdfFl26tFb5w4bPStlgct45jdy+iVV6xNYfVfgyTa77eXjNb5NMMTBys5oXOdpABA=="
+        "requested": "[0.26.1, 0.26.1]",
+        "resolved": "0.26.1",
+        "contentHash": "HETX3tYlMj0gzVM2ES+hxAGsmyB5tOUpkKtFDbfabGiVNeatmlkn/iC8Ue73F9obm8RgOokPXVEjo4jb93xU0w=="
       },
       "Goo.Widgets": {
         "type": "Direct",
@@ -87,9 +87,9 @@
     "net10.0/win-x64": {
       "Goo": {
         "type": "Direct",
-        "requested": "[0.26.0, 0.26.0]",
-        "resolved": "0.26.0",
-        "contentHash": "57wVoDpY7kae2tKiGPP0nO3IN0E9COpB5HlH0pCQ/IxxPKituYhgLMBh+E+GFu+VhhfEINKTJp3PvvYt8N1atQ==",
+        "requested": "[0.26.1, 0.26.1]",
+        "resolved": "0.26.1",
+        "contentHash": "Uvxl/yjFU+DOcnNprJhTw0wsb8N9LypXEQg5tG8Br1XSyouUQv270nYno83k244SPiYiqRkFTyhxu9tdJ87yaA==",
         "dependencies": {
           "Hexa.NET.SDL3": "1.2.17",
           "Tmds.DBus.Protocol": "0.95.1",
@@ -98,9 +98,9 @@
       },
       "Goo.Accessibility": {
         "type": "Direct",
-        "requested": "[0.26.0, 0.26.0]",
-        "resolved": "0.26.0",
-        "contentHash": "pqlP6pKij7MT1qJgy94fwrdfFl26tFb5w4bPStlgct45jdy+iVV6xNYfVfgyTa77eXjNb5NMMTBys5oXOdpABA=="
+        "requested": "[0.26.1, 0.26.1]",
+        "resolved": "0.26.1",
+        "contentHash": "HETX3tYlMj0gzVM2ES+hxAGsmyB5tOUpkKtFDbfabGiVNeatmlkn/iC8Ue73F9obm8RgOokPXVEjo4jb93xU0w=="
       },
       "Microsoft.DotNet.ILCompiler": {
         "type": "Direct",
