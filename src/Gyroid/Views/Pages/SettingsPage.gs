@@ -87,6 +87,7 @@ data struct SettingsNodeInput {
     var UpgradeDeadline string
     var State WalletState
     var Busy bool
+    var ViewHeight float64
 }
 
 data struct SettingsStartupInput {
@@ -638,7 +639,8 @@ class SettingsNode : Cell, IDisposable {
             UpgradeNotice: status.UpgradeNotice,
             UpgradeDeadline: status.UpgradeDeadline,
             State: input.Snapshot.State,
-            Busy: input.Busy
+            Busy: input.Busy,
+            ViewHeight: input.Height
         }
         if input.Section == "node" && next.Directory != directoryRead {
             generation++
