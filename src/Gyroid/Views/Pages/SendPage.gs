@@ -396,8 +396,19 @@ class SendPage : Cell, IDisposable {
     ) Task {
         var found SendEstimate?
         var problem = ""
+        var rows = drafts
         try {
-            found = await session.Send.EstimateAsync(requests, token)
+            let pending = await session.Send.EstimateAsync(requests, token)
+            found = pending
+            rows = drafts.Select(
+                (row SendReviewRow, index int32) -> row with{
+                    Amount = pending.Recipients[index].Amount,
+                    Destination = pending.Recipients[index].Address,
+                    Memo = pending.Recipients[index].Memo,
+                    Handle = pending.Handles[index]
+                }
+            )
+                .ToArray()
         } catch (error OperationCanceledException) {
             return
         } catch (error Exception) {
@@ -411,17 +422,7 @@ class SendPage : Cell, IDisposable {
                 reading = false
                 issue = problem
                 estimate = found
-                if let pending = found {
-                    reviewRows = drafts.Select(
-                        (row SendReviewRow, index int32) -> row with{
-                            Amount = pending.Recipients[index].Amount,
-                            Destination = pending.Recipients[index].Address,
-                            Memo = pending.Recipients[index].Memo,
-                            Handle = pending.Handles[index]
-                        }
-                    )
-                        .ToArray()
-                }
+                reviewRows = rows
                 Refresh()
             }
         )
