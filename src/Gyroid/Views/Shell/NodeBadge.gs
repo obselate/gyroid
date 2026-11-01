@@ -98,9 +98,14 @@ partial class App {
                     Position: PositionType.Absolute,
                     Left: 0,
                     Bottom: 0,
-                    Height: 2,
-                    Width: Percent(percent),
-                    BackgroundColor: AppTheme.Lime
+                    ControlParts.Progress(
+                        ui.Strings.Get("syncing"),
+                        percent!!/ 100.0,
+                        AppTheme.Lime,
+                        60,
+                        2,
+                        Color.Transparent
+                    )
                 }
             )
         }
@@ -293,14 +298,16 @@ partial class App {
         )
     }
 
-    private func NodeReading(label string, value string, total string = "") Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Baseline,
-        Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, ""),
-        Container{FlexGrow: 1},
-        Label(ui, value, AppTheme.Type14, AppTheme.Ink, ""),
-        Label(ui, total, AppTheme.Type14, AppTheme.Dim, "")
-    }
+    private func NodeReading(label string, value string, total string = "") Blob ->
+    KeyValue(
+        ui,
+        ui.Strings.Get(label),
+        Container{
+            FlexDirection: FlexDirection.Row,
+            Label(ui, value, AppTheme.Type12, AppTheme.Ink, ""),
+            Label(ui, total, AppTheme.Type12, AppTheme.Dim, "")
+        }
+    )
 
     private func UpgradeDialog() Blob {
         let node = wallet.Node.Status
@@ -315,7 +322,9 @@ partial class App {
                 Open = true,
                 AccessibilityName = ui.Strings.Get("Network upgrade"),
                 Width = Math.Min(width - 48, 600),
-                Header = Label(ui, ui.Strings.Get("Network upgrade"), AppTheme.Type17, AppTheme.Ink, ""),
+                Header = WalletParts.Header(
+                    Label(ui, ui.Strings.Get("Network upgrade"), AppTheme.Type17, AppTheme.Ink, "")
+                ),
                 Content = Container{
                     Gap: AppTheme.Space14,
                     Figure(ui, "Date", node.UpgradeDate, AppTheme.Ink),

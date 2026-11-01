@@ -58,11 +58,9 @@ data struct Activity {
 class OverviewPage : Cell[OverviewInput] {
     private let hero ElementHandle = ElementHandle()
     private let strip ElementHandle = ElementHandle()
-    private let infoAnchor ElementHandle = ElementHandle()
     private var heroWidth float64
     private var stripWidth float64
     private var hovering bool
-    private var infoOpen bool
     private var peeking bool
     private var expanded string = ""
     private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
@@ -170,7 +168,7 @@ class OverviewPage : Cell[OverviewInput] {
         let first = Container{
             FlexDirection: FlexDirection.Row,
             Gap: AppTheme.Space10,
-            NetworkParts.Figure(
+            TextParts.Figure(
                 ui,
                 "height",
                 height,
@@ -179,16 +177,16 @@ class OverviewPage : Cell[OverviewInput] {
                 !online ? AppTheme.Pink: node.Syncing ? AppTheme.Orange: AppTheme.Lime,
                 1.85
             ),
-            NetworkParts.Figure(ui, "peers", Count(node.Peers), "", size, color),
-            NetworkParts.Figure(ui, "last block", last, "", size, online && age > 900 ? AppTheme.Orange: color)
+            TextParts.Figure(ui, "peers", Count(node.Peers), "", size, color),
+            TextParts.Figure(ui, "last block", last, "", size, online && age > 900 ? AppTheme.Orange: color)
         }
         card.Add(first)
         let second = Container{
             FlexDirection: FlexDirection.Row,
             Gap: AppTheme.Space10,
-            NetworkParts.Figure(ui, "hashrate", Rate(report.Hashrate), Unit(report.Hashrate), size, color, 1.85),
-            NetworkParts.Figure(ui, "difficulty", Compact(report.Difficulty), "", size, color),
-            NetworkParts.Figure(
+            TextParts.Figure(ui, "hashrate", Rate(report.Hashrate), Unit(report.Hashrate), size, color, 1.85),
+            TextParts.Figure(ui, "difficulty", Compact(report.Difficulty), "", size, color),
+            TextParts.Figure(
                 ui,
                 "mempool",
                 Count(node.Mempool),
@@ -500,13 +498,10 @@ class OverviewPage : Cell[OverviewInput] {
         if peeking {
             card.BorderColor = AppTheme.StrongRule
         }
-        let header = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: AppTheme.Space10,
-            FlexShrink: 0,
-            Grow(Label(ui, ui.Strings.Get("balance"), AppTheme.Type12, AppTheme.Body, ""))
-        }
+        let header = WalletParts.Header(
+            Label(ui, ui.Strings.Get("balance"), AppTheme.Type12, AppTheme.Body, ""),
+            AppTheme.Space10
+        )
         if input.Privacy {
             let press = (event PointerEvent) -> if !event.IsFromInteractiveChild {
                 event.Capture()
@@ -555,23 +550,21 @@ class OverviewPage : Cell[OverviewInput] {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
             Gap: AppTheme.Space12,
-            Cell.Mount[DecodeValueInput, DecodeValue](
+            TextParts.Value(
+                ui,
                 "balance",
-                DecodeValueInput{
-                    Value: value,
-                    Ui: ui,
-                    Name: if masked {
-                        ui.Strings.Get("Amounts hidden")
-                    } else if known {
-                        ui.Strings.Get("balance") + " " + WalletAmount.Format(total) + " BNT"
-                    } else {
-                        value
-                    },
-                    Size: size,
-                    Color: color,
-                    FractionColor: color == AppTheme.Lime ? AppTheme.LimeMuted: AppTheme.StrongRule,
-                    Live: AccessibilityLive.Polite
-                }
+                if masked {
+                    ui.Strings.Get("Amounts hidden")
+                } else if known {
+                    ui.Strings.Get("balance") + " " + WalletAmount.Format(total) + " BNT"
+                } else {
+                    value
+                },
+                value,
+                size,
+                color,
+                color == AppTheme.Lime ? AppTheme.LimeMuted: AppTheme.StrongRule,
+                AccessibilityLive.Polite
             )
         }
         if known && !masked {
@@ -679,20 +672,13 @@ class OverviewPage : Cell[OverviewInput] {
         if hovering && !masked && confirming > 0 {
             let outputs = arrivals.Count((item Arrival) -> item.Kind != "pool")
             let last = arrivals.Where((item Arrival) -> item.Kind != "pool").Max((item Arrival) -> item.Blocks)
-            wrap.Add(
-                Container{
-                    BasedOn: AppTheme.PassiveTooltipStyle,
-                    Position: PositionType.Absolute,
-                    Right: 20,
-                    Bottom: height + AppTheme.Space8,
-                    ZIndex: 5,
-                    HitTestSelf: false,
-                    BoxShadows: []BoxShadow{BoxShadow{OffsetY: 10, Blur: 28, Color: AppTheme.Black}},
-                    KeyValue(ui, ui.Strings.Get("confirming"), Fixed(confirming)),
-                    KeyValue(ui, ui.Strings.Get("outputs"), outputs.ToString()),
-                    KeyValue(ui, ui.Strings.Get("all ready"), Wait(input, last))
-                }
-            )
+            let content = Container{
+                Gap: AppTheme.Space4,
+                KeyValue(ui, ui.Strings.Get("confirming"), Fixed(confirming)),
+                KeyValue(ui, ui.Strings.Get("outputs"), outputs.ToString()),
+                KeyValue(ui, ui.Strings.Get("all ready"), Wait(input, last))
+            }
+            wrap.Add(ChartParts.Tooltip(0, 0, content, right: 20, bottom: height + AppTheme.Space8, zIndex: 5))
         }
         card.Add(wrap)
         card.Add(Legend(input, masked, ready, confirming, unconfirmed, total == 0))
@@ -727,14 +713,8 @@ class OverviewPage : Cell[OverviewInput] {
             ("in mempool", unconfirmed, AppTheme.Blue)
         }
         for (label, units, tint) in items {
-            let name = Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space8,
-                Height: 18,
-                Container{BasedOn: AppTheme.MarkerStyle, BackgroundColor: tint},
-                Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, "")
-            }
+            let name = TextParts.Legend(ui, ui.Strings.Get(label), tint)
+            name.Height = 18
             if label == "confirming" {
                 name.Add(Info(ui))
             }
@@ -746,20 +726,18 @@ class OverviewPage : Cell[OverviewInput] {
             } else {
                 tint
             }
-            let value = Cell.Mount[DecodeValueInput, DecodeValue](
+            let value = TextParts.Value(
+                ui,
                 label,
-                DecodeValueInput{
-                    Value: text,
-                    Ui: ui,
-                    Name: ui.Strings.Get(label) + " " + if masked {
-                        ui.Strings.Get("Amounts hidden")
-                    } else {
-                        WalletAmount.Format(units)
-                    },
-                    Size: AppTheme.GetLegendFigureSize(wide, input.Height),
-                    Color: color,
-                    FractionColor: AppTheme.Dim
-                }
+                ui.Strings.Get(label) + " " + if masked {
+                    ui.Strings.Get("Amounts hidden")
+                } else {
+                    WalletAmount.Format(units)
+                },
+                text,
+                AppTheme.GetLegendFigureSize(wide, input.Height),
+                color,
+                AppTheme.Dim
             )
             legend.Add(
                 if wide {
@@ -778,44 +756,23 @@ class OverviewPage : Cell[OverviewInput] {
         return legend
     }
 
-    private func Info(ui Presentation) Blob -> Container{
-        Handle: infoAnchor,
-        (
-            AppTheme.IconButton with{
-                Icon = MaterialIcons.Create("info", AppTheme.Icon16, infoOpen ? AppTheme.Ink: AppTheme.Body),
-                AccessibilityName = ui.Strings.Get("About confirming"),
-                OnClick = () -> {
-                    infoOpen = !infoOpen
-                    Rebuild()
-                }
-            }
-        ).Build(),
-        Cell.Mount[PopoverInput, Popover](
-            "confirming-info",
-            PopoverInput{
-                Open: infoOpen,
-                Anchor: infoAnchor,
-                Placement: PopoverPlacement.BottomStart,
-                Width: Length.Auto,
-                Padding: AppTheme.Space12,
-                BackgroundColor: AppTheme.Raised,
-                BorderColor: AppTheme.Edge,
-                TakeFocus: false,
-                AccessibilityName: ui.Strings.Get("About confirming"),
-                Content: Container{
-                    Gap: AppTheme.Space4,
-                    Label(ui, ui.Strings.Get("Received: 10 blocks."), AppTheme.Type12, AppTheme.Body, ""),
-                    Label(ui, ui.Strings.Get("Mined: 60 blocks."), AppTheme.Type12, AppTheme.Body, ""),
-                    Label(ui, ui.Strings.Get("Mempool: change from your send."), AppTheme.Type12, AppTheme.Body, ""),
-                    Label(ui, ui.Strings.Get("1 block ≈ 5 min."), AppTheme.Type12, AppTheme.Body, "")
-                },
-                OnDismiss: reason -> {
-                    infoOpen = false
-                    Rebuild()
-                }
-            }
-        )
-    }
+    private func Info(ui Presentation) Blob -> Cell.Mount[InfoTipInput, InfoTip](
+        "confirming-info",
+        InfoTipInput{
+            Ui: ui,
+            Topic: "About confirming",
+            Lines: []string{
+                "Received: 10 blocks.",
+                "Mined: 60 blocks.",
+                "Mempool: change from your send.",
+                "1 block ≈ 5 min."
+            },
+            Language: ui.Strings.Language,
+            Width: 300,
+            Placement: PopoverPlacement.BottomStart,
+            TakeFocus: false
+        }
+    )
 
     private func Fade(color Color, faded bool) Color -> if faded {
         Color.FromNormalized(color.R * 0.3F + 0.014F, color.G * 0.3F + 0.014F, color.B * 0.3F + 0.014F, 1F)
@@ -1038,14 +995,7 @@ class OverviewPage : Cell[OverviewInput] {
         card.Add(header)
         let activities = Activities(input, chain)
         if activities.Count == 0 && incoming.Length == 0 {
-            card.Add(
-                Container{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    Height: 40,
-                    Grow(Label(ui, ui.Strings.Get("no transactions yet"), AppTheme.Type14, AppTheme.Dim, ""))
-                }
-            )
+            card.Add(ListParts.Empty(ui, "no transactions yet"))
             return card
         }
         let height = 48.0
@@ -1122,7 +1072,7 @@ class OverviewPage : Cell[OverviewInput] {
                 }
             )
         }
-        card.Add(rows)
+        card.Add(ListParts.Viewport(rows))
         return card
     }
 }
