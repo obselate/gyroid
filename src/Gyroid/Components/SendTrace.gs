@@ -155,6 +155,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             ui.Strings.Get("Close"),
             input.OnClose
         )
+        close.Key = "trace-close"
         let strip = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: if compact {
@@ -249,6 +250,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         ringStage.FlexShrink = 1
         ringStage.MinWidth = 0
         let stages = Container{
+            Key: "trace-stages",
             FlexDirection: FlexDirection.Row,
             Gap: AppTheme.Space12,
             Stage(
