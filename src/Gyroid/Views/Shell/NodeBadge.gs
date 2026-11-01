@@ -23,11 +23,23 @@ enum NodeConnectionState {
 
 data struct NodeBadgeInput {
     var Ui Presentation
-    var Node NodeStatus
+    var Running bool
+    var Syncing bool
+    var Height uint64
+    var ChainHeight uint64
+    var Peers uint64
+    var Mempool uint64
+    var Version string
+    var Network string
+    var SyncRate float64
+    var LastBlockTime int64
+    var UpgradeDate string
+    var UpgradeDeadline string
+    var UpgradeBlocksLeft uint64
     var Percent int32?
     var Language string
     var Width float64
-    var Height float64
+    var WindowHeight float64
     var OnNavigate Action[AppPage]
     var OnSettings Action
     var OnUpgrade Action
@@ -46,11 +58,11 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
         }
     }
 
-    private func NodeState(status NodeStatus) NodeConnectionState -> if !status.Running {
+    private func NodeState(running bool, syncing bool, peers uint64) NodeConnectionState -> if !running {
         NodeConnectionState.Offline
-    } else if status.Syncing {
+    } else if syncing {
         NodeConnectionState.Syncing
-    } else if status.Peers == 0 {
+    } else if peers == 0 {
         NodeConnectionState.NoPeers
     } else {
         NodeConnectionState.Synced
@@ -63,11 +75,10 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
         case NodeConnectionState.Synced: AppTheme.Mint
     }
 
-    protected override func Build(input NodeBadgeInput) Blob {
-        let ui = input.Ui
-        let status = input.Node
-        let state = NodeState(status)
-        let percent = input.Percent
+    protected override func Build(status NodeBadgeInput) Blob {
+        let ui = status.Ui
+        let state = NodeState(status.Running, status.Syncing, status.Peers)
+        let percent = status.Percent
         let height = status.Height > 0 ? Count(status.Height): "-"
         let detail = if state == NodeConnectionState.Offline {
             ui.Strings.Get("offline")
@@ -122,14 +133,13 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 }
             )
         }
-        return Container{FlexShrink: 0, badge, NodePopover(input, state)}
+        return Container{FlexShrink: 0, badge, NodePopover(status, state)}
     }
 
-    private func NodePopover(input NodeBadgeInput, state NodeConnectionState) Blob {
-        let ui = input.Ui
-        let status = input.Node
-        let width = input.Width
-        let height = input.Height
+    private func NodePopover(status NodeBadgeInput, state NodeConnectionState) Blob {
+        let ui = status.Ui
+        let width = status.Width
+        let height = status.WindowHeight
         let box = nodeAnchor.BorderBox
         let center = box.Y + box.Height / 2
         let version = status.Version.Length > 0 ? " · v" + status.Version: ""
@@ -226,7 +236,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                                 OnClick = () -> {
                                     nodeOpen = false
                                     Rebuild()
-                                    input.OnUpgrade()
+                                    status.OnUpgrade()
                                 }
                             }
                         ).Build()
@@ -249,7 +259,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
             OnClick: () -> {
                 nodeOpen = false
                 Rebuild()
-                input.OnNavigate(AppPage.Network)
+                status.OnNavigate(AppPage.Network)
             },
             Label(ui, ui.Strings.Get("Network"), AppTheme.Type14, AppTheme.Lime, ""),
             MaterialIcons.Create("chevron_right", AppTheme.Icon16, AppTheme.Lime)
@@ -265,7 +275,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                     () -> {
                         nodeOpen = false
                         Rebuild()
-                        input.OnSettings()
+                        status.OnSettings()
                     }
                 ),
                 networkButton
@@ -335,20 +345,35 @@ partial class App {
     private var upgradeShown bool
     private let showUpgrade Action
 
-    private func NodeBadge() Blob -> Cell.Mount[NodeBadgeInput, NodeBadgeRegion](
-        "node-badge",
-        NodeBadgeInput{
-            Ui: ui,
-            Node: wallet.Node.Status,
-            Percent: PhasePercent(),
-            Language: ui.Strings.Language,
-            Width: width,
-            Height: height,
-            OnNavigate: navigate,
-            OnSettings: openNodeSettings,
-            OnUpgrade: showUpgrade
-        }
-    )
+    private func NodeBadge() Blob {
+        let node = wallet.Node.Status
+        return Cell.Mount[NodeBadgeInput, NodeBadgeRegion](
+            "node-badge",
+            NodeBadgeInput{
+                Ui: ui,
+                Running: node.Running,
+                Syncing: node.Syncing,
+                Height: node.Height,
+                ChainHeight: node.ChainHeight,
+                Peers: node.Peers,
+                Mempool: node.Mempool,
+                Version: node.Version,
+                Network: node.Network,
+                SyncRate: node.SyncRate,
+                LastBlockTime: node.LastBlockTime,
+                UpgradeDate: node.UpgradeDate,
+                UpgradeDeadline: node.UpgradeDeadline,
+                UpgradeBlocksLeft: node.UpgradeBlocksLeft,
+                Percent: PhasePercent(),
+                Language: ui.Strings.Language,
+                Width: width,
+                WindowHeight: height,
+                OnNavigate: navigate,
+                OnSettings: openNodeSettings,
+                OnUpgrade: showUpgrade
+            }
+        )
+    }
 
     private func UpgradeDialog() Blob {
         let node = wallet.Node.Status
