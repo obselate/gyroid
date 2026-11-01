@@ -265,8 +265,8 @@ partial class App : Cell {
                 AccessibilityName: ui.Strings.Get("Replace send draft?"),
                 Content: Text{
                     Content: ui.Strings.Get("Replace your unsent draft with this payment link?"),
-                    FontFamily: ui.Font,
-                    Color: ui.Ink,
+                    FontFamily: AppTheme.Font,
+                    Color: AppTheme.Ink,
                     TextWrap: TextWrap.Wrap
                 },
                 ConfirmText: ui.Strings.Get("Replace"),
@@ -810,13 +810,13 @@ partial class App : Cell {
             Width: Percent(100),
             Height: Percent(100),
             BorderRadius: if maximized {
-                0.0
+                AppTheme.Radius0
             } else {
                 theme.PanelRadius
             },
             Overflow: Overflow.Hidden,
-            FontFamily: ui.Font,
-            Color: ui.Ink,
+            FontFamily: AppTheme.Font,
+            Color: AppTheme.Ink,
             OnPointerDown: (event PointerEvent) -> Touch(),
             OnWheel: (event WheelEvent) -> Touch(),
             Container{
@@ -825,7 +825,7 @@ partial class App : Cell {
                 Top: 0,
                 Right: 0,
                 Bottom: 0,
-                BackgroundColor: backgroundMode == "off" ? ui.Black: Color.Transparent,
+                BackgroundColor: backgroundMode == "off" ? AppTheme.Black: Color.Transparent,
                 ShaderEffect: backgroundMode == "off" ? nil: background
             },
             Chrome()
@@ -1132,8 +1132,8 @@ partial class App : Cell {
             FlexBasis: 0,
             MinWidth: 0,
             MinHeight: 0,
-            Gap: 16,
-            Padding: 24
+            Gap: AppTheme.Space16,
+            Padding: AppTheme.Space24
         }
         if let shown = banner {
             main.Add(Container{Key: "error-banner", FlexShrink: 0, shown})
@@ -1193,7 +1193,7 @@ partial class App : Cell {
         }
         let frame = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, FlexDirection: FlexDirection.Row}
         if WalletAvailable() {
-            main.Padding = 0
+            main.Padding = AppTheme.Space0
             main.Width = Percent(100)
             if page != AppPage.Transactions &&
                 page != AppPage.Messages &&
@@ -1201,8 +1201,8 @@ partial class App : Cell {
                 page != AppPage.Network {
                 main.MaxWidth = 1400
             }
-            frame.Padding = Edges{Left: 14, Right: 20, Bottom: 20}
-            frame.Gap = 16
+            frame.Padding = Edges{Left: AppTheme.Space14, Right: AppTheme.Space20, Bottom: AppTheme.Space20}
+            frame.Gap = AppTheme.Space16
             frame.Add(Sidebar(page))
             frame.Add(Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, AlignItems: AlignItems.Center, main})
         } else {
@@ -1231,12 +1231,12 @@ partial class App : Cell {
                     Top: 0,
                     Right: 0,
                     Bottom: 0,
-                    BorderWidth: 1,
+                    BorderWidth: AppTheme.Border1,
                     BorderRadius: theme.PanelRadius,
                     BorderColor: if window?.IsFocused == true {
-                        ui.Edge
+                        AppTheme.Edge
                     } else {
-                        ui.Rule
+                        AppTheme.Rule
                     },
                     HitTestSelf: false,
                     ZIndex: 30
