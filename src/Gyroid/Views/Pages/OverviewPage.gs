@@ -904,7 +904,7 @@ class OverviewPage : Cell[OverviewInput] {
             .Where(send -> send.IsSelf(snapshot.Address))
             .Select(send -> send.TxId)
             .ToHashSet()
-        for output in input.Session.History.Outputs {
+        for output in snapshot.History {
             let maturity = output.Maturity(chain)
             if selfSends.Contains(output.TxId) || (!output.Spent && output.BlockHeight > 0 && !maturity.Ready) {
                 continue

@@ -18,7 +18,8 @@ data class WalletOutput {
 }
 
 data struct WalletMaturity(Confirmations uint64, Required uint64) {
-    prop Count uint64 -> System.Math.Min(Confirmations > 0 ? Confirmations - 1: uint64(0), Required)
+    prop Depth uint64 -> Confirmations > 0 ? Confirmations - 1: uint64(0)
+    prop Count uint64 -> System.Math.Min(Depth, Required)
     prop Ready bool -> Confirmations > Required
     prop Remaining uint64 -> Required - Count
 }

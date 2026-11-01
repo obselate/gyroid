@@ -742,6 +742,8 @@ class HistoryPage : Cell[HistoryInput] {
         }
         let depth = if pending {
             ui.Strings.Get(row.State == "not_found" ? "not found": "pending")
+        } else if mature {
+            row.Maturity.Depth >= 10000 ? (row.Maturity.Depth / 1000).ToString() + "k": Count(row.Maturity.Depth)
         } else {
             row.Maturity.Count.ToString() + "/" + row.Maturity.Required.ToString()
         }
