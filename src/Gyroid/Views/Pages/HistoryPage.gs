@@ -94,7 +94,6 @@ data struct HistoryExportInput {
     var Network string
     var Wallet string
     var Tip uint64
-    var Cutoff uint64
     var Period string
     var From uint64
     var To uint64
@@ -129,7 +128,6 @@ class HistoryPage : Cell, IDisposable {
         Ribbon: HistoryService.PrepareRibbon([]HistoryRow{}, 0, 1, 0, 40, CancellationToken.None)
     }
     private var prepared HistoryPrepared
-    private var cutoff uint64
     private var preparationGeneration int32
     private var exportSnapshot WalletSnapshot?
     private var exportOutputs IReadOnlyList[WalletOutput]?
@@ -346,11 +344,7 @@ class HistoryPage : Cell, IDisposable {
         let token = active.Token
         let request = HistoryPreparation{
             Snapshot: current.Snapshot,
-            Outputs: current.SelectionTx.Length > 0 ? current.Session.History.Outputs: current.Snapshot.History,
-            Previous: prepared.Rows,
-            PreviousShown: prepared.Shown,
-            PreviousExport: prepared.Export,
-            PreviousRibbon: prepared.Ribbon,
+            Previous: prepared,
             PlotWidth: ribbonWidth,
             Cutoff: period == "all" ? 0UL: resolvedPeriod == period ? periodStart: current.Tip + 1,
             From: from,
@@ -365,7 +359,6 @@ class HistoryPage : Cell, IDisposable {
                 exportTip == current.Tip &&
                 Object.ReferenceEquals(exportOutputs, current.Session.History.Outputs),
         }
-        cutoff = request.Cutoff
         go PrepareCollection(window, history, request, generation, id, token)
     }
 
@@ -393,6 +386,7 @@ class HistoryPage : Cell, IDisposable {
                         prepared = result
                         Rebuild()
                     }
+                    resizeRibbon(ribbonWidth)
                 }
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
@@ -484,7 +478,6 @@ class HistoryPage : Cell, IDisposable {
             Session: input.Session,
             Network: identity.Network,
             Wallet: identity.Wallet,
-            Cutoff: cutoff,
             Tip: tip,
             Period: period,
             From: from,
@@ -781,7 +774,7 @@ class HistoryRibbon : Cell {
     init() {
         configureHover = cell -> {
             hoverCell = cell
-            cell.Accept(current, plotWidth, plotHeight, current.Data.Bins)
+            cell.Accept(current, plotWidth, plotHeight)
         }
         plot.MetricsChanged += metrics -> {
             if metrics.IsMounted && metrics.BorderBox.Width != plotWidth {
@@ -824,11 +817,7 @@ class HistoryRibbon : Cell {
         let height = compact ? 60.0: input.Width >= 1700 ? 110.0: 84.0
         plotHeight = height
         let columns = data.Bins.Length
-        let received = data.Received
-        let mined = data.Mined
-        let sent = data.Sent
-        let top = data.Top
-        let scale Func[float64, float64] = value -> input.Privacy ? 1.0: Math.Sqrt(value / top)
+        let scale Func[float64, float64] = value -> input.Privacy ? 1.0: Math.Sqrt(value / data.Top)
         let up = PathBuilder(0, 0, Math.Max(1.0, width), height)
         let coin = PathBuilder(0, 0, Math.Max(1.0, width), height)
         let down = PathBuilder(0, 0, Math.Max(1.0, width), height)
@@ -836,15 +825,15 @@ class HistoryRibbon : Cell {
         for column in 0 ... columns {
             let x = (column + 0.15) * step
             let w = 0.7 * step
-            let total = received[column] + mined[column]
+            let total = data.Received[column] + data.Mined[column]
             if total > 0 {
                 let bar = scale(total) * 0.44 * height
-                let split = bar * received[column] / total
+                let split = bar * data.Received[column] / total
                 Rectangle(up, x, 0.56 * height - bar, w, split)
                 Rectangle(coin, x, 0.56 * height - bar + split, w, bar - split)
             }
-            if sent[column] > 0 {
-                Rectangle(down, x, 0.58 * height, w, Math.Max(0.03, scale(sent[column]) * 0.4) * height)
+            if data.Sent[column] > 0 {
+                Rectangle(down, x, 0.58 * height, w, Math.Max(0.03, scale(data.Sent[column]) * 0.4) * height)
             }
         }
         let area = Container{
@@ -989,19 +978,14 @@ class HistoryRibbonHover : Cell {
     private var anchor uint64
     private var hover int32 = -1
     private var marked uint64
-    private var bins[]HistoryRibbonBin = [40]HistoryRibbonBin
 
-    public func Accept(input HistoryRibbonInput, width float64, height float64, prepared[]HistoryRibbonBin) {
-        if current.Equals(input) && plotWidth == width && plotHeight == height && Object.ReferenceEquals(
-            bins,
-            prepared
-        ) {
+    public func Accept(input HistoryRibbonInput, width float64, height float64) {
+        if current.Equals(input) && plotWidth == width && plotHeight == height {
             return
         }
         current = input
         plotWidth = width
         plotHeight = height
-        bins = prepared
         Rebuild()
     }
 
@@ -1020,7 +1004,7 @@ class HistoryRibbonHover : Cell {
         let from = input.From
         let to = input.To
         let width = plotWidth
-        let columns = bins.Length
+        let columns = input.Data.Bins.Length
         let size = float64(span) / columns
         let step = width / columns
         let area = Container{
@@ -1074,7 +1058,7 @@ class HistoryRibbonHover : Cell {
                 }
             }
         }
-        let cursor = if hover >= 0 && hover < bins.Length && !dragging {
+        let cursor = if hover >= 0 && hover < columns && !dragging {
             (hover + 0.5) * step
         } else if marked > low {
             width * Math.Clamp((float64(marked) - low) / span, 0.0, 1.0)
@@ -1094,7 +1078,7 @@ class HistoryRibbonHover : Cell {
                 }
             )
         }
-        if hover >= 0 && hover < bins.Length && !dragging {
+        if hover >= 0 && hover < columns && !dragging {
             area.Add(Tip(input, hover, size, step, width))
         }
         return area
@@ -1114,7 +1098,7 @@ class HistoryRibbonHover : Cell {
         let ui = input.Ui
         let start = current.Low + 1 + uint64(column * size)
         let end = Math.Max(start, current.Low + uint64((column + 1) * size))
-        let bin = bins[column]
+        let bin = input.Data.Bins[column]
         let tip = Container{
             Gap: AppTheme.Space4,
             Label(ui, start == end ? Count(start): Count(start) + " – " + Count(end), AppTheme.Type12, AppTheme.Ink, "")
@@ -1258,14 +1242,10 @@ class HistoryTransactions : Cell, IDisposable {
         RefreshRows()
         if selected.Length > 0 {
             selectionTimer?.Dispose()
-            let key = selected
-            let revision = selectedRevision
             selectionTimer = input.Window?.SetTimeout(
                 () -> {
                     selectionTimer = nil
-                    if revision == selectedRevision {
-                        list.ScrollToItem(key)
-                    }
+                    list.ScrollToItem(selected)
                 },
                 1
             )

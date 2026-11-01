@@ -94,12 +94,8 @@ data struct HistoryRow {
 
 data struct HistoryPreparation {
     var Snapshot WalletSnapshot
-    var Outputs System.Collections.Generic.IReadOnlyList[WalletOutput]
     var ExportOutputs System.Collections.Generic.IReadOnlyList[WalletOutput]
-    var Previous[]HistoryRow
-    var PreviousShown[]HistoryRow
-    var PreviousExport[]HistoryRow
-    var PreviousRibbon HistoryRibbonData
+    var Previous HistoryPrepared
     var PlotWidth float64
     var Cutoff uint64
     var From uint64

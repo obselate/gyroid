@@ -422,7 +422,7 @@ class HistoryService {
         for output in outputs {
             ct.ThrowIfCancellationRequested()
             let maturity = output.Maturity(tip)
-            if output.IsChange || selfSends.Contains(output.TxId) ||
+            if selfSends.Contains(output.TxId) ||
                 (!output.Spent && output.BlockHeight > 0 && !maturity.Ready) ||
                 activity.Count >= 50 {
                 continue
@@ -490,15 +490,12 @@ class HistoryService {
     }
 
     func Prepare(input HistoryPreparation, ct CancellationToken) HistoryPrepared {
-        let cutoff = input.Cutoff
-        let from = input.From
-        let to = input.To
-        let rows = input.ReuseRows ? input.Previous: PrepareRows(input, ct)
+        let rows = input.ReuseRows ? input.Previous.Rows: PrepareRows(input, input.Previous.Rows, ct)
         let tip = input.Tip
         let oldest = rows.Length > 0 && rows[rows.Length - 1].Height > 0 ? rows[rows.Length - 1].Height: tip
-        let low = cutoff == 0 ? oldest > 0 ? oldest - 1: 0UL: Math.Min(tip, cutoff - 1)
-        let first = to > 0 ? Math.Max(from, cutoff): cutoff
-        let last = to > 0 ? to: tip
+        let low = input.Cutoff == 0 ? oldest > 0 ? oldest - 1: 0UL: Math.Min(tip, input.Cutoff - 1)
+        let first = input.To > 0 ? Math.Max(input.From, input.Cutoff): input.Cutoff
+        let last = input.To > 0 ? input.To: tip
         let shown = rows.Where(
             (row HistoryRow) -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last
         )
@@ -514,44 +511,42 @@ class HistoryService {
                 summary.Fees += row.Fee
             }
         }
-        let export = input.ReuseRows ||
-            input.ReuseExport ? input.PreviousExport: PrepareRows(
-            input with{Outputs = input.ExportOutputs, Previous = input.PreviousExport, Complete = true},
-            ct
-        )
+        let export = input.ReuseExport ? input
+            .Previous
+            .Export: input.Complete ? rows: PrepareRows(input with{Complete = true}, input.Previous.Export, ct)
         let span = Math.Max(1UL, tip - low)
         let columns = int32(Math.Max(40.0, Math.Min(float64(span), Math.Floor(input.PlotWidth / 3))))
         let ribbon = PrepareRibbon(rows, low, span, tip, columns, ct)
         return HistoryPrepared{
             SelectionKey: input.SelectionTx.Length > 0 ?
             rows.FirstOrDefault(row -> row.TxId == input.SelectionTx).Key ?? "": "",
-            Rows: rows.SequenceEqual(input.Previous) ? input.Previous: rows,
-            Shown: shown.SequenceEqual(input.PreviousShown) ? input.PreviousShown: shown,
-            Export: export.SequenceEqual(input.PreviousExport) ? input.PreviousExport: export,
+            Rows: input.ReuseRows || rows.SequenceEqual(input.Previous.Rows) ? input.Previous.Rows: rows,
+            Shown: shown.SequenceEqual(input.Previous.Shown) ? input.Previous.Shown: shown,
+            Export: input.ReuseExport || export.SequenceEqual(input.Previous.Export) ? input.Previous.Export: export,
             ExportCount: export.Count(row -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last),
             Summary: summary,
             Low: low,
             Span: span,
-            Ribbon: ribbon.Bins.SequenceEqual(input.PreviousRibbon.Bins) && ribbon.Received.SequenceEqual(
-                input.PreviousRibbon.Received
+            Ribbon: ribbon.Bins.SequenceEqual(input.Previous.Ribbon.Bins) && ribbon.Received.SequenceEqual(
+                input.Previous.Ribbon.Received
             ) &&
                 ribbon
                 .Mined
-                .SequenceEqual(input.PreviousRibbon.Mined) && ribbon.Sent.SequenceEqual(
-                input.PreviousRibbon.Sent
-            ) ? input.PreviousRibbon: ribbon
+                .SequenceEqual(input.Previous.Ribbon.Mined) && ribbon.Sent.SequenceEqual(
+                input.Previous.Ribbon.Sent
+            ) ? input
+                .Previous
+                .Ribbon: ribbon
         }
     }
 
-    func PrepareRows(input HistoryPreparation, ct CancellationToken)[]HistoryRow {
+    func PrepareRows(input HistoryPreparation, previousRows[]HistoryRow, ct CancellationToken)[]HistoryRow {
         let snapshot = input.Snapshot
         let tip = input.Tip
-        let times = input.Times
-        let complete = input.Complete
-        let previous = input.Previous.ToDictionary(row -> row.Key, StringComparer.Ordinal)
+        let previous = previousRows.ToDictionary(row -> row.Key, StringComparer.Ordinal)
         let rows = List[HistoryRow]()
         let selfSends = SelfSends(snapshot)
-        for output in input.Outputs {
+        for output in input.Complete ? input.ExportOutputs: input.Snapshot.History {
             ct.ThrowIfCancellationRequested()
             if selfSends.Contains(output.TxId) {
                 continue
@@ -569,11 +564,11 @@ class HistoryService {
                     Memo = output.Memo,
                     Height = output.BlockHeight,
                     Maturity = output.Maturity(tip),
-                    Time = times.GetValueOrDefault(output.BlockHeight)
+                    Time = input.Times.GetValueOrDefault(output.BlockHeight)
                 }
             )
         }
-        let lowest = if !complete && snapshot.HistoryMore && snapshot.History.Length > 0 {
+        let lowest = if !input.Complete && snapshot.HistoryMore && snapshot.History.Length > 0 {
             snapshot.History[snapshot.History.Length - 1].BlockHeight
         } else {
             0UL
@@ -616,7 +611,7 @@ class HistoryService {
                     ),
                     Height = height,
                     Maturity = WalletMaturity(confirmed ? send.Confirmations: uint64(0), 10),
-                    Time = confirmed ? times.GetValueOrDefault(height): send.Timestamp,
+                    Time = confirmed ? input.Times.GetValueOrDefault(height): send.Timestamp,
                     State = send.Status,
                     Recipients = entries
                 }
