@@ -159,16 +159,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
-                Name: Hidden(ui.Privacy, message.Text) +
-                    " " +
-                    message
-                    .SentAt
-                    .ToLocalTime()
-                    .ToString("HH:mm") +
-                    " " +
-                    ui
-                    .Strings
-                    .Get(verification)
+                Name: Hidden(ui.Privacy, message.Text) + " " + time + " " + ui.Strings.Get(verification)
             },
             OnClick: input.OnOpen,
             Text{
