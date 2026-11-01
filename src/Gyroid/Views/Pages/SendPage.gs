@@ -242,6 +242,7 @@ class SendPage : Cell, IDisposable {
             )
         )
         if multi {
+            card.Height = Percent(100)
             card.Add(Cell.Mount[SendTotal]("amount-total", configureTotal))
             let list = VirtualRows(
                 editorRows,
