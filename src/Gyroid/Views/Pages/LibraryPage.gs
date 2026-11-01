@@ -25,13 +25,12 @@ data struct LibraryInput {
     var State WalletState
     var ActiveWallet string
     var Directory string
-    var Network string
     var Busy bool
     var Language string
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnNavigate Action[AppPage]
     var OnCreate Action[string, []char]
-    var OnUnlock Action[string, Func[CancellationToken, Task], Action]
+    var OnBackup Action[[]char]
 }
 
 class LibraryPage : Cell, IDisposable {
@@ -68,7 +67,7 @@ class LibraryPage : Cell, IDisposable {
                 Issue: issue,
                 ChooseFile: input.ChooseFile,
                 OnNavigate: input.OnNavigate,
-                OnUnlock: input.OnUnlock,
+                OnBackup: input.OnBackup,
                 OnStart: start
             }
         )
@@ -82,23 +81,19 @@ class LibraryPage : Cell, IDisposable {
         input = next
         Rebuild()
         if previous.Session == next.Session &&
-            previous.Directory == next.Directory &&
-            previous.Network == next.Network &&
             previous.State == next.State &&
             previous.ActiveWallet == next.ActiveWallet {
             return
         }
-        request?.Cancel()
-        request?.Dispose()
         guard let owner = next.Ui.Actions.window else {
             return
         }
+        request?.Cancel()
+        request?.Dispose()
         let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, owner.Closed)
         request = current
         generation++
-        let id = generation
-        let token = current.Token
-        go Load(next.Session.Library, owner, id, token)
+        go Load(next.Session.Library, owner, generation, current.Token)
     }
 
     private func Load(library WalletLibrary, owner Window, id int32, token CancellationToken) {
@@ -116,7 +111,7 @@ class LibraryPage : Cell, IDisposable {
         }
         owner.TryPost(
             () -> {
-                if id != generation || token.IsCancellationRequested {
+                if id != generation || (message == issue && found.SequenceEqual(wallets)) {
                     return
                 }
                 wallets = found
@@ -131,7 +126,7 @@ class LibraryPage : Cell, IDisposable {
         if form.Length > 0 {
             card.Add(
                 Cell.Mount[LibraryFormInput, LibraryForm](
-                    input.Network + input.Directory + form,
+                    form,
                     LibraryFormInput{
                         Session: input.Session,
                         Ui: input.Ui,
@@ -144,12 +139,7 @@ class LibraryPage : Cell, IDisposable {
                 )
             )
         } else {
-            card.Add(
-                Cell.Mount[LibraryList](
-                    input.Network + Path.Combine(input.Directory, input.ActiveWallet),
-                    configureList
-                )
-            )
+            card.Add(Cell.Mount[LibraryList]("list", configureList))
         }
         return card
     }
@@ -157,7 +147,6 @@ class LibraryPage : Cell, IDisposable {
     func Dispose() {
         generation++
         lifetime.Cancel()
-        request?.Cancel()
         request?.Dispose()
         lifetime.Dispose()
     }
@@ -175,18 +164,16 @@ data struct LibraryListInput {
     var Issue string
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnNavigate Action[AppPage]
-    var OnUnlock Action[string, Func[CancellationToken, Task], Action]
+    var OnBackup Action[[]char]
     var OnStart Action[string]
 }
 
 class LibraryList : Cell, IDisposable {
     private var input LibraryListInput
-    private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var generation int32
     private var opened string?
     private var password string = ""
     private var issue string = ""
-    private var busy bool
 
     func Accept(next LibraryListInput) {
         if EqualityComparer[LibraryListInput].Default.Equals(input, next) {
@@ -226,7 +213,7 @@ class LibraryList : Cell, IDisposable {
                         FlexDirection: FlexDirection.Row,
                         Gap: AppTheme.Space10,
                         Tile(input, "key", "Import view keys", false, () -> input.OnStart("ViewOnly")),
-                        Tile(input, "draft", "Open file", false, () -> ImportFile(input))
+                        Tile(input, "draft", "Open file", false, ImportFile)
                     }
                 }
             )
@@ -236,10 +223,10 @@ class LibraryList : Cell, IDisposable {
                     "add-wallet",
                     LibraryMenuInput{
                         Ui: ui,
-                        Busy: input.Busy || busy,
+                        Busy: input.Busy,
                         Language: input.Language,
                         OnStart: input.OnStart,
-                        OnImport: ImportCurrent
+                        OnImport: ImportFile
                     }
                 )
             )
@@ -264,9 +251,7 @@ class LibraryList : Cell, IDisposable {
         return card
     }
 
-    private func ImportCurrent() -> ImportFile(input)
-
-    private func ImportFile(input LibraryListInput) {
+    private func ImportFile() {
         input.ChooseFile.Invoke(
             FileDialogKind.OpenFile,
             "Import wallet",
@@ -300,7 +285,7 @@ class LibraryList : Cell, IDisposable {
             },
             BorderColor: primary ? AppTheme.Lime: AppTheme.Rule,
             BackgroundColor: AppTheme.Surface,
-            Disabled: input.Busy || busy,
+            Disabled: input.Busy,
             Hover: Style{BackgroundColor: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
@@ -330,18 +315,18 @@ class LibraryList : Cell, IDisposable {
             BasedOn: AppTheme.ListRowStyle,
             Height: 48,
             BorderWidth: AppTheme.Border0,
-            Disabled: input.Busy || busy,
+            Disabled: input.Busy,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
             OnClick: () -> {
-                if busy || input.Busy {
+                if input.Busy {
                     return
                 }
                 opened = expanded ? "": filename
                 password = ""
                 issue = ""
                 if loaded && !active {
-                    Run(ct -> input.Session.Library.ChooseWalletAsync(filename, ct), expectedWallet: filename)
+                    Run(ct -> input.Session.Library.ChooseWalletAsync(filename, ct))
                 }
             },
             Container{
@@ -390,7 +375,7 @@ class LibraryList : Cell, IDisposable {
                     MaterialIcons.Create("download", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Body),
                     ui.Strings.Get("Unload"),
                     () -> Run(ct -> input.Session.UnloadAsync(ct)),
-                    input.Busy || busy
+                    input.Busy
                 )
             )
         }
@@ -413,7 +398,7 @@ class LibraryList : Cell, IDisposable {
         if !expanded {
             return row
         }
-        let unlock = WalletForm(ui, !input.Busy && !busy, () -> Unlock(input, filename), []string{password})
+        let unlock = WalletForm(ui, !input.Busy, () -> Unlock(input, filename), []string{password})
         row.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -432,7 +417,7 @@ class LibraryList : Cell, IDisposable {
                                 Rebuild()
                             },
                             secret: true,
-                            disabled: input.Busy || busy,
+                            disabled: input.Busy,
                             labelled: false,
                             invalid: issue.Length > 0
                         )
@@ -468,27 +453,27 @@ class LibraryList : Cell, IDisposable {
         let secret = text.ToCharArray()
         let session = input.Session
         let active = input.ActiveWallet
+        let backup = input.OnBackup
         var message = ""
         password = ""
         issue = ""
-        busy = true
         generation++
         let id = generation
-        input.OnUnlock.Invoke(
-            text,
-            (ct CancellationToken) -> OpenWallet(session, active, filename, secret, value -> message = value, ct),
+        input
+            .Ui
+            .Actions
+            .Run(
+            ct -> Complete(token -> OpenWallet(session, active, filename, secret, token), value -> message = value, ct),
             () -> {
-                if id != generation || lifetime.IsCancellationRequested {
-                    return
+                if session.Snapshot.State == WalletState.Unlocked && session.Keys.BackupPending {
+                    backup(text.ToCharArray())
                 }
-                let current = this.input
-                if session != current.Session || current.ActiveWallet != filename {
-                    return
+                if id == generation {
+                    issue = message
+                    Rebuild()
                 }
-                busy = false
-                issue = message
-                Rebuild()
-            }
+            },
+            secret
         )
     }
 
@@ -497,74 +482,49 @@ class LibraryList : Cell, IDisposable {
         active string,
         filename string,
         secret[]char,
-        report Action[string],
         ct CancellationToken
     ) {
-        try {
-            if filename != active {
-                await session.Library.ChooseWalletAsync(filename, ct)
-            }
-            await session.UnlockAsync(secret, ct)
-        } catch (failure Exception) {
-            report(failure.Message)
-        } finally {
-            Array.Clear(secret)
+        if filename != active {
+            await session.Library.ChooseWalletAsync(filename, ct)
         }
+        await session.UnlockAsync(secret, ct)
     }
 
-    private func Run(action Func[CancellationToken, Task], expectedWallet string = "") {
-        let source = input
-        guard let owner = source.Ui.Actions.window else {
-            return
-        }
-        if busy {
-            return
-        }
-        busy = true
+    private func Run(action Func[CancellationToken, Task]) {
         issue = ""
         generation++
         let id = generation
-        let token = CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
-        go Complete(action, source, owner, id, token, expectedWallet)
-    }
-
-    private async func Complete(
-        action Func[CancellationToken, Task],
-        source LibraryListInput,
-        owner Window,
-        id int32,
-        token CancellationTokenSource,
-        expectedWallet string
-    ) {
         var message = ""
-        try {
-            await action(token.Token)
-        } catch (failure Exception) {
-            message = failure.Message
-        } finally {
-            token.Dispose()
-        }
-        owner.TryPost(
+        input
+            .Ui
+            .Actions
+            .Run(
+            ct -> Complete(action, value -> message = value, ct),
             () -> {
-                let current = input
-                if id != generation ||
-                    lifetime.IsCancellationRequested ||
-                    source.Session != current.Session ||
-                    source.Directory != current.Directory ||
-                    (source.ActiveWallet != current.ActiveWallet && expectedWallet != current.ActiveWallet) {
-                    return
+                if id == generation {
+                    issue = message
+                    Rebuild()
                 }
-                busy = false
-                issue = message
-                Rebuild()
             }
         )
     }
 
+    private async func Complete(action Func[CancellationToken, Task], report Action[string], ct CancellationToken) {
+        try {
+            await action(ct)
+        } catch (failure WalletException) {
+            report(failure.Message)
+        } catch (failure IOException) {
+            report(failure.Message)
+        } catch (failure UnauthorizedAccessException) {
+            report(failure.Message)
+        } catch (failure Exception) {
+            report("Operation failed")
+        }
+    }
+
     func Dispose() {
         generation++
-        lifetime.Cancel()
-        lifetime.Dispose()
         password = ""
     }
 }
@@ -600,13 +560,9 @@ class LibraryMenu : Cell[LibraryMenuInput] {
         Menu(input)
     }
 
-    private func Start(input LibraryMenuInput, kind string) {
-        menu = false
-        input.OnStart(kind)
-    }
-
     private func ImportFile(input LibraryMenuInput) {
         menu = false
+        Rebuild()
         input.OnImport()
     }
 
@@ -627,9 +583,9 @@ class LibraryMenu : Cell[LibraryMenuInput] {
                 AccessibilityName: ui.Strings.Get("Add wallet"),
                 Content: Container{
                     MinWidth: 0,
-                    Item(input, "add", "Create", () -> Start(input, "Create")),
-                    Item(input, "replay", "Restore · 12 words", () -> Start(input, "Phrase")),
-                    Item(input, "key", "Import view keys", () -> Start(input, "ViewOnly")),
+                    Item(input, "add", "Create", () -> input.OnStart("Create")),
+                    Item(input, "replay", "Restore · 12 words", () -> input.OnStart("Phrase")),
+                    Item(input, "key", "Import view keys", () -> input.OnStart("ViewOnly")),
                     Item(input, "draft", "Open file", () -> ImportFile(input))
                 },
                 OnDismiss: reason -> {
@@ -673,9 +629,7 @@ data struct LibraryFormInput {
 }
 
 class LibraryForm : Cell[LibraryFormInput], IDisposable {
-    private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var generation int32
-    private var busy bool
     private var issue string = ""
     private var name string = ""
     private var password string = ""
@@ -687,7 +641,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
     protected override func Build(input LibraryFormInput) Blob {
         let card = Container{Gap: AppTheme.Space14, MinHeight: 0}
         let form = input.Kind
-        let disabled = input.Busy || busy
+        let disabled = input.Busy
         let ui = input.Ui
         let required = if form == "Phrase" {
             []string{name.Trim(), phrase.Trim()}
@@ -793,97 +747,67 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
     private func Submit(input LibraryFormInput) {
         let filename = WalletFile(name)
         let secret = password.ToCharArray()
-        let session = input.Session
         password = ""
         confirmation = ""
         if input.Kind == "Create" {
             input.OnCreate(filename, secret)
             return
         }
-        guard let owner = input.Ui.Actions.window else {
-            Array.Clear(secret)
-            return
-        }
         let extra = (input.Kind == "Phrase" ? phrase: viewKey).ToCharArray()
         let publicKey = spendKey.ToCharArray()
-        let directory = session.Settings.WalletDirectory
-        let network = session.Settings.Network
-        let activeWallet = session.Settings.ActiveWallet
-        let token = CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
-        busy = true
         issue = ""
         generation++
         let id = generation
-        go Import(input, filename, secret, extra, publicKey, directory, network, activeWallet, owner, id, token)
+        var message = ""
+        input
+            .Ui
+            .Actions
+            .Run(
+            ct -> Import(input, filename, secret, extra, publicKey, value -> message = value, ct),
+            () -> {
+                if id != generation {
+                    return
+                }
+                issue = message
+                if message.Length == 0 {
+                    input.OnBack()
+                } else {
+                    Rebuild()
+                }
+            },
+            secret,
+            extra
+        )
     }
 
     private async func Import(
-        source LibraryFormInput,
+        input LibraryFormInput,
         filename string,
         secret[]char,
         extra[]char,
         publicKey[]char,
-        directory string,
-        network string,
-        activeWallet string,
-        owner Window,
-        id int32,
-        token CancellationTokenSource
+        report Action[string],
+        ct CancellationToken
     ) {
-        var message = ""
         try {
-            if source.Kind == "Phrase" {
-                await source.Session.ImportPhraseAsync(filename, extra, secret, token.Token)
+            if input.Kind == "Phrase" {
+                await input.Session.ImportPhraseAsync(filename, extra, secret, ct)
             } else {
-                await source.Session.ImportViewOnlyAsync(filename, publicKey, extra, secret, token.Token)
+                await input.Session.ImportViewOnlyAsync(filename, publicKey, extra, secret, ct)
             }
+        } catch (failure WalletException) {
+            report(failure.Message)
+        } catch (failure IOException) {
+            report(failure.Message)
+        } catch (failure UnauthorizedAccessException) {
+            report(failure.Message)
         } catch (failure Exception) {
-            message = failure.Message
-        } finally {
-            Array.Clear(secret)
-            Array.Clear(extra)
-            Array.Clear(publicKey)
-            token.Dispose()
+            report("Operation failed")
         }
-        owner.TryPost(
-            () -> {
-                if id != generation ||
-                    lifetime.IsCancellationRequested ||
-                    directory != source
-                    .Session
-                    .Settings
-                    .WalletDirectory ||
-                    network != source
-                    .Session
-                    .Settings
-                    .Network ||
-                    (
-                    source
-                        .Session
-                        .Settings
-                        .ActiveWallet != activeWallet &&
-                        source
-                        .Session
-                        .Settings
-                        .ActiveWallet != filename
-                ) {
-                    return
-                }
-                busy = false
-                issue = message
-                if message.Length == 0 {
-                    source.OnBack()
-                } else {
-                    Rebuild()
-                }
-            }
-        )
     }
 
     func Dispose() {
         generation++
-        lifetime.Cancel()
-        lifetime.Dispose()
         password = ""
         confirmation = ""
         phrase = ""
