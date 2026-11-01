@@ -262,7 +262,7 @@ class ContactEditor : Cell[ContactEditorInput] {
             !input.Busy && !taken && !destinationName,
             () -> Save(input),
             []string{label, address},
-            edited: Rebuild
+            edited: () -> Rebuild()
         )
         let fields = Container{
             FlexDirection: FlexDirection.Row,
