@@ -19,7 +19,6 @@ import System.Collections.Generic
 import System.Globalization
 import System.Linq
 import System.Threading
-import System.Threading.Tasks
 
 data struct OverviewInput {
     var Ui Presentation
@@ -81,17 +80,15 @@ data struct OverviewNetworkInput {
 data struct OverviewRecentInput {
     var Ui Presentation
     var Rows[]OverviewRow
+    var HasTransactions bool
     var IncomingOutputs int32
     var IncomingBlocks uint64
-    var Window Window?
     var Issue string
     var Privacy bool
     var Width float64
     var Language string
     var Network string
     var Wallet string
-    var Endpoint string
-    var ProcessId int32
     var OnHistory Action[string]
     var OnNavigate Action[AppPage]
     var Hovering bool
@@ -120,21 +117,7 @@ data struct OverviewUpgradeInput {
     var OnUpgrade Action
 }
 
-class OverviewPage : Cell[OverviewInput] {
-    private var current OverviewInput
-    private let configure Action[OverviewContent]
-
-    init() {
-        configure = cell -> cell.Accept(current)
-    }
-
-    protected override func Build(input OverviewInput) Blob {
-        current = input
-        return Cell.Mount[OverviewContent]("content", configure)
-    }
-}
-
-class OverviewContent : Cell, IDisposable {
+class OverviewPage : Cell, IDisposable {
     private var current OverviewInput
     private var arrivalSource IReadOnlyList[WalletOutput]? = nil
     private var changeSource IReadOnlyList[WalletOutput]? = nil
@@ -142,8 +125,6 @@ class OverviewContent : Cell, IDisposable {
     private var language string = ""
     private var identity HistoryIdentity
     private var readSource HistoryReadSource
-    private var arrivals[]HistoryArrival = []HistoryArrival{}
-    private var activity[]HistoryActivity = []HistoryActivity{}
     private var confirmingOutputs int32
     private var rows[]OverviewRow = []OverviewRow{}
     private var incomingOutputs int32
@@ -165,35 +146,23 @@ class OverviewContent : Cell, IDisposable {
         let chain = input.Snapshot.Balance?.ChainHeight ?? input.Node.Height
         let nextIdentity = HistoryPage.SourceIdentity(input.Session)
         let nextSource = HistoryPage.ReadSource(input.Session)
-        if disposed ||
-            (
-            current.Equals(input) &&
-                arrivalSource == nextArrivals &&
-                changeSource == nextChanges &&
-                language == input
-                .Ui
-                .Strings
-                .Language &&
-                identity.Equals(nextIdentity) && readSource.Equals(nextSource)
-        ) {
-            return
-        }
+        let nextLanguage = input.Ui.Strings.Language
         let prepare = current.Session != input.Session ||
             current.Snapshot != input.Snapshot ||
             current.Contacts != input.Contacts ||
-            language != input
-            .Ui
-            .Strings
-            .Language ||
+            language != nextLanguage ||
             !identity.Equals(nextIdentity) || !readSource.Equals(nextSource) ||
             arrivalSource != nextArrivals ||
             changeSource != nextChanges ||
             tip != chain
+        if disposed || (!prepare && current.Equals(input)) {
+            return
+        }
         current = input
         arrivalSource = nextArrivals
         changeSource = nextChanges
         tip = chain
-        language = input.Ui.Strings.Language
+        language = nextLanguage
         identity = nextIdentity
         readSource = nextSource
         Rebuild()
@@ -212,22 +181,8 @@ class OverviewContent : Cell, IDisposable {
         let token = pending.Token
         let id = generation
         let outputs = input.Snapshot.History
-        let previousArrivals = arrivals
-        let previousActivity = activity
         let previousRows = rows
-        go Prepare(
-            input,
-            nextArrivals,
-            nextChanges,
-            outputs,
-            chain,
-            previousArrivals,
-            previousActivity,
-            previousRows,
-            window,
-            id,
-            token
-        )
+        go Prepare(input, nextArrivals, nextChanges, outputs, chain, previousRows, window, id, token)
     }
 
     init() {
@@ -267,17 +222,25 @@ class OverviewContent : Cell, IDisposable {
         recentInput = OverviewRecentInput{
             Ui: input.Ui,
             Rows: rows,
+            HasTransactions: input
+                .Snapshot
+                .History
+                .Length > 0 ||
+                input
+                .Snapshot
+                .Sends
+                .Length > 0 ||
+                (arrivalSource?.Count ?? 0) > 0 ||
+                (changeSource?.Count ?? 0) > 0 ||
+                (input.Snapshot.Balance?.Unconfirmed ?? uint64(0)) > 0,
             IncomingOutputs: incomingOutputs,
             IncomingBlocks: incomingBlocks,
-            Window: input.Window,
             Issue: issue,
             Privacy: input.Privacy,
             Width: input.Width,
             Language: language,
             Network: input.Session.Node.Settings.Network,
             Wallet: input.Session.Node.Settings.ActiveWallet,
-            Endpoint: input.Session.Node.Settings.Endpoint,
-            ProcessId: input.Session.Node.Settings.OwnedProcessId,
             OnHistory: input.OnHistory,
             Hovering: hovering,
             OnNavigate: input.OnNavigate
@@ -340,8 +303,6 @@ class OverviewContent : Cell, IDisposable {
         changes IReadOnlyList[WalletOutput],
         outputs[]WalletOutput,
         chain uint64,
-        previousArrivals[]HistoryArrival,
-        previousActivity[]HistoryActivity,
         previousRows[]OverviewRow,
         window Window,
         id int32,
@@ -355,134 +316,132 @@ class OverviewContent : Cell, IDisposable {
                 .Where(height -> height > 0)
                 .Distinct()
                 .ToArray()
-            var times = Dictionary[uint64, int64]()
+            let sends = input.Snapshot.Sends.DistinctBy(send -> send.TxId).ToDictionary(send -> send.TxId)
+            var times = previousRows
+                .Where(row -> !row.IsArrival && row.Activity.OutputIndex >= 0 && row.Activity.Timestamp > 0)
+                .GroupBy(row -> row.Activity.Height)
+                .ToDictionary(group -> group.Key, group -> group.First().Activity.Timestamp)
             var failure = ""
-            try {
-                times = await history.BlockTimesAsync(heights, token)
-            } catch (error OperationCanceledException) {
-                return
-            } catch (error Exception) {
-                failure = input.Ui.Strings.Explain(error.Message)
-            }
-            let result = history.PrepareOverview(input.Snapshot, arrivalOutputs, changes, outputs, chain, times, token)
-            let sends = input.Snapshot.Sends.ToDictionary(send -> send.TxId)
-            let preparedArrivals = result.Arrivals
-            var count = 0
-            var blocks = uint64(0)
-            for index in 0 ... preparedArrivals.Length {
+            var previous = previousRows
+            for phase in 0 ... 2 {
                 token.ThrowIfCancellationRequested()
-                let item = preparedArrivals[index]
-                let send = item.Kind == "pool" ? input
-                    .Snapshot
-                    .Sends
-                    .FirstOrDefault(value -> value.Status == "mempool"):
-                sends.GetValueOrDefault(item.TxId)
-                let name = Contact(input.Contacts, input.Session.Messages, send)
-                let label = if item.Kind == "change" || item.Kind == "pool" {
-                    input.Ui.Strings.Get("change") + (name.Length > 0 ? " · " + name: "")
-                } else if item.Kind == "mined" {
-                    input.Ui.Strings.Get("mined") + " · " + input.Ui.Strings.Get("block") + " " + Count(item.Height)
-                } else {
-                    item.Source.Length > 0 ? item.Source: OverviewParts.Short(item.TxId)
+                if phase == 1 {
+                    try {
+                        times = await history.BlockTimesAsync(heights, token)
+                    } catch (error Exception) when !(error is OperationCanceledException) {
+                        failure = input.Ui.Strings.Explain(error.Message)
+                    }
                 }
-                preparedArrivals[index] = item with{Source = label}
-                if item.Kind != "pool" {
-                    count++
-                    blocks = Math.Max(blocks, item.Blocks)
-                }
-            }
-            let preparedActivity = result.Activity
-            for index in 0 ... preparedActivity.Length {
-                token.ThrowIfCancellationRequested()
-                let item = preparedActivity[index]
-                let name = item.OutputIndex < 0 ? Contact(
-                    input.Contacts,
-                    input.Session.Messages,
+                let result = history.PrepareOverview(
+                    input.Snapshot,
+                    arrivalOutputs,
+                    changes,
+                    outputs,
+                    chain,
+                    times,
+                    token
+                )
+                let preparedRows = List[OverviewRow]()
+                var count = 0
+                var blocks = uint64(0)
+                var incomingCount = 0
+                var incomingWait = uint64(0)
+                for item in result.Arrivals {
+                    let send = item.Kind == "pool" ? input
+                        .Snapshot
+                        .Sends
+                        .FirstOrDefault(value -> value.Status == "mempool"):
                     sends.GetValueOrDefault(item.TxId)
-                ): item.Label
-                let label = if item.Kind == "self" {
-                    input.Ui.Strings.Get("To self") + (name.Length > 0 ? " · " + name: "")
-                } else if name.Length > 0 {
-                    name
-                } else if item.Kind == "mined" {
-                    input.Ui.Strings.Get("block") + " " + Count(item.Height)
-                } else {
-                    OverviewParts.Short(item.TxId)
+                    let name = Contact(input.Contacts, input.Session.Messages, send)
+                    let label = if item.Kind == "change" || item.Kind == "pool" {
+                        input.Ui.Strings.Get("change") + (name.Length > 0 ? " · " + name: "")
+                    } else if item.Kind == "mined" {
+                        input.Ui.Strings.Get("mined") + " · " + input.Ui.Strings.Get("block") + " " + Count(item.Height)
+                    } else {
+                        item.Source.Length > 0 ? item.Source: OverviewParts.Short(item.TxId)
+                    }
+                    if item.Kind != "pool" {
+                        count++
+                        blocks = Math.Max(blocks, item.Blocks)
+                    }
+                    if !item.Self {
+                        incomingCount++
+                        incomingWait = Math.Max(incomingWait, item.Blocks)
+                        preparedRows.Add(
+                            OverviewRow{
+                                Key: item.Kind == "pool" ? "overview-pending": "overview-output-" +
+                                    item.TxId +
+                                    ":" +
+                                    item
+                                    .OutputIndex
+                                    .ToString(),
+                                Arrival: item with{Source = label},
+                                IsArrival: true
+                            }
+                        )
+                    }
                 }
-                let status = item.Status == "not_found" ? input.Ui.Strings.Get("not found"):
-                item.Status == "mempool" ? "mempool":
-                Math.Min(item.Confirmations, item.Required).ToString() + "/" + item.Required.ToString()
-                preparedActivity[index] = item with{
-                    Label = label,
-                    Status = status,
-                    Order = 0,
-                    Confirmations = 0,
-                    Required = 0,
-                    Height = 0
-                }
-            }
-            let preparedRows = List[OverviewRow]()
-            var incomingCount = 0
-            var incomingWait = uint64(0)
-            for item in preparedArrivals {
-                token.ThrowIfCancellationRequested()
-                if !item.Self {
-                    incomingCount++
-                    incomingWait = Math.Max(incomingWait, item.Blocks)
+                for item in result.Activity.DistinctBy(value -> (value.TxId, value.OutputIndex)) {
+                    let name = item.OutputIndex < 0 ? Contact(
+                        input.Contacts,
+                        input.Session.Messages,
+                        sends.GetValueOrDefault(item.TxId)
+                    ): item.Label
+                    let label = if item.Kind == "self" {
+                        input.Ui.Strings.Get("To self") + (name.Length > 0 ? " · " + name: "")
+                    } else if name.Length > 0 {
+                        name
+                    } else if item.Kind == "mined" {
+                        input.Ui.Strings.Get("block") + " " + Count(item.Height)
+                    } else {
+                        OverviewParts.Short(item.TxId)
+                    }
+                    let status = item.Status == "not_found" ? input.Ui.Strings.Get("not found"):
+                    item.Status == "mempool" ? "mempool": item.Confirmations.ToString() + "/" + item.Required.ToString()
                     preparedRows.Add(
                         OverviewRow{
-                            Key: item.Kind == "pool" ? "overview-pending": "overview-output-" +
+                            Key: item.OutputIndex < 0 ? "overview-send-" +
+                                item.TxId: "overview-output-" +
                                 item.TxId +
                                 ":" +
                                 item
                                 .OutputIndex
                                 .ToString(),
-                            Arrival: item,
-                            IsArrival: true
+                            Activity: item with{
+                                Label = label,
+                                Status = status,
+                                Order = 0,
+                                Confirmations = 0,
+                                Required = 0,
+                                Height = item.OutputIndex < 0 ? uint64(0): item.Height
+                            }
                         }
                     )
                 }
-            }
-            for item in preparedActivity {
-                token.ThrowIfCancellationRequested()
-                preparedRows.Add(
-                    OverviewRow{
-                        Key: item.OutputIndex < 0 ? "overview-send-" +
-                            item.TxId: "overview-output-" +
-                            item.TxId +
-                            ":" +
-                            item
-                            .OutputIndex
-                            .ToString(),
-                        Activity: item
-                    }
-                )
-            }
-            let nextRows = preparedRows.SequenceEqual(previousRows) ? previousRows: preparedRows.ToArray()
-            let nextArrivals = preparedArrivals.SequenceEqual(previousArrivals) ? previousArrivals: preparedArrivals
-            let nextActivity = preparedActivity.SequenceEqual(previousActivity) ? previousActivity: preparedActivity
-            window.TryPost(
-                () -> {
-                    if id != generation {
-                        return
-                    }
-                    if !Object.ReferenceEquals(arrivals, nextArrivals) || !Object.ReferenceEquals(
-                        activity,
-                        nextActivity
-                    ) ||
-                        !Object.ReferenceEquals(rows, nextRows) || issue != failure {
-                        arrivals = nextArrivals
-                        activity = nextActivity
+                let nextRows = preparedRows.SequenceEqual(previous) ? previous: preparedRows.ToArray()
+                let issueText = failure
+                previous = nextRows
+                window.TryPost(
+                    () -> {
+                        if id != generation ||
+                            (
+                            Object.ReferenceEquals(rows, nextRows) &&
+                                confirmingOutputs == count &&
+                                confirmingBlocks == blocks &&
+                                issue == issueText
+                        ) {
+                            return
+                        }
                         rows = nextRows
                         incomingOutputs = incomingCount
                         incomingBlocks = incomingWait
                         confirmingOutputs = count
                         confirmingBlocks = blocks
-                        issue = failure
+                        issue = issueText
                         Rebuild()
                     }
-                }
-            )
+                )
+            }
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let message = input.Ui.Strings.Explain(error.Message)
             window.TryPost(
@@ -1129,7 +1088,7 @@ class OverviewRecent : Cell {
 
     init() {
         rowKey = row -> row.Key
-        rowBuilder = row -> row.IsArrival ? Arrive(source, row.Arrival): Activity(source, row.Activity)
+        rowBuilder = row -> row.IsArrival ? Arrive(source, row): Activity(source, row.Activity)
     }
 
     func Accept(next OverviewRecentInput) {
@@ -1185,16 +1144,11 @@ class OverviewRecent : Cell {
         color
     }
 
-    private func Arrive(input OverviewRecentInput, item HistoryArrival) Blob {
+    private func Arrive(input OverviewRecentInput, value OverviewRow) Blob {
+        let item = value.Arrival
         let ui = input.Ui
         let faded = input.Hovering && item.Kind == "pool"
-        let key = item.Kind == "pool" ? "overview-pending": "overview-output-" +
-            item.TxId +
-            ":" +
-            item
-            .OutputIndex
-            .ToString()
-        let unfolded = item.TxId.Length > 0 && expanded == key
+        let unfolded = value.Expanded
         let glyph Blob = switch item.Kind {
             case "mined": Label(ui, "◆", AppTheme.Type14, Fade(AppTheme.Lime, faded), "")
             case "in": Label(ui, "↓", AppTheme.Type14, Fade(AppTheme.Mint, faded), "")
@@ -1202,7 +1156,7 @@ class OverviewRecent : Cell {
         }
         let row = Goo
             .Button{
-            Key: key,
+            Key: value.Key,
             BasedOn: AppTheme.ListRowStyle,
             FlexDirection: FlexDirection.Column,
             AlignItems: AlignItems.Stretch,
@@ -1219,7 +1173,7 @@ class OverviewRecent : Cell {
             },
             OnClick: () -> {
                 if item.TxId.Length > 0 {
-                    expanded = unfolded ? "": key
+                    expanded = unfolded ? "": value.Key
                     PrepareRows()
                 }
             },
@@ -1276,10 +1230,7 @@ class OverviewRecent : Cell {
         }
         WidgetKeyBindings.BindActivation(row)
         if unfolded {
-            let ready = DateTime
-                .Now
-                .AddMinutes(float64(item.Blocks * 5))
-                .ToString("HH:mm", CultureInfo.InvariantCulture)
+            let ready = Timestamp(DateTimeOffset.Now.ToUnixTimeSeconds() + int64(item.Blocks * 300))
             row.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
@@ -1341,7 +1292,9 @@ class OverviewRecent : Cell {
             card.Add(Label(ui, input.Issue, AppTheme.Type12, AppTheme.Pink, ""))
         }
         if rows.Length == 0 {
-            card.Add(ListParts.Empty(ui, "no transactions yet"))
+            if !input.HasTransactions {
+                card.Add(ListParts.Empty(ui, "no transactions yet"))
+            }
             return card
         }
         let list = VirtualRows(rows, 48.0, rowKey, rowBuilder)

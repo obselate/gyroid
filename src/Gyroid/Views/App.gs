@@ -58,6 +58,7 @@ data struct AppSource {
 partial class App : Cell, IDisposable {
     private let sendDone Action
     private let configureHistory Action[HistoryPage]
+    private let configureOverview Action[OverviewPage]
     private var historySelection string = ""
     private var historySelectionRevision int32
     private let selectHistory Action[string]
@@ -216,10 +217,26 @@ partial class App : Cell, IDisposable {
             }
         )
         selectHistory = tx -> {
+            navigate(AppPage.Transactions)
             historySelection = tx
             historySelectionRevision++
-            navigate(AppPage.Transactions)
         }
+        configureOverview = cell -> cell.Accept(
+            OverviewInput{
+                Ui: ui,
+                Session: wallet,
+                Window: window,
+                Snapshot: wallet.Snapshot,
+                Node: wallet.Node.Status,
+                Contacts: contacts,
+                Privacy: ui.Privacy,
+                Height: height,
+                Width: width,
+                OnNavigate: navigate,
+                OnUpgrade: showUpgrade,
+                OnHistory: selectHistory
+            }
+        )
         configureHistory = cell -> {
             let snapshot = wallet.Snapshot
             cell.Accept(
@@ -996,6 +1013,7 @@ partial class App : Cell, IDisposable {
     private func Open(target AppPage) {
         settingsOwner = nil
         pageGeneration++
+        historySelection = ""
         upgradeShown = false
         if target == AppPage.Messages {
             messageOverlay?.CloseDrawer()
@@ -1367,23 +1385,7 @@ partial class App : Cell, IDisposable {
         }
         let banner = Problem()
         let content = if page == AppPage.Overview {
-            Cell.Mount[OverviewInput, OverviewPage](
-                "overview",
-                OverviewInput{
-                    Ui: ui,
-                    Session: wallet,
-                    Window: window,
-                    Snapshot: snapshot,
-                    Node: wallet.Node.Status,
-                    Contacts: contacts,
-                    Privacy: ui.Privacy,
-                    Height: height,
-                    Width: width,
-                    OnNavigate: navigate,
-                    OnUpgrade: showUpgrade,
-                    OnHistory: selectHistory
-                }
-            )
+            Cell.Mount[OverviewPage]("overview", configureOverview)
         } else if page == AppPage.Send {
             if wallet
                 .Send
