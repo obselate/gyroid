@@ -530,7 +530,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Height: AppTheme.ControlCompact,
                     BorderRadius: AppTheme.Radius6,
                     BorderColor: peeking ? AppTheme.Lime: AppTheme.Edge,
-                    BackgroundColor: peeking ? AppTheme.Active: Color.Transparent,
+                    BackgroundColor: peeking ? AppTheme.LimeQuiet: Color.Transparent,
                     Focusable: true,
                     Focus: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Show amounts")},
@@ -569,7 +569,7 @@ class OverviewPage : Cell[OverviewInput] {
                     },
                     Size: size,
                     Color: color,
-                    FractionColor: color == AppTheme.Lime ? AppTheme.BalanceFraction: AppTheme.MutedFraction,
+                    FractionColor: color == AppTheme.Lime ? AppTheme.LimeMuted: AppTheme.StrongRule,
                     Live: AccessibilityLive.Polite
                 }
             )
@@ -642,12 +642,7 @@ class OverviewPage : Cell[OverviewInput] {
         }
         if masked || total == 0 {
             bar.Add(
-                Container{
-                    FlexGrow: 1,
-                    Height: height,
-                    BorderRadius: AppTheme.Radius2,
-                    BackgroundColor: AppTheme.Selected
-                }
+                Container{FlexGrow: 1, Height: height, BorderRadius: AppTheme.Radius2, BackgroundColor: AppTheme.Rule}
             )
         } else {
             if ready > 0 {
@@ -803,8 +798,8 @@ class OverviewPage : Cell[OverviewInput] {
                 Placement: PopoverPlacement.BottomStart,
                 Width: Length.Auto,
                 Padding: AppTheme.Space12,
-                BackgroundColor: AppTheme.Control,
-                BorderColor: AppTheme.PopoverEdge,
+                BackgroundColor: AppTheme.Raised,
+                BorderColor: AppTheme.Edge,
                 TakeFocus: false,
                 AccessibilityName: ui.Strings.Get("About confirming"),
                 Content: Container{
@@ -896,7 +891,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Container{
                         Width: Percent(100),
                         Height: 3,
-                        BackgroundColor: Fade(AppTheme.Selected, faded),
+                        BackgroundColor: Fade(AppTheme.Rule, faded),
                         Container{
                             Width: Percent(100.0 * item.Confirmations / item.Required),
                             Height: 3,

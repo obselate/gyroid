@@ -136,7 +136,7 @@ class SyncPage : Cell[SyncInput] {
                     15,
                     limit,
                     AppTheme.Lime,
-                    AppTheme.SyncFill,
+                    AppTheme.LimeQuiet,
                     "peers · 15 s",
                     inner,
                     input.Height,
@@ -195,7 +195,7 @@ class SyncPage : Cell[SyncInput] {
                     120,
                     top,
                     color,
-                    stalled ? AppTheme.StalledFill: AppTheme.SyncFill,
+                    stalled ? AppTheme.OrangeQuiet: AppTheme.LimeQuiet,
                     "blk/s · 2 min",
                     inner,
                     input.Height,
@@ -371,7 +371,7 @@ class SyncPage : Cell[SyncInput] {
                         Height: 1,
                         MinWidth: 6,
                         Margin: Edges{Right: AppTheme.Space6},
-                        BackgroundColor: done ? AppTheme.SuccessStroke: AppTheme.Edge
+                        BackgroundColor: done ? AppTheme.LimeMuted: AppTheme.Edge
                     }
                 )
             }
@@ -548,7 +548,7 @@ class SyncPage : Cell[SyncInput] {
                     Height: height,
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: AppTheme.Border1_6,
+                    BorderWidth: 1.6,
                     BorderColor: color
                 }
             )
@@ -580,7 +580,7 @@ class SyncPage : Cell[SyncInput] {
                     Top: 4,
                     Height: 2,
                     Width: Percent(checkpoint * 100),
-                    BackgroundColor: AppTheme.CheckpointFill
+                    BackgroundColor: AppTheme.LimeSoft
                 }
             )
             bar.Add(

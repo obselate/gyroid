@@ -36,7 +36,7 @@ partial class App {
             Gap: AppTheme.Space4,
             BorderRadius: AppTheme.Radius10,
             BackgroundColor: if selected {
-                AppTheme.Active
+                AppTheme.LimeQuiet
             } else {
                 Color.Transparent
             },

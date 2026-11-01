@@ -14,8 +14,8 @@ class ControlParts {
         func FieldBox(ui Presentation, content Blob, padding Edges, border Color? = nil) Container -> Container{
             BasedOn: AppTheme.FieldStyle,
             Padding: padding,
-            BorderColor: border ?? AppTheme.FieldEdge,
-            BackgroundColor: AppTheme.Field,
+            BorderColor: border ?? AppTheme.Edge,
+            BackgroundColor: AppTheme.Raised,
             content
         }
 
@@ -42,7 +42,7 @@ class ControlParts {
                 .Button{
                 BasedOn: AppTheme.SegmentStyle,
                 Padding: padding,
-                BackgroundColor: selected ? AppTheme.Selected: Color.Transparent,
+                BackgroundColor: selected ? AppTheme.Rule: Color.Transparent,
                 Hover: Style{BackgroundColor: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Disabled: disabled,
@@ -219,7 +219,7 @@ class ControlParts {
             } else {
                 AppTheme.Dim
             }
-            let ring = Ring(share, color, AppTheme.RingTrack)
+            let ring = Ring(share, color, AppTheme.Rule)
             let meter = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,

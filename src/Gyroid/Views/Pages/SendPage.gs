@@ -298,7 +298,7 @@ class SendPage : Cell[SendPageInput] {
             .Button{
             BasedOn: AppTheme.ButtonStyle,
             Height: AppTheme.ControlCompact,
-            BorderColor: AppTheme.FieldEdge,
+            BorderColor: AppTheme.Edge,
             BackgroundColor: AppTheme.Black,
             Disabled: input.Busy || atoms == 0,
             Hover: Style{BackgroundColor: AppTheme.Rule},
@@ -604,7 +604,7 @@ class SendPage : Cell[SendPageInput] {
             total = Add(total, amount)
         }
         if input.Privacy || spendable == 0 {
-            bar.Add(BarSegment(1, AppTheme.Unallocated))
+            bar.Add(BarSegment(1, AppTheme.Edge))
             return bar
         }
         if total > spendable {
@@ -665,7 +665,7 @@ class SendPage : Cell[SendPageInput] {
         if change > 0 {
             bar.Add(BarSegment(float64(change), AppTheme.Mint))
         }
-        bar.Add(BarSegment(float64(spendable - total), AppTheme.Unallocated))
+        bar.Add(BarSegment(float64(spendable - total), AppTheme.Edge))
         return bar
     }
 
@@ -683,7 +683,7 @@ class SendPage : Cell[SendPageInput] {
             FlexShrink: 1,
             OverflowY: Overflow.Scroll,
             BorderWidth: Edges{Top: AppTheme.Border1},
-            BorderColor: AppTheme.Selected
+            BorderColor: AppTheme.Rule
         }
         for index in 0 ... pending.Recipients.Length {
             list.Add(Recipient(input, pending, index))
@@ -821,9 +821,9 @@ class SendPage : Cell[SendPageInput] {
                 Right: expanded ? AppTheme.Space10: AppTheme.Space4
             },
             BorderRadius: expanded ? AppTheme.Radius8: AppTheme.Radius0,
-            BackgroundColor: expanded ? AppTheme.Field: Color.Transparent,
-            BorderColor: AppTheme.Selected,
-            Hover: Style{BackgroundColor: AppTheme.Field},
+            BackgroundColor: expanded ? AppTheme.Raised: Color.Transparent,
+            BorderColor: AppTheme.Rule,
+            Hover: Style{BackgroundColor: AppTheme.Raised},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,

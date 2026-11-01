@@ -106,7 +106,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
             FlexShrink: 0,
             BorderColor: primary ? AppTheme.Lime: AppTheme.Edge,
-            Hover: Style{BackgroundColor: primary ? AppTheme.Active: AppTheme.Rule},
+            Hover: Style{BackgroundColor: primary ? AppTheme.LimeQuiet: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Disabled: input.Busy,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
@@ -553,9 +553,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             } else {
                 AppTheme.Rule
             },
-            BackgroundColor: hovered == key && !edit ? AppTheme.TileHover: AppTheme.Raised,
+            BackgroundColor: hovered == key && !edit ? AppTheme.FaintRule: AppTheme.Raised,
             BoxShadows: if edit {
-                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.ActiveOutline}}
+                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.LimeQuiet}}
             } else {
                 []BoxShadow{}
             },
@@ -813,10 +813,10 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                     Container{
                         Width: 22,
                         Height: 22,
-                        BorderRadius: AppTheme.Radius11,
+                        BorderRadius: 11,
                         BorderWidth: state == 1 ? AppTheme.Border0: AppTheme.Border1,
                         BorderColor: state == 2 ? AppTheme.Lime: AppTheme.Edge,
-                        BackgroundColor: state == 1 ? AppTheme.CorrectAnswerFill: Color.Transparent,
+                        BackgroundColor: state == 1 ? AppTheme.LimeQuiet: Color.Transparent,
                         AlignItems: AlignItems.Center,
                         JustifyContent: JustifyContent.Center,
                         mark
@@ -900,25 +900,25 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             }
         } else if wrong {
             let number = (asked[found] + 1).ToString()
-            pick.Add(MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.ErrorStrong))
+            pick.Add(MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.Pink))
             pick.Add(
                 Label(
                     ui,
                     String.Format(ui.Strings.Get("That is not word {0}."), number),
                     AppTheme.Type14,
-                    AppTheme.ErrorStrong,
+                    AppTheme.Pink,
                     ""
                 )
             )
             pick.Add(Label(ui, ui.Strings.Get("Check your paper."), AppTheme.Type14, AppTheme.Dim, ""))
         } else if typed.Length > 0 && suggestions.Count == 0 {
-            pick.Add(MaterialIcons.Create("warning", AppTheme.Icon16, AppTheme.ErrorStrong))
+            pick.Add(MaterialIcons.Create("warning", AppTheme.Icon16, AppTheme.Pink))
             pick.Add(
                 Label(
                     ui,
                     String.Format(ui.Strings.Get("No word starts with “{0}”."), typed),
                     AppTheme.Type14,
-                    AppTheme.ErrorStrong,
+                    AppTheme.Pink,
                     ""
                 )
             )
@@ -998,7 +998,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             BorderWidth: AppTheme.Border1,
             BorderRadius: AppTheme.Radius8,
             BorderColor: if invalid {
-                AppTheme.ErrorStrong
+                AppTheme.Pink
             } else if active {
                 AppTheme.Lime
             } else if position > found {
@@ -1008,9 +1008,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             },
             BackgroundColor: AppTheme.Raised,
             BoxShadows: if invalid {
-                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.ErrorOutline}}
+                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.PinkQuiet}}
             } else if active {
-                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.ActiveOutline}}
+                []BoxShadow{BoxShadow{Spread: 3, Color: AppTheme.LimeQuiet}}
             } else {
                 []BoxShadow{}
             },
@@ -1030,7 +1030,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                             Controlled: true,
                             AutoFocus: true,
                             FontSize: size,
-                            Color: invalid ? AppTheme.ErrorStrong: AppTheme.Ink,
+                            Color: invalid ? AppTheme.Pink: AppTheme.Ink,
                             Accessibility: Accessibility{
                                 Name: String.Format(ui.Strings.Get("word {0}"), (index + 1).ToString())
                             },
@@ -1044,7 +1044,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 )
             )
         } else if position < 0 {
-            slot.Add(Label(ui, "••••••••", size, AppTheme.MaskedText, ""))
+            slot.Add(Label(ui, "••••••••", size, AppTheme.Dim, ""))
         }
         return slot
     }
@@ -1089,7 +1089,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             let button = Goo
                 .Button{
                 BasedOn: tab == id ? AppTheme.SelectedTabStyle: AppTheme.TabStyle,
-                Hover: Style{BackgroundColor: tab == id ? AppTheme.Selected: AppTheme.Rule},
+                Hover: Style{BackgroundColor: tab == id ? AppTheme.Rule: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Tab,

@@ -518,7 +518,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Width: 1,
                     Top: 0,
                     Bottom: 0,
-                    BackgroundColor: AppTheme.ChartMarkerMuted,
+                    BackgroundColor: AppTheme.Thumb,
                     HitTestSelf: false
                 }
             )
@@ -583,7 +583,7 @@ class HistoryPage : Cell[HistoryInput] {
             BorderWidth: AppTheme.Border1,
             BorderColor: AppTheme.Rule,
             BorderRadius: AppTheme.Radius4,
-            BackgroundColor: AppTheme.Field,
+            BackgroundColor: AppTheme.Raised,
             area,
             axis
         }
@@ -770,7 +770,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Width: compact ? 9.0: 12.0,
                     Height: compact ? 5.0: 6.0,
                     BorderRadius: AppTheme.Radius1,
-                    BackgroundColor: index >= lit ? AppTheme.Rule: mature ? AppTheme.MatureSlot: AppTheme.Orange
+                    BackgroundColor: index >= lit ? AppTheme.Rule: mature ? AppTheme.LimeMuted: AppTheme.Orange
                 }
             )
         }
@@ -815,8 +815,8 @@ class HistoryPage : Cell[HistoryInput] {
             Gap: AppTheme.Space12,
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
             BorderColor: row.Open ? Color.Transparent: AppTheme.Rule,
-            BackgroundColor: row.Open ? AppTheme.Expanded: Color.Transparent,
-            Hover: Style{BackgroundColor: AppTheme.RowHover},
+            BackgroundColor: row.Open ? AppTheme.Raised: Color.Transparent,
+            Hover: Style{BackgroundColor: AppTheme.Raised},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -932,7 +932,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Left: row.Width < 1000 ? AppTheme.Space16: AppTheme.ControlRegular,
                 Right: AppTheme.Space16
             },
-            BackgroundColor: AppTheme.Expanded,
+            BackgroundColor: AppTheme.Raised,
             BorderWidth: Edges{Bottom: AppTheme.Border1},
             BorderColor: AppTheme.Rule
         }
@@ -1248,9 +1248,9 @@ class HistoryPage : Cell[HistoryInput] {
                     button.Padding = Edges{Left: AppTheme.Space10, Right: AppTheme.Space10}
                     button.BorderWidth = AppTheme.Border0
                     button.BoxShadow = BoxShadow{}
-                    button.BackgroundColor = active ? AppTheme.Selected: Color.Transparent
+                    button.BackgroundColor = active ? AppTheme.Rule: Color.Transparent
                     button.Color = active ? AppTheme.Ink: AppTheme.Body
-                    button.Hover = Style{BackgroundColor: active ? AppTheme.Selected: AppTheme.Rule}
+                    button.Hover = Style{BackgroundColor: active ? AppTheme.Rule: AppTheme.Rule}
                     button.Children.Clear()
                     button.Children.Add(
                         Label(ui, ui.Strings.Get(item.Id), AppTheme.Type12, active ? AppTheme.Ink: AppTheme.Body, "")
@@ -1279,9 +1279,9 @@ class HistoryPage : Cell[HistoryInput] {
             Handle: exportAnchor,
             Height: AppTheme.CompactButton.Height!!,
             Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space12},
-            BorderColor: exporting ? AppTheme.ExportEdge: AppTheme.Edge,
+            BorderColor: exporting ? AppTheme.StrongEdge: AppTheme.Edge,
             BackgroundColor: exporting ? AppTheme.FaintRule: AppTheme.Raised,
-            Hover: Style{BorderColor: AppTheme.ExportEdge},
+            Hover: Style{BorderColor: AppTheme.StrongEdge},
             Focus: Theme.Read().FocusStyle,
             Disabled: shown.Length == 0,
             Opacity: shown.Length == 0 ? 0.4: 1.0,

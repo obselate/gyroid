@@ -348,15 +348,15 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Fit: ShapeFit.Fill,
                         CornerRadius: 2,
                         BackgroundColor: if chosen {
-                            pending ? AppTheme.PendingEdge: AppTheme.SuccessStroke
+                            pending ? AppTheme.OrangeMuted: AppTheme.LimeMuted
                         } else {
-                            pending ? AppTheme.WarningFill: AppTheme.SuccessFill
+                            pending ? AppTheme.OrangeQuiet: AppTheme.LimeQuiet
                         },
-                        BorderWidth: chosen ? AppTheme.Border1_4: AppTheme.Border1,
+                        BorderWidth: chosen ? 1.4: AppTheme.Border1,
                         BorderColor: if chosen {
                             AppTheme.Ink
                         } else {
-                            pending ? AppTheme.PendingStroke: AppTheme.SuccessHighlight
+                            pending ? AppTheme.OrangeStrong: AppTheme.LimeStrong
                         },
                         Dashes: pending && !chosen ? DashPattern([]float64{3, 2}, 0): nil
                     }
@@ -370,7 +370,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Top: bottom - rise - 10.2,
                         Width: 6.4,
                         Height: 6.4,
-                        BorderRadius: AppTheme.Radius3_2,
+                        BorderRadius: 3.2,
                         HitTestSelf: false,
                         BackgroundColor: mine
                     }
@@ -385,7 +385,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Width: 1,
                         Height: bottom - 12,
                         HitTestSelf: false,
-                        BackgroundColor: AppTheme.PendingStroke
+                        BackgroundColor: AppTheme.OrangeStrong
                     }
                 )
                 plot.Add(
@@ -505,7 +505,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         )
         card.FlexGrow = 1
         card.FlexBasis = 0
-        let tabs = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.TabList}, AppTheme.Field)
+        let tabs = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.TabList}, AppTheme.Raised)
         for index in 0 ... 2 {
             let key = index == 0 ? "peers": "banned"
             let count = key == "peers" ? report.Peers.Length: report.Banned.Length
@@ -690,8 +690,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         let y = height / 2
         let outer = Math.Min(width, height) / 2 - 4
         let ring = outer * 0.62
-        plot.Add(Circle(x, y, outer, AppTheme.PeerBlockedFill, DashPattern([]float64{2, 4}, 0)))
-        plot.Add(Circle(x, y, ring, AppTheme.PeerRing, nil))
+        plot.Add(Circle(x, y, outer, AppTheme.PinkSoft, DashPattern([]float64{2, 4}, 0)))
+        plot.Add(Circle(x, y, ring, AppTheme.FaintRule, nil))
         let tcp = PathBuilder(0, 0, width, height)
         let quic = PathBuilder(0, 0, width, height)
         for index in 0 ... report.Peers.Length {
@@ -702,8 +702,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 y + Math.Sin(angle) * ring
             )
         }
-        plot.Add(Lines(width, height, tcp, AppTheme.TransportBlueLine))
-        plot.Add(Lines(width, height, quic, AppTheme.TransportMintLine))
+        plot.Add(Lines(width, height, tcp, AppTheme.BlueSoft))
+        plot.Add(Lines(width, height, quic, AppTheme.MintSoft))
         let hexagon = PathBuilder(0, 0, 28, 28)
         for corner in 0 ... 7 {
             let angle = Math.PI / 6 + corner * Math.PI / 3
@@ -723,7 +723,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 Path: hexagon.Close().Build(),
                 Fit: ShapeFit.Fill,
                 BackgroundColor: AppTheme.Surface,
-                BorderWidth: AppTheme.Border1_5,
+                BorderWidth: 1.5,
                 BorderColor: AppTheme.Lime
             }
         )
@@ -745,7 +745,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 plot.Add(Lines(width, height, PathBuilder(0, 0, width, height).MoveTo(x, y).LineTo(px, py), color))
             }
             let dot = Dot(px, py, radius, color)
-            dot.BorderWidth = active ? AppTheme.Border1_5: AppTheme.Border0
+            dot.BorderWidth = active ? 1.5: AppTheme.Border0
             dot.BorderColor = AppTheme.Ink
             dot.OnPointerEnter = (event PointerEvent) -> Hover(peer.Id)
             dot.OnPointerLeave = (event PointerEvent) -> Hover("")

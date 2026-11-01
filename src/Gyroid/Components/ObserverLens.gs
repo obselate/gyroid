@@ -259,8 +259,8 @@ class ObserverLens : Cell[ObserverLensInput] {
         AlignItems: AlignItems.Center,
         Gap: AppTheme.Space6,
         MinWidth: 0,
-        MaterialIcons.Create(icon, AppTheme.Icon14, AppTheme.PrivateValue),
-        Label(ui, value, AppTheme.Type14, AppTheme.PrivateValue, "")
+        MaterialIcons.Create(icon, AppTheme.Icon14, AppTheme.MintStrong),
+        Label(ui, value, AppTheme.Type14, AppTheme.MintStrong, "")
     }
 
     private func Public(ui Presentation, value string, size float64) Blob -> Container{
@@ -331,7 +331,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                     Height: dot * 2,
                     BorderRadius: dot,
                     BackgroundColor: if chain {
-                        AppTheme.RealMember
+                        AppTheme.MintStrong
                     } else if index == real {
                         AppTheme.Lime
                     } else {

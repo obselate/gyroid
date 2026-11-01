@@ -118,16 +118,16 @@ class NetworkParts {
                         Width: Math.Max(2.0, step * 0.64),
                         Height: Math.Max(1.5, compact ? extent + 6 - level: Math.Abs(level - target)),
                         BorderRadius: AppTheme.Radius1,
-                        BorderWidth: chosen ? AppTheme.Border1_2: AppTheme.Border0,
+                        BorderWidth: chosen ? 1.2: AppTheme.Border0,
                         BorderColor: AppTheme.Ink,
                         BackgroundColor: if offline {
-                            AppTheme.Selected
+                            AppTheme.Rule
                         } else if compact {
-                            AppTheme.TransportBlueMuted
+                            AppTheme.BlueStrong
                         } else if seconds > 300 {
-                            chosen ? AppTheme.Orange: AppTheme.WarningMuted
+                            chosen ? AppTheme.Orange: AppTheme.OrangeStrong
                         } else {
-                            chosen ? AppTheme.Blue: AppTheme.InfoMuted
+                            chosen ? AppTheme.Blue: AppTheme.BlueStrong
                         }
                     }
                 )

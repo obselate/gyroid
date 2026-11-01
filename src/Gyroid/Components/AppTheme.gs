@@ -15,10 +15,6 @@ class AppTheme {
         const BadgeHeight float64 = 20
         const Border0 float64 = 0
         const Border1 float64 = 1
-        const Border1_2 float64 = 1.2
-        const Border1_4 float64 = 1.4
-        const Border1_5 float64 = 1.5
-        const Border1_6 float64 = 1.6
         const Border2 float64 = 2
         const Border3 float64 = 3
         const CheckboxSize float64 = 14
@@ -31,19 +27,16 @@ class AppTheme {
         const Icon20 float64 = 20
         const Icon22 float64 = 22
         const Icon32 float64 = 32
-        const Icon56 float64 = 56
         const LabelColumn float64 = 130
         const MarkerSize float64 = 8
         const Radius0 float64 = 0
         const Radius1 float64 = 1
         const Radius10 float64 = 10
-        const Radius11 float64 = 11
         const Radius12 float64 = 12
         const Radius14 float64 = 14
         const Radius18 float64 = 18
         const Radius2 float64 = 2
         const Radius3 float64 = 3
-        const Radius3_2 float64 = 3.2
         const Radius4 float64 = 4
         const Radius6 float64 = 6
         const Radius8 float64 = 8
@@ -58,7 +51,6 @@ class AppTheme {
         const Space24 float64 = 24
         const Space28 float64 = 28
         const Space4 float64 = 4
-        const Space44 float64 = 44
         const Space6 float64 = 6
         const Space8 float64 = 8
         const Stroke2 float64 = 2
@@ -84,76 +76,47 @@ class AppTheme {
         let Black Color = Color.Parse("#000000")
         let Surface Color = Color.Parse("#050505")
         let Raised Color = Color.Parse("#0a0a0a")
+        let FaintRule Color = Color.Parse("#141414")
         let Rule Color = Color.Parse("#1d1d1d")
         let Edge Color = Color.Parse("#2e2e2e")
+        let StrongRule Color = Color.Parse("#3a3a3a")
+        let StrongEdge Color = Color.Parse("#4a4a4a")
+        let Thumb Color = Color.Parse("#8c8c8c")
         let Ink Color = Color.Parse("#f2f2f2")
         let Body Color = Color.Parse("#c8c8c8")
         let Dim Color = Color.Parse("#7a7a7a")
         let Lime Color = Color.Parse("#aaff00")
-        let LimeHover Color = Color.Parse("#ccff33")
         let Orange Color = Color.Parse("#ffaa00")
         let Pink Color = Color.Parse("#ff00aa")
         let Blue Color = Color.Parse("#00aaff")
         let Mint Color = Color.Parse("#00ffaa")
         let Violet Color = Color.Parse("#aa00ff")
-        let Field Color = Color.Parse("#080808")
-        let FieldEdge Color = Color.Parse("#2a2a2a")
-        let Control Color = Color.Parse("#0b0b0b")
-        let Selected Color = Color.Parse("#1a1a1a")
-        let Active Color = Color.Parse("#121906")
-        let FaintRule Color = Color.Parse("#141414")
-        let StrongRule Color = Color.Parse("#3a3a3a")
-        let PopoverEdge Color = Color.Parse("#333333")
-        let SuccessFill Color = Color.Parse("#111a00")
-        let WarningFill Color = Color.Parse("#1a1100")
-        let Expanded Color = Color.Parse("#0f0f0f")
-        let ExportEdge Color = Color.Parse("#4a4a4a")
-        let Unallocated Color = Color.Parse("#262626")
-        let ActionFill Color = Color.Parse("#0b1203")
-        let PendingStroke Color = Color.Parse("#b37700")
-        let SyncFill Color = Color.Parse("#1b2609")
-        let SuccessStroke Color = Color.Parse("#4d7300")
-        let InfoFill Color = Color.Parse("#00111a")
-        let DangerQuiet Color = Color.Parse("#1a0011")
-        let RingTrack Color = Color.Parse("#1f1f1f")
-        let UpgradeDangerFill Color = Color.Parse("#3a0026")
-        let TransportBlueMuted Color = Color.Parse("#007caf")
-        let WarningMuted Color = Color.Parse("#9e6900")
-        let InfoMuted Color = Color.Parse("#00699e")
-        let PrivateValue Color = Color.Parse("#1fae84")
-        let RealMember Color = Color.Parse("#00bf80")
-        let ChartMarkerMuted Color = Color.Parse("#858585")
-        let MatureSlot Color = Color.Parse("#558000")
-        let RowHover Color = Color.Parse("#0c0c0c")
-        let ChartAccentGradientStart Color = Color.Parse("#202e07")
-        let ChartAccentGradientEnd Color = Color.Parse("#060707")
-        let PendingEdge Color = Color.Parse("#734d00")
-        let SuccessHighlight Color = Color.Parse("#77b300")
-        let PeerBlockedFill Color = Color.Parse("#40002b")
-        let PeerRing Color = Color.Parse("#171717")
-        let TransportBlueLine Color = Color.Parse("#003047")
-        let TransportMintLine Color = Color.Parse("#004730")
-        let BalanceFraction Color = Color.Parse("#588203")
-        let MutedFraction Color = Color.Parse("#3f3f3f")
-        let CopiedFill Color = Color.Parse("#00140d")
-        let VerifiedSlot Color = Color.Parse("#048f5f")
-        let VerifiedIndex Color = Color.Parse("#598304")
-        let SwitchThumbColor Color = Color.Parse("#8c8c8c")
-        let StalledFill Color = Color.Parse("#261c09")
-        let CheckpointFill Color = Color.Parse("#253807")
-        let ErrorStrong Color = Color.Parse("#ff3d6e")
-        let ActiveOutline Color = Color.Parse("#141f00")
-        let TileHover Color = Color.Parse("#121212")
-        let CorrectAnswerFill Color = Color.Parse("#182400")
-        let ErrorOutline Color = Color.Parse("#24090f")
-        let MaskedText Color = Color.Parse("#6a6a6a")
+        let LimeQuiet Color = Tint(Lime, 0.1)
+        let OrangeQuiet Color = Tint(Orange, 0.1)
+        let OrangeStrong Color = Tint(Orange, 0.7)
+        let LimeMuted Color = Tint(Lime, 0.45)
+        let BlueQuiet Color = Tint(Blue, 0.1)
+        let PinkQuiet Color = Tint(Pink, 0.1)
+        let PinkSoft Color = Tint(Pink, 0.25)
+        let BlueStrong Color = Tint(Blue, 0.7)
+        let MintStrong Color = Tint(Mint, 0.7)
+        let LimeSoft Color = Tint(Lime, 0.25)
+        let OrangeMuted Color = Tint(Orange, 0.45)
+        let LimeStrong Color = Tint(Lime, 0.7)
+        let BlueSoft Color = Tint(Blue, 0.25)
+        let MintSoft Color = Tint(Mint, 0.25)
+        let MintQuiet Color = Tint(Mint, 0.1)
+        let MintMuted Color = Tint(Mint, 0.45)
+
+        func Tint(color Color, strength float64) Color ->
+        Color.FromNormalized(color.R * float32(strength), color.G * float32(strength), color.B * float32(strength), 1)
 
         let Button ActionButton = ActionButton{
             Height: ControlRegular,
             BorderRadius: Radius8,
             BorderWidth: Border1,
             BorderColor: Edge,
-            BackgroundColor: Control,
+            BackgroundColor: Raised,
             TextColor: Ink,
             FontFamily: Font,
             FontSize: Type14,
@@ -161,16 +124,16 @@ class AppTheme {
             PaddingHorizontal: Space14,
             ActiveTransform: PanelTransform{},
             HoverBackgroundColor: Rule,
-            ActiveBackgroundColor: Selected,
-            DisabledBackgroundColor: Control,
+            ActiveBackgroundColor: Rule,
+            DisabledBackgroundColor: Raised,
             DisabledTextColor: Dim
         }
         let PrimaryButton ActionButton = Button with{
             BackgroundColor = Lime,
             TextColor = Black,
-            HoverBackgroundColor = LimeHover
+            HoverBackgroundColor = Lime
         }
-        let DangerButton ActionButton = Button with{BackgroundColor = DangerQuiet, BorderColor = Pink, TextColor = Pink}
+        let DangerButton ActionButton = Button with{BackgroundColor = PinkQuiet, BorderColor = Pink, TextColor = Pink}
         let ButtonStyle Style = Style{
             Height: ControlRegular,
             MinWidth: 64,
@@ -178,7 +141,7 @@ class AppTheme {
             BorderRadius: Radius8,
             BorderWidth: Border1,
             BorderColor: Edge,
-            BackgroundColor: Control,
+            BackgroundColor: Raised,
             Color: Ink,
             FontFamily: Font,
             FontSize: Type14,
@@ -198,7 +161,7 @@ class AppTheme {
             BorderRadius: Radius8,
             BorderWidth: Border1,
             BorderColor: Edge,
-            BackgroundColor: Control,
+            BackgroundColor: Raised,
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center
         }
@@ -219,7 +182,7 @@ class AppTheme {
             FontSize: Type13,
             Padding: Edges{Left: Space12, Right: Space12}
         }
-        let SelectedTabStyle Style = Style{BasedOn: TabStyle, BackgroundColor: Selected, Color: Ink}
+        let SelectedTabStyle Style = Style{BasedOn: TabStyle, BackgroundColor: Rule, Color: Ink}
         let SegmentStyle Style = Style{BasedOn: TabStyle, FontSize: Type12}
         let SegmentGroupStyle Style = Style{
             FlexDirection: FlexDirection.Row,
@@ -235,7 +198,7 @@ class AppTheme {
             ThumbSize: SwitchThumb,
             OffTrackColor: Edge,
             OnTrackColor: Lime,
-            ThumbColor: SwitchThumbColor,
+            ThumbColor: Thumb,
             OnThumbColor: Surface
         }
         let FlushSegmentGroupStyle Style = Style{BasedOn: SegmentGroupStyle, Padding: Space0, BorderWidth: Border0}
@@ -243,8 +206,8 @@ class AppTheme {
             Size: CheckboxSize,
             BorderRadius: Radius2,
             BorderWidth: Border1,
-            BackgroundColor: Field,
-            BorderColor: FieldEdge,
+            BackgroundColor: Raised,
+            BorderColor: Edge,
             CheckedBackgroundColor: Lime,
             CheckedBorderColor: Lime,
             MarkColor: Black,
@@ -255,8 +218,8 @@ class AppTheme {
             EntryHeight: ControlRegular,
             BorderRadius: Radius8,
             BorderWidth: Border1,
-            BackgroundColor: Field,
-            BorderColor: FieldEdge,
+            BackgroundColor: Raised,
+            BorderColor: Edge,
             TextColor: Ink,
             MutedTextColor: Body,
             InvalidColor: Pink,
@@ -270,12 +233,12 @@ class AppTheme {
             PaddingHorizontal: Space12
         }
         let FieldStyle Style = Style{
-            BorderRadius: FieldInput.BorderRadius!!,
-            BorderWidth: FieldInput.BorderWidth!!,
-            BackgroundColor: FieldInput.BackgroundColor!!,
-            BorderColor: FieldInput.BorderColor!!,
-            FontFamily: FieldInput.FontFamily!!,
-            FontSize: FieldInput.FontSize
+            BorderRadius: Radius8,
+            BorderWidth: Border1,
+            BackgroundColor: Raised,
+            BorderColor: Edge,
+            FontFamily: Font,
+            FontSize: Type14
         }
         let Dialog ModalDialog = ModalDialog{
             BackgroundColor: Raised,

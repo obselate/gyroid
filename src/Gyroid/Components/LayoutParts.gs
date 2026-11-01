@@ -134,7 +134,7 @@ class LayoutParts {
                     Height: 8,
                     BorderRadius: AppTheme.Radius2,
                     Overflow: Overflow.Hidden,
-                    BackgroundColor: AppTheme.UpgradeDangerFill,
+                    BackgroundColor: AppTheme.PinkSoft,
                     Shape{
                         Width: span - upgrade,
                         Height: 8,

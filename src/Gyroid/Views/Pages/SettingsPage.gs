@@ -136,7 +136,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         nav.Accessibility = Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("settings")}
         for id in sections {
             let selected = id == section
-            let fill = selected ? AppTheme.Active: Color.Transparent
+            let fill = selected ? AppTheme.LimeQuiet: Color.Transparent
             let button = Goo
                 .Button{
                 BasedOn: AppTheme.TabStyle,
@@ -908,7 +908,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                     return if bad {
                         Slot(ui, AppTheme.Pink, 1)
                     } else if checked > first {
-                        Slot(ui, AppTheme.VerifiedSlot, Math.Min(1.0, float64(checked - first) / float64(step)))
+                        Slot(ui, AppTheme.MintMuted, Math.Min(1.0, float64(checked - first) / float64(step)))
                     } else {
                         Slot(ui, AppTheme.Rule, 0)
                     }
@@ -1035,7 +1035,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             let first = start + uint64(index) * 100
             slots.Add(
                 if localCheckpoint >= first + 100 {
-                    Slot(ui, AppTheme.VerifiedIndex, 1)
+                    Slot(ui, AppTheme.LimeMuted, 1)
                 } else if tip > first {
                     Slot(ui, AppTheme.Orange, Math.Min(1.0, float64(tip - first) / 100))
                 } else {

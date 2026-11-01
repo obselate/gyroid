@@ -102,7 +102,7 @@ class WalletParts {
                 FlexShrink: shrink,
                 BorderRadius: radius,
                 BorderColor: active ? AppTheme.Lime: AppTheme.Edge,
-                BackgroundColor: AppTheme.Control,
+                BackgroundColor: AppTheme.Raised,
                 Disabled: disabled,
                 Hover: Style{BackgroundColor: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,

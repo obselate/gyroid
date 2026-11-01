@@ -550,10 +550,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     Height: Percent(100),
                     Path: fill.Build(),
                     Fit: ShapeFit.Fill,
-                    BackgroundGradient: LinearGradient(
-                        AppTheme.ChartAccentGradientStart,
-                        AppTheme.ChartAccentGradientEnd
-                    )
+                    BackgroundGradient: LinearGradient(AppTheme.LimeSoft, AppTheme.Surface)
                 }
             )
             area.Add(
@@ -564,7 +561,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
                     BackgroundColor: Color.Transparent,
-                    BorderWidth: AppTheme.Border1_6,
+                    BorderWidth: 1.6,
                     BorderColor: AppTheme.Lime,
                     StrokeJoin: StrokeJoin.Round,
                     VectorEffect: VectorEffect.NonScalingStroke
@@ -590,7 +587,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     BasedOn: AppTheme.PassiveTooltipStyle,
                     Position: PositionType.Absolute,
                     Top: Percent(y * 100),
-                    Margin: Edges{Top: -AppTheme.Space44},
+                    Margin: Edges{Top: -44},
                     Label(
                         ui,
                         sample.Time.ToString(format, CultureInfo.InvariantCulture) + " · " + sample.Rate.ToString(
@@ -605,10 +602,10 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                 }
                 if x > 0.75 {
                     tip.Right = Percent((1 - x) * 100)
-                    tip.Margin = Edges{Top: -AppTheme.Space44, Right: AppTheme.Space12}
+                    tip.Margin = Edges{Top: -44, Right: AppTheme.Space12}
                 } else {
                     tip.Left = Percent(x * 100)
-                    tip.Margin = Edges{Top: -AppTheme.Space44, Left: AppTheme.Space12}
+                    tip.Margin = Edges{Top: -44, Left: AppTheme.Space12}
                 }
                 area.Add(tip)
             }

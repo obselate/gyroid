@@ -174,7 +174,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                     BackgroundColor: AppTheme.Rule
                 }
             )
-            code.Add(MaterialIcons.Create("check", AppTheme.Icon56, AppTheme.Mint))
+            code.Add(MaterialIcons.Create("check", 56, AppTheme.Mint))
         } else {
             code.Add(
                 Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: AppTheme.Black}
@@ -242,7 +242,7 @@ class ReceivePage : Cell[ReceivePageInput] {
             ui,
             preview,
             Edges{Left: AppTheme.Space14, Right: AppTheme.Space14, Top: AppTheme.Space12, Bottom: AppTheme.Space12},
-            copied ? AppTheme.Mint: AppTheme.FieldEdge
+            copied ? AppTheme.Mint: AppTheme.Edge
         )
         field.MinHeight = 72
         field.Accessibility = Accessibility{Role: AccessibilityRole.Status}
@@ -259,7 +259,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 "New request",
                 AppTheme.Ink,
                 AppTheme.Edge,
-                AppTheme.Control,
+                AppTheme.Raised,
                 "",
                 () -> {
                     request.Amount = ""
@@ -275,7 +275,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 "Copied",
                 AppTheme.Mint,
                 AppTheme.Mint,
-                AppTheme.CopiedFill,
+                AppTheme.MintQuiet,
                 "clears in 2 min",
                 () -> { }
             )
@@ -286,7 +286,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 "Save QR image",
                 AppTheme.Lime,
                 AppTheme.Lime,
-                AppTheme.ActionFill,
+                AppTheme.LimeQuiet,
                 "",
                 () -> SaveQr(input)
             )
@@ -297,7 +297,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 shown == "link" ? "Copy link": "Copy address",
                 AppTheme.Lime,
                 AppTheme.Lime,
-                AppTheme.ActionFill,
+                AppTheme.LimeQuiet,
                 "",
                 () -> ui.Actions.Copy(payload, 120000)
             )

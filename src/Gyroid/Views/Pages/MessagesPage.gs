@@ -383,7 +383,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 FlexShrink: 0,
                 MinWidth: 0,
                 Gap: AppTheme.Space6,
-                BackgroundColor: conversation.Id == input.State.ConversationId ? AppTheme.Active: Color.Transparent,
+                BackgroundColor: conversation.Id == input.State.ConversationId ? AppTheme.LimeQuiet: Color.Transparent,
                 Hover: Style{BackgroundColor: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
