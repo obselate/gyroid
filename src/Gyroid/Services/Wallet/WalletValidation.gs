@@ -211,7 +211,9 @@ class WalletValidation {
             ) ||
                 filename.Contains('/') || filename.Contains('\\') || filename.Contains("..") ||
                 filename != Path.GetFileName(filename) || filename.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 {
-                throw WalletException("Wallet name must be a filename of at most 180 characters ending in .dat, without /, \\, .. or invalid filename characters")
+                throw WalletException(
+                    "Wallet name must be a filename of at most 180 characters ending in .dat, without /, \\, .. or invalid filename characters"
+                )
             }
         }
 
