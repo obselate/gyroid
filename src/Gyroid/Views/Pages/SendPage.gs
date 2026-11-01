@@ -79,10 +79,8 @@ class SendPage : Cell, IDisposable {
     private let remove Action[SendRow]
     private let maximum Action
     private let add Action
-    private var balance SendBalance?
     private var total SendTotal?
     private var actions SendActions?
-    private let configureBalance Action[SendBalance]
     private let configureTotal Action[SendTotal]
     private let configureActions Action[SendActions]
     private let configureReview Action[SendReview]
@@ -91,34 +89,21 @@ class SendPage : Cell, IDisposable {
 
     init() {
         changed = row -> {
-            generation++
-            estimate = nil
-            issue = ""
-            reading = false
+            Restart()
             SendService.PrepareDraft(row, input.Display.Contacts, input.Display.Network)
             Refresh(false)
         }
         submit = () -> Review()
         remove = row -> {
             input.Rows.Remove(row)
-            generation++
-            estimate = nil
-            reading = false
-            issue = ""
+            Restart()
             Refresh()
         }
         maximum = () -> Maximum()
         add = () -> {
             input.Rows.Add(SendRow())
-            generation++
-            estimate = nil
-            reading = false
-            issue = ""
+            Restart()
             Refresh()
-        }
-        configureBalance = child -> {
-            balance = child
-            child.Accept(BalanceInput())
         }
         configureTotal = child -> {
             total = child
@@ -148,56 +133,33 @@ class SendPage : Cell, IDisposable {
     }
 
     public func Accept(next SendPageInput) {
-        let draftsChanged = !SameDrafts(next.Rows, editorRows)
-        if (next with{Sends = sent == nil ? input.Sends: next.Sends}) == input && !draftsChanged {
+        if (next with{Sends = sent == nil ? input.Sends: next.Sends}) == input {
             return
         }
-        let validate = input.Display.Network != next.Display.Network || input.Display.Contacts != next.Display.Contacts
-        if draftsChanged || validate {
-            generation++
-            estimate = nil
-            reading = false
+        if next.Rows.Count == 0 {
+            next.Rows.Add(SendRow())
+        }
+        if input.Display.Network != next.Display.Network || input.Display.Contacts != next.Display.Contacts {
+            Restart()
+            for row in next.Rows {
+                SendService.PrepareDraft(row, next.Display.Contacts, next.Display.Network)
+            }
         }
         if input.Display.Network != next.Display.Network || input.Wallet != next.Wallet {
-            generation++
-            request?.Cancel()
-            estimate = nil
-            reading = false
-            issue = ""
+            Restart()
             sent = nil
             result = nil
         }
         input = next
-        if input.Rows.Count == 0 {
-            input.Rows.Add(SendRow())
-        }
-        for index in 0 ... input.Rows.Count {
-            let row = input.Rows[index]
-            if validate || index >= editorRows.Length || !SameDraft(row, editorRows[index]) {
-                SendService.PrepareDraft(row, input.Display.Contacts, input.Display.Network)
-            }
-        }
         Refresh()
     }
 
-    private func SameDraft(row SendRow, snapshot SendEditorInput) bool ->
-    row.Id == snapshot
-        .Row
-        .Id &&
-        row.Address == snapshot.Address &&
-        row.Amount == snapshot.Amount &&
-        row.Memo == snapshot.Memo
-
-    private func SameDrafts(rows List[SendRow], snapshots[]SendEditorInput) bool {
-        if rows.Count != snapshots.Length {
-            return false
-        }
-        for index in 0 ... rows.Count {
-            if !SameDraft(rows[index], snapshots[index]) {
-                return false
-            }
-        }
-        return true
+    private func Restart() {
+        request?.Cancel()
+        generation++
+        estimate = nil
+        reading = false
+        issue = ""
     }
 
     private func Refresh(rebuild bool = true) {
@@ -230,7 +192,6 @@ class SendPage : Cell, IDisposable {
         if rebuild {
             Rebuild()
         } else {
-            balance?.Accept(BalanceInput())
             actions?.Accept(ActionsInput())
             if input.Rows.Count > 1 {
                 total?.Accept(SendTotalInput{Display: display, Amount: model.Total, Over: model.Over})
@@ -238,19 +199,17 @@ class SendPage : Cell, IDisposable {
         }
     }
 
-    private func BalanceInput() SendBalanceInput -> SendBalanceInput{
-        Display: input.Display,
-        Rows: model.Rows,
-        Spendable: input.Spendable ?? uint64(0),
-        Total: model.Total,
-        Remaining: true,
-        Over: model.Over,
-        RemainingAmount: model.Remaining,
-        Issue: issue
-    }
-
     private func ActionsInput() SendActionsInput -> SendActionsInput{
         Display: input.Display,
+        Balance: SendBalanceInput{
+            Display: input.Display,
+            Rows: model.Rows,
+            Spendable: input.Spendable ?? uint64(0),
+            Total: model.Total,
+            Remaining: true,
+            Over: model.Over,
+            Issue: issue
+        },
         CanSubmit: model.CanSubmit,
         Loading: input.Display.Busy || reading,
         Focus: reviewFocus,
@@ -284,8 +243,6 @@ class SendPage : Cell, IDisposable {
         )
         if multi {
             card.Add(Cell.Mount[SendTotal]("amount-total", configureTotal))
-        }
-        if multi {
             let list = VirtualRows(
                 editorRows,
                 AppTheme.ControlRegular + AppTheme.Space8,
@@ -295,12 +252,11 @@ class SendPage : Cell, IDisposable {
             )
             list.MinHeight = 0
             list.FlexShrink = 1
-            list.Height = Math.Min(editorRows.Length * (AppTheme.ControlRegular + AppTheme.Space8), display.Height / 3)
-            card.Add(ListParts.Viewport(list, grow: false))
+            list.FlexGrow = 1
+            card.Add(ListParts.Viewport(list, grow: true))
         } else {
             card.Add(editorBuilder(editorRows[0]))
         }
-        card.Add(Cell.Mount[SendBalance]("totals", configureBalance))
         card.Add(Cell.Mount[SendActions]("actions", configureActions))
         if let shown = sent, let outcome = result {
             card.Add(
@@ -348,9 +304,7 @@ class SendPage : Cell, IDisposable {
         if !model.CanSubmit {
             return
         }
-        guard let window = input.Display.Window else {
-            return
-        }
+        let window = input.Display.Window
         let session = input.Session
         let network = input.Display.Network
         let wallet = input.Wallet
@@ -363,13 +317,13 @@ class SendPage : Cell, IDisposable {
             .ToArray()
         reading = true
         issue = ""
-        Refresh()
+        Refresh(false)
         go Estimate(session, window, network, wallet, id, drafts, requests, token)
     }
 
     private async func Estimate(
         session WalletSession,
-        window Window,
+        window Window?,
         network string,
         wallet string,
         id int32,
@@ -397,7 +351,7 @@ class SendPage : Cell, IDisposable {
         } catch (error Exception) {
             problem = error.Message
         }
-        window.TryPost(
+        window?.TryPost(
             () -> {
                 if !Current(id, session, network, wallet) {
                     return
@@ -412,9 +366,7 @@ class SendPage : Cell, IDisposable {
     }
 
     private func Maximum() {
-        guard let window = input.Display.Window else {
-            return
-        }
+        let window = input.Display.Window
         let row = input.Rows[0]
         let address = row.Kind.Length > 0 ? row.Destination: input.Address
         let memo = row.Memo
@@ -425,13 +377,13 @@ class SendPage : Cell, IDisposable {
         let id = generation
         reading = true
         issue = ""
-        Refresh()
+        Refresh(false)
         go ReadMaximum(session, window, network, wallet, id, row, address, memo, token)
     }
 
     private async func ReadMaximum(
         session WalletSession,
-        window Window,
+        window Window?,
         network string,
         wallet string,
         id int32,
@@ -449,7 +401,7 @@ class SendPage : Cell, IDisposable {
         } catch (error Exception) {
             problem = error.Message
         }
-        window.TryPost(
+        window?.TryPost(
             () -> {
                 if !Current(id, session, network, wallet) {
                     return
@@ -472,16 +424,14 @@ class SendPage : Cell, IDisposable {
         if input.Display.Busy {
             return
         }
-        guard let window = input.Display.Window else {
-            return
-        }
+        let window = input.Display.Window
         estimate = nil
         let session = input.Session
         let network = input.Display.Network
         let wallet = input.Wallet
         let id = generation
         let drafts = input.Rows
-        let submitted = editorRows
+        let draftIds = drafts.Select(row -> row.Id).ToArray()
         let onSent = input.OnSent
         input
             .Display
@@ -490,12 +440,12 @@ class SendPage : Cell, IDisposable {
             .Run(
             async (ct) -> {
                 let outcome = await session.Send.SubmitAsync(pending, ct)
-                window.TryPost(
+                window?.TryPost(
                     () -> {
                         if session.Settings.Network != network || session.Settings.ActiveWallet != wallet {
                             return
                         }
-                        if SameDrafts(drafts, submitted) {
+                        if drafts.Select(row -> row.Id).SequenceEqual(draftIds) {
                             drafts.Clear()
                             drafts.Add(SendRow())
                         }
@@ -509,10 +459,10 @@ class SendPage : Cell, IDisposable {
                             }
                             Refresh()
                         }
-                        onSent()
                     }
                 )
-            }
+            },
+            onSent
         )
     }
 }
@@ -767,8 +717,10 @@ class SendRecipientEditor : Cell[SendEditorInput] {
             Handle: anchor,
             OnKeyDown: (event KeyEvent) -> {
                 if event.Key == Key.Escape {
-                    row.Suggest = false
-                    editor.Changed(row)
+                    if row.Suggest && !input.Privacy && kind.Length == 0 && row.Matches.Length > 0 {
+                        row.Suggest = false
+                        editor.Changed(row)
+                    }
                     event.PreventDefault()
                 }
             },
@@ -966,6 +918,7 @@ class SendTotal : Cell {
 
 data struct SendActionsInput {
     var Display SendDisplay
+    var Balance SendBalanceInput
     var CanSubmit bool
     var Loading bool
     var Focus bool
@@ -1005,13 +958,17 @@ class SendActions : Cell {
             }
         )
         return Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.SpaceBetween,
-            Gap: AppTheme.Space12,
+            Gap: AppTheme.GetPageGap(display.Height),
             FlexShrink: 0,
-            add,
-            review
+            Cell.Mount[SendBalanceInput, SendBalance]("totals", input.Balance),
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                JustifyContent: JustifyContent.SpaceBetween,
+                Gap: AppTheme.Space12,
+                add,
+                review
+            }
         }
     }
 }
@@ -1025,28 +982,17 @@ data struct SendBalanceInput {
     var Change uint64
     var Remaining bool
     var Over bool
-    var RemainingAmount uint64
     var Issue string
 }
 
-class SendBalance : Cell {
-    private var current SendBalanceInput
-
-    public func Accept(input SendBalanceInput) {
-        if current == input {
-            return
-        }
-        current = input
-        Rebuild()
-    }
-
-    override func Build() Blob {
-        let input = current
+class SendBalance : Cell[SendBalanceInput] {
+    protected override func Build(input SendBalanceInput) Blob {
         let ui = input.Display.Ui
         let over = input.Over
         let content = Container{Gap: AppTheme.GetPageGap(input.Display.Height), FlexShrink: 0}
         content.Add(Bar(input))
         if input.Remaining {
+            let remaining = over ? input.Total - input.Spendable: input.Spendable - input.Total
             content.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
@@ -1055,15 +1001,13 @@ class SendBalance : Cell {
                     Figure(
                         ui,
                         "Remaining",
-                        (over ? "−": "") + WalletText.Amount(ui.Privacy, input.RemainingAmount),
+                        (over ? "−": "") + WalletText.Amount(ui.Privacy, remaining),
                         over ? AppTheme.Pink: AppTheme.Ink,
                         AppTheme.Type14,
                         ""
                     )
                 }
             )
-        }
-        if input.Remaining {
             if over {
                 content.Add(Status(ui, ui.Strings.Get("Exceeds spendable balance"), AppTheme.Pink, "warning"))
             } else if input.Issue.Length > 0 {
@@ -1104,10 +1048,13 @@ class SendBalance : Cell {
                 bar.Add(segment)
                 continue
             }
-            let lines = Cell.Mount[SendBalanceRowsInput, SendBalanceRows](
-                row.Id,
-                SendBalanceRowsInput{Display: input, Rows: value.Rows, Active: row.Id}
-            )
+            let name = row.Kind == "contact" || row.Kind == "handle" ? row.Address.Trim(): Short(row.Address)
+            let lines = Container{
+                FlexDirection: FlexDirection.Row,
+                Gap: AppTheme.Space24,
+                Label(ui, name, AppTheme.Type13, AppTheme.Ink, ""),
+                Label(ui, WalletAmount.Format(row.Amount), AppTheme.Type13, AppTheme.Ink, "")
+            }
             bar.Add(
                 Cell.Mount[TooltipInput, Tooltip](
                     row.Id,
@@ -1133,43 +1080,6 @@ class SendBalance : Cell {
     }
 }
 
-data struct SendBalanceRowsInput {
-    var Display SendDisplay
-    var Rows[]SendReviewRow
-    var Active string
-}
-
-class SendBalanceRows : Cell[SendBalanceRowsInput] {
-    private var current SendBalanceRowsInput
-    private let rowKey Func[SendReviewRow, string]
-    private let rowBuilder Func[SendReviewRow, Blob]
-
-    init() {
-        rowKey = row -> row.Id
-        rowBuilder = row -> {
-            let input = current
-            let ui = input.Display.Ui
-            let tone = row.Id == input.Active ? AppTheme.Ink: AppTheme.Dim
-            let name = row.Kind == "contact" || row.Kind == "handle" ? row.Address.Trim(): Short(row.Address)
-            return Container{
-                FlexDirection: FlexDirection.Row,
-                JustifyContent: JustifyContent.SpaceBetween,
-                Gap: AppTheme.Space24,
-                Label(ui, name, AppTheme.Type13, tone, ""),
-                Label(ui, WalletAmount.Format(row.Amount), AppTheme.Type13, tone, "")
-            }
-        }
-    }
-
-    protected override func Build(input SendBalanceRowsInput) Blob {
-        current = input
-        let list = VirtualRows(input.Rows, AppTheme.ControlCompact, rowKey, rowBuilder, false)
-        list.MinHeight = 0
-        list.Height = Math.Min(input.Rows.Length, 5) * AppTheme.ControlCompact
-        return ListParts.Viewport(list, grow: false)
-    }
-}
-
 data struct SendReviewInput {
     var Display SendDisplay
     var Estimate SendEstimate
@@ -1192,25 +1102,10 @@ class SendReview : Cell {
     private var shown[]SendReviewItem = []SendReviewItem{}
     private let rowKey Func[SendReviewItem, string]
     private let rowBuilder Func[SendReviewItem, Blob]
-    private let configureBalance Action[SendBalance]
 
     init() {
         rowKey = row -> row.Row.Id
         rowBuilder = row -> Recipient(row)
-        configureBalance = child -> {
-            let value = current
-            let pending = value.Estimate
-            child.Accept(
-                SendBalanceInput{
-                    Display: value.Display,
-                    Rows: value.Rows,
-                    Total: pending.Amount,
-                    Fee: pending.Fee,
-                    Change: pending.Change,
-                    Spendable: value.Spendable
-                }
-            )
-        }
     }
 
     public func Accept(input SendReviewInput) {
@@ -1250,13 +1145,14 @@ class SendReview : Cell {
         let list = VirtualRows(shown, AppTheme.ControlRegular + AppTheme.Space12, rowKey, rowBuilder, false)
         list.MinHeight = 0
         list.FlexShrink = 1
-        list.Height = Math.Min(shown.Length * (AppTheme.ControlRegular + AppTheme.Space12), input.Height / 3)
+        list.FlexGrow = 1
         list.BorderWidth = Edges{Top: AppTheme.Border1}
         list.BorderColor = AppTheme.Rule
         let remaining = spendable - Math.Min(spendable, pending.Total)
         let content = Container{
             Gap: compact ? AppTheme.Space14: AppTheme.Space16,
             MinHeight: 0,
+            Height: input.Height,
             FlexShrink: 1,
             WalletParts.Header(
                 Label(
@@ -1270,8 +1166,18 @@ class SendReview : Cell {
                 value: Label(ui, "BNT", AppTheme.Type14, AppTheme.Dim, ""),
                 alignment: AlignItems.Baseline
             ),
-            ListParts.Viewport(list, grow: false),
-            Cell.Mount[SendBalance]("review-totals", configureBalance),
+            ListParts.Viewport(list, grow: true),
+            Cell.Mount[SendBalanceInput, SendBalance](
+                "review-totals",
+                SendBalanceInput{
+                    Display: input,
+                    Rows: value.Rows,
+                    Total: pending.Amount,
+                    Fee: pending.Fee,
+                    Change: pending.Change,
+                    Spendable: spendable
+                }
+            ),
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,

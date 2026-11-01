@@ -38,7 +38,6 @@ data struct SendReviewRow {
 
 class SendForm {
     var Total uint64
-    var Remaining uint64
     var Over bool
     var CanSubmit bool
     var Rows[]SendReviewRow = []SendReviewRow{}
@@ -62,7 +61,6 @@ class SendForm {
         }
         Total = total
         Over = total > spendable
-        Remaining = Over ? total - spendable: spendable - total
         CanSubmit = ready && !Over && total > 0
         if !Rows.SequenceEqual(rows) {
             Rows = rows
