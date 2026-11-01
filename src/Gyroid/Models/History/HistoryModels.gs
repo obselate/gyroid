@@ -106,6 +106,7 @@ data struct HistoryPreparation {
     var Language string
     var Width float64
     var Complete bool
+    var ReuseRows bool
     var SelectionTx string
 }
 

@@ -135,6 +135,7 @@ class HistoryPage : Cell, IDisposable {
     private var preparedExportCount int32
     private var selectedKey string = ""
     private var preparationRequest CancellationTokenSource?
+    private var sourcePrepared bool
     private var fetching bool
     private var loading bool
     private var resolving bool
@@ -252,6 +253,7 @@ class HistoryPage : Cell, IDisposable {
         timesGeneration++
         paginationGeneration++
         preparationGeneration++
+        sourcePrepared = false
         preparationRequest?.Cancel()
         preparationRequest?.Dispose()
         preparationRequest = nil
@@ -308,9 +310,12 @@ class HistoryPage : Cell, IDisposable {
         }
     }
 
-    private func PrepareRows() {
+    private func PrepareRows(reuse bool = false) {
         guard let window = current.Window else {
             return
+        }
+        if !reuse {
+            sourcePrepared = false
         }
         preparationGeneration++
         let generation = preparationGeneration
@@ -336,6 +341,7 @@ class HistoryPage : Cell, IDisposable {
             SelectionTx: current.SelectionTx,
             Width: current.Width,
             Complete: current.SelectionTx.Length > 0,
+            ReuseRows: reuse,
         }
         cutoff = period == "all" ? 0UL: resolvedPeriod == period ? periodStart: current.Tip + 1
         let selectedCutoff = cutoff
@@ -344,7 +350,7 @@ class HistoryPage : Cell, IDisposable {
         go PrepareCollection(window, history, request, selectedCutoff, selectedFrom, selectedTo, generation, id, token)
     }
 
-    private func PrepareRange() -> PrepareRows()
+    private func PrepareRange() -> PrepareRows(sourcePrepared)
 
     private func PrepareCollection(
         window Window,
@@ -364,6 +370,7 @@ class HistoryPage : Cell, IDisposable {
                     if disposed || generation != preparationGeneration || !Active(id) {
                         return
                     }
+                    sourcePrepared = true
                     if Object.ReferenceEquals(allRows, result.Rows) && Object.ReferenceEquals(shown, result.Shown) &&
                         Object.ReferenceEquals(preparedExport, result.Export) &&
                         low == result.Low &&

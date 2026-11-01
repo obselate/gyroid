@@ -473,6 +473,8 @@ class HistoryService {
                     Timestamp: send.Timestamp,
                     TxId: send.TxId,
                     OutputIndex: -1,
+                    Height: send.Status == "confirmed" && send.Confirmations > 0 && tip + 1 >= send.Confirmations ?
+                    tip + 1 - send.Confirmations: 0,
                     Confirmations: maturity.Count,
                     Required: 10
                 }
@@ -491,7 +493,7 @@ class HistoryService {
         to uint64,
         ct CancellationToken
     ) HistoryPrepared {
-        let rows = PrepareRows(input, ct)
+        let rows = input.ReuseRows ? input.Previous: PrepareRows(input, ct)
         let tip = input.Tip
         let oldest = rows.Length > 0 && rows[rows.Length - 1].Height > 0 ? rows[rows.Length - 1].Height: tip
         let low = cutoff == 0 ? oldest > 0 ? oldest - 1: 0UL: Math.Min(tip, cutoff - 1)
@@ -512,7 +514,7 @@ class HistoryService {
                 summary.Fees += row.Fee
             }
         }
-        let export = PrepareRows(
+        let export = input.ReuseRows ? input.PreviousExport: PrepareRows(
             input with{Outputs = input.ExportOutputs, Previous = input.PreviousExport, Complete = true},
             ct
         )
