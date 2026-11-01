@@ -1334,7 +1334,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
     private func Row(input ToolsInput, cells[]string, heading bool, color Color) Blob {
         let ui = input.Ui
         let row = Container{
-            FlexDirection: FlexDirection.Row,
+            BasedOn: AppTheme.ListRowStyle,
+            AlignItems: AlignItems.Stretch,
             Gap: AppTheme.Space8,
             Padding: Edges{
                 Left: AppTheme.Space8,
@@ -1342,7 +1343,6 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Top: heading ? AppTheme.Space6: AppTheme.Space10,
                 Bottom: heading ? AppTheme.Space6: AppTheme.Space10
             },
-            BorderWidth: Edges{Bottom: AppTheme.Border1},
             BorderColor: heading ? AppTheme.Rule: AppTheme.FaintRule,
             FlexShrink: 0
         }

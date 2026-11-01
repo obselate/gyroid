@@ -212,7 +212,12 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             Height: AppTheme.TileHeight,
             AlignItems: AlignItems.FlexStart,
             JustifyContent: JustifyContent.Center,
-            Padding: Edges{Left: AppTheme.Space16, Right: AppTheme.Space16},
+            Padding: Edges{
+                Left: AppTheme.Space16,
+                Right: AppTheme.Space16,
+                Top: AppTheme.Space0,
+                Bottom: AppTheme.Space0
+            },
             BorderColor: primary ? AppTheme.Lime: AppTheme.Rule,
             BackgroundColor: AppTheme.Surface,
             Disabled: input.Busy,
@@ -264,7 +269,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             BasedOn: AppTheme.ButtonStyle,
             BorderWidth: AppTheme.Border0,
             BackgroundColor: Color.Transparent,
-            FlexDirection: FlexDirection.Row,
             JustifyContent: JustifyContent.FlexStart,
             Gap: AppTheme.Space10,
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
@@ -294,10 +298,9 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         }
         let button = Goo
             .Button{
+            BasedOn: AppTheme.ListRowStyle,
             Height: 48,
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: AppTheme.Space10,
+            BorderWidth: AppTheme.Border0,
             Disabled: input.Busy,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
@@ -373,7 +376,12 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             BasedOn: AppTheme.TileStyle,
             BackdropBlur: AppTheme.Space0,
             Gap: AppTheme.Space0,
-            Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space12},
+            Padding: Edges{
+                Left: AppTheme.Space12,
+                Right: AppTheme.Space12,
+                Top: AppTheme.Space0,
+                Bottom: AppTheme.Space0
+            },
             BorderColor: expanded ? AppTheme.Edge: AppTheme.Rule,
             BackgroundColor: expanded ? AppTheme.Raised: AppTheme.Surface,
             FlexShrink: 0,
