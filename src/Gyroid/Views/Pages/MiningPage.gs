@@ -107,7 +107,8 @@ class MiningPage : Cell, IDisposable {
             source.History != input.History ||
             source.Wallet != input.Wallet ||
             source.Network != input.Network ||
-            source.Endpoint != input.Endpoint
+            source.Endpoint != input.Endpoint ||
+            (source.NodeRunning && !input.NodeRunning)
         let stateChanged = source.Visible != input.Visible || source.NodeRunning != input.NodeRunning
         source = input
         Volatile.Write(ref visible, input.Visible)
@@ -315,10 +316,11 @@ class MiningPage : Cell, IDisposable {
                 unavailable = status == nil
                 if let value = status {
                     Record(input.History, value)
-                    if value.Running {
+                    let sampled = value.Running && value.Hashes > 0
+                    if sampled || samples.Length != input.History.Samples.Count {
                         samples = input.History.Samples.ToArray()
                     }
-                    if value.Running || value != previous || recovered {
+                    if sampled || value != previous || recovered {
                         Rebuild()
                     }
                 } else if !recovered {
