@@ -29,6 +29,10 @@ class SettingsValidation {
                 if next.Endpoint == current.Endpoint {
                     next.Endpoint = ""
                 }
+                if next.BinaryPath == current.BinaryPath &&
+                    (next.BinaryPath == current.DiscoveredBinaryPath || next.BinaryPath == current.LauncherBinaryPath) {
+                    next.BinaryPath = ""
+                }
                 next.ActiveWallet = ""
                 next.DiscoveredDataDirectory = ""
                 next.DiscoveredEndpoint = ""

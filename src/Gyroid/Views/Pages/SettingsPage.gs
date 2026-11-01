@@ -146,10 +146,11 @@ data struct SettingsPurgeInput {
     var Wallets int32
 }
 
-class SettingsStartupDraft {
+class SettingsRegionState {
     var Value WalletSettings?
     var Source WalletSettings?
     var Open bool
+    let Advanced SettingsAdvancedState = SettingsAdvancedState()
 }
 
 class SettingsPage : Cell {
@@ -161,7 +162,7 @@ class SettingsPage : Cell {
     private var advancedOwner SettingsAdvanced?
     private var nodeOwner SettingsNode?
     private var mountedSection string = ""
-    private let startupDraft SettingsStartupDraft = SettingsStartupDraft()
+    private let startupDraft SettingsRegionState = SettingsRegionState()
     private let openDialog Action[string]
     private let openPurge Action[string, string, int32]
     private let refreshNodeData Action
@@ -189,7 +190,7 @@ class SettingsPage : Cell {
         }
         configureAdvanced = region -> {
             advancedOwner = region
-            region.Accept(current, openPurge)
+            region.Accept(current, openPurge, startupDraft.Advanced)
         }
         configureDialogs = region -> {
             dialogs = region
@@ -211,7 +212,7 @@ class SettingsPage : Cell {
         generalOwner?.Accept(current)
         nodeOwner?.Accept(current, startupDraft)
         walletOwner?.Accept(current, openDialog)
-        advancedOwner?.Accept(current, openPurge)
+        advancedOwner?.Accept(current, openPurge, startupDraft.Advanced)
         dialogs?.Accept(current)
         let next = SettingsCompositionInput{
             Section: input.Section,
@@ -604,7 +605,7 @@ class SettingsNode : Cell, IDisposable {
     private var state SettingsNodeInput
     private var context SettingsPageInput
     private var rowHeight float64
-    private var draft SettingsStartupDraft
+    private var draft SettingsRegionState
     private var startupOwner SettingsStartup?
     private var directoryRead string = ""
     private var directoryExists bool
@@ -618,7 +619,7 @@ class SettingsNode : Cell, IDisposable {
         }
     }
 
-    func Accept(input SettingsPageInput, draft SettingsStartupDraft) {
+    func Accept(input SettingsPageInput, draft SettingsRegionState) {
         context = input
         this.draft = draft
         startupOwner?.Accept(input, draft)
@@ -831,29 +832,25 @@ class SettingsNode : Cell, IDisposable {
 class SettingsStartup : Cell, IDisposable {
     private var state SettingsStartupInput
     private var context SettingsPageInput
-    private var draft SettingsStartupDraft
-    private var applyPending bool
+    private var draft SettingsRegionState
     private var generation int32
     private var validated WalletSettings?
     private var validationIssue string = ""
     private var lifetime CancellationTokenSource?
 
-    func Accept(input SettingsPageInput, draft SettingsStartupDraft) {
+    func Accept(input SettingsPageInput, draft SettingsRegionState) {
         context = input
         this.draft = draft
         let settings = input.Settings
-        if lifetime == nil || draft.Source?.StartupDiffers(settings) != false {
-            lifetime?.Cancel()
-            lifetime?.Dispose()
+        if lifetime == nil {
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
+        }
+        if draft.Source?.StartupDiffers(settings) != false {
             generation++
             validated = nil
             validationIssue = ""
-            if draft.Source?.StartupDiffers(settings) != false {
-                draft.Source = settings
-                draft.Value = settings.Copy()
-            }
-            applyPending = false
+            draft.Source = settings
+            draft.Value = settings.Copy()
         }
         let next = SettingsStartupInput{
             Language: input.Language,
@@ -889,7 +886,7 @@ class SettingsStartup : Cell, IDisposable {
                 Label(context.Ui, context.Ui.Strings.Explain(validationIssue), AppTheme.Type13, AppTheme.Pink, "")
             )
         }
-        if applyPending {
+        if validated != nil {
             content.Add(ConfirmApply(context))
         }
         return content
@@ -1026,18 +1023,15 @@ class SettingsStartup : Cell, IDisposable {
         guard let value = draft.Value, let owner = input.Window else {
             return
         }
-        if applyPending {
-            guard let next = validated else {
-                return
-            }
-            applyPending = false
+        if let next = validated {
+            validated = nil
             input.Ui.Actions.Run(ct -> input.Session.ApplySettingsAsync(next, ct), input.OnClose)
             return
         }
         generation++
         let request = generation
         let next = value.Copy()
-        let current = input.Session.Settings
+        let current = input.Settings.Copy()
         let token = lifetime?.Token ?? CancellationToken.None
         go ValidateSettings(next, current, owner, request, token)
     }
@@ -1062,21 +1056,16 @@ class SettingsStartup : Cell, IDisposable {
         }
         owner.TryPost(
             () -> {
-                guard let current = draft.Value else {
+                guard let edited = draft.Value else {
                     return
                 }
-                if request != generation || value.StartupDiffers(current) {
+                if request != generation || value.StartupDiffers(edited) {
                     return
                 }
                 validationIssue = issue
                 validated = result
-                if let next = result {
-                    if state.State != WalletState.Unloaded {
-                        applyPending = true
-                    } else {
-                        let session = context.Session
-                        context.Ui.Actions.Run(ct -> session.ApplySettingsAsync(next, ct), context.OnClose)
-                    }
+                if validated != nil && state.State == WalletState.Unloaded {
+                    SaveSettings(context)
                 }
                 Rebuild()
             }
@@ -1092,7 +1081,7 @@ class SettingsStartup : Cell, IDisposable {
     private func ConfirmApply(input SettingsPageInput) Blob {
         let ui = input.Ui
         let close Action = () -> {
-            applyPending = false
+            validated = nil
             Rebuild()
         }
         return WalletParts.Modal(
@@ -1338,35 +1327,50 @@ class SettingsWallet : Cell, IDisposable {
     }
 }
 
+class SettingsAdvancedState {
+    var state SettingsAdvancedInput
+    var loadIssue string = ""
+    var chainLoaded bool
+    var dataSize int64 = -1
+    var sizeText string = "-"
+    var sizeUnit string = "GB"
+    var freeSpace int64
+    var dataWallets int32
+    var trustedCheckpoint uint64
+    var localCheckpoint uint64
+    var autoSave bool?
+    var certificate ChainCertificate?
+}
+
 class SettingsAdvanced : Cell, IDisposable {
-    private var state SettingsAdvancedInput
+    private var data SettingsAdvancedState
     private var context SettingsPageInput
     private var openPurge Action[string, string, int32]
     private var lifetime CancellationTokenSource?
     private var checkpointGeneration int32
     private var generation int32
     private var certifyGeneration int32
-    private var loadIssue string = ""
-    private var chainLoaded bool
-    private var dataSize int64 = -1
-    private var sizeText string = "-"
-    private var sizeUnit string = "GB"
-    private var freeSpace int64
-    private var dataWallets int32
-    private var trustedCheckpoint uint64
-    private var localCheckpoint uint64
-    private var autoSave bool?
-    private var certificate ChainCertificate?
 
-    func Accept(input SettingsPageInput, openPurge Action[string, string, int32]) {
+    func Accept(input SettingsPageInput, openPurge Action[string, string, int32], data SettingsAdvancedState) {
+        this.data = data
         context = input
         this.openPurge = openPurge
         let settings = input.Settings
-        if lifetime == nil ||
-            state.Network != settings.Network ||
-            state.Directory != settings.DataDirectory ||
-            state.Endpoint != settings.Endpoint ||
-            state.ProcessId != settings
+        if lifetime == nil {
+            lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
+        }
+        if data
+            .state
+            .Network != settings.Network ||
+            data
+            .state
+            .Directory != settings.DataDirectory ||
+            data
+            .state
+            .Endpoint != settings.Endpoint ||
+            data
+            .state
+            .ProcessId != settings
             .OwnedProcessId {
             lifetime?.Cancel()
             lifetime?.Dispose()
@@ -1374,20 +1378,20 @@ class SettingsAdvanced : Cell, IDisposable {
             generation++
             certifyGeneration++
             checkpointGeneration++
-            chainLoaded = false
-            dataSize = -1
-            sizeText = "-"
-            freeSpace = 0
-            dataWallets = 0
-            trustedCheckpoint = 0
-            localCheckpoint = 0
-            autoSave = nil
-            certificate = nil
-            loadIssue = ""
+            data.chainLoaded = false
+            data.dataSize = -1
+            data.sizeText = "-"
+            data.freeSpace = 0
+            data.dataWallets = 0
+            data.trustedCheckpoint = 0
+            data.localCheckpoint = 0
+            data.autoSave = nil
+            data.certificate = nil
+            data.loadIssue = ""
         }
-        if input.Section == "advanced" && !chainLoaded {
+        if input.Section == "advanced" && !data.chainLoaded {
             generation++
-            chainLoaded = true
+            data.chainLoaded = true
             let request = generation
             let token = lifetime?.Token ?? CancellationToken.None
             let session = input.Session
@@ -1406,23 +1410,26 @@ class SettingsAdvanced : Cell, IDisposable {
             Busy: input.Busy,
             Height: input.Height
         }
-        if next.Equals(state) {
+        if next.Equals(data.state) {
             return
         }
-        state = next
+        data.state = next
         Rebuild()
     }
 
     override func Build() Blob {
         let pane = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Gap: AppTheme.Space12}
         Advanced(context, pane)
-        if loadIssue.Length > 0 {
-            pane.Add(Label(context.Ui, context.Ui.Strings.Explain(loadIssue), AppTheme.Type13, AppTheme.Pink, ""))
+        if data.loadIssue.Length > 0 {
+            pane.Add(Label(context.Ui, context.Ui.Strings.Explain(data.loadIssue), AppTheme.Type13, AppTheme.Pink, ""))
         }
         return pane
     }
 
     func Dispose() {
+        if data.dataSize < 0 {
+            data.chainLoaded = false
+        }
         generation++
         certifyGeneration++
         checkpointGeneration++
@@ -1431,20 +1438,26 @@ class SettingsAdvanced : Cell, IDisposable {
     }
 
     func Refresh() {
-        chainLoaded = false
-        Accept(context, openPurge)
+        data.chainLoaded = false
+        Accept(context, openPurge, data)
     }
 
     private func Advanced(input SettingsPageInput, pane Container) {
         let ui = input.Ui
-        let figure = AppTheme.GetInstrumentSize(state.Height)
-        let used = if dataSize > 0 {
-            Math.Max(1, int32(Math.Round(40.0 * float64(dataSize) / float64(dataSize + freeSpace))))
+        let figure = AppTheme.GetInstrumentSize(data.state.Height)
+        let used = if data.dataSize > 0 {
+            Math.Max(1, int32(Math.Round(40.0 * float64(data.dataSize) / float64(data.dataSize + data.freeSpace))))
         } else {
             0
         }
-        let data = Instrument(input, "chain data", "data", "About chain data", "Block data the node keeps on this disk")
-        data.Add(
+        let storage = Instrument(
+            input,
+            "chain data",
+            "data",
+            "About chain data",
+            "Block data the node keeps on this disk"
+        )
+        storage.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Baseline,
@@ -1453,26 +1466,26 @@ class SettingsAdvanced : Cell, IDisposable {
                 Value(
                     ui,
                     "size",
-                    ui.Strings.Get("chain data") + " " + sizeText,
-                    sizeText,
+                    ui.Strings.Get("chain data") + " " + data.sizeText,
+                    data.sizeText,
                     figure,
                     AppTheme.Ink,
                     AppTheme.Dim
                 ),
-                Label(ui, sizeUnit, AppTheme.Type14, AppTheme.Body, ""),
+                Label(ui, data.sizeUnit, AppTheme.Type14, AppTheme.Body, ""),
                 Label(
                     ui,
-                    ui.Strings.Get("{0} GB free").Replace("{0}", (freeSpace / 1000000000).ToString()),
+                    ui.Strings.Get("{0} GB free").Replace("{0}", (data.freeSpace / 1000000000).ToString()),
                     AppTheme.Type13,
                     AppTheme.Dim,
                     ""
                 )
             }
         )
-        data.Add(
+        storage.Add(
             Grid(
                 input,
-                ui.Strings.Get("chain data") + " " + sizeText + " " + sizeUnit,
+                ui.Strings.Get("chain data") + " " + data.sizeText + " " + data.sizeUnit,
                 4,
                 nil,
                 index -> Slot(ui, index < used ? AppTheme.Blue: AppTheme.Rule, 1)
@@ -1484,14 +1497,14 @@ class SettingsAdvanced : Cell, IDisposable {
             Gap: AppTheme.Space8,
             FlexShrink: 0
         }
-        if dataWallets > 0 {
+        if data.dataWallets > 0 {
             purgeRow.Add(
                 Status(
                     ui,
                     ui
                         .Strings
-                        .Get(dataWallets == 1 ? "{0} wallet inside": "{0} wallets inside")
-                        .Replace("{0}", dataWallets.ToString()),
+                        .Get(data.dataWallets == 1 ? "{0} wallet inside": "{0} wallets inside")
+                        .Replace("{0}", data.dataWallets.ToString()),
                     AppTheme.Orange,
                     "warning"
                 )
@@ -1502,13 +1515,13 @@ class SettingsAdvanced : Cell, IDisposable {
             (
                 AppTheme.DangerButton with{
                     Content = ui.Strings.Get("Purge…"),
-                    OnClick = () -> openPurge(sizeText, sizeUnit, dataWallets),
-                    Disabled = state.Busy || !state.Owned || dataSize < 0
+                    OnClick = () -> openPurge(data.sizeText, data.sizeUnit, data.dataWallets),
+                    Disabled = data.state.Busy || !data.state.Owned || data.dataSize < 0
                 }
             ).Build()
         )
-        data.Add(purgeRow)
-        let tip = Math.Max(state.NodeHeight, certificate?.Height ?? uint64(0))
+        storage.Add(purgeRow)
+        let tip = Math.Max(data.state.NodeHeight, data.certificate?.Height ?? uint64(0))
         var step uint64 = 100
         for candidate in[]uint64{250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000} {
             if step * 30 < tip {
@@ -1528,9 +1541,9 @@ class SettingsAdvanced : Cell, IDisposable {
             Gap: AppTheme.Space12,
             FlexShrink: 0
         }
-        let wide = AppTheme.GetVerdictSize(state.Height)
+        let wide = AppTheme.GetVerdictSize(data.state.Height)
         var note = ""
-        if let result = certificate {
+        if let result = data.certificate {
             let clean = result.Violations.Length == 0
             note = Violations(ui, result.Violations.Length)
             verdict.Add(
@@ -1555,7 +1568,7 @@ class SettingsAdvanced : Cell, IDisposable {
             verdict.Add(Label(ui, ui.Strings.Get("not checked"), wide, AppTheme.Dim, ""))
         }
         checks.Add(verdict)
-        let checked = certificate?.Height ?? uint64(0)
+        let checked = data.certificate?.Height ?? uint64(0)
         checks.Add(
             Grid(
                 input,
@@ -1564,9 +1577,10 @@ class SettingsAdvanced : Cell, IDisposable {
                 []string{Short(0), Short(step * 10), Short(step * 20)},
                 index -> {
                     let first = uint64(index) * step
-                    let bad = certificate?.Violations.Any(
-                        (height uint64) -> height >= first && height < first + step
-                    ) ==
+                    let bad = data
+                        .certificate
+                        ?.Violations
+                        .Any((height uint64) -> height >= first && height < first + step) ==
                     true
                     return if bad {
                         Slot(ui, AppTheme.Pink, 1)
@@ -1586,7 +1600,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 FlexShrink: 0,
                 Label(ui, note, AppTheme.Type13, AppTheme.Dim, ""),
                 Container{FlexGrow: 1},
-                Button(ui, "Certify", () -> Certify(input), state.Busy)
+                Button(ui, "Certify", () -> Certify(input), data.state.Busy)
             }
         )
         pane.Add(
@@ -1596,7 +1610,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 FlexGrow: 1,
                 FlexBasis: 0,
                 MinHeight: 0,
-                data,
+                storage,
                 checks
             }
         )
@@ -1605,8 +1619,8 @@ class SettingsAdvanced : Cell, IDisposable {
 
     private func Checkpoint(input SettingsPageInput, figure float64) Blob {
         let ui = input.Ui
-        let tip = state.NodeHeight
-        let start = localCheckpoint - localCheckpoint % 1000
+        let tip = data.state.NodeHeight
+        let start = data.localCheckpoint - data.localCheckpoint % 1000
         let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space12, AppTheme.Radius14)
         card.FlexShrink = 0
         card.Add(
@@ -1619,14 +1633,14 @@ class SettingsAdvanced : Cell, IDisposable {
                 Container{FlexGrow: 1},
                 Info(
                     input.Ui,
-                    state.Language,
+                    data.state.Language,
                     "checkpoint-info",
                     "About checkpoints",
                     "Save writes a checkpoint every 100 blocks. Load lets sync skip proof-of-work checks up to the last checkpoint"
                 )
             }
         )
-        let checkpointText = Count(localCheckpoint)
+        let checkpointText = Count(data.localCheckpoint)
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -1651,24 +1665,24 @@ class SettingsAdvanced : Cell, IDisposable {
                     Toggle(
                         input,
                         "auto save",
-                        autoSave == true,
+                        data.autoSave == true,
                         () -> {
-                            let enabled = autoSave != true
+                            let enabled = data.autoSave != true
                             Checkpoints(input, ct -> input.Session.CheckpointAutoSaveAsync(enabled, ct))
                         },
-                        autoSave == nil
+                        data.autoSave == nil
                     ),
                     Button(
                         ui,
                         "Save",
                         () -> Checkpoints(input, ct -> input.Session.CheckpointsAsync("save", ct)),
-                        state.Busy
+                        data.state.Busy
                     ),
                     Button(
                         ui,
                         "Load",
                         () -> Checkpoints(input, ct -> input.Session.CheckpointsAsync("load", ct)),
-                        state.Busy
+                        data.state.Busy
                     )
                 }
             }
@@ -1679,7 +1693,7 @@ class SettingsAdvanced : Cell, IDisposable {
             Height: 42,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Image,
-                Name: ui.Strings.Get("checkpoint") + " " + Count(localCheckpoint) + " / " + Count(tip)
+                Name: ui.Strings.Get("checkpoint") + " " + Count(data.localCheckpoint) + " / " + Count(tip)
             }
         }
         let slots = Container{
@@ -1694,7 +1708,7 @@ class SettingsAdvanced : Cell, IDisposable {
         for index in 0 ... 10 {
             let first = start + uint64(index) * 100
             slots.Add(
-                if localCheckpoint >= first + 100 {
+                if data.localCheckpoint >= first + 100 {
                     Slot(ui, AppTheme.LimeMuted, 1)
                 } else if tip > first {
                     Slot(ui, AppTheme.Orange, Math.Min(1.0, float64(tip - first) / 100))
@@ -1716,7 +1730,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 }
             )
         }
-        if trustedCheckpoint > 0 {
+        if data.trustedCheckpoint > 0 {
             bar.Add(
                 Container{
                     Position: PositionType.Absolute,
@@ -1724,7 +1738,7 @@ class SettingsAdvanced : Cell, IDisposable {
                     Left: 0,
                     Label(
                         ui,
-                        ui.Strings.Get("trusted") + " " + Count(trustedCheckpoint),
+                        ui.Strings.Get("trusted") + " " + Count(data.trustedCheckpoint),
                         AppTheme.Type12,
                         AppTheme.Blue,
                         ""
@@ -1739,7 +1753,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 Right: 0,
                 Label(
                     ui,
-                    ui.Strings.Get("next") + " " + Count(localCheckpoint - localCheckpoint % 100 + 100),
+                    ui.Strings.Get("next") + " " + Count(data.localCheckpoint - data.localCheckpoint % 100 + 100),
                     AppTheme.Type12,
                     AppTheme.Dim,
                     ""
@@ -1779,7 +1793,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 if request != checkpointGeneration {
                     return
                 }
-                loadIssue = issue
+                data.loadIssue = issue
                 if issue.Length == 0 {
                     Refresh()
                 } else {
@@ -1813,8 +1827,8 @@ class SettingsAdvanced : Cell, IDisposable {
         owner.TryPost(
             () -> {
                 if request == certifyGeneration {
-                    certificate = result
-                    loadIssue = issue
+                    data.certificate = result
+                    data.loadIssue = issue
                     Rebuild()
                 }
             }
@@ -1829,7 +1843,7 @@ class SettingsAdvanced : Cell, IDisposable {
         card.Add(
             WalletParts.Header(
                 Label(ui, ui.Strings.Get(title), AppTheme.Type12, AppTheme.Body, ""),
-                trailing: Info(input.Ui, state.Language, key, topic, line)
+                trailing: Info(input.Ui, data.state.Language, key, topic, line)
             )
         )
         return card
@@ -1845,7 +1859,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 Label(input.Ui, names[row], AppTheme.Type11, AppTheme.Dim, "")
             }
         }
-        let grid = SegmentGrid(rows, 10, slot, rowGap: AppTheme.GetDetailGap(state.Height), label: buildLabel)
+        let grid = SegmentGrid(rows, 10, slot, rowGap: AppTheme.GetDetailGap(data.state.Height), label: buildLabel)
         grid.Accessibility = Accessibility{Role: AccessibilityRole.Image, Name: name}
         return grid
     }
@@ -1884,15 +1898,15 @@ class SettingsAdvanced : Cell, IDisposable {
                     if request != generation {
                         return
                     }
-                    freeSpace = result.Free
-                    trustedCheckpoint = result.Trusted
-                    dataSize = result.Size
-                    sizeUnit = unit
-                    sizeText = text
-                    dataWallets = result.Wallets
-                    localCheckpoint = result.Local
-                    autoSave = result.AutoSave
-                    loadIssue = ""
+                    data.freeSpace = result.Free
+                    data.trustedCheckpoint = result.Trusted
+                    data.dataSize = result.Size
+                    data.sizeUnit = unit
+                    data.sizeText = text
+                    data.dataWallets = result.Wallets
+                    data.localCheckpoint = result.Local
+                    data.autoSave = result.AutoSave
+                    data.loadIssue = ""
                     Rebuild()
                 }
             )
@@ -1901,7 +1915,7 @@ class SettingsAdvanced : Cell, IDisposable {
             owner?.TryPost(
                 () -> {
                     if request == generation {
-                        loadIssue = issue
+                        data.loadIssue = issue
                         Rebuild()
                     }
                 }
@@ -2096,36 +2110,33 @@ class SettingsDialogs : Cell, IDisposable {
         var words[]char = []char{}
         var issue = ""
         try {
-            try {
-                words = await session.Keys.RevealSeedAsync(password, token)
-            } catch (cancelled OperationCanceledException) {
-                return
-            } catch (failure Exception) {
-                issue = failure.Message
-            }
+            words = await session.Keys.RevealSeedAsync(password, token)
+        } catch (cancelled OperationCanceledException) {
+            return
+        } catch (failure Exception) {
+            issue = failure.Message
         } finally {
             Array.Clear(password)
         }
-        let result = words
-        let cleanup = token.Register(() -> Array.Clear(result))
+        let cleanup = token.Register(() -> Array.Clear(words))
         if !owner.TryPost(
             () -> {
                 cleanup.Dispose()
                 if request != generation || session.Settings.ActiveWallet != wallet {
-                    Array.Clear(result)
+                    Array.Clear(words)
                     return
                 }
                 loading = false
                 passwordIssue = issue
                 if issue.Length == 0 {
-                    publish.Invoke(result)
+                    publish.Invoke(words)
                     Close()
                 }
                 Rebuild()
             }
         ) {
             cleanup.Dispose()
-            Array.Clear(result)
+            Array.Clear(words)
         }
     }
 
@@ -2205,7 +2216,15 @@ class SettingsDialogs : Cell, IDisposable {
             }
         }
         if fileIssue.Length > 0 {
-            content.Add(Label(ui, ui.Strings.Explain(fileIssue), AppTheme.Type13, AppTheme.Body, ""))
+            content.Add(
+                Label(
+                    ui,
+                    ui.Strings.Explain(fileIssue),
+                    AppTheme.Type13,
+                    fileIssue == "Saved" ? AppTheme.Body: AppTheme.Pink,
+                    ""
+                )
+            )
         }
         return WalletParts.Modal(
             ui,

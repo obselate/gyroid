@@ -382,7 +382,6 @@ class WalletSession : IDisposable {
     func SettingsDirectoryExists(path string) bool -> Directory.Exists(path)
 
     func OpenSettingsDirectoryAsync(path string, ct CancellationToken) Task {
-        ct.ThrowIfCancellationRequested()
         let start = System.Diagnostics.ProcessStartInfo(
             OperatingSystem.IsWindows() ? "explorer.exe": OperatingSystem.IsMacOS() ? "open": "xdg-open"
         )
@@ -427,8 +426,6 @@ class WalletSession : IDisposable {
         var autoSave bool?
         try {
             autoSave = await CheckpointAutoSaveAsync(nil, ct)
-        } catch (cancelled OperationCanceledException) {
-            throw cancelled
         } catch (failure Exception) { }
         return SettingsChainResult{
             Size: size,
