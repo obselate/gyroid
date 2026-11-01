@@ -185,7 +185,7 @@ class NodeSession : IDisposable {
 
     private func ThrowIfCoreExited() {
         if Supervisor.NeedsRestart {
-            throw WalletException("Configured core exited before its API became ready")
+            throw WalletException(Supervisor.ExitError)
         }
     }
 

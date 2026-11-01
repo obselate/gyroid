@@ -89,8 +89,15 @@ class PrivateFiles {
             if OperatingSystem.IsWindows() {
                 handle = OpenWindowsWalletFile(path, 2147483648, 1, IntPtr.Zero, 3, 35651584, IntPtr.Zero)
                 if handle.IsInvalid {
+                    let error = Marshal.GetLastPInvokeError()
                     handle.Dispose()
-                    throw WalletException("File must be a regular no-follow file")
+                    throw WalletException(
+                        switch error {
+                            case 2, 3: "File does not exist"
+                            case 5: "File access was denied"
+                            default: "File could not be opened"
+                        }
+                    )
                 }
                 let attributes = File.GetAttributes(handle)
                 if (
@@ -141,7 +148,15 @@ class PrivateFiles {
                 }
                 let fd = OpenWalletFile(path, flags)
                 if fd < 0 {
-                    throw WalletException("File must be a regular no-follow file")
+                    let error = Marshal.GetLastPInvokeError()
+                    throw WalletException(
+                        switch error {
+                            case 2, 20: "File does not exist"
+                            case 1, 13: "File access was denied"
+                            default: error == (OperatingSystem.IsMacOS() ? 62: 40) ?
+                            "File must be a regular no-follow file": "File could not be opened"
+                        }
+                    )
                 }
                 handle = SafeFileHandle(IntPtr(fd), true)
                 let status = Marshal.AllocHGlobal(256)
@@ -154,7 +169,7 @@ class PrivateFiles {
                         StatWalletFile(fd, status)
                     }
                     if result != 0 {
-                        throw WalletException("File must be a regular no-follow file")
+                        throw WalletException("File could not be inspected")
                     }
                     let mode = if mac {
                         int32(Marshal.ReadInt16(status, 4))

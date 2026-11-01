@@ -42,6 +42,10 @@ class Strings {
             case "API listener is not the configured core executable": "Local node is not the configured program"
             case "API listener identity changed during connection": "Local node changed during connection"
             case "File must be a regular no-follow file": "Access file must be a regular file, not a link"
+            case "File does not exist": "Node access file is missing"
+            case "File access was denied": "Node access file cannot be read"
+            case "File could not be opened": "Node access file could not be opened"
+            case "File could not be inspected": "Node access file could not be inspected"
             case "File ownership or permissions are not private": "Access file must belong to you with private permissions"
             case "File exceeds the supported size": "Access file exceeds the size limit"
             case "API cookie must contain exactly 64 hexadecimal characters": "Node access file must contain a 64-character hex token"
@@ -71,7 +75,11 @@ class Strings {
             case "Cannot reach the Blocknet ID resolver": "Blocknet ID lookup unreachable. Check your connection"
             case "Cannot read the Blocknet ID response": "Blocknet ID lookup failed"
             case "Could not verify the Blocknet ID destination": "Blocknet ID address could not be verified"
-            default: message.Replace("Daemon request failed with HTTP", Get("Node request failed with code"))
+            default: message.Replace(
+                "Configured core exited before its API became ready:",
+                Get("Node did not start") + ":"
+            )
+                .Replace("Daemon request failed with HTTP", Get("Node request failed with code"))
         }
     )
 
@@ -462,6 +470,7 @@ class Strings {
             case "Node not reachable. Check Node URL in Settings": "无法连接节点，请检查设置中的节点地址。"
             case "Node is starting. Try again shortly": "节点正在启动，请稍后重试。"
             case "Node did not start": "节点启动失败"
+            case "Automatic node restart stopped": "节点自动重启已停止"
             case "Settings file not loaded": "设置文件未加载"
             case "Node program could not start": "无法启动节点程序"
             case "Node program must be a full path": "节点程序须使用完整路径"
@@ -471,6 +480,9 @@ class Strings {
             case "Node settings must be a separate file": "节点设置须使用单独的文件"
             case "Node URL must be a local http address": "节点地址须为本机 HTTP 地址"
             case "Node access file cannot be read": "无法读取节点授权文件"
+            case "Node access file is missing": "节点授权文件不存在"
+            case "Node access file could not be opened": "无法打开节点授权文件"
+            case "Node access file could not be inspected": "无法检查节点授权文件"
             case "No node release for this platform": "此平台无可用的节点版本"
             case "Local node process could not be verified": "无法验证本机节点进程"
             case "Local node is not the process started by this app": "本机节点并非由本应用启动"

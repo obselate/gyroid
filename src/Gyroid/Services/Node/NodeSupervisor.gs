@@ -22,6 +22,7 @@ class NodeSupervisor : IDisposable {
     var disposed bool
     var lease FileStream? = nil
     var nextStart DateTimeOffset
+    var output string = ""
     var Progress Action? = nil
     var Exited Action? = nil
     var Source string = "External"
@@ -31,6 +32,15 @@ class NodeSupervisor : IDisposable {
     var CheckpointHeight uint64
 
     prop NeedsRestart bool -> process != nil && !Owned
+
+    prop ExitError string {
+        get {
+            lock ownership {
+                return output.Length > 0 ? "Configured core exited before its API became ready: " + output:
+                "Configured core exited before its API became ready"
+            }
+        }
+    }
 
     prop Owned bool {
         get {
@@ -164,6 +174,8 @@ class NodeSupervisor : IDisposable {
         start.Environment["BLOCKNET_P2P_KEY"] = Path.Combine(settings.DataDirectory, "identity.key")
         start.Environment.Remove("BLOCKNET_VIEW_PRIV")
         stop.CancelAfter(TimeSpan.FromSeconds(60))
+        var stdout Task = Task.CompletedTask
+        var stderr Task = Task.CompletedTask
         try {
             lock ownership {
                 ct.ThrowIfCancellationRequested()
@@ -171,6 +183,7 @@ class NodeSupervisor : IDisposable {
                     throw WalletException("Daemon owner is closed")
                 }
                 nextStart = DateTimeOffset.UtcNow.AddSeconds(2)
+                output = ""
                 process = Process.Start(start)
             }
             let owned = process
@@ -191,14 +204,18 @@ class NodeSupervisor : IDisposable {
             if !OperatingSystem.IsWindows() {
                 owned.StandardInput.Close()
             }
-            owned.StandardOutput.BaseStream.CopyToAsync(Stream.Null)
-            owned.StandardError.BaseStream.CopyToAsync(Stream.Null)
+            stdout = ReadOutputAsync(owned.StandardOutput, owned)
+            stderr = ReadOutputAsync(owned.StandardError, owned)
             owned.Exited += (_, _) -> {
                 if Object.ReferenceEquals(process, owned) && !disposed {
                     Exited?.Invoke()
                 }
             }
             owned.EnableRaisingEvents = true
+            if owned.HasExited {
+                await Task.WhenAll(stdout, stderr)
+                throw WalletException(ExitError)
+            }
             using let core = Process.GetProcessById(settings.OwnedProcessId)
             var processorTime = core.TotalProcessorTime
             while !owned.HasExited {
@@ -214,8 +231,13 @@ class NodeSupervisor : IDisposable {
                 }
                 await Task.Delay(250, ct)
             }
-            throw WalletException("Configured core exited before its API became ready")
+            await Task.WhenAll(stdout, stderr)
+            throw WalletException(ExitError)
         } catch (error Exception) {
+            if process?.HasExited == true {
+                await Task.WhenAll(stdout, stderr)
+            }
+            let failure = ExitError
             Stop()
             if error is OperationCanceledException &&
                 !cancellation.IsCancellationRequested &&
@@ -225,8 +247,22 @@ class NodeSupervisor : IDisposable {
             if error is WalletException {
                 throw error
             }
-            throw WalletException("Could not start the configured core executable")
+            throw WalletException(output.Length > 0 ? failure: "Could not start the configured core executable")
         }
+    }
+
+    private async func ReadOutputAsync(reader StreamReader, owned Process) {
+        try {
+            while let line = await reader.ReadLineAsync() {
+                if !string.IsNullOrWhiteSpace(line) {
+                    lock ownership {
+                        if Object.ReferenceEquals(process, owned) {
+                            output = line.Substring(Math.Max(0, line.Length - 512)).Trim()
+                        }
+                    }
+                }
+            }
+        } catch (error IOException) { } catch (error ObjectDisposedException) { }
     }
 
     private func UseInstallation(settings WalletSettings) {

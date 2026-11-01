@@ -41,6 +41,9 @@ class WalletSession : IDisposable {
     var eventsEnabled bool
     var eventsHealthy bool
     var nextRestart DateTimeOffset
+    var restartAttempts int32
+    var NodeError string = ""
+    prop NodeRestartStopped bool -> restartAttempts >= 3 && NodeError.Length > 0
     var lastActivity int64 = WalletLockScheduler.Now()
     var scanUnchangedSince DateTimeOffset
     var scanRestarted bool
@@ -264,7 +267,20 @@ class WalletSession : IDisposable {
                 await Task.Delay(2000, ct)
                 await gate.WaitAsync(ct)
                 try {
-                    if disposed || settings.NodeMode == "manual" || !Node.Supervisor.NeedsRestart {
+                    if disposed ||
+                        settings.NodeMode == "manual" ||
+                        (!Node.Supervisor.NeedsRestart && NodeError.Length == 0) {
+                        continue
+                    }
+                    if NodeError.Length == 0 && DateTimeOffset.UtcNow > nextRestart.AddMinutes(1) {
+                        restartAttempts = 0
+                    }
+                    if Node.Supervisor.NeedsRestart {
+                        NodeError = Node.Supervisor.ExitError
+                    }
+                    if restartAttempts >= 3 {
+                        Node.Publish()
+                        Changed?.Invoke()
                         continue
                     }
                     StopEvents()
@@ -280,6 +296,7 @@ class WalletSession : IDisposable {
                         await Task.Delay(delay, ct)
                     }
                     nextRestart = DateTimeOffset.UtcNow.AddSeconds(10)
+                    restartAttempts++
                     Node.Reconnect()
                     await ConnectCoreAsync(ct)
                     UpdateEvents()
@@ -288,6 +305,9 @@ class WalletSession : IDisposable {
                 }
             } catch (error Exception) {
                 Node.Publish()
+                if restartAttempts < 3 {
+                    restartRequested.Writer.TryWrite(true)
+                }
             }
             if !disposed {
                 Changed?.Invoke()
@@ -329,11 +349,17 @@ class WalletSession : IDisposable {
                 Keys.BackupPending = File.Exists(Library.WalletPath(filename) + ".backup-pending")
             }
             connected = true
+            NodeError = ""
             if managed {
                 await Send.RecoverAsync(ct)
             }
             PublishCurrent()
         } catch (error Exception) {
+            NodeError = if error is WalletException {
+                error.Message
+            } else {
+                "Could not start the configured core executable"
+            }
             Node.Publish()
             connected = false
             managed = false
@@ -345,6 +371,7 @@ class WalletSession : IDisposable {
     async func ConnectAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
+            restartAttempts = 0
             await ConnectCoreAsync(ct)
             if state == WalletState.Unlocked {
                 await RefreshCoreAsync(ct)
@@ -414,6 +441,7 @@ class WalletSession : IDisposable {
             connected = false
             PublishEmpty()
             Node.Publish()
+            restartAttempts = 0
             await ConnectCoreAsync(ct)
         } finally {
             End()
@@ -952,14 +980,11 @@ class WalletSession : IDisposable {
         let sendError = Send.Error
         try {
             if Node.Supervisor.NeedsRestart && settings.NodeMode != "manual" {
-                Node.Reconnect()
-                Send.InvalidateConfirmation()
-                await ConnectCoreAsync(ct)
-            } else {
-                await Node.RefreshStatusAsync(ct)
-                if state == WalletState.Unlocked {
-                    await RefreshCoreAsync(ct)
-                }
+                restartRequested.Writer.TryWrite(true)
+            }
+            await Node.RefreshStatusAsync(ct)
+            if state == WalletState.Unlocked {
+                await RefreshCoreAsync(ct)
             }
         } finally {
             End(
