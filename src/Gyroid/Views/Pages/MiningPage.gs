@@ -2,7 +2,6 @@ package Gyroid.Views
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Gyroid.Components
 import Gyroid.Components.LayoutParts
@@ -79,23 +78,10 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         let ui = input.Ui
         let status = input.History.Status
         let compact = input.Height < 700
-        let card = WalletParts.Card(ui)
-        card.Width = Percent(100)
-        card.BorderRadius = AppTheme.Radius14
-        card.Padding = if compact {
-            Edges{Top: AppTheme.Space14, Bottom: AppTheme.Space14, Left: AppTheme.Space16, Right: AppTheme.Space16}
-        } else {
-            Edges{Top: AppTheme.Space16, Bottom: AppTheme.Space16, Left: AppTheme.Space22, Right: AppTheme.Space22}
-        }
-        card.Gap = compact ? AppTheme.Space10: AppTheme.Space12
-        let head = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: AppTheme.Space10,
-            MinHeight: 34,
-            FlexShrink: 0,
+        let card = WalletParts.PageCard(ui, height: input.Height, maxWidth: 1180, fill: true)
+        let head = WalletParts.Header(
             Label(ui, ui.Strings.Get("mining"), AppTheme.Type17, AppTheme.Ink, ""),
-            Container{FlexGrow: 1},
+            AppTheme.Space10,
             Cell.Mount[InfoTipInput, InfoTip](
                 "about",
                 InfoTipInput{
@@ -110,7 +96,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     Width: 300
                 }
             )
-        }
+        )
+        head.MinHeight = 34
         card.Add(head)
         if unavailable || !input.Session.Node.Status.Running {
             card.MaxWidth = 620
@@ -153,17 +140,13 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                 AlignItems: AlignItems.FlexEnd,
                 Gap: AppTheme.Space8,
                 FlexShrink: 0,
-                Cell.Mount[DecodeValueInput, DecodeValue](
+                TextParts.Value(
+                    ui,
                     "rate",
-                    DecodeValueInput{
-                        Value: text,
-                        Name: ui.Strings.Get("hashrate") + " " + text + " H/s",
-                        Size: AppTheme.GetMajorFigureSize(input.Height),
-                        Color: AppTheme.Ink,
-                        FractionColor: AppTheme.Ink,
-                        Live: AccessibilityLive.Off,
-                        Ui: ui
-                    }
+                    ui.Strings.Get("hashrate") + " " + text + " H/s",
+                    text,
+                    AppTheme.GetMajorFigureSize(input.Height),
+                    AppTheme.Ink
                 ),
                 Container{Padding: Edges{Bottom: AppTheme.Space4}, Label(ui, "H/s", AppTheme.Type16, AppTheme.Body, "")}
             }
@@ -178,11 +161,18 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             FlexShrink: 0
         }
         let size = compact ? AppTheme.Type14: AppTheme.Type16
-        stats.Add(Reading(ui, "threads", status.Threads.ToString(), size))
-        stats.Add(Reading(ui, "hashes", Count(status.Hashes), size))
-        stats.Add(Reading(ui, "blocks found", Count(status.Blocks), size))
+        stats.Add(TextParts.Figure(ui, "threads", status.Threads.ToString(), "", size, AppTheme.Ink))
+        stats.Add(TextParts.Figure(ui, "hashes", Count(status.Hashes), "", size, AppTheme.Ink))
+        stats.Add(TextParts.Figure(ui, "blocks found", Count(status.Blocks), "", size, AppTheme.Ink))
         stats.Add(
-            Reading(ui, "since", status.Started.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture), size)
+            TextParts.Figure(
+                ui,
+                "since",
+                status.Started.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture),
+                "",
+                size,
+                AppTheme.Ink
+            )
         )
         card.Add(stats)
         return Container{FlexGrow: 1, MinHeight: 0, AlignItems: AlignItems.Center, card}
@@ -328,22 +318,22 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                                 ""
                             )
                         ),
-                        WalletParts.Square(
+                        ControlParts.Icon(
                             ui,
-                            "chevron_left",
+                            MaterialIcons.Create(
+                                "chevron_left",
+                                AppTheme.Icon14,
+                                threads > 1 ? AppTheme.Ink: AppTheme.Dim
+                            ),
                             ui.Strings.Get("Fewer threads"),
-                            false,
-                            threads <= 1 || input.Busy,
                             () -> Act(input, ct -> input.Session.Mining.SetThreadsAsync(threads - 1, ct)),
-                            AppTheme.ControlCompact,
-                            radius: AppTheme.Radius8,
-                            iconSize: AppTheme.Icon14,
-                            iconColor: threads > 1 ? AppTheme.Ink: AppTheme.Dim,
-                            shrink: 1
+                            threads <= 1 || input.Busy,
+                            size: AppTheme.ControlCompact
                         ),
                         Container{
                             MinWidth: 22,
                             AlignItems: AlignItems.Center,
+                            Accessibility: Accessibility{Name: ui.Strings.Get("threads") + " " + threads.ToString()},
                             Label(
                                 ui,
                                 if threads > 0 {
@@ -356,18 +346,17 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                                 ""
                             )
                         },
-                        WalletParts.Square(
+                        ControlParts.Icon(
                             ui,
-                            "chevron_right",
+                            MaterialIcons.Create(
+                                "chevron_right",
+                                AppTheme.Icon14,
+                                threads > 0 && threads < cores ? AppTheme.Ink: AppTheme.Dim
+                            ),
                             ui.Strings.Get("More threads"),
-                            false,
-                            threads <= 0 || threads >= cores || input.Busy,
                             () -> Act(input, ct -> input.Session.Mining.SetThreadsAsync(threads + 1, ct)),
-                            AppTheme.ControlCompact,
-                            radius: AppTheme.Radius8,
-                            iconSize: AppTheme.Icon14,
-                            iconColor: threads > 0 && threads < cores ? AppTheme.Ink: AppTheme.Dim,
-                            shrink: 1
+                            threads <= 0 || threads >= cores || input.Busy,
+                            size: AppTheme.ControlCompact
                         )
                     }
                 ),
@@ -401,7 +390,6 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                         )
                     }
                 ),
-                Row(ui, wide, "miner", Label(ui, "blocknet-core", AppTheme.Type13, AppTheme.Ink, ""))
             },
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -418,18 +406,8 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         }
     }
 
-    private func Row(ui Presentation, wide bool, label string, value Blob) Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        Gap: AppTheme.Space14,
-        MinHeight: 26,
-        Container{
-            Width: wide ? 110.0: 90.0,
-            FlexShrink: 0,
-            Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Dim, "")
-        },
-        Grow(value)
-    }
+    private func Row(ui Presentation, wide bool, label string, value Blob) Blob ->
+    TextParts.KeyValue(ui, ui.Strings.Get(label), value, labelWidth: wide ? 110.0: 90.0)
 
     private func Command(
         input MiningPageInput,
@@ -438,52 +416,20 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         color Color,
         border Color,
         action Action
-    ) Blob {
-        let ui = input.Ui
-        let tint = input.Busy ? Color.Transparent: color
-        let button = Goo
-            .Button{
-            BasedOn: AppTheme.ButtonStyle,
-            FlexShrink: 0,
-            FontSize: AppTheme.Type13,
-            BorderColor: border,
-            Disabled: input.Busy,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
-            OnClick: action,
-            MaterialIcons.Create(icon, AppTheme.Icon14, tint),
-            Label(ui, ui.Strings.Get(label), AppTheme.Type13, tint, "")
+    ) Blob -> ControlParts
+        .Button(
+        input.Ui,
+        label,
+        action,
+        busy: input.Busy,
+        appearance: AppTheme.Button with{
+            FontSize = AppTheme.Type13,
+            BorderColor = border,
+            TextColor = color,
+            HoverBackgroundColor = AppTheme.Rule,
+            Leading = MaterialIcons.Create(icon, AppTheme.Icon14, color)
         }
-        WidgetKeyBindings.BindActivation(button)
-        if input.Busy {
-            button.Add(
-                Container{
-                    Position: PositionType.Absolute,
-                    Left: 0,
-                    Right: 0,
-                    Top: 0,
-                    Bottom: 0,
-                    AlignItems: AlignItems.Center,
-                    JustifyContent: JustifyContent.Center,
-                    Cell.Mount[SpinnerInput, Spinner](
-                        "busy",
-                        SpinnerInput{Size: 20, StrokeWidth: AppTheme.Stroke3, Color: color}
-                    )
-                }
-            )
-        }
-        return button
-    }
-
-    private func Reading(ui Presentation, label string, value string, size float64) Blob -> Container{
-        FlexGrow: 1,
-        FlexBasis: 0,
-        MinWidth: 0,
-        Gap: AppTheme.Space4,
-        Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Dim, ""),
-        Label(ui, value, size, AppTheme.Ink, "")
-    }
+    )
 
     private func Chart(input MiningPageInput) Blob {
         let ui = input.Ui
@@ -567,7 +513,13 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     VectorEffect: VectorEffect.NonScalingStroke
                 }
             )
-            area.Add(Dot(1, 1 - samples[samples.Count - 1].Rate / top, AppTheme.Lime))
+            area.Add(
+                ChartParts.Point(
+                    Percent(100),
+                    Percent((1 - samples[samples.Count - 1].Rate / top) * 100),
+                    AppTheme.Lime
+                )
+            )
             if hover >= 0 && hover < samples.Count {
                 let sample = samples[hover]
                 let x = (sample.Time - first).TotalSeconds / span
@@ -582,32 +534,28 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                         BackgroundColor: AppTheme.StrongRule
                     }
                 )
-                area.Add(Dot(x, y, AppTheme.Ink))
-                let tip = Container{
-                    BasedOn: AppTheme.PassiveTooltipStyle,
-                    Position: PositionType.Absolute,
-                    Top: Percent(y * 100),
-                    Margin: Edges{Top: -44},
-                    Label(
-                        ui,
-                        sample.Time.ToString(format, CultureInfo.InvariantCulture) + " · " + sample.Rate.ToString(
-                            "F1",
-                            CultureInfo.InvariantCulture
-                        ) +
-                            " H/s",
-                        AppTheme.Type12,
-                        AppTheme.Ink,
-                        ""
+                area.Add(ChartParts.Point(Percent(x * 100), Percent(y * 100), AppTheme.Ink))
+                area.Add(
+                    ChartParts.Tooltip(
+                        Percent(x * 100),
+                        Percent(y * 100),
+                        Label(
+                            ui,
+                            sample.Time.ToString(format, CultureInfo.InvariantCulture) + " · " + sample.Rate.ToString(
+                                "F1",
+                                CultureInfo.InvariantCulture
+                            ) +
+                                " H/s",
+                            AppTheme.Type12,
+                            AppTheme.Ink,
+                            ""
+                        ),
+                        right: x > 0.75 ? Percent((1 - x) * 100): nil,
+                        margin: x > 0.75
+                        ? Edges{Top: -44, Right: AppTheme.Space12}
+                        : Edges{Top: -44, Left: AppTheme.Space12}
                     )
-                }
-                if x > 0.75 {
-                    tip.Right = Percent((1 - x) * 100)
-                    tip.Margin = Edges{Top: -44, Right: AppTheme.Space12}
-                } else {
-                    tip.Left = Percent(x * 100)
-                    tip.Margin = Edges{Top: -44, Left: AppTheme.Space12}
-                }
-                area.Add(tip)
+                )
             }
             for step in 0 ... 5 {
                 labels.Add(Tick(ui, first.AddSeconds(span * step / 4).ToString(format, CultureInfo.InvariantCulture)))
@@ -647,16 +595,6 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             hover = nearest
             Rebuild()
         }
-    }
-
-    private func Dot(x float64, y float64, color Color) Blob -> Container{
-        BasedOn: AppTheme.MarkerStyle,
-        Position: PositionType.Absolute,
-        Left: Percent(x * 100),
-        Top: Percent(y * 100),
-        Margin: Edges{Left: -4, Top: -4},
-        BorderRadius: AppTheme.Radius4,
-        BackgroundColor: color
     }
 
     private func Tick(ui Presentation, text string) Blob -> Text{
