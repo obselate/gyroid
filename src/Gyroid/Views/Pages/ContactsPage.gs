@@ -106,7 +106,7 @@ class ContactsPage : Cell[ContactsInput] {
         let ui = input.Ui
         return Container{
             BasedOn: AppTheme.ListRowStyle,
-            Key: label,
+            Key: "contact-row-" + label,
             Height: 48,
             FlexShrink: 0,
             Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space8},
