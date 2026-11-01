@@ -22,14 +22,14 @@ class InfoTip : Cell[InfoTipInput] {
 
     protected override func Build(input InfoTipInput) Blob {
         let ui = input.Ui
-        let lines = Container{Gap: 8}
+        let lines = Container{Gap: AppTheme.Space8}
         for line in input.Lines {
             lines.Add(
                 Text{
                     Content: ui.Strings.Get(line),
-                    FontFamily: ui.Font,
-                    FontSize: 12.5,
-                    Color: ui.Body,
+                    FontFamily: AppTheme.Font,
+                    FontSize: AppTheme.Type13,
+                    Color: AppTheme.Body,
                     TextWrap: TextWrap.Wrap
                 }
             )
@@ -37,14 +37,16 @@ class InfoTip : Cell[InfoTipInput] {
         return Container{
             Handle: anchor,
             FlexShrink: 0,
-            IconButton{
-                Icon: MaterialIcons.Create("info", 16, visible ? ui.Ink: ui.Body),
-                AccessibilityName: ui.Strings.Get(input.Topic),
-                OnClick: () -> {
-                    visible = !visible
-                    Rebuild()
+            (
+                AppTheme.IconButton with{
+                    Icon = MaterialIcons.Create("info", AppTheme.Icon16, visible ? AppTheme.Ink: AppTheme.Body),
+                    AccessibilityName = ui.Strings.Get(input.Topic),
+                    OnClick = () -> {
+                        visible = !visible
+                        Rebuild()
+                    }
                 }
-            }.Build(),
+            ).Build(),
             Cell.Mount[PopoverInput, Popover](
                 "tip",
                 PopoverInput{
@@ -52,7 +54,10 @@ class InfoTip : Cell[InfoTipInput] {
                     Anchor: anchor,
                     Placement: PopoverPlacement.BottomEnd,
                     Width: input.Width,
-                    Padding: 14,
+                    Padding: AppTheme.Space14,
+                    BackgroundColor: AppTheme.Raised,
+                    BorderColor: AppTheme.Edge,
+                    CreatePanel: (value, bounds, content) -> Container{BasedOn: AppTheme.InformationCardStyle,},
                     Content: lines,
                     AccessibilityName: ui.Strings.Get(input.Topic),
                     OnDismiss: reason -> {

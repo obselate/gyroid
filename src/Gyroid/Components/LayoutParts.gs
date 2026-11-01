@@ -12,11 +12,12 @@ import System.Globalization
 class LayoutParts {
     shared {
         func BarSegment(share float64, color Color, height float64 = 8, minWidth float64 = 3) Container -> Container{
+            BasedOn: AppTheme.TrackStyle,
             FlexGrow: share,
             FlexBasis: 0,
             MinWidth: minWidth,
             Height: height,
-            BorderRadius: 2,
+            BorderRadius: AppTheme.Radius2,
             BackgroundColor: color
         }
 
@@ -40,9 +41,9 @@ class LayoutParts {
         }
 
         func Accent(color Color, content Blob) Blob -> Container{
-            BorderWidth: Edges{Left: 3},
+            BorderWidth: Edges{Left: AppTheme.Border3},
             BorderColor: color,
-            Padding: Edges{Left: 12},
+            Padding: Edges{Left: AppTheme.Space12},
             MinWidth: 0,
             content
         }
@@ -51,7 +52,7 @@ class LayoutParts {
             let row = Container{
                 FlexDirection: FlexDirection.Row,
                 JustifyContent: JustifyContent.FlexEnd,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 FlexShrink: 0
             }
             for child in children {
@@ -95,8 +96,8 @@ class LayoutParts {
                     Position: PositionType.Absolute,
                     Width: now,
                     Height: 8,
-                    BorderRadius: 2,
-                    BackgroundColor: ui.Lime
+                    BorderRadius: AppTheme.Radius2,
+                    BackgroundColor: AppTheme.Lime
                 }
             }
             if upgrade > now {
@@ -115,7 +116,7 @@ class LayoutParts {
                         Height: 8,
                         Path: dashes.Build(),
                         Fit: ShapeFit.Fill,
-                        BackgroundColor: ui.Orange
+                        BackgroundColor: AppTheme.Orange
                     }
                 )
             }
@@ -131,15 +132,15 @@ class LayoutParts {
                     Left: upgrade,
                     Width: span - upgrade,
                     Height: 8,
-                    BorderRadius: 2,
+                    BorderRadius: AppTheme.Radius2,
                     Overflow: Overflow.Hidden,
-                    BackgroundColor: Color.Parse("#3a0026"),
+                    BackgroundColor: AppTheme.UpgradeDangerFill,
                     Shape{
                         Width: span - upgrade,
                         Height: 8,
                         Path: stripes.Build(),
                         Fit: ShapeFit.Fill,
-                        BackgroundColor: ui.Pink
+                        BackgroundColor: AppTheme.Pink
                     }
                 }
             )
@@ -150,7 +151,7 @@ class LayoutParts {
                     Top: -5,
                     Width: 2,
                     Height: 18,
-                    BackgroundColor: ui.Lime
+                    BackgroundColor: AppTheme.Lime
                 }
             )
             bar.Add(
@@ -160,7 +161,7 @@ class LayoutParts {
                     Top: -5,
                     Width: 2,
                     Height: 18,
-                    BackgroundColor: ui.Orange
+                    BackgroundColor: AppTheme.Orange
                 }
             )
             return bar

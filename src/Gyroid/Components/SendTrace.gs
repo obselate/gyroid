@@ -131,29 +131,31 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         let filled = int32(confirmations)
         let ticks = Text{
             Content: String('●', filled) + String('○', 10 - filled),
-            StyleRanges: []TextStyleRange{TextStyleRange(TextRange(0, filled), Style{Color: ui.Lime})},
-            FontFamily: ui.Font,
-            FontSize: 13,
-            Color: ui.Dim,
+            StyleRanges: []TextStyleRange{TextStyleRange(TextRange(0, filled), Style{Color: AppTheme.Lime})},
+            FontFamily: AppTheme.Font,
+            FontSize: AppTheme.Type13,
+            Color: AppTheme.Dim,
             TextWrap: TextWrap.NoWrap
         }
         let chain = Label(
             ui,
             status,
-            12,
+            AppTheme.Type12,
             if state == "confirmed" {
-                ui.Lime
+                AppTheme.Lime
             } else {
-                ui.Orange
+                AppTheme.Orange
             },
             ""
         )
-        let txid = Label(ui, Hidden(ui.Privacy, result.TxId.Substring(0, 8)), 12, ui.Ink, "")
-        let close = IconButton{
-            Icon: MaterialIcons.Create("close", 16, ui.Body),
-            AccessibilityName: ui.Strings.Get("Close"),
-            OnClick: input.OnClose
-        }.Build()
+        let txid = Label(ui, Hidden(ui.Privacy, result.TxId.Substring(0, 8)), AppTheme.Type12, AppTheme.Ink, "")
+        let close = (
+            AppTheme.IconButton with{
+                Icon = MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.Body),
+                AccessibilityName = ui.Strings.Get("Close"),
+                OnClick = input.OnClose
+            }
+        ).Build()
         let strip = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: if compact {
@@ -161,21 +163,21 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             } else {
                 AlignItems.FlexStart
             },
-            Gap: 16,
+            Gap: AppTheme.Space16,
             FlexShrink: 0,
             MinWidth: 0,
-            Padding: Edges{Top: 8, Bottom: 8},
-            BorderWidth: Edges{Top: 1, Bottom: 1},
-            BorderColor: ui.Rule,
+            Padding: Edges{Top: AppTheme.Space8, Bottom: AppTheme.Space8},
+            BorderWidth: Edges{Top: AppTheme.Border1, Bottom: AppTheme.Border1},
+            BorderColor: AppTheme.Rule,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Status,
                 Name: ui.Strings.Get("sent") + " " + Amount(ui.Privacy, estimate.Amount) + " BNT " + status
             }
         }
         if compact {
-            strip.Add(Label(ui, "◆", 14, ui.Lime, ""))
+            strip.Add(Label(ui, "◆", AppTheme.Type14, AppTheme.Lime, ""))
             strip.Add(txid)
-            strip.Add(Label(ui, "-" + Amount(ui.Privacy, estimate.Amount), 12, ui.Pink, ""))
+            strip.Add(Label(ui, "-" + Amount(ui.Privacy, estimate.Amount), AppTheme.Type12, AppTheme.Pink, ""))
             strip.Add(chain)
             strip.Add(Grow(ticks))
             strip.Add(close)
@@ -190,12 +192,12 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             } else {
                 ""
             },
-            16,
-            ui.Lime,
+            AppTheme.Type16,
+            AppTheme.Lime,
             ""
         )
-        let ring = Container{Gap: 2, MinWidth: 0, Overflow: Overflow.Hidden}
-        let neon = []Color{ui.Lime, ui.Orange, ui.Pink, ui.Blue, ui.Mint, ui.Violet}
+        let ring = Container{Gap: AppTheme.Space2, MinWidth: 0, Overflow: Overflow.Hidden}
+        let neon = []Color{AppTheme.Lime, AppTheme.Orange, AppTheme.Pink, AppTheme.Blue, AppTheme.Mint, AppTheme.Violet}
         for row in 0 ... Math.Min(inputCount, 3) {
             let digits = Random(result.TxId.GetHashCode() + row)
             let glyphs = StringBuilder()
@@ -210,35 +212,38 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
                 Text{
                     Content: glyphs.ToString(),
                     StyleRanges: tints.ToArray(),
-                    FontFamily: ui.Font,
-                    FontSize: 12,
-                    Color: ui.Dim,
+                    FontFamily: AppTheme.Font,
+                    FontSize: AppTheme.Type12,
+                    Color: AppTheme.Dim,
                     TextWrap: TextWrap.NoWrap
                 }
             )
         }
         if inputCount > 3 {
-            ring.Add(Label(ui, "+" + (inputCount - 3).ToString(), 11, ui.Dim, ""))
+            ring.Add(Label(ui, "+" + (inputCount - 3).ToString(), AppTheme.Type11, AppTheme.Dim, ""))
         }
-        let outputs = Container{Gap: 2, Label(ui, "▶ " + Amount(ui.Privacy, estimate.Amount), 12, ui.Pink, "")}
+        let outputs = Container{
+            Gap: AppTheme.Space2,
+            Label(ui, "▶ " + Amount(ui.Privacy, estimate.Amount), AppTheme.Type12, AppTheme.Pink, "")
+        }
         if result.Change > 0 {
             outputs.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
-                    Gap: 6,
-                    Label(ui, "▶ " + Amount(ui.Privacy, result.Change), 12, ui.Mint, ""),
-                    Label(ui, ui.Strings.Get("change"), 11, ui.Dim, "")
+                    Gap: AppTheme.Space6,
+                    Label(ui, "▶ " + Amount(ui.Privacy, result.Change), AppTheme.Type12, AppTheme.Mint, ""),
+                    Label(ui, ui.Strings.Get("change"), AppTheme.Type11, AppTheme.Dim, "")
                 }
             )
         }
         outputs.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
-                Gap: 6,
+                Gap: AppTheme.Space6,
                 OpacityAnim: fades[3],
                 TranslateAnim: shifts[3],
-                Label(ui, "↘ " + Amount(ui.Privacy, result.Fee), 12, ui.Orange, ""),
-                Label(ui, ui.Strings.Get("Fee"), 11, ui.Dim, "")
+                Label(ui, "↘ " + Amount(ui.Privacy, result.Fee), AppTheme.Type12, AppTheme.Orange, ""),
+                Label(ui, ui.Strings.Get("Fee"), AppTheme.Type11, AppTheme.Dim, "")
             }
         )
         let ringStage = Stage(ui, "ring ×16", 1, ring)
@@ -246,15 +251,21 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         ringStage.MinWidth = 0
         let stages = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: 12,
+            Gap: AppTheme.Space12,
             Stage(
                 ui,
                 "inputs",
                 0,
                 Container{
-                    Gap: 2,
+                    Gap: AppTheme.Space2,
                     coins,
-                    Label(ui, Amount(ui.Privacy, estimate.Amount + result.Fee + result.Change), 12, ui.Body, "")
+                    Label(
+                        ui,
+                        Amount(ui.Privacy, estimate.Amount + result.Fee + result.Change),
+                        AppTheme.Type12,
+                        AppTheme.Body,
+                        ""
+                    )
                 }
             ),
             ringStage,
@@ -266,12 +277,12 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 6,
-                    Container{ScaleAnim: seal, Label(ui, "◆", 16, ui.Lime, "")},
+                    Gap: AppTheme.Space6,
+                    Container{ScaleAnim: seal, Label(ui, "◆", AppTheme.Type16, AppTheme.Lime, "")},
                     txid
                 }
             ),
-            Stage(ui, "broadcast", 5, Container{Gap: 2, chain, ticks})
+            Stage(ui, "broadcast", 5, Container{Gap: AppTheme.Space2, chain, ticks})
         }
         strip.Add(Grow(stages))
         strip.Add(close)
@@ -279,7 +290,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
     }
 
     private func Stage(ui Presentation, label string, stage int32, content Blob) Container -> Container{
-        Gap: 4,
+        Gap: AppTheme.Space4,
         FlexShrink: 0,
         OpacityAnim: fades[stage],
         TranslateAnim: shifts[stage],
@@ -290,8 +301,8 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             } else {
                 ui.Strings.Get(label)
             },
-            11,
-            ui.Dim,
+            AppTheme.Type11,
+            AppTheme.Dim,
             ""
         ),
         content

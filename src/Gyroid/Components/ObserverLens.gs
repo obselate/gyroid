@@ -30,10 +30,6 @@ data struct ObserverLensInput {
 class ObserverLens : Cell[ObserverLensInput] {
     private var view ObserverView?
     private var loading string = ""
-    private let hidden Color = Color.Parse("#1fae84")
-    private let decoy Color = Color.Parse("#3a3a3a")
-    private let member Color = Color.Parse("#00bf80")
-    private let line Color = Color.Parse("#141414")
 
     protected override func Build(input ObserverLensInput) Blob {
         let ui = input.Ui
@@ -59,7 +55,7 @@ class ObserverLens : Cell[ObserverLensInput] {
         let side = compact ? 72.0: 96.0
         let size = view?.RingSize ?? 16
         let content = Container{
-            Gap: 0,
+            Gap: AppTheme.Space0,
             MinHeight: 0,
             FlexShrink: 1,
             OverflowY: Overflow.Scroll,
@@ -70,35 +66,47 @@ class ObserverLens : Cell[ObserverLensInput] {
                 input,
                 side,
                 Container{},
-                Heading(ui, "person", "you", ui.Lime),
+                Heading(ui, "person", "you", AppTheme.Lime),
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Heading(ui, "public", "chain", ui.Mint),
+                    Heading(ui, "public", "chain", AppTheme.Mint),
                     Container{FlexGrow: 1},
-                    Public(ui, ui.Strings.Get("public"), 12)
+                    Public(ui, ui.Strings.Get("public"), AppTheme.Type12)
                 }
             )
         )
-        let yours = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 14}
-        let chain = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: 14}
+        let yours = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: AppTheme.Space14}
+        let chain = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: AppTheme.Space14}
         let rings = view?.Rings ?? []int32{}
         for index in 0 ... Math.Min(rings.Length, 2) {
             yours.Add(Ring(size, rings[index], false, compact))
             chain.Add(Ring(size, -1, true, compact))
         }
         if rings.Length > 2 {
-            yours.Add(Label(ui, "+" + (rings.Length - 2).ToString(), 13, ui.Dim, ""))
-            chain.Add(Label(ui, "+" + (rings.Length - 2).ToString(), 13, ui.Dim, ""))
+            yours.Add(Label(ui, "+" + (rings.Length - 2).ToString(), AppTheme.Type13, AppTheme.Dim, ""))
+            chain.Add(Label(ui, "+" + (rings.Length - 2).ToString(), AppTheme.Type13, AppTheme.Dim, ""))
         }
         yours.Add(
-            Label(ui, ui.Strings.Get(rings.Any((index int32) -> index < 0) ? "unknown": "yours"), 13, ui.Lime, "")
+            Label(
+                ui,
+                ui.Strings.Get(rings.Any((index int32) -> index < 0) ? "unknown": "yours"),
+                AppTheme.Type13,
+                AppTheme.Lime,
+                ""
+            )
         )
-        chain.Add(Label(ui, String.Format(ui.Strings.Get("1 of {0}"), size), 13, ui.Mint, ""))
-        let ringRow = Columns(input, side, Label(ui, ui.Strings.Get("inputs"), 12.5, ui.Dim, ""), yours, chain)
-        ringRow.Padding = Edges{Top: 6, Bottom: 10}
-        ringRow.BorderWidth = Edges{Bottom: 1}
-        ringRow.BorderColor = ui.Rule
+        chain.Add(Label(ui, String.Format(ui.Strings.Get("1 of {0}"), size), AppTheme.Type13, AppTheme.Mint, ""))
+        let ringRow = Columns(
+            input,
+            side,
+            Label(ui, ui.Strings.Get("inputs"), AppTheme.Type13, AppTheme.Dim, ""),
+            yours,
+            chain
+        )
+        ringRow.Padding = Edges{Top: AppTheme.Space6, Bottom: AppTheme.Space10}
+        ringRow.BorderWidth = Edges{Bottom: AppTheme.Border1}
+        ringRow.BorderColor = AppTheme.Rule
         content.Add(ringRow)
         let fee = Amount(ui.Privacy, send.Fee) + " BNT"
         let height = if let value = view {
@@ -111,7 +119,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 input,
                 side,
                 "amount",
-                Label(ui, "−" + Amount(ui.Privacy, send.Amount) + " BNT", 14, ui.Ink, ""),
+                Label(ui, "−" + Amount(ui.Privacy, send.Amount) + " BNT", AppTheme.Type14, AppTheme.Ink, ""),
                 Hidden(ui, "lock", Short(view?.Commitment ?? ""))
             )
         )
@@ -122,10 +130,10 @@ class ObserverLens : Cell[ObserverLensInput] {
                 "to",
                 Container{
                     FlexDirection: FlexDirection.Row,
-                    Gap: 8,
+                    Gap: AppTheme.Space8,
                     MinWidth: 0,
-                    Label(ui, WalletText.Hidden(ui.Privacy, input.Recipient), 14, ui.Ink, ""),
-                    Label(ui, ui.Strings.Get("+ change"), 14, ui.Dim, "")
+                    Label(ui, WalletText.Hidden(ui.Privacy, input.Recipient), AppTheme.Type14, AppTheme.Ink, ""),
+                    Label(ui, ui.Strings.Get("+ change"), AppTheme.Type14, AppTheme.Dim, "")
                 },
                 Hidden(
                     ui,
@@ -144,7 +152,13 @@ class ObserverLens : Cell[ObserverLensInput] {
                 input,
                 side,
                 "memo",
-                Label(ui, memo.Length > 0 ? WalletText.Hidden(ui.Privacy, memo): "—", 14, ui.Ink, ""),
+                Label(
+                    ui,
+                    memo.Length > 0 ? WalletText.Hidden(ui.Privacy, memo): "—",
+                    AppTheme.Type14,
+                    AppTheme.Ink,
+                    ""
+                ),
                 Hidden(
                     ui,
                     "lock",
@@ -156,33 +170,41 @@ class ObserverLens : Cell[ObserverLensInput] {
                 )
             )
         )
-        content.Add(Item(input, side, "fee", Label(ui, fee, 14, ui.Ink, ""), Public(ui, fee, 14)))
+        content.Add(
+            Item(
+                input,
+                side,
+                "fee",
+                Label(ui, fee, AppTheme.Type14, AppTheme.Ink, ""),
+                Public(ui, fee, AppTheme.Type14)
+            )
+        )
         content.Add(
             Item(
                 input,
                 side,
                 "block",
-                Label(ui, height > 0 ? Count(height): "—", 14, ui.Ink, ""),
-                height > 0 ? Public(ui, Count(height), 14): Container{}
+                Label(ui, height > 0 ? Count(height): "—", AppTheme.Type14, AppTheme.Ink, ""),
+                height > 0 ? Public(ui, Count(height), AppTheme.Type14): Container{}
             )
         )
         let confirmed = send.Status == "confirmed"
         return Cell.Mount[ModalDialog, ModalDialogHost](
             "lens",
-            ModalDialog{
-                Open: true,
-                CreateRoot: (dialog, backdrop, panel) -> DialogRoot(ui),
-                AccessibilityName: ui.Strings.Get("sent"),
-                Width: Math.Min(input.Width - 40, 780),
-                Header: Container{
+            AppTheme.Dialog with{
+                Open = true,
+                CreateRoot = (dialog, backdrop, panel) -> DialogRoot(ui),
+                AccessibilityName = ui.Strings.Get("sent"),
+                Width = Math.Min(input.Width - 40, 780),
+                Header = Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 12,
-                    Label(ui, ui.Strings.Get("sent"), 17, ui.Ink, ""),
+                    Gap: AppTheme.Space12,
+                    Label(ui, ui.Strings.Get("sent"), AppTheme.Type17, AppTheme.Ink, ""),
                     Status(
                         ui,
                         ChainState(ui, send.Status, send.Confirmations),
-                        confirmed ? ui.Mint: ui.Orange,
+                        confirmed ? AppTheme.Mint: AppTheme.Orange,
                         confirmed ? "check": "schedule"
                     ),
                     Container{FlexGrow: 1},
@@ -205,15 +227,15 @@ class ObserverLens : Cell[ObserverLensInput] {
                         }
                     )
                 },
-                Content: content,
-                Footer: ActionRow(
+                Content = content,
+                Footer = ActionRow(
                     []Blob{
                         Button(ui, "Prove", input.OnProve, ui.Working() || !confirmed),
                         Button(ui, "Close", input.OnClose)
                     }
                 ),
-                OnCancel: input.OnClose,
-                OnClose: input.OnClose
+                OnCancel = input.OnClose,
+                OnClose = input.OnClose
             }
         )
     }
@@ -227,32 +249,32 @@ class ObserverLens : Cell[ObserverLensInput] {
     private func Heading(ui Presentation, icon string, label string, color Color) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Center,
-        Gap: 8,
-        MaterialIcons.Create(icon, 16, color),
-        Label(ui, ui.Strings.Get(label), 13, color, "")
+        Gap: AppTheme.Space8,
+        MaterialIcons.Create(icon, AppTheme.Icon16, color),
+        Label(ui, ui.Strings.Get(label), AppTheme.Type13, color, "")
     }
 
     private func Hidden(ui Presentation, icon string, value string) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Center,
-        Gap: 6,
+        Gap: AppTheme.Space6,
         MinWidth: 0,
-        MaterialIcons.Create(icon, 14, hidden),
-        Label(ui, value, 14, hidden, "")
+        MaterialIcons.Create(icon, AppTheme.Icon14, AppTheme.PrivateValue),
+        Label(ui, value, AppTheme.Type14, AppTheme.PrivateValue, "")
     }
 
     private func Public(ui Presentation, value string, size float64) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Center,
-        Gap: 6,
+        Gap: AppTheme.Space6,
         MinWidth: 0,
-        Container{Width: 6, Height: 6, BorderRadius: 3, BackgroundColor: ui.Orange},
-        Label(ui, value, size, ui.Orange, "")
+        Container{BasedOn: AppTheme.PresenceStyle, BackgroundColor: AppTheme.Orange},
+        Label(ui, value, size, AppTheme.Orange, "")
     }
 
     private func Columns(input ObserverLensInput, side float64, label Blob, you Blob, chain Blob) Container {
         let ui = input.Ui
-        let padding = input.Width < 1100 ? 10.0: 14.0
+        let padding = AppTheme.GetColumnPadding(input.Width)
         return Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Stretch,
@@ -272,18 +294,24 @@ class ObserverLens : Cell[ObserverLensInput] {
                 MinWidth: 0,
                 JustifyContent: JustifyContent.Center,
                 Padding: Edges{Left: padding, Right: padding},
-                BorderWidth: Edges{Left: 1},
-                BorderColor: ui.Rule,
+                BorderWidth: Edges{Left: AppTheme.Border1},
+                BorderColor: AppTheme.Rule,
                 chain
             }
         }
     }
 
     private func Item(input ObserverLensInput, side float64, label string, you Blob, chain Blob) Blob {
-        let row = Columns(input, side, Label(input.Ui, input.Ui.Strings.Get(label), 12.5, input.Ui.Dim, ""), you, chain)
+        let row = Columns(
+            input,
+            side,
+            Label(input.Ui, input.Ui.Strings.Get(label), AppTheme.Type13, AppTheme.Dim, ""),
+            you,
+            chain
+        )
         row.MinHeight = input.Width < 1100 ? 36.0: 42.0
-        row.BorderWidth = Edges{Bottom: 1}
-        row.BorderColor = line
+        row.BorderWidth = Edges{Bottom: AppTheme.Border1}
+        row.BorderColor = AppTheme.FaintRule
         return row
     }
 
@@ -303,11 +331,11 @@ class ObserverLens : Cell[ObserverLensInput] {
                     Height: dot * 2,
                     BorderRadius: dot,
                     BackgroundColor: if chain {
-                        member
+                        AppTheme.RealMember
                     } else if index == real {
-                        Color.Parse("#aaff00")
+                        AppTheme.Lime
                     } else {
-                        decoy
+                        AppTheme.StrongRule
                     }
                 }
             )

@@ -81,18 +81,24 @@ class MessageBubble : Cell[MessageBubbleInput] {
         }
         let invalid = message.Verification == Verification.Invalid
         let verification = message.Verification.ToString()
-        let color = invalid ? ui.Pink: message.Verification == Verification.Unverified ? ui.Orange: ui.Dim
+        let color = invalid ? AppTheme.Pink: message.Verification == Verification.Unverified ? AppTheme.Orange: AppTheme.Dim
         let time = (message.Outgoing ? message.SentAt: message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString(
             "HH:mm"
         )
         let delivered = message.State == MessageState.Confirmed && message.Confirmations > 0
-        let statusColor = message.Outgoing ? ui.Black.WithAlpha(0.9): ui.Body
+        let statusColor = message.Outgoing ? AppTheme.Black.WithAlpha(0.9): AppTheme.Body
         let metadata = Container{
             FlexDirection: FlexDirection.Row,
             JustifyContent: JustifyContent.FlexEnd,
             AlignItems: AlignItems.Center,
-            Gap: 4,
-            Text{Content: time, FontFamily: ui.Font, FontSize: 11, FontWeight: 700, Color: statusColor}
+            Gap: AppTheme.Space4,
+            Text{
+                Content: time,
+                FontFamily: AppTheme.Font,
+                FontSize: AppTheme.Type11,
+                FontWeight: AppTheme.WeightBold,
+                Color: statusColor
+            }
         }
         if message.Outgoing && message.State != MessageState.Failed {
             let tip = delivered ? ui
@@ -114,15 +120,15 @@ class MessageBubble : Cell[MessageBubbleInput] {
                             Accessibility: Accessibility{Role: AccessibilityRole.Text, Name: tip},
                             MaterialIcons.Create(
                                 delivered ? "done_all": message.State == MessageState.InProgress ? "schedule": "done",
-                                13,
+                                AppTheme.Icon16,
                                 statusColor
                             )
                         },
                         Content: Text{
                             Content: tip,
-                            FontFamily: ui.Font,
-                            FontSize: 12,
-                            Color: ui.Body,
+                            FontFamily: AppTheme.Font,
+                            FontSize: AppTheme.Type12,
+                            Color: AppTheme.Body,
                             TextWrap: TextWrap.Wrap,
                             MaxWidth: 246
                         }
@@ -134,28 +140,25 @@ class MessageBubble : Cell[MessageBubbleInput] {
             Handle: input.Handle,
             FlexShrink: 0,
             MinWidth: 0,
-            Gap: 3,
-            Margin: Edges{Top: input.First ? 12.0: 2.0},
+            Gap: AppTheme.Space4,
+            Margin: Edges{Top: input.First ? AppTheme.Space12: AppTheme.Space2},
             AlignItems: message.Outgoing ? AlignItems.FlexEnd: AlignItems.FlexStart,
             TranslateAnim: shift
         }
         if input.Group && input.First && !message.Outgoing {
-            column.Add(Label(ui, Hidden(ui.Privacy, message.SenderName), 11, color, ""))
+            column.Add(Label(ui, Hidden(ui.Privacy, message.SenderName), AppTheme.Type11, color, ""))
         }
         let bubble = Goo
             .Button{
+            BasedOn: AppTheme.BubbleStyle,
             MaxWidth: Percent(70),
             MinWidth: 0,
-            FlexDirection: FlexDirection.Column,
-            AlignItems: AlignItems.Stretch,
-            Padding: Edges{Left: 13, Right: 13, Top: 9, Bottom: 9},
-            BorderRadius: 18,
             BorderBottomLeftRadius: input.Last && !message.Outgoing ? 4.0: 18.0,
             BorderBottomRightRadius: input.Last && message.Outgoing ? 4.0: 18.0,
-            BorderWidth: invalid || input.Highlight ? 2.0: 0.0,
-            BorderColor: invalid ? ui.Pink: ui.Blue,
-            BackgroundColor: message.Outgoing ? ui.Lime: ui.Rule,
-            Gap: 4,
+            BorderWidth: invalid || input.Highlight ? AppTheme.Border2: AppTheme.Border0,
+            BorderColor: invalid ? AppTheme.Pink: AppTheme.Blue,
+            BackgroundColor: message.Outgoing ? AppTheme.Lime: AppTheme.Rule,
+            Gap: AppTheme.Space4,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -164,9 +167,9 @@ class MessageBubble : Cell[MessageBubbleInput] {
             OnClick: input.OnOpen,
             Text{
                 Content: Hidden(ui.Privacy, message.Text),
-                FontFamily: ui.Font,
-                FontSize: 13,
-                Color: message.Outgoing ? ui.Black: ui.Ink,
+                FontFamily: AppTheme.Font,
+                FontSize: AppTheme.Type13,
+                Color: message.Outgoing ? AppTheme.Black: AppTheme.Ink,
                 TextWrap: TextWrap.Wrap,
                 MinWidth: 0
             },
@@ -175,15 +178,15 @@ class MessageBubble : Cell[MessageBubbleInput] {
         WidgetKeyBindings.BindActivation(bubble)
         column.Add(bubble)
         if !message.Outgoing && message.Verification != Verification.Verified && (!input.Group || input.First) {
-            column.Add(Label(ui, ui.Strings.Get(verification), 10, color, ""))
+            column.Add(Label(ui, ui.Strings.Get(verification), AppTheme.Type10, color, ""))
         }
         if message.State == MessageState.Failed {
             column.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 8,
-                    Label(ui, ui.Strings.Get("Not sent"), 11, ui.Pink, ""),
+                    Gap: AppTheme.Space8,
+                    Label(ui, ui.Strings.Get("Not sent"), AppTheme.Type11, AppTheme.Pink, ""),
                     Button(ui, "Retry", input.OnRetry, !input.CanRetry)
                 }
             )
@@ -260,7 +263,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         let recipient = input.Conversation.Members.Any(member -> member != input.Session.Messages.OwnAddress)
         if mode != MessengerMode.Send || !recipient {
             return Container{
-                Padding: 14,
+                Padding: AppTheme.Space14,
                 FlexShrink: 0,
                 Label(
                     ui,
@@ -273,8 +276,8 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                             .Snapshot
                             .ViewOnly ? "View-only wallet": !recipient ? "No recipient": "Node not connected"
                     ),
-                    12,
-                    ui.Dim,
+                    AppTheme.Type12,
+                    AppTheme.Dim,
                     ""
                 )
             }
@@ -306,14 +309,9 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
             5
         )
         let field = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.FlexEnd,
-            Padding: 5,
-            Gap: 6,
-            BorderWidth: 1,
-            BorderRadius: 12,
-            BorderColor: estimate.Fits ? ui.Edge: ui.Pink,
-            BackgroundColor: ui.Black,
+            BasedOn: AppTheme.ComposerStyle,
+            BorderColor: estimate.Fits ? AppTheme.Edge: AppTheme.Pink,
+            BackgroundColor: AppTheme.Black,
             Container{
                 FlexGrow: 1,
                 FlexBasis: 0,
@@ -330,13 +328,18 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                         Height: rows * 19.0 + 14,
                         MinimumRows: 1,
                         MinimumHeight: 33,
-                        FontSize: 13,
-                        FontFamily: ui.Font,
-                        BackgroundColor: ui.Black,
-                        TextColor: ui.Ink,
+                        FontSize: AppTheme.Type13,
+                        FontFamily: AppTheme.Font,
+                        BackgroundColor: AppTheme.Black,
+                        TextColor: AppTheme.Ink,
                         CreateEditor: (value, editor) -> {
-                            editor.BorderWidth = 0
-                            editor.Padding = Edges{Left: 8, Right: 4, Top: 7, Bottom: 7}
+                            editor.BorderWidth = AppTheme.Border0
+                            editor.Padding = Edges{
+                                Left: AppTheme.Space8,
+                                Right: AppTheme.Space4,
+                                Top: AppTheme.Space8,
+                                Bottom: AppTheme.Space8
+                            }
                             editor.KeyBindings = []KeyBinding{
                                 KeyBinding{Key: Key.Enter, Action: send},
                                 KeyBinding{Key: Key.KeypadEnter, Action: send}
@@ -349,12 +352,11 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         }
         let button = Goo
             .Button{
-            Width: 34,
-            Height: 34,
+            BasedOn: AppTheme.IconButtonStyle,
             FlexShrink: 0,
-            BorderRadius: 8,
+            BorderRadius: AppTheme.Radius8,
             Overflow: Overflow.Hidden,
-            BackgroundColor: ui.Rule,
+            BackgroundColor: AppTheme.Rule,
             Disabled: !enabled || sending,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Send message")},
@@ -365,7 +367,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 Right: 0,
                 Top: 0,
                 Bottom: 0,
-                BackgroundColor: estimate.Fits ? ui.Lime: ui.Pink,
+                BackgroundColor: estimate.Fits ? AppTheme.Lime: AppTheme.Pink,
                 OpacityAnim: fill
             },
             Container{
@@ -373,7 +375,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 Left: 8,
                 Top: 8,
                 TranslateAnim: arrow,
-                MaterialIcons.Create("arrow_upward", 18, ui.Black)
+                MaterialIcons.Create("arrow_upward", AppTheme.Icon18, AppTheme.Black)
             }
         }
         WidgetKeyBindings.BindActivation(button)
@@ -385,37 +387,41 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         let bytes = estimate.BytesUsed / recipients
         let lap = Math.Clamp((Math.Max(1, bytes) - 1) / 124, 0, 4)
         let color = switch lap {
-            case 0: ui.Lime
-            case 1: ui.Blue
-            case 2: ui.Mint
-            case 3: ui.Violet
-            default: ui.Orange
+            case 0: AppTheme.Lime
+            case 1: AppTheme.Blue
+            case 2: AppTheme.Mint
+            case 3: AppTheme.Violet
+            default: AppTheme.Orange
         }
         let track = switch lap {
-            case 0: ui.Rule
-            case 1: ui.Lime
-            case 2: ui.Blue
-            case 3: ui.Mint
-            default: ui.Violet
+            case 0: AppTheme.Rule
+            case 1: AppTheme.Lime
+            case 2: AppTheme.Blue
+            case 3: AppTheme.Mint
+            default: AppTheme.Violet
         }
-        let ring = Ring((bytes - lap * 124) / 124.0, estimate.Fits ? color: ui.Pink, estimate.Fits ? track: ui.Pink)
+        let ring = Ring(
+            (bytes - lap * 124) / 124.0,
+            estimate.Fits ? color: AppTheme.Pink,
+            estimate.Fits ? track: AppTheme.Pink
+        )
         return Container{
-            Padding: 14,
-            Gap: 6,
+            Padding: AppTheme.Space14,
+            Gap: AppTheme.Space6,
             FlexShrink: 0,
-            BorderWidth: Edges{Top: 1},
-            BorderColor: ui.Rule,
+            BorderWidth: Edges{Top: AppTheme.Border1},
+            BorderColor: AppTheme.Rule,
             field,
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 7,
+                Gap: AppTheme.Space8,
                 ring,
                 Label(
                     ui,
                     estimate.Outputs.ToString() + " " + ui.Strings.Get(estimate.Outputs == 1 ? "memo": "memos"),
-                    11,
-                    estimate.Fits ? ui.Dim: ui.Pink,
+                    AppTheme.Type11,
+                    estimate.Fits ? AppTheme.Dim: AppTheme.Pink,
                     ""
                 )
             }

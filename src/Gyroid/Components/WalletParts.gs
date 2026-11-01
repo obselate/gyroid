@@ -12,12 +12,17 @@ import System
 class WalletParts {
     shared {
         func Rows(ui Presentation, rows[]Container) Container {
-            let list = Card(ui, Edges{Top: 4, Bottom: 4, Left: 16, Right: 16}, 0, 14)
+            let list = Card(
+                ui,
+                Edges{Top: AppTheme.Space4, Bottom: AppTheme.Space4, Left: AppTheme.Space16, Right: AppTheme.Space16},
+                AppTheme.Space0,
+                AppTheme.Radius14
+            )
             list.FlexShrink = 1
             list.OverflowY = Overflow.Scroll
             for index in 0 ... rows.Length {
                 if index < rows.Length - 1 {
-                    rows[index].BorderWidth = Edges{Bottom: 1}
+                    rows[index].BorderWidth = Edges{Bottom: AppTheme.Border1}
                 }
                 list.Add(rows[index])
             }
@@ -25,24 +30,16 @@ class WalletParts {
         }
 
         func Card(ui Presentation, padding Edges? = nil, gap float64 = 16, radius float64 = 6) Container -> Container{
-            BackgroundColor: ui.Surface.WithAlpha(ui.Pane),
-            BackdropBlur: 16,
-            BorderWidth: 1,
-            BorderColor: Theme.Read().HairlineColor,
+            BasedOn: AppTheme.CardStyle,
             BorderRadius: radius,
-            Padding: padding ?? Edges(20),
+            Padding: padding ?? Edges(AppTheme.Space20),
             Gap: gap,
             MinWidth: 0,
             MinHeight: 0
         }
 
         func PageCard(ui Presentation, width float64, height float64) Container {
-            let card = Card(
-                ui,
-                width < 1100 ? 16.0: Math.Clamp(height * 0.025, 20.0, 32.0),
-                Math.Clamp(14 + Math.Max(0, height - 640) * 0.025, 14.0, 24.0),
-                14
-            )
+            let card = Card(ui, AppTheme.GetPagePadding(width, height), AppTheme.GetPageGap(height), AppTheme.Radius14)
             card.Width = 900
             card.MaxWidth = Percent(100)
             card.MaxHeight = Percent(100)
@@ -71,11 +68,11 @@ class WalletParts {
             let row = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 10,
+                Gap: AppTheme.Space10,
                 Height: height,
                 FlexShrink: 0,
-                BorderColor: ui.FaintRule,
-                Grow(Label(ui, ui.Strings.Get(label), 14, ui.Body, ""))
+                BorderColor: AppTheme.FaintRule,
+                Grow(Label(ui, ui.Strings.Get(label), AppTheme.Type14, AppTheme.Body, ""))
             }
             for part in parts {
                 row.Add(part)
@@ -99,24 +96,22 @@ class WalletParts {
         ) Blob {
             let button = Goo
                 .Button{
+                BasedOn: AppTheme.IconButtonStyle,
                 Width: size,
                 Height: size,
                 FlexShrink: shrink,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
-                BorderWidth: 1,
                 BorderRadius: radius,
-                BorderColor: active ? ui.Lime: ui.Edge,
-                BackgroundColor: ui.Control,
+                BorderColor: active ? AppTheme.Lime: AppTheme.Edge,
+                BackgroundColor: AppTheme.Control,
                 Disabled: disabled,
-                Hover: Style{BackgroundColor: ui.Rule},
+                Hover: Style{BackgroundColor: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label},
                 OnClick: click,
                 MaterialIcons.Create(
                     icon,
                     iconSize,
-                    iconColor ?? (active ? ui.Lime: disabled ? disabledColor ?? ui.Dim: ui.Body)
+                    iconColor ?? (active ? AppTheme.Lime: disabled ? disabledColor ?? AppTheme.Dim: AppTheme.Body)
                 )
             }
             WidgetKeyBindings.BindActivation(button)
@@ -125,7 +120,15 @@ class WalletParts {
 
         func Modal(ui Presentation, key string, dialog ModalDialog) Blob -> Cell.Mount[ModalDialog, ModalDialogHost](
             key,
-            dialog with{CreateRoot = (dialog, backdrop, panel) -> DialogRoot(ui)}
+            dialog with{
+                BackgroundColor = dialog.BackgroundColor ?? AppTheme.Dialog.BackgroundColor,
+                BorderColor = dialog.BorderColor ?? AppTheme.Dialog.BorderColor,
+                BorderWidth = dialog.BorderWidth ?? AppTheme.Dialog.BorderWidth,
+                BorderRadius = dialog.BorderRadius ?? AppTheme.Dialog.BorderRadius,
+                Padding = dialog.Padding ?? AppTheme.Dialog.Padding,
+                Gap = dialog.Gap ?? AppTheme.Dialog.Gap,
+                CreateRoot = (dialog, backdrop, panel) -> DialogRoot(ui)
+            }
         )
 
         func Modal(
@@ -142,20 +145,20 @@ class WalletParts {
         ) Blob -> Modal(
             ui,
             key,
-            ModalDialog{
-                Open: true,
-                AccessibilityName: ui.Strings.Get(name),
-                Width: Math.Min(availableWidth - 40, width),
-                MaxHeight: Percent(100),
-                Padding: 22,
-                Gap: 14,
-                BackgroundColor: ui.Raised,
-                BorderRadius: 14,
-                Header: header,
-                Content: content,
-                Footer: footer,
-                OnCancel: close,
-                OnClose: close
+            AppTheme.Dialog with{
+                Open = true,
+                AccessibilityName = ui.Strings.Get(name),
+                Width = Math.Min(availableWidth - 40, width),
+                MaxHeight = Percent(100),
+                Padding = AppTheme.Space22,
+                Gap = AppTheme.Space14,
+                BackgroundColor = AppTheme.Raised,
+                BorderRadius = AppTheme.Radius14,
+                Header = header,
+                Content = content,
+                Footer = footer,
+                OnCancel = close,
+                OnClose = close
             }
         )
 
@@ -164,7 +167,7 @@ class WalletParts {
             card.Width = Percent(100)
             card.MaxWidth = maxWidth
             card.MaxHeight = Percent(100)
-            let header = Header(Label(ui, title, 18, ui.Ink), 16)
+            let header = Header(Label(ui, title, AppTheme.Type17, AppTheme.Ink), AppTheme.Space8)
             header.AlignItems = AlignItems.Baseline
             header.JustifyContent = JustifyContent.SpaceBetween
             if let value = trailing {

@@ -20,8 +20,8 @@ class TextParts {
         ) Blob -> Container{
             FlexDirection: FlexDirection.Row,
             Gap: gap,
-            Label(ui, label, 12, color ?? ui.Body, ""),
-            Label(ui, value, 12, ui.Ink, "")
+            Label(ui, label, AppTheme.Type12, color ?? AppTheme.Body, ""),
+            Label(ui, value, AppTheme.Type12, AppTheme.Ink, "")
         }
 
         func ChainState(ui Presentation, state string, confirmations uint64) string -> if state == "confirmed" {
@@ -45,7 +45,14 @@ class TextParts {
         ) Text {
             let thresholds = Random(seed)
             let reveal = (t - 0.45) / 0.55
-            let neon = []Color{ui.Lime, ui.Orange, ui.Pink, ui.Blue, ui.Mint, ui.Violet}
+            let neon = []Color{
+                AppTheme.Lime,
+                AppTheme.Orange,
+                AppTheme.Pink,
+                AppTheme.Blue,
+                AppTheme.Mint,
+                AppTheme.Violet
+            }
             let chars = content.ToCharArray()
             let tints = List[TextStyleRange]()
             var index = 0
@@ -62,7 +69,7 @@ class TextParts {
             return Text{
                 Content: String(chars),
                 StyleRanges: tints.ToArray(),
-                FontFamily: ui.Font,
+                FontFamily: AppTheme.Font,
                 FontSize: size,
                 Color: color,
                 TextWrap: TextWrap.NoWrap,
@@ -90,14 +97,14 @@ class TextParts {
                     ui.Actions.DecodeSeed ^ content.GetHashCode(),
                     Random.Shared,
                     size,
-                    color ?? ui.Ink
+                    color ?? AppTheme.Ink
                 )
             }
             return Text{
                 Content: content,
-                FontFamily: ui.Font,
+                FontFamily: AppTheme.Font,
                 FontSize: size,
-                Color: color ?? ui.Ink,
+                Color: color ?? AppTheme.Ink,
                 TextWrap: TextWrap.NoWrap,
                 TextTrimming: TextTrimming.Ellipsis,
                 MinWidth: 0
@@ -115,30 +122,26 @@ class TextParts {
         ) Blob -> Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
-            Gap: compact ? 7: 10,
+            Gap: compact ? AppTheme.Space8: AppTheme.Space10,
             MinWidth: 0,
             FlexShrink: compact ? 0: 1,
             Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
-            TextParts.Label(ui, ui.Strings.Get(label), 12, compact ? ui.Dim: ui.Body, compact ? "": "page"),
+            TextParts.Label(
+                ui,
+                ui.Strings.Get(label),
+                AppTheme.Type12,
+                compact ? AppTheme.Dim: AppTheme.Body,
+                compact ? "": "page"
+            ),
             TextParts.Label(ui, value, size, color, channel)
         }
 
         func Badge(ui Presentation, content string, color Color, icon string = "") Container {
-            let badge = Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: 5,
-                Height: 20,
-                Padding: Edges{Left: 6, Right: 6},
-                BorderWidth: 1,
-                BorderColor: color,
-                BorderRadius: 3,
-                FlexShrink: 0
-            }
+            let badge = Container{BasedOn: AppTheme.BadgeStyle, BorderColor: color, FlexShrink: 0}
             if icon.Length > 0 {
-                badge.Add(MaterialIcons.Create(icon, 12, color))
+                badge.Add(MaterialIcons.Create(icon, AppTheme.Icon12, color))
             }
-            badge.Add(TextParts.Label(ui, content, 11.5, color, ""))
+            badge.Add(TextParts.Label(ui, content, AppTheme.Type12, color, ""))
             return badge
         }
 
@@ -146,13 +149,13 @@ class TextParts {
             let status = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 6,
+                Gap: AppTheme.Space6,
                 FlexShrink: 0
             }
             if icon.Length > 0 {
-                status.Add(MaterialIcons.Create(icon, 14, color))
+                status.Add(MaterialIcons.Create(icon, AppTheme.Icon14, color))
             }
-            status.Add(TextParts.Label(ui, content, 12.5, color, ""))
+            status.Add(TextParts.Label(ui, content, AppTheme.Type13, color, ""))
             return status
         }
 
@@ -163,23 +166,35 @@ class TextParts {
             return Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.FlexStart,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 FlexShrink: 0,
                 Grow(
                     Container{
-                        Gap: 6,
-                        TextParts.Label(ui, ui.Strings.Get(label), 12, ui.Body),
-                        Text{Content: shown, FontFamily: ui.Font, FontSize: 13, Color: ui.Ink, TextWrap: TextWrap.Wrap}
+                        Gap: AppTheme.Space6,
+                        TextParts.Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body),
+                        Text{
+                            Content: shown,
+                            FontFamily: AppTheme.Font,
+                            FontSize: AppTheme.Type13,
+                            Color: AppTheme.Ink,
+                            TextWrap: TextWrap.Wrap
+                        }
                     }
                 ),
-                IconButton{
-                    Icon: MaterialIcons.Create(copied ? "check": "content_copy", 16, copied ? ui.Lime: ui.Body),
-                    AccessibilityName: ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
-                    OnClick: () -> {
-                        ui.Actions.Copy(value, clearAfterMs)
-                        ui.Actions.rebuild()
+                (
+                    AppTheme.IconButton with{
+                        Icon = MaterialIcons.Create(
+                            copied ? "check": "content_copy",
+                            AppTheme.Icon16,
+                            copied ? AppTheme.Lime: AppTheme.Body
+                        ),
+                        AccessibilityName = ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
+                        OnClick = () -> {
+                            ui.Actions.Copy(value, clearAfterMs)
+                            ui.Actions.rebuild()
+                        }
                     }
-                }.Build()
+                ).Build()
             }
         }
     }

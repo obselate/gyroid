@@ -22,13 +22,13 @@ class NetworkParts {
             FlexGrow: weight,
             FlexBasis: 0,
             MinWidth: 0,
-            Gap: 5,
+            Gap: AppTheme.Space6,
             Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value + " " + unit},
-            Label(ui, ui.Strings.Get(label), 13, ui.Dim, ""),
+            Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Dim, ""),
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Baseline,
-                Gap: 6,
+                Gap: AppTheme.Space6,
                 Overflow: Overflow.Hidden,
                 Cell.Mount[DecodeValueInput, DecodeValue](
                     label,
@@ -42,7 +42,7 @@ class NetworkParts {
                         Ui: ui
                     }
                 ),
-                Label(ui, unit, 11, color, "")
+                Label(ui, unit, AppTheme.Type11, color, "")
             }
         }
 
@@ -91,15 +91,17 @@ class NetworkParts {
                             Height: 1,
                             Path: PathBuilder(0, 0, inner, 1).MoveTo(0, 0.5).LineTo(inner, 0.5).Build(),
                             Fit: ShapeFit.Fill,
-                            BorderWidth: 1,
-                            BorderColor: ui.Dim,
+                            BorderWidth: AppTheme.Border1,
+                            BorderColor: AppTheme.Dim,
                             Dashes: DashPattern([]float64{4, 3}, 0)
                         }
                     )
                 } else {
-                    plot.Add(Rule(2, top, inner, ui.FaintRule))
+                    plot.Add(Rule(2, top, inner, AppTheme.FaintRule))
                 }
-                plot.Add(Place(inner + 10, top - 7, Label(ui, Duration(int64(seconds)), 10, ui.Dim, "")))
+                plot.Add(
+                    Place(inner + 10, top - 7, Label(ui, Duration(int64(seconds)), AppTheme.Type10, AppTheme.Dim, ""))
+                )
             }
             let start = blocks.Length - count - 1
             for index in 0 ... count {
@@ -115,17 +117,17 @@ class NetworkParts {
                         Top: compact ? level: Math.Min(level, target),
                         Width: Math.Max(2.0, step * 0.64),
                         Height: Math.Max(1.5, compact ? extent + 6 - level: Math.Abs(level - target)),
-                        BorderRadius: 1,
-                        BorderWidth: chosen ? 1.2: 0.0,
-                        BorderColor: ui.Ink,
+                        BorderRadius: AppTheme.Radius1,
+                        BorderWidth: chosen ? AppTheme.Border1_2: AppTheme.Border0,
+                        BorderColor: AppTheme.Ink,
                         BackgroundColor: if offline {
-                            ui.Selected
+                            AppTheme.Selected
                         } else if compact {
-                            Color.Parse("#007caf")
+                            AppTheme.TransportBlueMuted
                         } else if seconds > 300 {
-                            chosen ? ui.Orange: Color.Parse("#9e6900")
+                            chosen ? AppTheme.Orange: AppTheme.WarningMuted
                         } else {
-                            chosen ? ui.Blue: Color.Parse("#00699e")
+                            chosen ? AppTheme.Blue: AppTheme.InfoMuted
                         }
                     }
                 )
@@ -143,13 +145,15 @@ class NetworkParts {
                 }
             }
             if !compact {
-                plot.Add(Place(2, height - 14, Label(ui, "#" + Count(blocks[0].Height), 11, ui.Dim, "")))
+                plot.Add(
+                    Place(2, height - 14, Label(ui, "#" + Count(blocks[0].Height), AppTheme.Type11, AppTheme.Dim, ""))
+                )
                 plot.Add(
                     Container{
                         Position: PositionType.Absolute,
                         Right: 44,
                         Top: height - 14,
-                        Label(ui, "#" + Count(blocks[blocks.Length - 1].Height), 11, ui.Dim, "")
+                        Label(ui, "#" + Count(blocks[blocks.Length - 1].Height), AppTheme.Type11, AppTheme.Dim, "")
                     }
                 )
             }

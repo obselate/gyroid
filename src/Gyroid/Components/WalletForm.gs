@@ -63,20 +63,20 @@ class WalletForm {
         labelled bool = true,
         hidden bool = false
     ) Blob -> Bind(
-        TextField{
-            Label: labelled ? ui.Strings.Get(label): nil,
-            AccessibilityName: ui.Strings.Get(label),
-            Value: value,
-            Controlled: true,
-            Password: secret || hidden,
-            RevealButton: secret,
-            IssueText: issue.Length > 0 ? ui.Strings.Explain(issue): nil,
-            Invalid: issue.Length > 0,
-            Disabled: disabled || ui.Working(),
-            Width: Percent(100),
-            FontFamily: ui.Font,
-            ContentDirection: Direction.LeftToRight,
-            OnChange: text -> {
+        AppTheme.FieldInput with{
+            Label = labelled ? ui.Strings.Get(label): nil,
+            AccessibilityName = ui.Strings.Get(label),
+            Value = value,
+            Controlled = true,
+            Password = secret || hidden,
+            RevealButton = secret,
+            IssueText = issue.Length > 0 ? ui.Strings.Explain(issue): nil,
+            Invalid = issue.Length > 0,
+            Disabled = disabled || ui.Working(),
+            Width = Percent(100),
+            FontFamily = AppTheme.Font,
+            ContentDirection = Direction.LeftToRight,
+            OnChange = text -> {
                 changed(text)
                 edited?.Invoke()
             }
@@ -115,16 +115,16 @@ class WalletForm {
         ),
         CreateRoot: (_, root) -> {
             root.FlexDirection = FlexDirection.Row
-            root.Gap = 12
+            root.Gap = AppTheme.Space12
             root.FlexShrink = 0
             root.Children.Insert(
                 0,
                 Container{
-                    Width: 136,
-                    Height: 38,
+                    Width: AppTheme.LabelColumn,
+                    Height: AppTheme.ControlRegular,
                     FlexShrink: 0,
                     JustifyContent: JustifyContent.Center,
-                    Label(ui, ui.Strings.Get(label), 13, ui.Body, "")
+                    Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, "")
                 }
             )
             return root
@@ -175,12 +175,12 @@ class WalletForm {
     func Labelled(label string, field Blob) Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Center,
-        Gap: 10,
+        Gap: AppTheme.Space12,
         FlexShrink: 0,
         Container{
-            Width: 130,
+            Width: AppTheme.LabelColumn,
             FlexShrink: 0,
-            Label(ui, label.Length > 0 ? ui.Strings.Get(label): "", 12.5, ui.Body, "")
+            Label(ui, label.Length > 0 ? ui.Strings.Get(label): "", AppTheme.Type13, AppTheme.Body, "")
         },
         Grow(Container{MinWidth: 0, field})
     }
@@ -197,11 +197,11 @@ class WalletForm {
     ) Blob -> Container{
         Gap: Theme.Read().ControlGap,
         FlexShrink: 0,
-        Label(ui, ui.Strings.Get(label), Theme.Read().LabelFontSize, ui.Body, ""),
+        Label(ui, ui.Strings.Get(label), Theme.Read().LabelFontSize, AppTheme.Body, ""),
         Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.FlexStart,
-            Gap: 8,
+            Gap: AppTheme.Space8,
             FlexShrink: 0,
             Grow(
                 Container{
