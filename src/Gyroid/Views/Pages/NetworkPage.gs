@@ -419,29 +419,14 @@ class NetworkHeading {
     }
 }
 
-class NetworkRibbon : Cell[NetworkRibbonInput], IDisposable {
+class NetworkRibbon : Cell[NetworkRibbonInput] {
     private let ribbonPlot ElementHandle = ElementHandle()
-    private var actions UiService?
-    private let clipboardChanged Action
 
     init() {
-        clipboardChanged = () -> Rebuild()
         ribbonPlot.MetricsChanged += _ -> Rebuild()
     }
 
-    public func Dispose() {
-        if let source = actions {
-            source.ClipboardChanged -= clipboardChanged
-        }
-        actions = nil
-    }
-
     protected override func Build(input NetworkRibbonInput) Blob {
-        if actions != input.Chart.Ui.Actions {
-            Dispose()
-            actions = input.Chart.Ui.Actions
-            input.Chart.Ui.Actions.ClipboardChanged += clipboardChanged
-        }
         let chart = input.Chart
         let blocks = chart.Blocks
         let tip = blocks.Length > 0 ? blocks[blocks.Length - 1]: NetworkBlock()
@@ -671,9 +656,6 @@ class NetworkRibbon : Cell[NetworkRibbonInput], IDisposable {
                 ""
             )
         )
-        let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
-            System.MemoryExtensions.AsSpan(block.Hash)
-        )
         row.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -686,18 +668,13 @@ class NetworkRibbon : Cell[NetworkRibbonInput], IDisposable {
                     AppTheme.Dim,
                     ""
                 ),
-                ControlParts.Icon(
+                TextParts.Copy(
                     ui,
-                    MaterialIcons.Create(
-                        copied ? "check": "content_copy",
-                        AppTheme.Icon14,
-                        copied ? AppTheme.Lime: AppTheme.Dim
-                    ),
+                    block.Hash,
                     ui.Strings.Get("copy hash"),
-                    () -> {
-                        ui.Actions.Copy(block.Hash, 120000)
-                    },
                     size: AppTheme.ControlCompact,
+                    iconSize: AppTheme.Icon14,
+                    color: AppTheme.Dim,
                     style: AppTheme.DisclosureStyle
                 )
             }
@@ -716,32 +693,17 @@ data struct NetworkPeersInput {
     var Language string
 }
 
-class NetworkPeers : Cell[NetworkPeersInput], IDisposable {
+class NetworkPeers : Cell[NetworkPeersInput] {
     private var tab string = "peers"
     private var hovered string = ""
     private var revealed bool
     private let hoverPeer Action[string]
-    private var actions UiService?
-    private let clipboardChanged Action
 
     init() {
-        clipboardChanged = () -> Rebuild()
         hoverPeer = Hover
     }
 
-    public func Dispose() {
-        if let source = actions {
-            source.ClipboardChanged -= clipboardChanged
-        }
-        actions = nil
-    }
-
     protected override func Build(input NetworkPeersInput) Blob {
-        if actions != input.Ui.Actions {
-            Dispose()
-            actions = input.Ui.Actions
-            input.Ui.Actions.ClipboardChanged += clipboardChanged
-        }
         let ui = input.Ui
         let card = WalletParts.Card(
             ui,
@@ -873,23 +835,7 @@ class NetworkPeers : Cell[NetworkPeersInput], IDisposable {
             identityRow
         }
         if revealed {
-            let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
-                System.MemoryExtensions.AsSpan(identity)
-            )
-            identityRow.Add(
-                ControlParts.Icon(
-                    ui,
-                    MaterialIcons.Create(
-                        copied ? "check": "content_copy",
-                        AppTheme.Icon16,
-                        copied ? AppTheme.Lime: AppTheme.Body
-                    ),
-                    ui.Strings.Get("Copy node ID"),
-                    () -> {
-                        ui.Actions.Copy(identity, 120000)
-                    }
-                )
-            )
+            identityRow.Add(TextParts.Copy(ui, identity, ui.Strings.Get("Copy node ID")))
             identityPanel.Add(
                 Text{
                     Content: Grouped(identity),

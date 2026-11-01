@@ -161,6 +161,7 @@ func Main() {
     view.UpdateScale()
     view.Start()
     window.Run()
+    view.Stopped().GetAwaiter().GetResult()
     if wallet.State == WalletState.Unlocked || wallet.State == WalletState.Unknown {
         try {
             wallet.LockAsync().GetAwaiter().GetResult()

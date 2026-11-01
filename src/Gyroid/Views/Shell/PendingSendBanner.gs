@@ -13,9 +13,6 @@ import System.Linq
 
 data struct PendingSendInput {
     var Ui Presentation
-    var Wallet string
-    var Network string
-    var Key string
     var State string
     var Pending bool
     var Retryable bool
@@ -38,12 +35,18 @@ partial class App {
     }
 
     private func PendingSendBanner() Blob -> Cell.Mount[PendingSendInput, PendingSendRegion](
-        "pending-send-region",
+        "pending-send-" +
+            wallet
+            .Settings
+            .ActiveWallet +
+            "/" +
+            wallet
+            .Settings
+            .Network +
+            "/" +
+            (wallet.Send.Pending?.Key ?? wallet.Send.Outcome.TxId),
         PendingSendInput{
             Ui: ui,
-            Wallet: wallet.Settings.ActiveWallet,
-            Network: wallet.Settings.Network,
-            Key: wallet.Send.Pending?.Key ?? wallet.Send.Outcome.TxId,
             State: wallet.Send.Pending?.State ?? "",
             Pending: wallet.Send.Pending != nil,
             Retryable: wallet.Send.Pending?.Retryable == true,
@@ -61,17 +64,8 @@ partial class App {
 class PendingSendRegion : Cell[PendingSendInput] {
     private var confirmPendingSend bool
     private var resumePendingSend bool
-    private var wallet string = ""
-    private var network string = ""
-    private var key string = ""
 
     protected override func Build(input PendingSendInput) Blob {
-        if wallet != input.Wallet || network != input.Network || key != input.Key {
-            wallet = input.Wallet
-            network = input.Network
-            key = input.Key
-            confirmPendingSend = false
-        }
         let content = Container{FlexShrink: 0, PendingSendBanner(input)}
         if confirmPendingSend {
             content.Add(ConfirmPendingSend(input))

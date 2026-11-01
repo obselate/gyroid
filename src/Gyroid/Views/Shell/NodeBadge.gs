@@ -258,7 +258,6 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Network")},
             OnClick: () -> {
                 nodeOpen = false
-                Rebuild()
                 status.OnNavigate(AppPage.Network)
             },
             Label(ui, ui.Strings.Get("Network"), AppTheme.Type14, AppTheme.Lime, ""),
@@ -274,7 +273,6 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                     "Node settings",
                     () -> {
                         nodeOpen = false
-                        Rebuild()
                         status.OnSettings()
                     }
                 ),

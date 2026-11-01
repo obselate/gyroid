@@ -10,6 +10,7 @@ import System
 import System.Collections.Generic
 import System.Globalization
 import System.Linq
+import System.Threading.Tasks
 
 partial class App {
     private var tray TrayIcon?
@@ -22,6 +23,8 @@ partial class App {
     private var hidden bool
 
     private var quitting bool
+    private var closePending bool
+    private var closeReady bool
 
     func Start() {
         guard let host = window else {
@@ -85,8 +88,17 @@ partial class App {
             return true
         }
         if quitting {
-            Close()
-            return true
+            if closeReady {
+                return true
+            }
+            if !closePending {
+                closePending = true
+                host.Hide()
+                Close()
+                let drain = closeDrain
+                go FinishClose(host, drain)
+            }
+            return false
         }
         upgradeShown = false
         ClearSeed()
@@ -101,6 +113,16 @@ partial class App {
         UpdatePlayback()
         Rebuild()
         return false
+    }
+
+    private async func FinishClose(host Window, drain Task) {
+        await drain
+        host.TryPost(
+            () -> {
+                closeReady = true
+                host.RequestClose()
+            }
+        )
     }
 
     private func TraySettings() TrayOptions -> TrayOptions{

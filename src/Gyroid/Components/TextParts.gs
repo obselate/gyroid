@@ -1,7 +1,9 @@
 package Gyroid.Components
 
 import Goo
+import Goo.Widgets
 import Goo.Widgets.Icons
+import Goo.Widgets.Inputs
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Services.WalletText
@@ -248,33 +250,77 @@ class TextParts {
             shown string,
             valueColor Color? = nil,
             disabled bool = false
+        ) Blob -> Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.FlexStart,
+            Gap: AppTheme.Space8,
+            FlexShrink: 0,
+            Grow(
+                Container{
+                    Gap: AppTheme.Space6,
+                    Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body),
+                    Text{
+                        Content: shown,
+                        FontFamily: AppTheme.Font,
+                        FontSize: AppTheme.Type13,
+                        Color: valueColor ?? AppTheme.Ink,
+                        TextWrap: TextWrap.Wrap
+                    }
+                }
+            ),
+            Copy(ui, value, ui.Strings.Get("Copy") + " " + ui.Strings.Get(label), disabled: disabled)
+        }
+
+        func Copy(
+            ui Presentation,
+            value string,
+            label string,
+            disabled bool = false,
+            text bool = false,
+            size float64 = 38,
+            iconSize float64? = nil,
+            color Color? = nil,
+            style Style? = nil,
+            clearAfterMs float64 = 120000,
+            content Container? = nil,
+            key string = ""
         ) Blob -> Cell
-            .Mount[CopyableTextInput, CopyableText](
-            "copy-" + label,
-            CopyableTextInput{
+            .Mount[CopyControlInput, CopyControl](
+            "copy-" + (key.Length > 0 ? key: label),
+            CopyControlInput{
                 Ui: ui,
-                Label: label,
                 Value: value,
-                Shown: shown,
-                Color: valueColor ?? AppTheme.Ink,
+                Label: label,
                 Disabled: disabled,
+                Text: text,
+                Size: size,
+                IconSize: iconSize ?? AppTheme.Icon16,
+                Color: color ?? AppTheme.Body,
+                Style: style,
+                ClearAfterMs: clearAfterMs,
+                Content: content,
                 Language: ui.Strings.Language
             }
         )
     }
 }
 
-data struct CopyableTextInput {
+data struct CopyControlInput {
     var Ui Presentation
-    var Label string
     var Value string
-    var Shown string
-    var Color Color
+    var Label string
     var Disabled bool
+    var Text bool
+    var Size float64
+    var IconSize float64
+    var Color Color
+    var Style Style?
+    var ClearAfterMs float64
+    var Content Container?
     var Language string
 }
 
-class CopyableText : Cell[CopyableTextInput], IDisposable {
+class CopyControl : Cell[CopyControlInput], IDisposable {
     private var actions UiService?
     private let changed Action
 
@@ -289,50 +335,60 @@ class CopyableText : Cell[CopyableTextInput], IDisposable {
         actions = nil
     }
 
-    protected override func Build(input CopyableTextInput) Blob {
+    protected override func Build(input CopyControlInput) Blob {
         if actions != input.Ui.Actions {
-            Dispose()
+            if let source = actions {
+                source.ClipboardChanged -= changed
+            }
             actions = input.Ui.Actions
             input.Ui.Actions.ClipboardChanged += changed
         }
         let ui = input.Ui
-        let label = input.Label
-        let value = input.Value
-        let disabled = input.Disabled
-        let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(value))
-        let content = Container{
-            Gap: AppTheme.Space6,
-            TextParts.Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body)
-        }
-        content.Add(
-            Text{
-                Content: input.Shown,
-                FontFamily: AppTheme.Font,
-                FontSize: AppTheme.Type13,
-                Color: input.Color,
-                TextWrap: TextWrap.Wrap
-            }
+        let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
+            System.MemoryExtensions.AsSpan(input.Value)
         )
-        return Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.FlexStart,
-            Gap: AppTheme.Space8,
-            FlexShrink: 0,
-            Grow(content),
-            ControlParts.Icon(
+        let copy = () -> ui.Actions.Copy(input.Value, input.ClearAfterMs)
+        if let content = input.Content {
+            content.BorderColor = copied ? AppTheme.Mint: AppTheme.Edge
+            content.Disabled = input.Disabled
+            content.OnClick = copy
+            content.Accessibility = Accessibility{Role: AccessibilityRole.Button, Name: input.Label}
+            WidgetKeyBindings.BindActivation(content)
+            return content
+        }
+        if input.Text {
+            let color = copied ? AppTheme.Mint: AppTheme.Lime
+            return ControlParts.Button(
                 ui,
-                MaterialIcons.Create(
-                    copied ? "check": "content_copy",
-                    AppTheme.Icon16,
-                    disabled ? AppTheme.Dim: copied ? AppTheme.Lime: AppTheme.Body
-                ),
-                ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
-                () -> {
-                    ui.Actions.Copy(value, 120000)
-                },
-                disabled: disabled
+                copied ? "Copied": input.Label,
+                copy,
+                input.Disabled,
+                busy: false,
+                appearance: AppTheme.Button with{
+                    BorderColor = color,
+                    BackgroundColor = copied ? AppTheme.MintQuiet: AppTheme.LimeQuiet,
+                    TextColor = color,
+                    Leading = MaterialIcons.Create(
+                        copied ? "check": "content_copy",
+                        input.IconSize,
+                        input.Disabled ? AppTheme.Dim: color
+                    )
+                }
             )
         }
+        return ControlParts.Icon(
+            ui,
+            MaterialIcons.Create(
+                copied ? "check": "content_copy",
+                input.IconSize,
+                input.Disabled ? AppTheme.Dim: copied ? AppTheme.Lime: input.Color
+            ),
+            input.Label,
+            copy,
+            disabled: input.Disabled,
+            size: input.Size,
+            style: input.Style
+        )
     }
 }
 
@@ -355,7 +411,15 @@ class DecodeLabel : Cell[DecodeLabelInput] {
     protected override func Build(input DecodeLabelInput) Blob {
         if revision != input.Revision {
             revision = input.Revision
-            if input.Revision > 0 && input.Ui.Actions.playbackActive() {
+            if input
+                .Ui
+                .Actions
+                .playbackActive() &&
+                System
+                .Diagnostics
+                .Stopwatch
+                .GetElapsedTime(input.Revision)
+                .TotalMilliseconds < 250 {
                 progress.Snap(0)
                 progress.To(1, Motion.Tween(250))
             } else {

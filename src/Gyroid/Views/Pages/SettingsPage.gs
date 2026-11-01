@@ -1948,22 +1948,12 @@ class SettingsDialogs : Cell, IDisposable {
     private var purgeText string = ""
     private var purging bool
     private var issue string = ""
-    private var actions UiService?
-    private let clipboardChanged Action
 
     init() {
         close = Close
-        clipboardChanged = () -> Rebuild()
     }
 
     func Accept(input SettingsPageInput) {
-        if actions != input.Ui.Actions {
-            if let source = actions {
-                source.ClipboardChanged -= clipboardChanged
-            }
-            actions = input.Ui.Actions
-            input.Ui.Actions.ClipboardChanged += clipboardChanged
-        }
         context = input
         if state.Wallet != input
             .Settings
@@ -2038,13 +2028,7 @@ class SettingsDialogs : Cell, IDisposable {
         Rebuild()
     }
 
-    func Dispose() {
-        if let source = actions {
-            source.ClipboardChanged -= clipboardChanged
-        }
-        actions = nil
-        ResetDialog()
-    }
+    func Dispose() -> ResetDialog()
 
     override func Build() Blob -> switch kind {
         case "phrase", "view-key": Dialog(context)
@@ -2289,19 +2273,15 @@ class SettingsDialogs : Cell, IDisposable {
                 )
             )
         }
-        let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(ReadOnlySpan[char](key))
         row.Add(
-            Icon(
+            TextParts.Copy(
                 ui,
-                MaterialIcons.Create(
-                    copied ? "check": "content_copy",
-                    AppTheme.Icon14,
-                    copied ? AppTheme.Lime: AppTheme.Body
-                ),
+                text,
                 ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
-                () -> ui.Actions.Copy(text, 30000),
                 size: AppTheme.ControlCompact,
-                style: AppTheme.DisclosureStyle
+                iconSize: AppTheme.Icon14,
+                style: AppTheme.DisclosureStyle,
+                clearAfterMs: 30000
             )
         )
         return row

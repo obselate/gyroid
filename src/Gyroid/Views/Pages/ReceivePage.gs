@@ -337,21 +337,8 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
     private var qrCode QrCode?
     private var qrPath VectorPath = VectorPath.Empty
     private var generation int32
-    private var actions UiService?
-    private let clipboardChanged Action
-
-    init() {
-        clipboardChanged = () -> Rebuild()
-    }
 
     protected override func Build(input ReceivePresentationInput) Blob {
-        if actions != input.Ui.Actions {
-            if let source = actions {
-                source.ClipboardChanged -= clipboardChanged
-            }
-            actions = input.Ui.Actions
-            input.Ui.Actions.ClipboardChanged += clipboardChanged
-        }
         let ui = input.Ui
         let draft = input.Draft
         let empty = draft.Amount.Length == 0 && draft.Memo.Length == 0
@@ -419,9 +406,6 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                 Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: AppTheme.Black}
             )
         }
-        let copied = shown != "qr" && ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
-            System.MemoryExtensions.AsSpan(payload)
-        )
         let options = [empty ? 2: 3]NavigationItem
         if !empty {
             options[0] = NavigationItem{Id: "link", Label: ui.Strings.Get("Link")}
@@ -460,21 +444,25 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
             ui,
             preview,
             Edges{Left: AppTheme.Space14, Right: AppTheme.Space14, Top: AppTheme.Space12, Bottom: AppTheme.Space12},
-            copied ? AppTheme.Mint: AppTheme.Edge
+            AppTheme.Edge
         )
         field.MinHeight = 72
         field.Accessibility = Accessibility{Role: AccessibilityRole.Status}
-        if shown == "link" {
-            field.Accessibility = Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Copy link")}
-            field.Disabled = input.Busy || draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0
-            field.OnClick = () -> ui.Actions.Copy(payload, 120000)
-            WidgetKeyBindings.BindActivation(field)
+        let previewControl Blob = if shown == "link" {
+            TextParts.Copy(
+                ui,
+                payload,
+                ui.Strings.Get("Copy link"),
+                disabled: input.Busy || draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0,
+                content: field,
+                key: "payload"
+            )
+        } else {
+            field
         }
         let disabled = input.Busy || shown != "address" && (draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0)
         let action = if input.Paid {
             Action(ui, "add", "New request", AppTheme.Ink, AppTheme.Edge, AppTheme.Raised, disabled, input.Reset)
-        } else if copied {
-            Action(ui, "check", "Copied", AppTheme.Mint, AppTheme.Mint, AppTheme.MintQuiet, disabled, () -> { })
         } else if shown == "qr" {
             Action(
                 ui,
@@ -487,16 +475,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                 () -> SaveQr(input)
             )
         } else {
-            Action(
-                ui,
-                "content_copy",
-                shown == "link" ? "Copy link": "Copy address",
-                AppTheme.Lime,
-                AppTheme.Lime,
-                AppTheme.LimeQuiet,
-                disabled,
-                () -> ui.Actions.Copy(payload, 120000)
-            )
+            TextParts.Copy(ui, payload, shown == "link" ? "Copy link": "Copy address", disabled: disabled, text: true)
         }
         return Container{
             FlexDirection: FlexDirection.Row,
@@ -526,7 +505,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                             Change: input.Change
                         }
                     ),
-                    Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, field, action}
+                    Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, previewControl, action}
                 }
             )
         }
@@ -575,10 +554,6 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
 
     public func Dispose() {
         generation++
-        if let source = actions {
-            source.ClipboardChanged -= clipboardChanged
-        }
-        actions = nil
     }
 
     private func QrPath(code QrCode) VectorPath {

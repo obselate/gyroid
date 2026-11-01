@@ -101,11 +101,7 @@ class SeedPage : Cell, IDisposable {
                 ui,
                 copied ? "Copied": "Copy",
                 () -> {
-                    let previous = ui.Actions.ClipboardOwner
-                    ui.Actions.Copy(input.Words, 30000)
-                    if !previous.Equals(ui.Actions.ClipboardOwner) {
-                        copiedOwner = ui.Actions.ClipboardOwner
-                    }
+                    copiedOwner = ui.Actions.Copy(input.Words, 30000)
                 }
             )
         )
@@ -153,8 +149,8 @@ class SeedPage : Cell, IDisposable {
 
     private func ReleaseCopy() {
         if let source = actions {
-            if !copiedOwner.IsEmpty && copiedOwner.Equals(source.ClipboardOwner) {
-                source.ReleaseClipboard()
+            if !copiedOwner.IsEmpty {
+                source.ReleaseClipboard(copiedOwner)
             }
         }
         copiedOwner = ReadOnlyMemory[uint8].Empty

@@ -71,6 +71,8 @@ partial class App : Cell, IDisposable {
     private var window Window?
     private let workers chan[WindowWork] = Chan.Unbounded[WindowWork]()
     private var lifetime CancellationTokenSource?
+    private var workerTask Task = Task.CompletedTask
+    private var closeDrain Task = Task.CompletedTask
     private var closed bool
 
     private var width float64 = 1280
@@ -87,7 +89,6 @@ partial class App : Cell, IDisposable {
 
     private var error string = ""
     private var connectionError string = ""
-    private var problemRevision int32
 
     private var refreshing bool
 
@@ -415,16 +416,6 @@ partial class App : Cell, IDisposable {
                 Run(ct -> wallet.Send.DismissAsync(ct))
             }
         }
-        retryConnection = () -> {
-            refreshError = ""
-            Run(ct -> wallet.ConnectAsync(ct))
-        }
-        dismissProblem = () -> {
-            error = ""
-            refreshError = ""
-            wallet.BackgroundError = ""
-            problemRevision++
-        }
         ApplyPreferences()
         background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
         appIcon = ImageSource.Decode(Resources.Resource("Gyroid.Icon.png"))
@@ -523,7 +514,7 @@ partial class App : Cell, IDisposable {
         let source = CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
         lifetime = source
         let token = source.Token
-        go RunWorkersAsync(token)
+        workerTask = RunWorkersAsync(token)
         Resize(owner)
         owner.MetricsChanged += metrics -> {
             pixelScale = metrics.DisplayScaleX * metrics.UiScale
@@ -575,7 +566,10 @@ partial class App : Cell, IDisposable {
             return
         }
         closed = true
-        workers.Writer.TryComplete()
+        ui.Actions.Dispose()
+        let drain = Task.WhenAny(ui.Actions.Released(), Task.Delay(500))
+        closeDrain = drain
+        go StopWorkers(drain)
         lifetime?.Cancel()
         lifetime?.Dispose()
         lifetime = nil
@@ -587,14 +581,18 @@ partial class App : Cell, IDisposable {
         backgroundLockTimer?.Dispose()
         frameTimer?.Dispose()
         frameTimer = nil
-        ui.Actions.Dispose()
         ClearSeed()
         sendRows.Clear()
         wallet.Changed = nil
     }
 
-    public func Dispose() {
-        Close()
+    public func Dispose() -> Close()
+
+    func Stopped() Task -> workerTask
+
+    private async func StopWorkers(drain Task) {
+        await drain
+        workers.Writer.TryComplete()
     }
 
     private func Touch() {
@@ -678,6 +676,7 @@ partial class App : Cell, IDisposable {
         }
         if snapshot.State != lastState || walletChanged {
             ClearSeed()
+            ui.Actions.ReleaseClipboard()
             upgradeShown = false
             screen = AppPage.None
             ui.Actions.Decode("page")
@@ -833,7 +832,6 @@ partial class App : Cell, IDisposable {
                 for work in workers {
                     go RunWork(work, ct)
                 }
-                ctx.TryCancel()
             }
         } catch (failure OperationCanceledException) when closed { } catch (failure Exception) {
             Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
@@ -1236,9 +1234,7 @@ partial class App : Cell, IDisposable {
             Padding: AppTheme.Space24
         }
         if let shown = banner {
-            shown.Key = "error-banner"
-            shown.FlexShrink = 0
-            main.Add(shown)
+            main.Add(Container{Key: "error-banner", FlexShrink: 0, shown})
         }
         if page == AppPage.Overview &&
             (
@@ -1259,9 +1255,7 @@ partial class App : Cell, IDisposable {
                 .Outcome
                 .Error != nil
         ) {
-            let pendingBanner = PendingSendBanner()
-            pendingBanner.Key = "pending-send"
-            main.Add(pendingBanner)
+            main.Add(PendingSendBanner())
         }
         if page == AppPage.Overview ||
             page == AppPage.Transactions ||
