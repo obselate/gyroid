@@ -192,7 +192,11 @@ class PrivacyChecks {
                     owned[NodeJson.Text(output, "one_time_pub")] = NodeJson.Number(output, "spent_height")
                 }
             }
-            let height = NodeJson.OptionalNumber(found.RootElement, "block_height") ?? uint64(0)
+            let height = if NodeJson.Flag(found.RootElement, "in_mempool") {
+                uint64(0)
+            } else {
+                NodeJson.OptionalNumber(found.RootElement, "block_height") ?? uint64(0)
+            }
             let tx = found.RootElement.GetProperty("tx")
             let rings = List[int32]()
             var size = 0
