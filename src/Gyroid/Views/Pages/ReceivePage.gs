@@ -17,15 +17,8 @@ import System
 import System.Collections.Generic
 import System.IO
 import System.Text
-
-class ReceiveRequest {
-    var Amount string = ""
-    var Memo string = ""
-    var Reference string = ""
-    var Since uint64
-    let ExistingOutputs HashSet[string] = HashSet[string](StringComparer.Ordinal)
-    var Format string = "link"
-}
+import System.Threading
+import System.Threading.Tasks
 
 data struct ReceivePageInput {
     var Ui Presentation
@@ -38,15 +31,6 @@ data struct ReceivePageInput {
     var Language string
     var Height float64
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
-}
-
-data struct ReceiveDraft {
-    var Amount string
-    var Memo string
-    var Reference string
-    var FullMemo string
-    var AmountIssue string
-    var MemoIssue string
 }
 
 data struct ReceiveFormInput {
@@ -72,31 +56,37 @@ data struct ReceiveStatusInput {
 data struct ReceivePresentationInput {
     var Ui Presentation
     var Draft ReceiveDraft
+    var Prepared ReceivePrepared?
+    var Error string
     var Address string
-    var Format string
     var Privacy bool
     var Busy bool
     var Paid bool
     var Language string
     var Height float64
-    var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var Change Action[string, string]
     var Select Action[string]
     var Reset Action
 }
 
-class ReceivePage : Cell {
+class ReceivePage : Cell, IDisposable {
     private var input ReceivePageInput
     private var presentation ReceivePresentationInput
     private var status ReceiveStatusInput
     private let change Action[string, string]
     private let selectFormat Action[string]
     private let reset Action
+    private var prepared ReceivePrepared?
+    private var generation int32
+    private var lifetime CancellationTokenSource?
 
     init() {
-        change = (amount, memo) -> {
-            input.Request.Amount = amount.Trim()
-            input.Request.Memo = memo.Trim()
+        change = (field, value) -> {
+            if field == "amount" {
+                input.Request.Amount = value
+            } else {
+                input.Request.Memo = value
+            }
             Prepare()
         }
         selectFormat = format -> {
@@ -114,49 +104,105 @@ class ReceivePage : Cell {
         if input == next {
             return
         }
+        let presentationChanged = input.Privacy != next.Privacy ||
+            input.Busy != next.Busy ||
+            input.Language != next.Language ||
+            input.Height != next.Height
         input = next
+        if presentationChanged {
+            if let result = prepared {
+                Publish(result)
+            }
+        }
         Prepare()
     }
 
     private func Prepare() {
-        let request = input.Request
-        let empty = request.Amount.Length == 0 && request.Memo.Length == 0
-        if empty {
-            request.Reference = ""
-        } else if request.Reference.Length == 0 {
-            request.Reference = "#" + Random.Shared.Next(0x1000000).ToString("x6")
-            request.Since = input.ChainHeight
-            request.ExistingOutputs.Clear()
-            for output in input.History {
-                request.ExistingOutputs.Add(output.TxId + ":" + output.OutputIndex.ToString())
-            }
+        guard let owner = input.Ui.Actions.window else {
+            return
         }
-        let full = if request.Memo.Length > 0 {
-            request.Memo + " " + request.Reference
-        } else {
-            request.Reference
+        let cancellation = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
+        lifetime = cancellation
+        generation++
+        let id = generation
+        let source = input.Request
+        let request = ReceiveRequest{
+            Amount: source.Amount,
+            Memo: source.Memo,
+            Reference: source.Reference,
+            Since: source.Since,
+            ExistingOutputs: source.ExistingOutputs,
+            Format: source.Format
         }
-        let draft = ReceiveDraft{
-            Amount: request.Amount,
-            Memo: request.Memo,
-            Reference: request.Reference,
-            FullMemo: full,
-            AmountIssue: WalletValidation.AmountIssue(request.Amount),
-            MemoIssue: WalletValidation.MemoIssue(full)
+        let history = input.History
+        let address = input.Address
+        let height = input.ChainHeight
+        let previous = prepared
+        let token = cancellation.Token
+        go PrepareRequest(owner, request, history, address, height, previous, id, token)
+    }
+
+    private func PrepareRequest(
+        owner Window,
+        request ReceiveRequest,
+        history[]WalletOutput,
+        address string,
+        height uint64,
+        previous ReceivePrepared?,
+        id int32,
+        token CancellationToken
+    ) {
+        try {
+            let result = WalletSession.PrepareReceive(request, address, history, height, previous, token)
+            owner.TryPost(
+                () -> {
+                    if id != generation ||
+                        token.IsCancellationRequested ||
+                        input.Address != address ||
+                        input
+                        .Request
+                        .Amount
+                        .Trim() != result
+                        .Draft
+                        .Amount ||
+                        input
+                        .Request
+                        .Memo
+                        .Trim() != result
+                        .Draft
+                        .Memo ||
+                        input
+                        .Request
+                        .Format != request.Format {
+                        return
+                    }
+                    prepared = result
+                    input.Request.Reference = request.Reference
+                    input.Request.Since = request.Since
+                    input.Request.ExistingOutputs = request.ExistingOutputs
+                    Publish(result)
+                }
+            )
+        } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
+            owner.TryPost(
+                () -> {
+                    if id == generation && !token.IsCancellationRequested {
+                        presentation.Error = failure.Message
+                        Rebuild()
+                    }
+                }
+            )
         }
-        let paid = Payment(true)
-        let possible = if paid == nil && request.Amount.Length > 0 {
-            Payment(false)
-        } else {
-            nil
-        }
-        let output = paid ?? possible
+    }
+
+    private func Publish(result ReceivePrepared) {
+        let output = result.Paid ?? result.Possible
         status = ReceiveStatusInput{
             Ui: input.Ui,
-            Paid: paid != nil,
-            Possible: possible != nil,
+            Paid: result.Paid != nil,
+            Possible: result.Possible != nil,
             Amount: output?.Amount ?? uint64(0),
-            Confirmations: if let value = paid {
+            Confirmations: if let value = result.Paid {
                 if value.BlockHeight == 0 || input.ChainHeight < value.BlockHeight {
                     uint64(0)
                 } else {
@@ -165,21 +211,21 @@ class ReceivePage : Cell {
             } else {
                 uint64(0)
             },
-            Reference: possible != nil ? request.Reference: "",
+            Reference: result.Possible != nil ? result.Request.Reference: "",
             Privacy: input.Privacy,
             Language: input.Language
         }
         presentation = ReceivePresentationInput{
             Ui: input.Ui,
-            Draft: draft,
+            Draft: result.Draft,
+            Prepared: result,
+            Error: "",
             Address: input.Address,
-            Format: request.Format,
             Privacy: input.Privacy,
             Busy: input.Busy,
-            Paid: paid != nil,
+            Paid: result.Paid != nil,
             Language: input.Language,
             Height: input.Height,
-            ChooseFile: input.ChooseFile,
             Change: change,
             Select: selectFormat,
             Reset: reset
@@ -193,41 +239,18 @@ class ReceivePage : Cell {
             WalletParts.Header(
                 Label(input.Ui, input.Ui.Strings.Get("receive"), AppTheme.Type17, AppTheme.Ink, ""),
                 AppTheme.Space12,
-                Cell.Mount[ReceiveStatusInput, ReceiveStatus]("payment-status", status)
+                prepared != nil ? Cell.Mount[ReceiveStatusInput, ReceiveStatus]("payment-status", status): Container{}
             )
         )
         card.Add(Cell.Mount[ReceivePresentationInput, ReceivePresentation]("request-presentation", presentation))
         return card
     }
 
-    private func Payment(reference bool) WalletOutput? {
-        let request = input.Request
-        let atoms = if request.Amount.Length > 0 && WalletValidation.AmountIssue(request.Amount).Length == 0 {
-            WalletAmount.Parse(request.Amount)
-        } else {
-            uint64(0)
-        }
-        if request.Reference.Length == 0 || request.Amount.Length > 0 && atoms == 0 {
-            return nil
-        }
-        for output in input.History {
-            if output.Coinbase ||
-                output.BlockHeight != 0 &&
-                output.BlockHeight < request.Since ||
-                request
-                .ExistingOutputs
-                .Contains(output.TxId + ":" + output.OutputIndex.ToString()) {
-                continue
-            }
-            if (atoms == 0 || output.Amount == atoms) && if reference {
-                output.Memo.Contains(request.Reference, StringComparison.Ordinal)
-            } else {
-                output.Memo == request.Memo
-            } {
-                return output
-            }
-        }
-        return nil
+    public func Dispose() {
+        generation++
+        lifetime?.Cancel()
+        lifetime?.Dispose()
+        lifetime = nil
     }
 }
 
@@ -301,7 +324,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                         } else {
                             nil
                         },
-                        OnChange: value -> input.Change.Invoke(value, draft.Memo)
+                        OnChange: value -> input.Change.Invoke("amount", value)
                     }
                 )
             },
@@ -311,7 +334,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                     form.Field(
                         "Memo",
                         draft.Memo,
-                        value -> input.Change.Invoke(draft.Amount, value),
+                        value -> input.Change.Invoke("memo", value),
                         issue: draft.MemoIssue,
                         disabled: input.Disabled,
                         labelled: false,
@@ -337,41 +360,33 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
     private var qrCode QrCode?
     private var qrPath VectorPath = VectorPath.Empty
     private var generation int32
+    private var exportResult string = ""
 
     protected override func Build(input ReceivePresentationInput) Blob {
         let ui = input.Ui
         let draft = input.Draft
+        guard let prepared = input.Prepared else {
+            return Container{}
+        }
         let empty = draft.Amount.Length == 0 && draft.Memo.Length == 0
-        let shown = if empty && input.Format == "link" {
-            "address"
-        } else {
-            input.Format
-        }
-        let query = List[string]()
-        if draft.Amount.Length > 0 && draft.AmountIssue.Length == 0 {
-            query.Add("amount=" + draft.Amount)
-        }
-        if draft.FullMemo.Length > 0 && draft.MemoIssue.Length == 0 {
-            query.Add("memo=" + Uri.EscapeDataString(draft.FullMemo))
-        }
-        let link = "blocknet://" + input.Address + if query.Count > 0 {
-            "?" + String.Join("&", query)
-        } else {
-            ""
-        }
+        let shown = prepared.Shown
+        let link = prepared.Link
+        let payload = prepared.Payload
         let ranges = List[TextStyleRange]{TextStyleRange(TextRange(0, 11), Style{Color: AppTheme.Dim})}
-        var start = 11 + input.Address.Length
-        for part in query {
-            ranges.Add(TextStyleRange(TextRange(start, part.IndexOf('=') + 2), Style{Color: AppTheme.Dim}))
-            start += part.Length + 1
+        let amountStart = link.IndexOf("?amount=", StringComparison.Ordinal)
+        if amountStart >= 0 {
+            ranges.Add(TextStyleRange(TextRange(amountStart, 8), Style{Color: AppTheme.Dim}))
         }
-        let payload = shown == "address" ? input.Address: link
+        let memoStart = link.IndexOf("memo=", StringComparison.Ordinal)
+        if memoStart >= 0 {
+            ranges.Add(TextStyleRange(TextRange(memoStart - 1, 6), Style{Color: AppTheme.Dim}))
+        }
         if payload != qrText {
             generation++
+            exportResult = ""
             qrText = payload
-            let encoded = QrCode.EncodeText(payload, QrCode.Ecc.Medium)
-            qrCode = encoded
-            qrPath = QrPath(encoded)
+            qrCode = prepared.Code
+            qrPath = prepared.Path
         }
         let side = Math.Clamp(input.Height - 340, 180.0, 400.0)
         let code = Container{
@@ -471,6 +486,11 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         } else {
             TextParts.Copy(ui, payload, shown == "link" ? "Copy link": "Copy address", disabled: disabled, text: true)
         }
+        let actions = Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, field, action}
+        let message = exportResult.Length > 0 ? exportResult: input.Error
+        if message.Length > 0 {
+            actions.Add(Label(ui, ui.Strings.Get(message), AppTheme.Type13, AppTheme.Body, ""))
+        }
         return Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
@@ -499,7 +519,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                             Change: input.Change
                         }
                     ),
-                    Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, field, action}
+                    actions
                 }
             )
         }
@@ -533,14 +553,54 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         guard let code = qrCode else {
             return
         }
+        guard let owner = input.Ui.Actions.window else {
+            return
+        }
+        generation++
         let current = generation
-        input.ChooseFile.Invoke(
-            FileDialogKind.SaveFile,
-            "Save QR image",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "blocknet-request.png"),
-            (path string) -> {
+        try {
+            let pending = owner.ShowFileDialogAsync(
+                FileDialogKind.SaveFile,
+                FileDialogOptions{
+                    Title: input.Ui.Strings.Get("Save QR image"),
+                    InitialPath: Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        "blocknet-request.png"
+                    )
+                }
+            )
+            exportResult = ""
+            input.Ui.Actions.Run(ct -> CompleteExport(owner, pending, code, current, ct))
+        } catch (failure Exception) {
+            exportResult = failure.Message
+        }
+    }
+
+    private async func CompleteExport(
+        owner Window,
+        pending Task[FileDialogResult],
+        code QrCode,
+        current int32,
+        ct CancellationToken
+    ) {
+        var result = ""
+        try {
+            let chosen = await pending
+            if chosen.Status == FileDialogStatus.Success && chosen.Paths.Count > 0 {
+                await WalletSession.ExportReceiveAsync(chosen.Paths[0], code, ct)
+                result = "Saved"
+            } else if chosen.Status != FileDialogStatus.Cancelled {
+                result = "File dialog unavailable"
+            }
+        } catch (failure Exception) {
+            result = failure.Message
+        }
+        let message = result
+        owner.TryPost(
+            () -> {
                 if current == generation {
-                    input.Ui.Actions.Run(ct -> File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8), ct))
+                    exportResult = message
+                    Rebuild()
                 }
             }
         )
@@ -548,31 +608,5 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
 
     public func Dispose() {
         generation++
-    }
-
-    private func QrPath(code QrCode) VectorPath {
-        let margin = 4
-        let path = PathBuilder(0, 0, code.Size + margin * 2, code.Size + margin * 2)
-        var y = 0
-        while y < code.Size {
-            var x = 0
-            while x < code.Size {
-                if !code.GetModule(x, y) {
-                    x++
-                    continue
-                }
-                let start = x
-                while x < code.Size && code.GetModule(x, y) {
-                    x++
-                }
-                path.MoveTo(start + margin, y + margin)
-                path.LineTo(x + margin, y + margin)
-                path.LineTo(x + margin, y + margin + 1)
-                path.LineTo(start + margin, y + margin + 1)
-                path.Close()
-            }
-            y++
-        }
-        return path.Build()
     }
 }

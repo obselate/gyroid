@@ -1,6 +1,8 @@
 package Gyroid.Services
 
+import Goo
 import Gyroid.Models
+import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic
 import System.IO
@@ -10,6 +12,18 @@ import System.Text
 import System.Text.Json
 import System.Threading
 import System.Threading.Tasks
+
+class ReceivePrepared {
+    var Request ReceiveRequest
+    var Draft ReceiveDraft
+    var Link string = ""
+    var Payload string = ""
+    var Shown string = ""
+    var Code QrCode?
+    var Path VectorPath = VectorPath.Empty
+    var Paid WalletOutput?
+    var Possible WalletOutput?
+}
 
 class WalletSession : IDisposable {
     var settings WalletSettings
@@ -1192,6 +1206,112 @@ class WalletSession : IDisposable {
     }
 
     shared {
+        func PrepareReceive(
+            request ReceiveRequest,
+            address string,
+            history[]WalletOutput,
+            height uint64,
+            previous ReceivePrepared?,
+            ct CancellationToken
+        ) ReceivePrepared {
+            ct.ThrowIfCancellationRequested()
+            request.Amount = request.Amount.Trim()
+            request.Memo = request.Memo.Trim()
+            let empty = request.Amount.Length == 0 && request.Memo.Length == 0
+            if empty {
+                request.Reference = ""
+            } else if request.Reference.Length == 0 {
+                request.Reference = "#" + Random.Shared.Next(0x1000000).ToString("x6")
+                request.Since = height
+                request.ExistingOutputs = HashSet[string](StringComparer.Ordinal)
+                for output in history {
+                    request.ExistingOutputs.Add(output.TxId + ":" + output.OutputIndex.ToString())
+                }
+            }
+            let full = request.Memo.Length > 0 ? request.Memo + " " + request.Reference: request.Reference
+            let draft = ReceiveDraft{
+                Amount: request.Amount,
+                Memo: request.Memo,
+                Reference: request.Reference,
+                FullMemo: full,
+                AmountIssue: WalletValidation.AmountIssue(request.Amount),
+                MemoIssue: WalletValidation.MemoIssue(full)
+            }
+            let query = List[string]()
+            if draft.Amount.Length > 0 && draft.AmountIssue.Length == 0 {
+                query.Add("amount=" + draft.Amount)
+            }
+            if full.Length > 0 && draft.MemoIssue.Length == 0 {
+                query.Add("memo=" + Uri.EscapeDataString(full))
+            }
+            let link = "blocknet://" + address + (query.Count > 0 ? "?" + String.Join("&", query): "")
+            let shown = empty && request.Format == "link" ? "address": request.Format
+            let payload = shown == "address" ? address: link
+            let result = ReceivePrepared{Request: request, Draft: draft, Link: link, Shown: shown, Payload: payload}
+            let atoms = draft.Amount.Length > 0 && draft.AmountIssue.Length == 0 ? WalletAmount.Parse(
+                draft.Amount
+            ): uint64(0)
+            if request.Reference.Length > 0 && (draft.Amount.Length == 0 || atoms > 0) {
+                for output in history {
+                    ct.ThrowIfCancellationRequested()
+                    if output.Coinbase ||
+                        output.BlockHeight != 0 &&
+                        output.BlockHeight < request.Since ||
+                        request
+                        .ExistingOutputs
+                        .Contains(output.TxId + ":" + output.OutputIndex.ToString()) {
+                        continue
+                    }
+                    if atoms == 0 || output.Amount == atoms {
+                        if output.Memo.Contains(request.Reference, StringComparison.Ordinal) {
+                            result.Paid = output
+                            break
+                        }
+                        if draft.Amount.Length > 0 && result.Possible == nil && output.Memo == request.Memo {
+                            result.Possible = output
+                        }
+                    }
+                }
+            }
+            if result.Paid != nil {
+                result.Possible = nil
+            }
+            if previous != nil && previous.Payload == payload {
+                result.Code = previous.Code
+                result.Path = previous.Path
+                return result
+            }
+            let code = QrCode.EncodeText(payload, QrCode.Ecc.Medium)
+            result.Code = code
+            let path = PathBuilder(0, 0, code.Size + 8, code.Size + 8)
+            for y in 0 ... code.Size {
+                ct.ThrowIfCancellationRequested()
+                var x = 0
+                while x < code.Size {
+                    if !code.GetModule(x, y) {
+                        x++
+                        continue
+                    }
+                    let start = x
+                    while x < code.Size && code.GetModule(x, y) {
+                        x++
+                    }
+                    path.MoveTo(start + 4, y + 4)
+                    path.LineTo(x + 4, y + 4)
+                    path.LineTo(x + 4, y + 5)
+                    path.LineTo(start + 4, y + 5)
+                    path.Close()
+                }
+            }
+            result.Path = path.Build()
+            return result
+        }
+
+        async func ExportReceiveAsync(path string, code QrCode, ct CancellationToken) {
+            ct.ThrowIfCancellationRequested()
+            await File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8), ct)
+        }
+
         private func WriteCredentials(
             writer Utf8JsonWriter,
             password[]char,

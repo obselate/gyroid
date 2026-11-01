@@ -1,5 +1,26 @@
 package Gyroid.Models
 
+import System
+import System.Collections.Generic
+
+class ReceiveRequest {
+    var Amount string = ""
+    var Memo string = ""
+    var Reference string = ""
+    var Since uint64
+    var ExistingOutputs HashSet[string] = HashSet[string](StringComparer.Ordinal)
+    var Format string = "link"
+}
+
+data struct ReceiveDraft {
+    var Amount string
+    var Memo string
+    var Reference string
+    var FullMemo string
+    var AmountIssue string
+    var MemoIssue string
+}
+
 enum WalletState {
     Unloaded,
     Locked,
