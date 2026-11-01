@@ -65,6 +65,8 @@ data struct OverviewBalanceInput {
     var Width float64
     var Language string
     var Arrivals List[Arrival]
+    var Hovering bool
+    var OnHover Action[bool]
 }
 
 data struct OverviewNetworkInput {
@@ -96,6 +98,7 @@ data struct OverviewRecentInput {
     var Network string
     var Arrivals List[Arrival]
     var OnNavigate Action[AppPage]
+    var Hovering bool
 }
 
 data struct OverviewUpgradeInput {
@@ -110,10 +113,16 @@ class OverviewPage : Cell[OverviewInput] {
     private var recentInput OverviewRecentInput
     private let configureNetwork Action[OverviewNetwork]
     private let configureRecent Action[OverviewRecent]
+    private var hovering bool
+    private let hover Action[bool]
 
     init() {
         configureNetwork = cell -> cell.Accept(networkInput)
         configureRecent = cell -> cell.Accept(recentInput)
+        hover = value -> if hovering != value {
+            hovering = value
+            Rebuild()
+        }
     }
 
     protected override func Build(input OverviewInput) Blob {
@@ -147,6 +156,7 @@ class OverviewPage : Cell[OverviewInput] {
             Language: language,
             Network: input.Session.Node.Settings.Network,
             Arrivals: arrivals,
+            Hovering: hovering,
             OnNavigate: input.OnNavigate
         }
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Gap: AppTheme.Space12}
@@ -174,6 +184,8 @@ class OverviewPage : Cell[OverviewInput] {
                         Height: input.Height,
                         Width: input.Width,
                         Language: language,
+                        Hovering: hovering,
+                        OnHover: hover,
                         Arrivals: arrivals
                     }
                 ),
@@ -328,6 +340,12 @@ class OverviewParts {
             WidgetKeyBindings.BindActivation(button)
             return button
         }
+
+        func Fade(color Color, faded bool) Color -> if faded {
+            Color.FromNormalized(color.R * 0.3F + 0.014F, color.G * 0.3F + 0.014F, color.B * 0.3F + 0.014F, 1F)
+        } else {
+            color
+        }
     }
 }
 
@@ -401,7 +419,6 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
     private let hero ElementHandle = ElementHandle()
     private var heroWidth float64
     private var peeking bool
-    private var hovering bool
 
     init() {
         hero.MetricsChanged += _ -> {
@@ -595,16 +612,16 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                 let segment = BarSegment(
                     float64(confirming) / 100000000,
                     AppTheme.Orange,
-                    hovering ? height + 6: height,
+                    input.Hovering ? height + 6: height,
                     14
                 )
                 segment.OnPointerEnter = (event PointerEvent) -> {
-                    hovering = true
+                    input.OnHover(true)
                 }
                 segment.OnPointerLeave = (event PointerEvent) -> {
-                    hovering = false
+                    input.OnHover(false)
                 }
-                if hovering {
+                if input.Hovering {
                     segment.BoxShadows = []BoxShadow{
                         BoxShadow{Spread: 1, Color: AppTheme.Black},
                         BoxShadow{Spread: 2, Color: AppTheme.Orange}
@@ -617,7 +634,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
             }
         }
         let wrap = Container{FlexShrink: 0, Position: PositionType.Relative, bar}
-        if hovering && !masked && confirming > 0 {
+        if input.Hovering && !masked && confirming > 0 {
             let outputs = arrivals.Count((item Arrival) -> item.Kind != "pool")
             let last = arrivals.Where((item Arrival) -> item.Kind != "pool").Max((item Arrival) -> item.Blocks)
             let content = Container{
@@ -993,12 +1010,13 @@ class OverviewRecent : Cell, IDisposable {
 
     private func Arrive(input OverviewRecentInput, item Arrival) Blob {
         let ui = input.Ui
+        let faded = input.Hovering && item.Kind == "pool"
         let key = item.TxId + ":" + item.OutputIndex.ToString()
         let unfolded = item.TxId.Length > 0 && expanded == key
         let glyph Blob = switch item.Kind {
-            case "mined": Label(ui, "◆", AppTheme.Type14, AppTheme.Lime, "")
-            case "in": Label(ui, "↓", AppTheme.Type14, AppTheme.Mint, "")
-            default: MaterialIcons.Create("replay", AppTheme.Icon14, AppTheme.Blue)
+            case "mined": Label(ui, "◆", AppTheme.Type14, Fade(AppTheme.Lime, faded), "")
+            case "in": Label(ui, "↓", AppTheme.Type14, Fade(AppTheme.Mint, faded), "")
+            default: MaterialIcons.Create("replay", AppTheme.Icon14, Fade(AppTheme.Blue, faded))
         }
         let row = Goo
             .Button{
@@ -1027,8 +1045,13 @@ class OverviewRecent : Cell, IDisposable {
                 AlignItems: AlignItems.Center,
                 Gap: AppTheme.Space12,
                 Container{Width: 16, AlignItems: AlignItems.Center, glyph},
-                Container{Width: 120, Number(ui, input.Privacy, Fixed(item.Amount), AppTheme.Ink, AppTheme.Dim)},
-                Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Source, 512)), AppTheme.Type13, AppTheme.Dim, "")),
+                Container{
+                    Width: 120,
+                    Number(ui, input.Privacy, Fixed(item.Amount), Fade(AppTheme.Ink, faded), Fade(AppTheme.Dim, faded))
+                },
+                Grow(
+                    Label(ui, Hidden(input.Privacy, SafeText(item.Source, 512)), AppTheme.Type13, Fade(AppTheme.Dim, faded), "")
+                ),
                 Container{
                     Width: input.Width < 1200 ? 110.0: 160.0,
                     Gap: AppTheme.Space6,
@@ -1041,24 +1064,24 @@ class OverviewRecent : Cell, IDisposable {
                             .Required
                             .ToString(),
                         AppTheme.Type11,
-                        item.Kind == "pool" ? AppTheme.Blue: AppTheme.Orange,
+                        Fade(item.Kind == "pool" ? AppTheme.Blue: AppTheme.Orange, faded),
                         ""
                     ),
                     Container{
                         Width: Percent(100),
                         Height: 3,
-                        BackgroundColor: AppTheme.Rule,
+                        BackgroundColor: Fade(AppTheme.Rule, faded),
                         Container{
                             Width: Percent(100.0 * item.Confirmations / item.Required),
                             Height: 3,
-                            BackgroundColor: AppTheme.Orange
+                            BackgroundColor: Fade(AppTheme.Orange, faded)
                         }
                     }
                 },
                 Container{
                     Width: 60,
                     AlignItems: AlignItems.FlexEnd,
-                    Label(ui, Wait(input.Ui, item.Blocks), AppTheme.Type11, AppTheme.Dim, "")
+                    Label(ui, Wait(input.Ui, item.Blocks), AppTheme.Type11, Fade(AppTheme.Dim, faded), "")
                 }
             }
         }
