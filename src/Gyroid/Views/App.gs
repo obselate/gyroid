@@ -781,7 +781,8 @@ partial class App : Cell {
             Language: ui.Strings.Language,
             Width: width,
             OnReceive: openReceive,
-            OnMessage: OpenMessage
+            OnMessage: OpenMessage,
+            ChooseFile: chooseFile
         }
     )
 

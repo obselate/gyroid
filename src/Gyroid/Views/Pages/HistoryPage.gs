@@ -35,6 +35,7 @@ data struct HistoryInput {
     var Width float64
     var OnReceive Action
     var OnMessage Action[string]
+    var ChooseFile Action[FileDialogKind, string, string, Action[string]]
 }
 
 enum HistoryRowKind {
@@ -1498,42 +1499,56 @@ class HistoryPage : Cell[HistoryInput] {
     }
 
     private func SaveProof(row HistoryRow) {
-        if let window = current.Window {
-            let choice = Choose(window, "proof-" + row.TxId.Substring(0, 8) + ".txt")
-            let text = ProofText(row)
-            current.Ui.Actions.Run(ct -> WriteText(choice, text, ct))
-        }
+        let input = current
+        let text = ProofText(row)
+        input.ChooseFile.Invoke(
+            FileDialogKind.SaveFile,
+            "save",
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "proof-" + row.TxId.Substring(0, 8) + ".txt"
+            ),
+            path -> input.Ui.Actions.Run(ct -> Write(path, text, ct))
+        )
     }
 
     private func SaveExport(input HistoryInput) {
         exporting = false
         Rebuild()
-        if let window = input.Window {
-            let choice = Choose(window, "history." + format)
-            let rows = Collect(input, true).ToArray()
-            input
+        let rows = Collect(input, true).ToArray()
+        let known = Dictionary[uint64, int64](times)
+        let withMemos = memos
+        let suffix = format
+        let selectedPeriod = period
+        let selectedFrom = from
+        let selectedTo = to
+        input.ChooseFile.Invoke(
+            FileDialogKind.SaveFile,
+            "save",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "history." + suffix),
+            path -> input
                 .Ui
                 .Actions
                 .Run(
                 ct -> WriteExport(
-                    choice,
+                    path,
                     input.Session,
                     rows,
                     input.Tip,
-                    Dictionary[uint64, int64](times),
-                    memos,
-                    format,
-                    period,
-                    from,
-                    to,
+                    known,
+                    withMemos,
+                    suffix,
+                    selectedPeriod,
+                    selectedFrom,
+                    selectedTo,
                     ct
                 )
             )
-        }
+        )
     }
 
     private async func WriteExport(
-        choice Task[string],
+        path string,
         session WalletSession,
         all[]HistoryRow,
         tip uint64,
@@ -1545,10 +1560,6 @@ class HistoryPage : Cell[HistoryInput] {
         selectedTo uint64,
         ct CancellationToken
     ) {
-        let path = await choice.WaitAsync(ct)
-        if path.Length == 0 {
-            return
-        }
         let cutoff = await session.History.PeriodStartAsync(selectedPeriod, tip, ct)
         let rows = all.Where(
             (row HistoryRow) ->
@@ -1612,30 +1623,6 @@ class HistoryPage : Cell[HistoryInput] {
         writer.WriteEndArray()
         writer.Flush()
         return json ? Encoding.UTF8.GetString(output.ToArray()): text.ToString()
-    }
-
-    private async func WriteText(choice Task[string], text string, ct CancellationToken) {
-        let path = await choice.WaitAsync(ct)
-        if path.Length > 0 {
-            await Write(path, text, ct)
-        }
-    }
-
-    private async func Choose(window Window, name string) string {
-        let result = await window.ShowFileDialogAsync(
-            FileDialogKind.SaveFile,
-            FileDialogOptions{
-                Title: current.Ui.Strings.Get("save"),
-                InitialPath: Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), name)
-            }
-        )
-        if result.Status == FileDialogStatus.Success && result.Paths.Count > 0 {
-            return result.Paths[0]
-        }
-        if result.Status != FileDialogStatus.Cancelled {
-            throw WalletException("File dialog unavailable")
-        }
-        return ""
     }
 
     private func Write(path string, text string, ct CancellationToken) Task {
