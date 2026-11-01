@@ -71,6 +71,9 @@ class UiService : IDisposable {
     }
 
     func Copy(content string, clearAfterMs float64) {
+        if window == nil {
+            return
+        }
         let text = content.ToCharArray()
         let previous = ClipboardOwner
         Copy(text, clearAfterMs)
