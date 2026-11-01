@@ -47,9 +47,8 @@ class MiningService {
         ct CancellationToken
     ) MiningPollResult {
         var state = previous.Request
-        var continuous = previous.Continuous
         while true {
-            if state.Visible && state.Online {
+            if state.Active {
                 select {
                     case let next = <- requests {
                         state = next
@@ -59,16 +58,10 @@ class MiningService {
             } else {
                 state = await requests.Reader.ReadAsync(ct)
             }
-            if !state.Visible || !state.Online {
-                continuous = false
-            }
             while requests.Reader.TryRead(out let next) {
                 state = next
-                if !state.Visible || !state.Online {
-                    continuous = false
-                }
             }
-            if state.Visible && state.Online {
+            if state.Active {
                 break
             }
         }
@@ -79,15 +72,14 @@ class MiningService {
                 return previous
             }
             let waiting = status.Running && session.Node.Status.Peers == 0
-            report = previous.Report.Record(status, waiting, continuous, DateTimeOffset.Now)
-        } catch (failure OperationCanceledException) when ct.IsCancellationRequested {
-            throw failure
-        } catch (failure Exception) { }
-        return MiningPollResult{
-            Request: state,
-            Report: report,
-            Continuous: report.Available && report.Status.Running && report.Status.Hashes > 0 && !report.Waiting
-        }
+            report = previous.Report.Record(
+                status,
+                waiting,
+                state.Revision == previous.Request.Revision,
+                DateTimeOffset.Now
+            )
+        } catch (failure Exception) when !ct.IsCancellationRequested { }
+        return MiningPollResult{Request: state, Report: report}
     }
 
     func StartAsync(ct CancellationToken = default(CancellationToken)) Task -> PostAsync("mining/start", nil, ct)

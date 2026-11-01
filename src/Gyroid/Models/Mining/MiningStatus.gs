@@ -21,15 +21,13 @@ data struct MiningSample {
 }
 
 data struct MiningPollRequest {
-    var Visible bool
-    var Online bool
+    var Active bool
     var Revision int32
 }
 
 data struct MiningPollResult {
     var Request MiningPollRequest
     var Report MiningReport
-    var Continuous bool
 }
 
 class MiningHistory {
@@ -48,19 +46,19 @@ data struct MiningReport {
     var Top float64 = 0.16
 
     func Record(status MiningStatus, waiting bool, continuous bool, now DateTimeOffset) MiningReport {
-        let result = MiningReport{... this, Status: status, Available: true, Waiting: waiting}
+        let history = status.Started == Status.Started ? Samples: []MiningSample{}
+        let result = MiningReport{... this, Status: status, Available: true, Waiting: waiting, Samples: history}
         if !status.Running || waiting || status.Hashes == 0 {
             return result
         }
-        let count = Math.Min(Samples.Length, 719)
+        let count = Math.Min(history.Length, 719)
         let samples = [count + 1]MiningSample
-        Array.Copy(Samples, Samples.Length - count, samples, 0, count)
+        Array.Copy(history, history.Length - count, samples, 0, count)
         let interrupted = !continuous ||
-            status.Started != Status.Started ||
             count == 0 ||
             (now - samples[count - 1].Time).TotalSeconds > 7.5 ||
             status.Hashes < samples[count - 1].Hashes
-        var rate = 0.0
+        var rate = status.Hashrate
         if !interrupted {
             for index in 0 ... count {
                 let sample = samples[count - index - 1]

@@ -112,8 +112,7 @@ class MiningPage : Cell, IDisposable {
             }
             let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
             request = current
-            let report = input.History.Report
-            RunWorkerAsync(input, report, generation, refreshRequested, Context.FromToken(current.Token))
+            RunWorkerAsync(input, input.History.Report, generation, refreshRequested, Context.FromToken(current.Token))
             Refresh()
         } else if stateChanged {
             Refresh()
@@ -250,7 +249,7 @@ class MiningPage : Cell, IDisposable {
     private func Refresh() {
         pollRevision++
         refreshRequested.Writer.TryWrite(
-            MiningPollRequest{Visible: source.Visible, Online: source.NodeRunning, Revision: pollRevision}
+            MiningPollRequest{Active: source.Visible && source.NodeRunning, Revision: pollRevision}
         )
     }
 
@@ -285,15 +284,13 @@ class MiningPage : Cell, IDisposable {
         pageContext Context
     ) {
         var observation = MiningPollResult{Report: initial}
-        let mining = input.Session.Mining
-        let token = pageContext.Token
         while !pageContext.IsCancelled {
-            observation = await mining.PollAsync(observation, requests, token)
+            observation = await input.Session.Mining.PollAsync(observation, requests, pageContext.Token)
             let report = observation.Report
             let revision = observation.Request.Revision
             input.Window?.TryPost(
                 () -> {
-                    if id != generation || revision != pollRevision || !source.Visible || !source.NodeRunning {
+                    if id != generation || revision != pollRevision {
                         return
                     }
                     if input.History.Report != report {
