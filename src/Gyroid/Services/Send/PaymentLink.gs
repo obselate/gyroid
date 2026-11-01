@@ -2,7 +2,7 @@ package Gyroid.Services
 
 import System
 
-data class PaymentLink(Address string, Amount string, Memo string) {
+data class PaymentLink(Address string, Amount string, Memo string, HasAmount bool, HasMemo bool) {
     shared {
         func Parse(value string) PaymentLink? {
             let text = value.Trim()
@@ -14,8 +14,13 @@ data class PaymentLink(Address string, Amount string, Memo string) {
             if address.EndsWith("/", StringComparison.Ordinal) {
                 address = address.Substring(0, address.Length - 1)
             }
+            if address.Trim().Length == 0 {
+                return nil
+            }
             var amount = ""
             var memo = ""
+            var hasAmount = false
+            var hasMemo = false
             if query >= 0 {
                 for part in text.Substring(query + 1).Split('&') {
                     let separator = part.IndexOf('=')
@@ -27,13 +32,15 @@ data class PaymentLink(Address string, Amount string, Memo string) {
                         let decoded = Uri.UnescapeDataString(part.Substring(separator + 1))
                         if name == "amount" {
                             amount = decoded
+                            hasAmount = true
                         } else {
                             memo = decoded
+                            hasMemo = true
                         }
                     }
                 }
             }
-            return PaymentLink(address, amount, memo)
+            return PaymentLink(address, amount, memo, hasAmount, hasMemo)
         }
     }
 }

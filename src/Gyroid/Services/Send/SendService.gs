@@ -2,6 +2,7 @@ package Gyroid.Services
 
 import Gyroid.Models
 import System
+import System.Collections.Generic
 import System.IO
 import System.Linq
 import System.Text
@@ -409,6 +410,54 @@ class SendService {
     }
 
     shared {
+        func PrepareDraft(row SendRow, contacts SortedDictionary[string, string], network string) {
+            row.AmountIssue = WalletValidation.AmountIssue(row.Amount)
+            row.Atoms = nil
+            try {
+                row.Atoms = WalletAmount.Parse(row.Amount)
+            } catch (error WalletException) { }
+            row.MemoIssue = WalletValidation.MemoIssue(row.Memo)
+            let text = row.Address.Trim()
+            row.Destination = AddressBook.Resolve(contacts, text)
+            row.AddressIssue = ""
+            row.Kind = ""
+            let matches = contacts
+                .Where(
+                (entry KeyValuePair[string, string]) -> entry.Key.StartsWith(text, StringComparison.OrdinalIgnoreCase)
+            )
+                .Take(5)
+                .Select(entry -> SendSuggestion{Name: entry.Key, Destination: entry.Value, PrefixLength: text.Length})
+                .ToArray()
+            if !row.Matches.SequenceEqual(matches) {
+                row.Matches = matches
+            }
+            if text.Length == 0 || !contacts.ContainsKey(text) && matches.Length > 0 {
+                return
+            }
+            try {
+                if row.Destination.StartsWith("$", StringComparison.Ordinal) {
+                    BlocknetIdService.Normalize(row.Destination)
+                } else {
+                    row.AddressIssue = WalletValidation.AddressIssue(
+                        WalletValidation.ValidateAddress(row.Destination),
+                        network
+                    )
+                }
+            } catch (error WalletException) {
+                row.AddressIssue = error.Message
+            }
+            if row.AddressIssue.Length == 0 {
+                row.Kind = if !AddressBook.IsDestination(text) && PaymentLink.Parse(text) == nil &&
+                    contacts.ContainsKey(text) {
+                    "contact"
+                } else if text.StartsWith("$", StringComparison.Ordinal) {
+                    "handle"
+                } else {
+                    "address"
+                }
+            }
+        }
+
         private func WriteSend(writer Utf8JsonWriter, recipients[]WalletRecipient, dryRun bool) {
             writer.WriteStartObject()
             writer.WriteBoolean("dry_run", dryRun)

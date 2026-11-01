@@ -1,7 +1,82 @@
 package Gyroid.Models
 
 import System
+import System.Collections.Generic
 import System.Linq
+
+class SendRow {
+    let Id string = Guid.NewGuid().ToString("N")
+    var Address string = ""
+    var Amount string = ""
+    var Memo string = ""
+    var MemoOpen bool
+    var Suggest bool
+    var Atoms uint64?
+    var AmountIssue string = ""
+    var AddressIssue string = ""
+    var MemoIssue string = ""
+    var Kind string = ""
+    var Destination string = ""
+    var Matches[]SendSuggestion = []SendSuggestion{}
+}
+
+data struct SendSuggestion {
+    var Name string
+    var Destination string
+    var PrefixLength int32
+}
+
+data struct SendReviewRow {
+    var Id string
+    var Address string
+    var Amount uint64
+    var Memo string
+    var Kind string
+    var Destination string
+    var Handle string
+}
+
+class SendForm {
+    var Total uint64
+    var Remaining uint64
+    var Over bool
+    var CanSubmit bool
+    var Rows[]SendReviewRow = []SendReviewRow{}
+
+    func Refresh(drafts List[SendRow], spendable uint64, blocked bool) {
+        var total uint64 = 0
+        var ready = !blocked && drafts.Count > 0
+        let rows = [drafts.Count]SendReviewRow
+        for index in 0 ... drafts.Count {
+            let row = drafts[index]
+            total = Add(total, row.Atoms ?? uint64(0))
+            ready = ready && row.Atoms != nil && row.Kind.Length > 0 && row.MemoIssue.Length == 0
+            rows[index] = SendReviewRow{
+                Id: row.Id,
+                Address: row.Address,
+                Amount: row.Atoms ?? uint64(0),
+                Memo: row.Memo,
+                Kind: row.Kind,
+                Destination: row.Destination
+            }
+        }
+        Total = total
+        Over = total > spendable
+        Remaining = Over ? total - spendable: spendable - total
+        CanSubmit = ready && !Over && total > 0
+        if !Rows.SequenceEqual(rows) {
+            Rows = rows
+        }
+    }
+
+    shared {
+        func Add(left uint64, right uint64) uint64 -> if left > uint64.MaxValue - right {
+            uint64.MaxValue
+        } else {
+            left + right
+        }
+    }
+}
 
 class SendEstimate {
     let Recipients[]WalletRecipient
