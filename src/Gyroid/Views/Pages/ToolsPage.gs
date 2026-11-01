@@ -1221,16 +1221,19 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         } else if active {
             slot.Add(
                 Grow(
-                    phraseForm.Field(
-                        String.Format(ui.Strings.Get("word {0}"), (index + 1).ToString()),
-                        typed,
-                        value -> {
-                            typed = value.Trim().ToLowerInvariant()
-                            wrong = false
-                        },
-                        labelled: false,
-                        invalid: invalid
-                    )
+                    Container{
+                        MinWidth: 0,
+                        phraseForm.Field(
+                            String.Format(ui.Strings.Get("word {0}"), (index + 1).ToString()),
+                            typed,
+                            value -> {
+                                typed = value.Trim().ToLowerInvariant()
+                                wrong = false
+                            },
+                            labelled: false,
+                            invalid: invalid
+                        )
+                    }
                 )
             )
         } else if position < 0 {
@@ -1596,9 +1599,12 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
         )
         stats.Add(Stat(input, "duplicates", report == nil ? "—": Count(report.Duplicates), AppTheme.Ink, true))
         card.Add(
-            WalletParts.Header(
-                stats,
-                trailing: Info(
+            Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: AppTheme.Space8,
+                Grow(stats),
+                Info(
                     input,
                     "info-health",
                     "health",
@@ -1608,7 +1614,7 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
                         "Duplicates: outputs that share one key image. Only one of them can be spent"
                     }
                 )
-            )
+            }
         )
         let values = Container{
             FlexDirection: FlexDirection.Row,
