@@ -120,7 +120,6 @@ data struct HistoryExportInput {
     var Ui Presentation
     var Session WalletSession
     var Window Window?
-    var Address string
     var Identity HistoryIdentity
     var Tip uint64
     var Cutoff uint64
@@ -379,7 +378,6 @@ class HistoryPage : Cell, IDisposable {
             Ui: ui,
             Session: input.Session,
             Window: input.Window,
-            Address: input.Snapshot.Address,
             Identity: identity,
             Cutoff: cutoff,
             Tip: tip,
@@ -657,7 +655,6 @@ class HistoryPage : Cell, IDisposable {
                 }
                 if fetched.Count > 0 {
                     timesRevision++
-                    RequestTimes(current.Snapshot.History.Take(50).Select(output -> output.BlockHeight))
                     Rebuild()
                 }
             }
@@ -704,6 +701,9 @@ class HistoryPage : Cell, IDisposable {
                 loading = false
                 if !ct.IsCancellationRequested {
                     paginationIssue = issue
+                    if issue.Length == 0 {
+                        ContinueLoading()
+                    }
                 }
                 Rebuild()
             }
@@ -1151,6 +1151,7 @@ class HistoryTransactions : Cell, IDisposable {
     private var saveRequest CancellationTokenSource?
     private var saveGeneration int32
     private let list ElementHandle = ElementHandle()
+    private var firstVisible int32
     private let rowKey Func[HistoryRow, string]
     private let rowBuilder Func[HistoryRow, Blob]
 
@@ -1172,8 +1173,8 @@ class HistoryTransactions : Cell, IDisposable {
         rowKey = row -> row.Key
         rowBuilder = row -> Row(row)
         list.MetricsChanged += metrics -> {
-            let first = int32(metrics.ScrollOffset.Y / 38)
-            current.RequestTimes(shown.Skip(Math.Max(0, first - 10)).Take(50).Select(row -> row.Height))
+            firstVisible = int32(metrics.ScrollOffset.Y / 38)
+            current.RequestTimes(shown.Skip(Math.Max(0, firstVisible - 10)).Take(50).Select(row -> row.Height))
             if current.Period == "all" && metrics.ScrollRange.Y - metrics.ScrollOffset.Y < 440 {
                 current.LoadMore()
             }
@@ -1196,6 +1197,7 @@ class HistoryTransactions : Cell, IDisposable {
         }
         accepted = true
         current = input
+        input.RequestTimes(input.Rows.Skip(Math.Max(0, firstVisible - 10)).Take(50).Select(row -> row.Height))
         RefreshRows()
     }
 
