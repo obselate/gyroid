@@ -1,6 +1,7 @@
 package Gyroid.Views
 
 import Goo
+import Gyroid.Components
 import System
 import System.Diagnostics
 import System.Linq
@@ -72,7 +73,7 @@ partial class App {
         }
         background.SetParameter(
             3,
-            Vector4(float32(sceneShift), float32(3 * (window?.UiScale ?? 1)), float32(ui.Pane), 0F)
+            Vector4(float32(sceneShift), float32(3 * (window?.UiScale ?? 1)), float32(AppTheme.Pane), 0F)
         )
     }
 }

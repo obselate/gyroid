@@ -22,9 +22,9 @@ partial class App {
 
     private func PendingSendBanner() Blob {
         let pending = wallet.Send.Pending
-        let content = WalletParts.Card(ui, gap: 10)
+        let content = WalletParts.Card(ui, gap: AppTheme.Space10)
         content.FlexShrink = 0
-        content.Add(Label(ui, ui.Strings.Get("Pending send"), 14, ui.Orange))
+        content.Add(Label(ui, ui.Strings.Get("Pending send"), AppTheme.Type14, AppTheme.Orange))
         let outcome = wallet.Send.Outcome
         let message = if wallet.Send.Error.Length > 0 {
             ui.Strings.Explain(wallet.Send.Error)
@@ -35,7 +35,15 @@ partial class App {
         } else {
             ui.Strings.Get("Send failed") + ": " + (outcome.Error ?? "")
         }
-        content.Add(Text{Content: message, FontFamily: ui.Font, FontSize: 13, Color: ui.Ink, TextWrap: TextWrap.Wrap})
+        content.Add(
+            Text{
+                Content: message,
+                FontFamily: AppTheme.Font,
+                FontSize: AppTheme.Type13,
+                Color: AppTheme.Ink,
+                TextWrap: TextWrap.Wrap
+            }
+        )
         let actions = List[Blob]{
             Button(
                 ui,
@@ -75,12 +83,12 @@ partial class App {
         return WalletParts.Modal(
             ui,
             "pending-send",
-            ModalDialog{
-                Open: true,
-                Preset: ModalDialogPreset.Confirm,
-                AccessibilityName: ui.Strings.Get("Pending send"),
-                Width: Math.Min(width - 48, 600),
-                Content: Text{
+            AppTheme.Dialog with{
+                Open = true,
+                Preset = ModalDialogPreset.Confirm,
+                AccessibilityName = ui.Strings.Get("Pending send"),
+                Width = Math.Min(width - 48, 600),
+                Content = Text{
                     Content: ui.Strings.Get(
                         if resume {
                             "Resubmitting an unknown send can pay twice if the node forgot its record"
@@ -88,21 +96,21 @@ partial class App {
                             "Dismissing does not cancel a payment. Sending again can pay twice"
                         }
                     ),
-                    FontFamily: ui.Font,
-                    FontSize: 14,
-                    Color: ui.Orange,
+                    FontFamily: AppTheme.Font,
+                    FontSize: AppTheme.Type14,
+                    Color: AppTheme.Orange,
                     TextWrap: TextWrap.Wrap
                 },
-                ConfirmText: ui.Strings.Get(
+                ConfirmText = ui.Strings.Get(
                     if resume {
                         "Resubmit"
                     } else {
                         "Dismiss"
                     }
                 ),
-                CancelText: ui.Strings.Get("Cancel"),
-                ConfirmDisabled: ui.Working(),
-                OnConfirm: () -> {
+                CancelText = ui.Strings.Get("Cancel"),
+                ConfirmDisabled = ui.Working(),
+                OnConfirm = () -> {
                     confirmPendingSend = false
                     if resume {
                         Run(ct -> wallet.Send.ResumeAsync(ct), () -> Refresh())
@@ -110,8 +118,8 @@ partial class App {
                         Run(ct -> wallet.Send.DismissAsync(ct))
                     }
                 },
-                OnCancel: close,
-                OnClose: close
+                OnCancel = close,
+                OnClose = close
             }
         )
     }

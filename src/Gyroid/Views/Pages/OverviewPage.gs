@@ -65,7 +65,6 @@ class OverviewPage : Cell[OverviewInput] {
     private var infoOpen bool
     private var peeking bool
     private var expanded string = ""
-    private let fraction Color = Color.Parse("#588203")
     private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
     private let requested HashSet[uint64] = HashSet[uint64]()
     private var fetching bool
@@ -92,7 +91,7 @@ class OverviewPage : Cell[OverviewInput] {
         RequestTimes(input)
         RequestNetwork(input)
         let arrivals = Arrivals(input, chain)
-        let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Gap: 12}
+        let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Gap: AppTheme.Space12}
         if input.Node.UpgradeDate.Length > 0 {
             page.Add(Upgrade(input))
         }
@@ -100,7 +99,7 @@ class OverviewPage : Cell[OverviewInput] {
             Height: Math.Clamp(Math.Min(input.Height * 0.32, input.Width * 0.09 + 151), 260, 352),
             FlexShrink: 0,
             FlexDirection: FlexDirection.Row,
-            Gap: 16
+            Gap: AppTheme.Space16
         }
         let balance = Hero(input, arrivals)
         balance.Width = input.Width < 1200 ? 400.0: Percent(39)
@@ -153,9 +152,9 @@ class OverviewPage : Cell[OverviewInput] {
         let node = input.Node
         let report = input.Session.Node.Network
         let online = node.Running
-        let size = input.Width < 1200 ? 20.0: 24.0
-        let color = online ? ui.Ink: ui.Dim
-        let card = WalletParts.Card(ui, input.Width < 1200 ? 16.0: 18.0, 10)
+        let size = input.Width < 1200 ? AppTheme.Type20: AppTheme.Type24
+        let color = online ? AppTheme.Ink: AppTheme.Dim
+        let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space10)
         card.FlexGrow = 1
         card.FlexBasis = 0
         card.OnPointerDown = (event PointerEvent) -> if !event.IsFromInteractiveChild {
@@ -170,23 +169,23 @@ class OverviewPage : Cell[OverviewInput] {
         )
         let first = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             NetworkParts.Figure(
                 ui,
                 "height",
                 height,
                 sync,
                 size,
-                !online ? ui.Pink: node.Syncing ? ui.Orange: ui.Lime,
+                !online ? AppTheme.Pink: node.Syncing ? AppTheme.Orange: AppTheme.Lime,
                 1.85
             ),
             NetworkParts.Figure(ui, "peers", Count(node.Peers), "", size, color),
-            NetworkParts.Figure(ui, "last block", last, "", size, online && age > 900 ? ui.Orange: color)
+            NetworkParts.Figure(ui, "last block", last, "", size, online && age > 900 ? AppTheme.Orange: color)
         }
         card.Add(first)
         let second = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             NetworkParts.Figure(ui, "hashrate", Rate(report.Hashrate), Unit(report.Hashrate), size, color, 1.85),
             NetworkParts.Figure(ui, "difficulty", Compact(report.Difficulty), "", size, color),
             NetworkParts.Figure(
@@ -211,8 +210,8 @@ class OverviewPage : Cell[OverviewInput] {
         ): "-"
         card.Add(
             WalletParts.Header(
-                Label(ui, ui.Strings.Get("block time") + " " + average, 12, color, ""),
-                8,
+                Label(ui, ui.Strings.Get("block time") + " " + average, AppTheme.Type12, color, ""),
+                AppTheme.Space8,
                 Link(ui, "network", () -> input.OnNavigate(AppPage.Network))
             )
         )
@@ -386,7 +385,7 @@ class OverviewPage : Cell[OverviewInput] {
 
     private func Number(ui Presentation, masked bool, text string, color Color, fraction Color) Blob {
         if masked {
-            return Label(ui, "••••••••", 14, fraction, "")
+            return Label(ui, "••••••••", AppTheme.Type14, fraction, "")
         }
         let point = text.IndexOf('.')
         return Text{
@@ -394,7 +393,7 @@ class OverviewPage : Cell[OverviewInput] {
             StyleRanges: []TextStyleRange{
                 TextStyleRange(TextRange(point, text.Length - point), Style{Color: fraction})
             },
-            FontSize: 14,
+            FontSize: AppTheme.Type14,
             Color: color,
             TextWrap: TextWrap.NoWrap,
             FlexShrink: 0
@@ -405,12 +404,12 @@ class OverviewPage : Cell[OverviewInput] {
         let button = Goo
             .Button{
             FlexShrink: 0,
-            BorderRadius: 3,
+            BorderRadius: AppTheme.Radius3,
             BackgroundColor: Color.Transparent,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get(label)},
             OnClick: action,
-            Label(ui, ui.Strings.Get(label) + " ›", 12, ui.Lime, "")
+            Label(ui, ui.Strings.Get(label) + " ›", AppTheme.Type12, AppTheme.Lime, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -419,12 +418,18 @@ class OverviewPage : Cell[OverviewInput] {
     private func Upgrade(input OverviewInput) Blob {
         let ui = input.Ui
         let node = input.Node
-        let bar = WalletParts.Card(ui, Edges{Top: 0, Bottom: 0, Left: 16, Right: 10}, 14)
+        let bar = WalletParts.Card(
+            ui,
+            Edges{Top: AppTheme.Space0, Bottom: AppTheme.Space0, Left: AppTheme.Space16, Right: AppTheme.Space10},
+            AppTheme.Space14
+        )
         bar.FlexShrink = 0
         bar.FlexDirection = FlexDirection.Row
         bar.AlignItems = AlignItems.Center
         bar.Height = 40
-        bar.Add(Label(ui, ui.Strings.Get("Network upgrade") + " " + node.UpgradeDate, 12, ui.Body, ""))
+        bar.Add(
+            Label(ui, ui.Strings.Get("Network upgrade") + " " + node.UpgradeDate, AppTheme.Type12, AppTheme.Body, "")
+        )
         bar.Add(
             Container{
                 Handle: strip,
@@ -439,14 +444,24 @@ class OverviewPage : Cell[OverviewInput] {
             }
         )
         if !node.Syncing {
-            bar.Add(Label(ui, Count(node.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Ink, ""))
+            bar.Add(
+                Label(
+                    ui,
+                    Count(node.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"),
+                    AppTheme.Type14,
+                    AppTheme.Ink,
+                    ""
+                )
+            )
         }
         bar.Add(
-            IconButton{
-                Icon: MaterialIcons.Create("info", 16, ui.Body),
-                AccessibilityName: ui.Strings.Get("Upgrade notice"),
-                OnClick: input.OnUpgrade
-            }.Build()
+            (
+                AppTheme.IconButton with{
+                    Icon = MaterialIcons.Create("info", AppTheme.Icon16, AppTheme.Body),
+                    AccessibilityName = ui.Strings.Get("Upgrade notice"),
+                    OnClick = input.OnUpgrade
+                }
+            ).Build()
         )
         return bar
     }
@@ -469,28 +484,28 @@ class OverviewPage : Cell[OverviewInput] {
             "-"
         }
         let color = if masked || !known || total == 0 {
-            ui.Dim
+            AppTheme.Dim
         } else {
-            ui.Lime
+            AppTheme.Lime
         }
         let inner = Math.Max(0.0, heroWidth - 40)
-        let size = if masked || !known {
-            34.0
-        } else {
-            Math.Clamp(Math.Min(input.Height * 0.12, inner * 1.53 / value.Length), 34, 150)
-        }
-        let card = WalletParts.Card(ui, Edges{Top: 16, Bottom: 16, Left: 20, Right: 20}, 14)
+        let size = AppTheme.GetBalanceSize(masked || !known, input.Height, inner, value.Length)
+        let card = WalletParts.Card(
+            ui,
+            Edges{Top: AppTheme.Space16, Bottom: AppTheme.Space16, Left: AppTheme.Space20, Right: AppTheme.Space20},
+            AppTheme.Space14
+        )
         card.Handle = hero
         card.FlexGrow = 1
         if peeking {
-            card.BorderColor = ui.StrongRule
+            card.BorderColor = AppTheme.StrongRule
         }
         let header = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             FlexShrink: 0,
-            Grow(Label(ui, ui.Strings.Get("balance"), 12, ui.Body, ""))
+            Grow(Label(ui, ui.Strings.Get("balance"), AppTheme.Type12, AppTheme.Body, ""))
         }
         if input.Privacy {
             let press = (event PointerEvent) -> if !event.IsFromInteractiveChild {
@@ -498,18 +513,24 @@ class OverviewPage : Cell[OverviewInput] {
                 peeking = true
                 Rebuild()
             }
-            header.Height = 28
-            header.Add(Label(ui, ui.Strings.Get(peeking ? "release to hide": "hold to show"), 12, ui.Dim, ""))
+            header.Height = AppTheme.ControlCompact
+            header.Add(
+                Label(
+                    ui,
+                    ui.Strings.Get(peeking ? "release to hide": "hold to show"),
+                    AppTheme.Type12,
+                    AppTheme.Dim,
+                    ""
+                )
+            )
             header.Add(
                 Container{
-                    Width: 28,
-                    Height: 28,
-                    AlignItems: AlignItems.Center,
-                    JustifyContent: JustifyContent.Center,
-                    BorderWidth: 1,
-                    BorderRadius: 6,
-                    BorderColor: peeking ? ui.Lime: ui.Edge,
-                    BackgroundColor: peeking ? ui.Active: Color.Transparent,
+                    BasedOn: AppTheme.IconButtonStyle,
+                    Width: AppTheme.ControlCompact,
+                    Height: AppTheme.ControlCompact,
+                    BorderRadius: AppTheme.Radius6,
+                    BorderColor: peeking ? AppTheme.Lime: AppTheme.Edge,
+                    BackgroundColor: peeking ? AppTheme.Active: Color.Transparent,
                     Focusable: true,
                     Focus: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Show amounts")},
@@ -522,7 +543,7 @@ class OverviewPage : Cell[OverviewInput] {
                     OnPointerDown: press,
                     OnPointerUp: (event PointerEvent) -> Hide(),
                     OnPointerCancel: (event PointerEvent) -> Hide(),
-                    MaterialIcons.Create("visibility_off", 16, peeking ? ui.Lime: ui.Body)
+                    MaterialIcons.Create("visibility_off", AppTheme.Icon16, peeking ? AppTheme.Lime: AppTheme.Body)
                 }
             )
             card.OnPointerDown = press
@@ -533,7 +554,7 @@ class OverviewPage : Cell[OverviewInput] {
         let figure = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
-            Gap: 12,
+            Gap: AppTheme.Space12,
             Cell.Mount[DecodeValueInput, DecodeValue](
                 "balance",
                 DecodeValueInput{
@@ -548,13 +569,13 @@ class OverviewPage : Cell[OverviewInput] {
                     },
                     Size: size,
                     Color: color,
-                    FractionColor: color == ui.Lime ? fraction: Color.Parse("#3f3f3f"),
+                    FractionColor: color == AppTheme.Lime ? AppTheme.BalanceFraction: AppTheme.MutedFraction,
                     Live: AccessibilityLive.Polite
                 }
             )
         }
         if known && !masked {
-            figure.Add(Label(ui, "BNT", 16, ui.Body, ""))
+            figure.Add(Label(ui, "BNT", AppTheme.Type16, AppTheme.Body, ""))
         }
         card.Add(
             Container{
@@ -570,16 +591,16 @@ class OverviewPage : Cell[OverviewInput] {
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 6,
+                    Gap: AppTheme.Space6,
                     Text{
                         Content: String.Format(
                             ui.Strings.Get("Syncing {0} / {1} · balance may be inaccurate"),
                             Count(balance?.ScanHeight ?? uint64(0)),
                             Count(balance?.ChainHeight ?? input.Node.Height)
                         ),
-                        FontFamily: ui.Font,
-                        FontSize: 12,
-                        Color: ui.Orange,
+                        FontFamily: AppTheme.Font,
+                        FontSize: AppTheme.Type12,
+                        Color: AppTheme.Orange,
                         TextWrap: TextWrap.Wrap,
                         FlexGrow: 1,
                         MinWidth: 0
@@ -603,7 +624,7 @@ class OverviewPage : Cell[OverviewInput] {
         let bar = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 3,
+            Gap: AppTheme.Space4,
             Height: height,
             FlexShrink: 0,
             Accessibility: Accessibility{
@@ -620,13 +641,25 @@ class OverviewPage : Cell[OverviewInput] {
             }
         }
         if masked || total == 0 {
-            bar.Add(Container{FlexGrow: 1, Height: height, BorderRadius: 2, BackgroundColor: ui.Selected})
+            bar.Add(
+                Container{
+                    FlexGrow: 1,
+                    Height: height,
+                    BorderRadius: AppTheme.Radius2,
+                    BackgroundColor: AppTheme.Selected
+                }
+            )
         } else {
             if ready > 0 {
-                bar.Add(BarSegment(float64(ready) / 100000000, ui.Lime, height, 14))
+                bar.Add(BarSegment(float64(ready) / 100000000, AppTheme.Lime, height, 14))
             }
             if confirming > 0 {
-                let segment = BarSegment(float64(confirming) / 100000000, ui.Orange, hovering ? height + 6: height, 14)
+                let segment = BarSegment(
+                    float64(confirming) / 100000000,
+                    AppTheme.Orange,
+                    hovering ? height + 6: height,
+                    14
+                )
                 segment.OnPointerEnter = (event PointerEvent) -> {
                     hovering = true
                     Rebuild()
@@ -637,14 +670,14 @@ class OverviewPage : Cell[OverviewInput] {
                 }
                 if hovering {
                     segment.BoxShadows = []BoxShadow{
-                        BoxShadow{Spread: 1, Color: ui.Black},
-                        BoxShadow{Spread: 2, Color: ui.Orange}
+                        BoxShadow{Spread: 1, Color: AppTheme.Black},
+                        BoxShadow{Spread: 2, Color: AppTheme.Orange}
                     }
                 }
                 bar.Add(segment)
             }
             if unconfirmed > 0 {
-                bar.Add(BarSegment(float64(unconfirmed) / 100000000, ui.Blue, height, 14))
+                bar.Add(BarSegment(float64(unconfirmed) / 100000000, AppTheme.Blue, height, 14))
             }
         }
         let wrap = Container{FlexShrink: 0, Position: PositionType.Relative, bar}
@@ -653,18 +686,13 @@ class OverviewPage : Cell[OverviewInput] {
             let last = arrivals.Where((item Arrival) -> item.Kind != "pool").Max((item Arrival) -> item.Blocks)
             wrap.Add(
                 Container{
+                    BasedOn: AppTheme.PassiveTooltipStyle,
                     Position: PositionType.Absolute,
                     Right: 20,
-                    Bottom: height + 8,
+                    Bottom: height + AppTheme.Space8,
                     ZIndex: 5,
                     HitTestSelf: false,
-                    Padding: Edges{Top: 10, Bottom: 10, Left: 12, Right: 12},
-                    Gap: 4,
-                    BackgroundColor: ui.Control,
-                    BorderWidth: 1,
-                    BorderColor: ui.PopoverEdge,
-                    BorderRadius: 6,
-                    BoxShadows: []BoxShadow{BoxShadow{OffsetY: 10, Blur: 28, Color: ui.Black}},
+                    BoxShadows: []BoxShadow{BoxShadow{OffsetY: 10, Blur: 28, Color: AppTheme.Black}},
                     KeyValue(ui, ui.Strings.Get("confirming"), Fixed(confirming)),
                     KeyValue(ui, ui.Strings.Get("outputs"), outputs.ToString()),
                     KeyValue(ui, ui.Strings.Get("all ready"), Wait(input, last))
@@ -693,29 +721,33 @@ class OverviewPage : Cell[OverviewInput] {
     ) Blob {
         let ui = input.Ui
         let wide = heroWidth - 40 >= 470
-        let legend = Container{FlexDirection: wide ? FlexDirection.Row: FlexDirection.Column, Gap: 8, FlexShrink: 0}
+        let legend = Container{
+            FlexDirection: wide ? FlexDirection.Row: FlexDirection.Column,
+            Gap: AppTheme.Space8,
+            FlexShrink: 0
+        }
         let items = [](string, uint64, Color){
-            ("ready", ready, ui.Lime),
-            ("confirming", confirming, ui.Orange),
-            ("in mempool", unconfirmed, ui.Blue)
+            ("ready", ready, AppTheme.Lime),
+            ("confirming", confirming, AppTheme.Orange),
+            ("in mempool", unconfirmed, AppTheme.Blue)
         }
         for (label, units, tint) in items {
             let name = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 Height: 18,
-                Container{Width: 8, Height: 8, BorderRadius: 2, BackgroundColor: tint},
-                Label(ui, ui.Strings.Get(label), 12, ui.Body, "")
+                Container{BasedOn: AppTheme.MarkerStyle, BackgroundColor: tint},
+                Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, "")
             }
             if label == "confirming" {
                 name.Add(Info(ui))
             }
             let text = masked ? "••••••••": Fixed(units)
             let color = if masked || empty {
-                ui.Dim
+                AppTheme.Dim
             } else if label == "ready" {
-                ui.Ink
+                AppTheme.Ink
             } else {
                 tint
             }
@@ -729,14 +761,14 @@ class OverviewPage : Cell[OverviewInput] {
                     } else {
                         WalletAmount.Format(units)
                     },
-                    Size: wide ? Math.Clamp(input.Height * 0.024, 16, 26): 16,
+                    Size: AppTheme.GetLegendFigureSize(wide, input.Height),
                     Color: color,
-                    FractionColor: ui.Dim
+                    FractionColor: AppTheme.Dim
                 }
             )
             legend.Add(
                 if wide {
-                    Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, Gap: 6, name, value}
+                    Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, Gap: AppTheme.Space6, name, value}
                 } else {
                     Container{
                         FlexDirection: FlexDirection.Row,
@@ -753,14 +785,16 @@ class OverviewPage : Cell[OverviewInput] {
 
     private func Info(ui Presentation) Blob -> Container{
         Handle: infoAnchor,
-        IconButton{
-            Icon: MaterialIcons.Create("info", 16, infoOpen ? ui.Ink: ui.Body),
-            AccessibilityName: ui.Strings.Get("About confirming"),
-            OnClick: () -> {
-                infoOpen = !infoOpen
-                Rebuild()
+        (
+            AppTheme.IconButton with{
+                Icon = MaterialIcons.Create("info", AppTheme.Icon16, infoOpen ? AppTheme.Ink: AppTheme.Body),
+                AccessibilityName = ui.Strings.Get("About confirming"),
+                OnClick = () -> {
+                    infoOpen = !infoOpen
+                    Rebuild()
+                }
             }
-        }.Build(),
+        ).Build(),
         Cell.Mount[PopoverInput, Popover](
             "confirming-info",
             PopoverInput{
@@ -768,17 +802,17 @@ class OverviewPage : Cell[OverviewInput] {
                 Anchor: infoAnchor,
                 Placement: PopoverPlacement.BottomStart,
                 Width: Length.Auto,
-                Padding: 12,
-                BackgroundColor: ui.Control,
-                BorderColor: ui.PopoverEdge,
+                Padding: AppTheme.Space12,
+                BackgroundColor: AppTheme.Control,
+                BorderColor: AppTheme.PopoverEdge,
                 TakeFocus: false,
                 AccessibilityName: ui.Strings.Get("About confirming"),
                 Content: Container{
-                    Gap: 4,
-                    Label(ui, ui.Strings.Get("Received: 10 blocks."), 12, ui.Body, ""),
-                    Label(ui, ui.Strings.Get("Mined: 60 blocks."), 12, ui.Body, ""),
-                    Label(ui, ui.Strings.Get("Mempool: change from your send."), 12, ui.Body, ""),
-                    Label(ui, ui.Strings.Get("1 block ≈ 5 min."), 12, ui.Body, "")
+                    Gap: AppTheme.Space4,
+                    Label(ui, ui.Strings.Get("Received: 10 blocks."), AppTheme.Type12, AppTheme.Body, ""),
+                    Label(ui, ui.Strings.Get("Mined: 60 blocks."), AppTheme.Type12, AppTheme.Body, ""),
+                    Label(ui, ui.Strings.Get("Mempool: change from your send."), AppTheme.Type12, AppTheme.Body, ""),
+                    Label(ui, ui.Strings.Get("1 block ≈ 5 min."), AppTheme.Type12, AppTheme.Body, "")
                 },
                 OnDismiss: reason -> {
                     infoOpen = false
@@ -800,20 +834,19 @@ class OverviewPage : Cell[OverviewInput] {
         let key = item.TxId + ":" + item.OutputIndex.ToString()
         let unfolded = item.TxId.Length > 0 && expanded == key
         let glyph Blob = switch item.Kind {
-            case "mined": Label(ui, "◆", 14, Fade(ui.Violet, faded), "")
-            case "in": Label(ui, "↓", 14, Fade(ui.Mint, faded), "")
-            default: MaterialIcons.Create("replay", 14, Fade(ui.Blue, faded))
+            case "mined": Label(ui, "◆", AppTheme.Type14, Fade(AppTheme.Lime, faded), "")
+            case "in": Label(ui, "↓", AppTheme.Type14, Fade(AppTheme.Mint, faded), "")
+            default: MaterialIcons.Create("replay", AppTheme.Icon14, Fade(AppTheme.Blue, faded))
         }
         let row = Goo
             .Button{
+            BasedOn: AppTheme.ListRowStyle,
             FlexDirection: FlexDirection.Column,
             AlignItems: AlignItems.Stretch,
             JustifyContent: JustifyContent.FlexStart,
-            Gap: 6,
-            Padding: Edges{Top: 12, Bottom: 12},
+            Gap: AppTheme.Space6,
+            Padding: Edges{Top: AppTheme.Space12, Bottom: AppTheme.Space12},
             FlexShrink: 0,
-            BorderWidth: Edges{Bottom: 1},
-            BorderColor: ui.Rule,
             BackgroundColor: Color.Transparent,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
@@ -830,16 +863,24 @@ class OverviewPage : Cell[OverviewInput] {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 12,
+                Gap: AppTheme.Space12,
                 Container{Width: 16, AlignItems: AlignItems.Center, glyph},
                 Container{
                     Width: 120,
-                    Number(ui, input.Privacy, Fixed(item.Amount), Fade(ui.Ink, faded), Fade(ui.Dim, faded))
+                    Number(ui, input.Privacy, Fixed(item.Amount), Fade(AppTheme.Ink, faded), Fade(AppTheme.Dim, faded))
                 },
-                Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Source, 512)), 13, Fade(ui.Dim, faded), "")),
+                Grow(
+                    Label(
+                        ui,
+                        Hidden(input.Privacy, SafeText(item.Source, 512)),
+                        AppTheme.Type13,
+                        Fade(AppTheme.Dim, faded),
+                        ""
+                    )
+                ),
                 Container{
                     Width: input.Width < 1200 ? 110.0: 160.0,
-                    Gap: 5,
+                    Gap: AppTheme.Space6,
                     AlignItems: AlignItems.FlexEnd,
                     Label(
                         ui,
@@ -848,25 +889,25 @@ class OverviewPage : Cell[OverviewInput] {
                             item
                             .Required
                             .ToString(),
-                        11,
-                        Fade(item.Kind == "pool" ? ui.Blue: ui.Orange, faded),
+                        AppTheme.Type11,
+                        Fade(item.Kind == "pool" ? AppTheme.Blue: AppTheme.Orange, faded),
                         ""
                     ),
                     Container{
                         Width: Percent(100),
                         Height: 3,
-                        BackgroundColor: Fade(ui.Selected, faded),
+                        BackgroundColor: Fade(AppTheme.Selected, faded),
                         Container{
                             Width: Percent(100.0 * item.Confirmations / item.Required),
                             Height: 3,
-                            BackgroundColor: Fade(ui.Orange, faded)
+                            BackgroundColor: Fade(AppTheme.Orange, faded)
                         }
                     }
                 },
                 Container{
                     Width: 60,
                     AlignItems: AlignItems.FlexEnd,
-                    Label(ui, Wait(input, item.Blocks), 11, Fade(ui.Dim, faded), "")
+                    Label(ui, Wait(input, item.Blocks), AppTheme.Type11, Fade(AppTheme.Dim, faded), "")
                 }
             }
         }
@@ -881,12 +922,12 @@ class OverviewPage : Cell[OverviewInput] {
                     FlexDirection: FlexDirection.Row,
                     FlexWrap: FlexWrap.Wrap,
                     AlignItems: AlignItems.Center,
-                    Gap: 18,
-                    RowGap: 6,
-                    Padding: Edges{Left: 28, Top: 4},
-                    KeyValue(ui, ui.Strings.Get("block"), Count(item.Height), 6, ui.Dim),
-                    KeyValue(ui, "tx", Short(item.TxId).Substring(3), 6, ui.Dim),
-                    KeyValue(ui, ui.Strings.Get("ready at"), ready, 6, ui.Dim),
+                    Gap: AppTheme.Space16,
+                    RowGap: AppTheme.Space6,
+                    Padding: Edges{Left: AppTheme.Space28, Top: AppTheme.Space4},
+                    KeyValue(ui, ui.Strings.Get("block"), Count(item.Height), AppTheme.Space6, AppTheme.Dim),
+                    KeyValue(ui, "tx", Short(item.TxId).Substring(3), AppTheme.Space6, AppTheme.Dim),
+                    KeyValue(ui, ui.Strings.Get("ready at"), ready, AppTheme.Space6, AppTheme.Dim),
                     Container{FlexGrow: 1},
                     Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions))
                 }
@@ -965,22 +1006,34 @@ class OverviewPage : Cell[OverviewInput] {
     private func Recent(input OverviewInput, chain uint64, arrivals List[Arrival]) Blob {
         let ui = input.Ui
         let incoming = arrivals.Where(item -> !item.Self).ToArray()
-        let card = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 16, Right: 16}, 0)
+        let card = WalletParts.Card(
+            ui,
+            Edges{Top: AppTheme.Space12, Bottom: AppTheme.Space12, Left: AppTheme.Space16, Right: AppTheme.Space16},
+            AppTheme.Space0
+        )
         card.Overflow = Overflow.Hidden
         card.FlexGrow = 1
         card.FlexBasis = 0
         card.MinWidth = 0
-        let header = WalletParts.Header(Label(ui, ui.Strings.Get("recent"), 12, ui.Body, ""))
+        let header = WalletParts.Header(Label(ui, ui.Strings.Get("recent"), AppTheme.Type12, AppTheme.Body, ""))
         header.Height = 24
-        header.Margin = Edges{Bottom: 4}
+        header.Margin = Edges{Bottom: AppTheme.Space4}
         if incoming.Length > 0 {
-            header.Add(Label(ui, ui.Strings.Get("incoming") + " " + incoming.Length.ToString(), 11, ui.Body, ""))
+            header.Add(
+                Label(
+                    ui,
+                    ui.Strings.Get("incoming") + " " + incoming.Length.ToString(),
+                    AppTheme.Type11,
+                    AppTheme.Body,
+                    ""
+                )
+            )
             header.Add(
                 Label(
                     ui,
                     ui.Strings.Get("all ready") + " " + Wait(input, incoming.Max((item Arrival) -> item.Blocks)),
-                    11,
-                    ui.Dim,
+                    AppTheme.Type11,
+                    AppTheme.Dim,
                     ""
                 )
             )
@@ -995,7 +1048,7 @@ class OverviewPage : Cell[OverviewInput] {
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Height: 40,
-                    Grow(Label(ui, ui.Strings.Get("no transactions yet"), 14, ui.Dim, ""))
+                    Grow(Label(ui, ui.Strings.Get("no transactions yet"), AppTheme.Type14, AppTheme.Dim, ""))
                 }
             )
             return card
@@ -1015,27 +1068,24 @@ class OverviewPage : Cell[OverviewInput] {
             let outgoing = item.Kind == "out" || item.Kind == "self"
             let shown = input.Privacy ? ui.Strings.Get("Amounts hidden"): WalletAmount.Format(item.Amount)
             let glyph Blob = if item.Kind == "self" {
-                MaterialIcons.Create("sync", 14, ui.Pink)
+                MaterialIcons.Create("sync", AppTheme.Icon14, AppTheme.Pink)
             } else {
                 Label(
                     ui,
                     outgoing ? "↑": item.Kind == "mined" ? "◆": "↓",
-                    14,
-                    outgoing ? ui.Pink: item.Kind == "mined" ? ui.Violet: ui.Mint,
+                    AppTheme.Type14,
+                    outgoing ? AppTheme.Pink: item.Kind == "mined" ? AppTheme.Lime: AppTheme.Mint,
                     ""
                 )
             }
             rows.Add(
                 Container{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    Gap: 12,
+                    BasedOn: AppTheme.ListRowStyle,
+                    Gap: AppTheme.Space12,
                     Height: height,
                     FlexShrink: 0,
                     MinWidth: 0,
                     Overflow: Overflow.Hidden,
-                    BorderWidth: Edges{Bottom: 1},
-                    BorderColor: ui.Rule,
                     Accessibility: Accessibility{
                         Name: ui.Strings.Get(item.Kind == "self" ? "To self": outgoing ? "sent": "received") +
                             " " +
@@ -1051,26 +1101,28 @@ class OverviewPage : Cell[OverviewInput] {
                             input.Privacy,
                             (outgoing ? "-": "+") +
                                 (item.Kind == "self" ? WalletAmount.Format(item.Amount): Fixed(item.Amount)),
-                            outgoing ? ui.Pink: ui.Mint,
-                            ui.Dim
+                            outgoing ? AppTheme.Pink: AppTheme.Mint,
+                            AppTheme.Dim
                         )
                     },
-                    Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Label, 512)), 13, ui.Dim, "")),
+                    Grow(
+                        Label(ui, Hidden(input.Privacy, SafeText(item.Label, 512)), AppTheme.Type13, AppTheme.Dim, "")
+                    ),
                     Container{
                         Width: input.Width < 1200 ? 110.0: 160.0,
                         AlignItems: AlignItems.FlexEnd,
                         Label(
                             ui,
                             item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,
-                            11,
-                            item.Status == "mempool" ? ui.Blue: item.Ready ? ui.Lime: ui.Orange,
+                            AppTheme.Type11,
+                            item.Status == "mempool" ? AppTheme.Blue: item.Ready ? AppTheme.Lime: AppTheme.Orange,
                             ""
                         )
                     },
                     Container{
                         Width: 60,
                         AlignItems: AlignItems.FlexEnd,
-                        Label(ui, item.Timestamp > 0 ? Clock(item.Timestamp): "-", 12, ui.Dim, "")
+                        Label(ui, item.Timestamp > 0 ? Clock(item.Timestamp): "-", AppTheme.Type12, AppTheme.Dim, "")
                     }
                 }
             )

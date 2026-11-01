@@ -8,6 +8,7 @@ import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
+import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Models
@@ -44,13 +45,13 @@ partial class App {
             return Banner{
                 Tone: Tone.Warning,
                 Content: ui.Strings.Get("Settings file not loaded") + ": " + ui.Strings.Explain(problem),
-                FontFamily: ui.Font,
+                FontFamily: AppTheme.Font,
             }.Build()
         }
         return Banner{
             Tone: Tone.Danger,
             Content: ui.Strings.Explain(message),
-            FontFamily: ui.Font,
+            FontFamily: AppTheme.Font,
             Title: wallet.NodeRestartStopped ? ui.Strings.Get("Automatic node restart stopped"): nil,
             Actions: wallet
                 .NodeError

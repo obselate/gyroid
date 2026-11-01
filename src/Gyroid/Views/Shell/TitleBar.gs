@@ -2,6 +2,7 @@ package Gyroid.Views
 
 import Goo
 import Goo.Widgets.Layout
+import Gyroid.Components
 import Gyroid.Components.TextParts
 import Gyroid.Services.WalletText
 import System
@@ -13,20 +14,26 @@ partial class App {
         Host: window,
         Height: 44,
         ControlWidth: 46,
-        ControlColor: ui.Body,
-        HoverBackgroundColor: ui.Rule,
+        ControlColor: AppTheme.Body,
+        HoverBackgroundColor: AppTheme.Rule,
         EnableDoubleClick: true,
         EnableContextMenu: true,
         CreateControlContent: (chrome, command) -> ControlGlyph(chrome, command),
         LeadingContent: Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
-            Padding: Edges{Left: 18},
+            Gap: AppTheme.Space10,
+            Padding: Edges{Left: AppTheme.Space16},
             Image{Width: 18, Height: 18, Source: appIcon},
-            Label(ui, "gyroid", 14, ui.Ink, ""),
-            Label(ui, WalletAvailable() ? WalletName(wallet.Settings.ActiveWallet): "", 14, ui.Ink, ""),
-            Label(ui, wallet.Snapshot.ViewOnly ? ui.Strings.Get("view only"): "", 12, ui.Orange, "")
+            Label(ui, "gyroid", AppTheme.Type14, AppTheme.Ink, ""),
+            Label(
+                ui,
+                WalletAvailable() ? WalletName(wallet.Settings.ActiveWallet): "",
+                AppTheme.Type14,
+                AppTheme.Ink,
+                ""
+            ),
+            Label(ui, wallet.Snapshot.ViewOnly ? ui.Strings.Get("view only"): "", AppTheme.Type12, AppTheme.Orange, "")
         }
     }.Build()
 

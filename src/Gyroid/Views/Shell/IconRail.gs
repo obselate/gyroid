@@ -19,11 +19,11 @@ partial class App {
         unread int32 = 0
     ) Blob {
         let color = if disabled {
-            ui.Dim
+            AppTheme.Dim
         } else if selected {
-            ui.Lime
+            AppTheme.Lime
         } else {
-            ui.Body
+            AppTheme.Body
         }
         let button = Goo
             .Button{
@@ -33,15 +33,15 @@ partial class App {
             FlexDirection: FlexDirection.Column,
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center,
-            Gap: 4,
-            BorderRadius: 10,
+            Gap: AppTheme.Space4,
+            BorderRadius: AppTheme.Radius10,
             BackgroundColor: if selected {
-                ui.Active
+                AppTheme.Active
             } else {
                 Color.Transparent
             },
             Disabled: disabled,
-            Hover: Style{BackgroundColor: ui.Rule},
+            Hover: Style{BackgroundColor: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -49,8 +49,8 @@ partial class App {
                 Selected: selected
             },
             OnClick: action,
-            MaterialIcons.Create(icon, 20, color),
-            Label(ui, ui.Strings.Get(label), 11, color, "")
+            MaterialIcons.Create(icon, AppTheme.Icon20, color),
+            Label(ui, ui.Strings.Get(label), AppTheme.Type11, color, "")
         }
         WidgetKeyBindings.BindActivation(button)
         if unread > 0 {
@@ -59,10 +59,10 @@ partial class App {
                     Position: PositionType.Absolute,
                     Right: 4,
                     Top: 2,
-                    Padding: Edges{Left: 3, Right: 3},
-                    BorderRadius: 3,
-                    BackgroundColor: ui.Lime,
-                    Label(ui, unread.ToString(), 9, ui.Black, "")
+                    Padding: Edges{Left: AppTheme.Space4, Right: AppTheme.Space4},
+                    BorderRadius: AppTheme.Radius3,
+                    BackgroundColor: AppTheme.Lime,
+                    Label(ui, unread.ToString(), AppTheme.Type10, AppTheme.Black, "")
                 }
             )
         }
@@ -72,8 +72,13 @@ partial class App {
     private func Sidebar(page AppPage) Blob {
         let blocked = ui.Working()
         let compact = height < 700
-        let inset = compact ? 4.0: 8.0
-        let rail = WalletParts.Card(ui, Edges{Top: inset, Bottom: inset}, compact ? 0.0: 2.0, 14)
+        let inset = compact ? AppTheme.Space4: AppTheme.Space8
+        let rail = WalletParts.Card(
+            ui,
+            Edges{Top: inset, Bottom: inset},
+            compact ? AppTheme.Space0: AppTheme.Space2,
+            AppTheme.Radius14
+        )
         rail.Width = 72
         rail.FlexShrink = 0
         rail.AlignItems = AlignItems.Center
@@ -102,7 +107,13 @@ partial class App {
         rail.Add(Container{FlexGrow: 1})
         rail.Add(NodeBadge())
         rail.Add(
-            Container{Width: 32, Height: 1, FlexShrink: 0, Margin: Edges{Top: 4, Bottom: 4}, BackgroundColor: ui.Rule}
+            Container{
+                Width: 32,
+                Height: 1,
+                FlexShrink: 0,
+                Margin: Edges{Top: AppTheme.Space4, Bottom: AppTheme.Space4},
+                BackgroundColor: AppTheme.Rule
+            }
         )
         rail.Add(
             RailItem(

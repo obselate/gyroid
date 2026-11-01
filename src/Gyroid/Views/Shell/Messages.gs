@@ -110,13 +110,9 @@ partial class App {
         if conversation != nil && latest != nil {
             let toast = Goo
                 .Button{
-                Padding: 14,
-                Gap: 6,
+                BasedOn: AppTheme.InformationCardStyle,
+                Gap: AppTheme.Space6,
                 MinWidth: 0,
-                BorderRadius: 8,
-                BorderWidth: 1,
-                BorderColor: ui.Edge,
-                BackgroundColor: ui.Raised,
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Button,
@@ -133,12 +129,12 @@ partial class App {
                 },
                 Container{
                     FlexDirection: FlexDirection.Row,
-                    Gap: 8,
-                    MaterialIcons.Create("chat_bubble", 16, ui.Lime),
-                    Grow(Label(ui, Hidden(ui.Privacy, conversation.Title), 13, ui.Ink, "")),
-                    Label(ui, ui.Strings.Get("Reply"), 11, ui.Lime, "")
+                    Gap: AppTheme.Space8,
+                    MaterialIcons.Create("chat_bubble", AppTheme.Icon16, AppTheme.Lime),
+                    Grow(Label(ui, Hidden(ui.Privacy, conversation.Title), AppTheme.Type13, AppTheme.Ink, "")),
+                    Label(ui, ui.Strings.Get("Reply"), AppTheme.Type11, AppTheme.Lime, "")
                 },
-                Label(ui, Hidden(ui.Privacy, MessagesPage.Preview(latest.Text)), 12, ui.Body, "")
+                Label(ui, Hidden(ui.Privacy, MessagesPage.Preview(latest.Text)), AppTheme.Type12, AppTheme.Body, "")
             }
             WidgetKeyBindings.BindActivation(toast)
             root.Add(toast)

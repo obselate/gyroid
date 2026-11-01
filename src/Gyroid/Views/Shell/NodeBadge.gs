@@ -44,10 +44,10 @@ partial class App {
     }
 
     private func NodeColor(state NodeConnectionState) Color -> switch state {
-        case NodeConnectionState.Offline: ui.Pink
-        case NodeConnectionState.Syncing: ui.Lime
-        case NodeConnectionState.NoPeers: ui.Orange
-        case NodeConnectionState.Synced: ui.Mint
+        case NodeConnectionState.Offline: AppTheme.Pink
+        case NodeConnectionState.Syncing: AppTheme.Lime
+        case NodeConnectionState.NoPeers: AppTheme.Orange
+        case NodeConnectionState.Synced: AppTheme.Mint
     }
 
     private func NodeBadge() Blob {
@@ -69,14 +69,14 @@ partial class App {
             FlexShrink: 0,
             FlexDirection: FlexDirection.Column,
             AlignItems: AlignItems.Center,
-            Gap: 2,
-            Padding: Edges{Top: 6, Bottom: 6},
-            BorderWidth: 1,
-            BorderRadius: 4,
-            BorderColor: nodeOpen ? ui.Edge: ui.Rule,
-            BackgroundColor: nodeOpen ? ui.Rule: ui.Black.WithAlpha(0.35),
+            Gap: AppTheme.Space2,
+            Padding: Edges{Top: AppTheme.Space6, Bottom: AppTheme.Space6},
+            BorderWidth: AppTheme.Border1,
+            BorderRadius: AppTheme.Radius4,
+            BorderColor: nodeOpen ? AppTheme.Edge: AppTheme.Rule,
+            BackgroundColor: nodeOpen ? AppTheme.Rule: AppTheme.Black.WithAlpha(0.35),
             Overflow: Overflow.Hidden,
-            Hover: Style{BackgroundColor: ui.Rule},
+            Hover: Style{BackgroundColor: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -88,8 +88,8 @@ partial class App {
                 nodeOpen = !nodeOpen
                 Rebuild()
             },
-            Label(ui, height, 11, state == NodeConnectionState.Offline ? ui.Dim: ui.Ink, ""),
-            Label(ui, detail, 10.5, state == NodeConnectionState.Synced ? ui.Dim: NodeColor(state), "")
+            Label(ui, height, AppTheme.Type11, state == NodeConnectionState.Offline ? AppTheme.Dim: AppTheme.Ink, ""),
+            Label(ui, detail, AppTheme.Type11, state == NodeConnectionState.Synced ? AppTheme.Dim: NodeColor(state), "")
         }
         WidgetKeyBindings.BindActivation(badge)
         if state == NodeConnectionState.Syncing && percent != nil {
@@ -100,7 +100,7 @@ partial class App {
                     Bottom: 0,
                     Height: 2,
                     Width: Percent(percent),
-                    BackgroundColor: ui.Lime
+                    BackgroundColor: AppTheme.Lime
                 }
             )
         }
@@ -112,14 +112,12 @@ partial class App {
         let center = box.Y + box.Height / 2
         let version = status.Version.Length > 0 ? " · v" + status.Version: ""
         let card = Container{
+            BasedOn: AppTheme.InformationCardStyle,
             Width: 330,
-            Padding: Edges{Left: 18, Right: 18, Top: 16, Bottom: 16},
-            Gap: 14,
-            BackgroundColor: ui.Raised,
-            BorderWidth: 1,
-            BorderColor: ui.Edge,
-            BorderRadius: 12,
-            BoxShadows: []BoxShadow{BoxShadow{OffsetY: 10, Blur: 40, Color: ui.Black.WithAlpha(0.9)}},
+            Padding: AppTheme.Space16,
+            Gap: AppTheme.Space14,
+            BorderRadius: AppTheme.Radius12,
+            BoxShadows: []BoxShadow{BoxShadow{OffsetY: 10, Blur: 40, Color: AppTheme.Black.WithAlpha(0.9)}},
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
@@ -134,15 +132,15 @@ partial class App {
                             case NodeConnectionState.Synced: "synced"
                         }
                     ),
-                    14,
+                    AppTheme.Type14,
                     NodeColor(state),
                     ""
                 ),
-                Label(ui, ui.Strings.Get(status.Network) + version, 14, ui.Dim, "")
+                Label(ui, ui.Strings.Get(status.Network) + version, AppTheme.Type14, AppTheme.Dim, "")
             }
         }
         if status.Running {
-            let readings = Container{Gap: 10}
+            let readings = Container{Gap: AppTheme.Space10}
             let syncing = state == NodeConnectionState.Syncing
             readings.Add(NodeReading("Height", Count(status.Height), syncing ? " / " + Count(status.ChainHeight): ""))
             if syncing && status.SyncRate > 0 {
@@ -174,31 +172,39 @@ partial class App {
             let upgradeDate = Container{
                 FlexDirection: FlexDirection.Row,
                 JustifyContent: JustifyContent.SpaceBetween,
-                Label(ui, status.UpgradeDate, 14, ui.Ink, "")
+                Label(ui, status.UpgradeDate, AppTheme.Type14, AppTheme.Ink, "")
             }
             if !status.Syncing {
                 upgradeDate.Add(
-                    Label(ui, Count(status.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"), 14, ui.Orange, "")
+                    Label(
+                        ui,
+                        Count(status.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"),
+                        AppTheme.Type14,
+                        AppTheme.Orange,
+                        ""
+                    )
                 )
             }
-            card.Add(Container{Height: 1, BackgroundColor: ui.Rule})
+            card.Add(Container{Height: 1, BackgroundColor: AppTheme.Rule})
             card.Add(
                 Container{
-                    Gap: 10,
+                    Gap: AppTheme.Space10,
                     Container{
                         FlexDirection: FlexDirection.Row,
                         AlignItems: AlignItems.Center,
                         JustifyContent: JustifyContent.SpaceBetween,
-                        Label(ui, ui.Strings.Get("Network upgrade"), 13, ui.Body, ""),
-                        IconButton{
-                            Icon: MaterialIcons.Create("info", 16, ui.Body),
-                            AccessibilityName: ui.Strings.Get("Network upgrade"),
-                            OnClick: () -> {
-                                nodeOpen = false
-                                upgradeShown = true
-                                Rebuild()
+                        Label(ui, ui.Strings.Get("Network upgrade"), AppTheme.Type13, AppTheme.Body, ""),
+                        (
+                            AppTheme.IconButton with{
+                                Icon = MaterialIcons.Create("info", AppTheme.Icon16, AppTheme.Body),
+                                AccessibilityName = ui.Strings.Get("Network upgrade"),
+                                OnClick = () -> {
+                                    nodeOpen = false
+                                    upgradeShown = true
+                                    Rebuild()
+                                }
                             }
-                        }.Build()
+                        ).Build()
                     },
                     UpgradeTimeline(ui, status, 294),
                     upgradeDate
@@ -207,24 +213,20 @@ partial class App {
         }
         let networkButton = Goo
             .Button{
-            Height: 34,
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 6,
-            Padding: Edges{Left: 14, Right: 10},
-            BorderWidth: 1,
-            BorderRadius: 8,
-            BorderColor: ui.Lime,
-            BackgroundColor: ui.Raised,
-            Hover: Style{BackgroundColor: ui.Rule},
+            BasedOn: AppTheme.ButtonStyle,
+            Gap: AppTheme.Space6,
+            Padding: Edges{Left: AppTheme.Space14, Right: AppTheme.Space10},
+            BorderColor: AppTheme.Lime,
+            BackgroundColor: AppTheme.Raised,
+            Hover: Style{BackgroundColor: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Network")},
             OnClick: () -> {
                 nodeOpen = false
                 Navigate(AppPage.Network)
             },
-            Label(ui, ui.Strings.Get("Network"), 14, ui.Lime, ""),
-            MaterialIcons.Create("chevron_right", 16, ui.Lime)
+            Label(ui, ui.Strings.Get("Network"), AppTheme.Type14, AppTheme.Lime, ""),
+            MaterialIcons.Create("chevron_right", AppTheme.Icon16, AppTheme.Lime)
         }
         WidgetKeyBindings.BindActivation(networkButton)
         card.Add(
@@ -255,7 +257,7 @@ partial class App {
                 Height: 18,
                 Path: fill,
                 Fit: ShapeFit.Fill,
-                BackgroundColor: ui.Raised
+                BackgroundColor: AppTheme.Raised
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -264,8 +266,8 @@ partial class App {
                 Height: 18,
                 Path: edge,
                 Fit: ShapeFit.Fill,
-                BorderWidth: 1,
-                BorderColor: ui.Edge
+                BorderWidth: AppTheme.Border1,
+                BorderColor: AppTheme.Edge
             }
         }
         return Cell.Mount[PopoverInput, Popover](
@@ -274,7 +276,7 @@ partial class App {
                 Open: nodeOpen,
                 Anchor: nodeAnchor,
                 Placement: PopoverPlacement.RightStart,
-                Gap: 5,
+                Gap: AppTheme.Space6,
                 Width: 339,
                 MaxHeight: height,
                 ViewportMargin: 0,
@@ -294,10 +296,10 @@ partial class App {
     private func NodeReading(label string, value string, total string = "") Blob -> Container{
         FlexDirection: FlexDirection.Row,
         AlignItems: AlignItems.Baseline,
-        Label(ui, ui.Strings.Get(label), 13, ui.Body, ""),
+        Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, ""),
         Container{FlexGrow: 1},
-        Label(ui, value, 14, ui.Ink, ""),
-        Label(ui, total, 14, ui.Dim, "")
+        Label(ui, value, AppTheme.Type14, AppTheme.Ink, ""),
+        Label(ui, total, AppTheme.Type14, AppTheme.Dim, "")
     }
 
     private func UpgradeDialog() Blob {
@@ -309,27 +311,27 @@ partial class App {
         return WalletParts.Modal(
             ui,
             "upgrade",
-            ModalDialog{
-                Open: true,
-                AccessibilityName: ui.Strings.Get("Network upgrade"),
-                Width: Math.Min(width - 48, 600),
-                Header: Label(ui, ui.Strings.Get("Network upgrade"), 18, ui.Ink, ""),
-                Content: Container{
-                    Gap: 14,
-                    Figure(ui, "Date", node.UpgradeDate, ui.Ink),
-                    Figure(ui, "Blocks left", Count(node.UpgradeBlocksLeft), ui.Orange),
-                    Figure(ui, "Migration deadline", node.UpgradeDeadline, ui.Ink),
+            AppTheme.Dialog with{
+                Open = true,
+                AccessibilityName = ui.Strings.Get("Network upgrade"),
+                Width = Math.Min(width - 48, 600),
+                Header = Label(ui, ui.Strings.Get("Network upgrade"), AppTheme.Type17, AppTheme.Ink, ""),
+                Content = Container{
+                    Gap: AppTheme.Space14,
+                    Figure(ui, "Date", node.UpgradeDate, AppTheme.Ink),
+                    Figure(ui, "Blocks left", Count(node.UpgradeBlocksLeft), AppTheme.Orange),
+                    Figure(ui, "Migration deadline", node.UpgradeDeadline, AppTheme.Ink),
                     Text{
                         Content: ui.Strings.UpgradeInstructions(node.UpgradeDate, node.UpgradeDeadline),
-                        FontFamily: ui.Font,
-                        FontSize: 13,
-                        Color: ui.Body,
+                        FontFamily: AppTheme.Font,
+                        FontSize: AppTheme.Type13,
+                        Color: AppTheme.Body,
                         TextWrap: TextWrap.Wrap
                     }
                 },
-                Footer: ActionRow([]Blob{Button(ui, "Close", close)}),
-                OnCancel: close,
-                OnClose: close
+                Footer = ActionRow([]Blob{Button(ui, "Close", close)}),
+                OnCancel = close,
+                OnClose = close
             }
         )
     }
