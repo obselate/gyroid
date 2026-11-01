@@ -355,7 +355,6 @@ partial class App : Cell, IDisposable {
                 Privacy: ui.Privacy,
                 Busy: ui.Working(),
                 Language: ui.Strings.Language,
-                Clipboard: ui.Actions.ClipboardText,
                 Width: width,
                 Height: height,
                 MaximumScalePercent: maximumScalePercent,

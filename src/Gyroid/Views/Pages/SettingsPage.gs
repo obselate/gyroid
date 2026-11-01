@@ -38,7 +38,6 @@ data struct SettingsPageInput {
     var Privacy bool
     var Busy bool
     var Language string
-    var Clipboard[]char
     var Width float64
     var Height float64
     var MaximumScalePercent int32
@@ -140,7 +139,6 @@ data struct SettingsDialogInput {
     var Privacy bool
     var Busy bool
     var Width float64
-    var Clipboard[]char
 }
 
 data struct SettingsPurgeInput {
@@ -1950,12 +1948,22 @@ class SettingsDialogs : Cell, IDisposable {
     private var purgeText string = ""
     private var purging bool
     private var issue string = ""
+    private var actions UiService?
+    private let clipboardChanged Action
 
     init() {
         close = Close
+        clipboardChanged = () -> Rebuild()
     }
 
     func Accept(input SettingsPageInput) {
+        if actions != input.Ui.Actions {
+            if let source = actions {
+                source.ClipboardChanged -= clipboardChanged
+            }
+            actions = input.Ui.Actions
+            input.Ui.Actions.ClipboardChanged += clipboardChanged
+        }
         context = input
         if state.Wallet != input
             .Settings
@@ -1973,8 +1981,7 @@ class SettingsDialogs : Cell, IDisposable {
             DefaultWallets: SettingsStore.DefaultWallets(input.Settings.Network),
             Privacy: input.Privacy,
             Busy: input.Busy,
-            Width: input.Width,
-            Clipboard: input.Clipboard
+            Width: input.Width
         }
         if next.Equals(state) {
             return
@@ -2031,7 +2038,13 @@ class SettingsDialogs : Cell, IDisposable {
         Rebuild()
     }
 
-    func Dispose() -> ResetDialog()
+    func Dispose() {
+        if let source = actions {
+            source.ClipboardChanged -= clipboardChanged
+        }
+        actions = nil
+        ResetDialog()
+    }
 
     override func Build() Blob -> switch kind {
         case "phrase", "view-key": Dialog(context)
@@ -2276,7 +2289,7 @@ class SettingsDialogs : Cell, IDisposable {
                 )
             )
         }
-        let copied = ReadOnlySpan[char](state.Clipboard).SequenceEqual(ReadOnlySpan[char](key))
+        let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(ReadOnlySpan[char](key))
         row.Add(
             Icon(
                 ui,
