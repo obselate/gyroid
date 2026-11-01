@@ -664,7 +664,10 @@ class SettingsNode : Cell, IDisposable {
             directoryRead = next.Directory
             directoryExists = false
             let request = generation
-            go ReadDirectory(next.Directory, input.Window, request)
+            let path = next.Directory
+            let owner = input.Window
+            let session = input.Session
+            go ReadDirectory(session, path, owner, request)
         }
         if next.Equals(state) {
             return
@@ -675,10 +678,10 @@ class SettingsNode : Cell, IDisposable {
 
     override func Build() Blob -> NodeSection(context)
 
-    private func ReadDirectory(path string, owner Window?, request int32) {
+    private func ReadDirectory(session WalletSession, path string, owner Window?, request int32) {
         var exists = false
         try {
-            exists = Directory.Exists(path)
+            exists = session.SettingsDirectoryExists(path)
         } catch (failure Exception) { }
         owner?.TryPost(
             () -> {
@@ -793,22 +796,7 @@ class SettingsNode : Cell, IDisposable {
                         Button(
                             ui,
                             "Open",
-                            () -> ui.Actions.Run(
-                                ct -> {
-                                    let start = ProcessStartInfo(
-                                        if OperatingSystem.IsWindows() {
-                                            "explorer.exe"
-                                        } else if OperatingSystem.IsMacOS() {
-                                            "open"
-                                        } else {
-                                            "xdg-open"
-                                        }
-                                    )
-                                    start.ArgumentList.Add(folder)
-                                    Process.Start(start)?.Dispose()
-                                    return Task.CompletedTask
-                                }
-                            ),
+                            () -> ui.Actions.Run(ct -> input.Session.OpenSettingsDirectoryAsync(folder, ct)),
                             state.Busy || !directoryExists
                         )
                     }
@@ -856,7 +844,7 @@ class SettingsNode : Cell, IDisposable {
     }
 }
 
-class SettingsStartup : Cell {
+class SettingsStartup : Cell, IDisposable {
     private var state SettingsStartupInput
     private var context SettingsPageInput
     private var draft WalletSettings?
@@ -864,11 +852,17 @@ class SettingsStartup : Cell {
     private var listenIssue string = ""
     private var programIssue string = ""
     private var applyPending bool
+    private var generation int32
+    private var validated WalletSettings?
+    private var validationIssue string = ""
 
     func Accept(input SettingsPageInput) {
         context = input
         let settings = input.Settings
         if source?.StartupDiffers(settings) != false {
+            generation++
+            validated = nil
+            validationIssue = ""
             source = settings
             draft = settings.Copy()
             applyPending = false
@@ -904,6 +898,11 @@ class SettingsStartup : Cell {
             return Container{}
         }
         let content = Container{MinHeight: 0, Gap: AppTheme.Space8, Startup(context, value)}
+        if validationIssue.Length > 0 {
+            content.Add(
+                Label(context.Ui, context.Ui.Strings.Explain(validationIssue), AppTheme.Type13, AppTheme.Pink, "")
+            )
+        }
         if applyPending {
             content.Add(ConfirmApply(context))
         }
@@ -1046,28 +1045,54 @@ class SettingsStartup : Cell {
     }
 
     private func SaveSettings(input SettingsPageInput) {
-        guard let value = draft else {
+        guard let value = draft, let owner = input.Window else {
             return
         }
-        let settings = input.Session.Settings
-        listenIssue = SettingsValidation.ListenError(value.ListenAddress)
-        programIssue = if value.BinaryPath != settings.BinaryPath && value.BinaryPath.Length > 0 {
-            NodeDiscovery.ProgramError(value.BinaryPath)
-        } else {
-            ""
-        }
-        if listenIssue.Length > 0 || programIssue.Length > 0 {
-            Rebuild()
+        if applyPending {
+            guard let next = validated else {
+                return
+            }
+            applyPending = false
+            input.Ui.Actions.Run(ct -> input.Session.ApplySettingsAsync(next, ct), input.OnClose)
             return
         }
-        if state.State != WalletState.Unloaded && !applyPending {
-            applyPending = true
-            Rebuild()
-            return
-        }
-        applyPending = false
+        generation++
+        let request = generation
         let next = value.Copy()
-        input.Ui.Actions.Run(ct -> input.Session.ApplySettingsAsync(next, ct), input.OnClose)
+        let current = input.Session.Settings
+        go ValidateSettings(next, current, owner, request)
+    }
+
+    private func ValidateSettings(value WalletSettings, current WalletSettings, owner Window, request int32) {
+        var result WalletSettings?
+        var issue = ""
+        try {
+            result = SettingsValidation.Prepare(value, current)
+        } catch (failure Exception) {
+            issue = failure.Message
+        }
+        owner.TryPost(
+            () -> {
+                if request != generation || draft == nil || value.StartupDiffers(draft) {
+                    return
+                }
+                validationIssue = issue
+                validated = result
+                if let next = result {
+                    if state.State != WalletState.Unloaded {
+                        applyPending = true
+                    } else {
+                        let session = context.Session
+                        context.Ui.Actions.Run(ct -> session.ApplySettingsAsync(next, ct), context.OnClose)
+                    }
+                }
+                Rebuild()
+            }
+        )
+    }
+
+    func Dispose() {
+        generation++
     }
 
     private func ConfirmApply(input SettingsPageInput) Blob {
@@ -1371,7 +1396,10 @@ class SettingsAdvanced : Cell, IDisposable {
             chainLoaded = true
             let request = generation
             let token = lifetime?.Token ?? CancellationToken.None
-            go LoadChain(input.Session, settings, input.Window, request, token)
+            let session = input.Session
+            let value = settings.Copy()
+            let owner = input.Window
+            go LoadChain(session, value, owner, request, token)
         }
         let next = SettingsAdvancedInput{
             Language: input.Language,
@@ -1717,7 +1745,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 Right: 0,
                 Label(
                     ui,
-                    ui.Strings.Get("next") + " " + Count(localCheckpoint + 100),
+                    ui.Strings.Get("next") + " " + Count(localCheckpoint - localCheckpoint % 100 + 100),
                     AppTheme.Type12,
                     AppTheme.Dim,
                     ""
@@ -1774,7 +1802,8 @@ class SettingsAdvanced : Cell, IDisposable {
         certifyGeneration++
         let request = certifyGeneration
         let token = lifetime.Token
-        go ReadCertificate(input.Session, owner, request, token)
+        let session = input.Session
+        go ReadCertificate(session, owner, request, token)
     }
 
     private async func ReadCertificate(session WalletSession, owner Window, request int32, token CancellationToken) {
@@ -1850,62 +1879,25 @@ class SettingsAdvanced : Cell, IDisposable {
         ct CancellationToken
     ) {
         try {
-            let data = DirectoryInfo(settings.DataDirectory)
-            var size int64 = 0
-            var wallets int32 = 0
-            var local uint64 = 0
-            if data.Exists {
-                for file in data.EnumerateFiles(
-                    "*",
-                    EnumerationOptions{
-                        RecurseSubdirectories: true,
-                        IgnoreInaccessible: true,
-                        AttributesToSkip: FileAttributes.ReparsePoint
-                    }
-                ) {
-                    ct.ThrowIfCancellationRequested()
-                    size += file.Length
-                }
-                try {
-                    wallets = session.Library.DataWallets().Count
-                } catch (failure Exception) {
-                    wallets = -1
-                }
-                let saved = FileInfo(Path.Combine(data.FullName, "checkpoints.dat"))
-                if saved.Exists && saved.Length <= 1048576 {
-                    local = Checkpoints.Height(Checkpoints.Parse(File.ReadAllBytes(saved.FullName)))
-                }
-            }
-            let free = DriveInfo(
-                if OperatingSystem.IsWindows() {
-                    Path.GetPathRoot(data.FullName) ?? data.FullName
-                } else if data.Exists {
-                    data.FullName
-                } else {
-                    data.Parent?.FullName ?? "/"
-                }
-            ).AvailableFreeSpace
-            let trusted = settings.Network == "mainnet" ?
-            Checkpoints.Height(Checkpoints.Parse(Resources.Resource("Gyroid.Checkpoints.Mainnet"))): uint64(0)
-            let unit = size >= 1000000000 ? "GB": "MB"
-            let text = (float64(size) / (size >= 1000000000 ? 1e9: 1e6)).ToString("0.0", CultureInfo.InvariantCulture)
-            var save bool? = nil
-            try {
-                save = await session.CheckpointAutoSaveAsync(nil, ct)
-            } catch (failure Exception) { }
+            let result = await session.ReadSettingsChainAsync(settings, ct)
+            let unit = result.Size >= 1000000000 ? "GB": "MB"
+            let text = (float64(result.Size) / (result.Size >= 1000000000 ? 1e9: 1e6)).ToString(
+                "0.0",
+                CultureInfo.InvariantCulture
+            )
             owner?.TryPost(
                 () -> {
                     if request != generation {
                         return
                     }
-                    freeSpace = free
-                    trustedCheckpoint = trusted
-                    dataSize = size
+                    freeSpace = result.Free
+                    trustedCheckpoint = result.Trusted
+                    dataSize = result.Size
                     sizeUnit = unit
                     sizeText = text
-                    dataWallets = wallets
-                    localCheckpoint = local
-                    autoSave = save
+                    dataWallets = result.Wallets
+                    localCheckpoint = result.Local
+                    autoSave = result.AutoSave
                     loadIssue = ""
                     Rebuild()
                 }
@@ -1944,6 +1936,8 @@ class SettingsDialogs : Cell, IDisposable {
     private var viewOnlyName string = ""
     private var viewOnlyPassword string = ""
     private var viewOnlyCreated string = ""
+    private var filenameIssue string = ""
+    private var fileIssue string = ""
     private var creating bool
     private var purgeText string = ""
     private var purging bool
@@ -1983,10 +1977,10 @@ class SettingsDialogs : Cell, IDisposable {
     func Open(kind string) {
         ResetDialog()
         this.kind = kind
-        if kind == "view-key" {
+        if kind == "view-key" || kind == "phrase" {
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(context.Window?.Closed ?? CancellationToken.None)
         } else if kind == "view-only" {
-            viewOnlyName = state.Wallet.Replace(".wallet.dat", "").Replace(".dat", "") + ".view.wallet.dat"
+            viewOnlyName = AppSettings.WalletBasename(state.Wallet) + ".view.wallet.dat"
         }
         Rebuild()
     }
@@ -2013,6 +2007,8 @@ class SettingsDialogs : Cell, IDisposable {
         viewOnlyName = ""
         viewOnlyPassword = ""
         viewOnlyCreated = ""
+        filenameIssue = ""
+        fileIssue = ""
         purgeText = ""
         issue = ""
         loading = false
@@ -2073,10 +2069,6 @@ class SettingsDialogs : Cell, IDisposable {
         }
         let buffer = password.ToCharArray()
         password = ""
-        if kind == "phrase" {
-            input.OnRevealSeed.Invoke(buffer)
-            return
-        }
         guard let owner = input.Window, let lifetime = lifetime else {
             Array.Clear(buffer)
             return
@@ -2087,7 +2079,58 @@ class SettingsDialogs : Cell, IDisposable {
         let request = generation
         let token = lifetime.Token
         let wallet = state.Wallet
-        go LoadKeys(input.Session, wallet, owner, buffer, request, token)
+        let session = input.Session
+        if kind == "phrase" {
+            let publish = input.OnRevealSeed
+            go LoadPhrase(session, wallet, owner, buffer, publish, request, token)
+        } else {
+            go LoadKeys(session, wallet, owner, buffer, request, token)
+        }
+    }
+
+    private async func LoadPhrase(
+        session WalletSession,
+        wallet string,
+        owner Window,
+        password[]char,
+        publish Action[[]char],
+        request int32,
+        token CancellationToken
+    ) {
+        var words[]char = []char{}
+        var issue = ""
+        try {
+            try {
+                words = await session.Keys.RevealSeedAsync(password, token)
+            } catch (cancelled OperationCanceledException) {
+                return
+            } catch (failure Exception) {
+                issue = failure.Message
+            }
+        } finally {
+            Array.Clear(password)
+        }
+        let result = words
+        let cleanup = token.Register(() -> Array.Clear(result))
+        if !owner.TryPost(
+            () -> {
+                cleanup.Dispose()
+                if request != generation || session.Settings.ActiveWallet != wallet {
+                    Array.Clear(result)
+                    return
+                }
+                loading = false
+                passwordIssue = issue
+                if issue.Length == 0 {
+                    publish.Invoke(result)
+                    Close()
+                }
+                Rebuild()
+            }
+        ) {
+            cleanup.Dispose()
+            Array.Clear(result)
+        }
     }
 
     private async func LoadKeys(
@@ -2165,6 +2208,9 @@ class SettingsDialogs : Cell, IDisposable {
                 }
             }
         }
+        if fileIssue.Length > 0 {
+            content.Add(Label(ui, ui.Strings.Explain(fileIssue), AppTheme.Type13, AppTheme.Body, ""))
+        }
         return WalletParts.Modal(
             ui,
             input.Window,
@@ -2195,13 +2241,13 @@ class SettingsDialogs : Cell, IDisposable {
                         () -> input.ChooseFile.Invoke(
                             FileDialogKind.SaveFile,
                             "keys file",
-                            Path.Combine(Home(), state.Wallet.Replace(".wallet.dat", "") + ".keys.txt"),
+                            Path.Combine(Home(), AppSettings.WalletBasename(state.Wallet) + ".keys.txt"),
                             path -> {
                                 if Object.ReferenceEquals(viewKeys, keys) &&
                                     input
                                     .Session
                                     .State == WalletState.Unlocked {
-                                    ui.Actions.Run(ct -> input.Session.Keys.SaveViewKeysAsync(path, keys, ct))
+                                    SaveKeys(input, path, keys)
                                 }
                             }
                         ),
@@ -2211,6 +2257,48 @@ class SettingsDialogs : Cell, IDisposable {
                 }
             ),
             close
+        )
+    }
+
+    private func SaveKeys(input SettingsPageInput, path string, keys WalletViewKeys) {
+        guard let owner = input.Window else {
+            return
+        }
+        let copy = WalletViewKeys{
+            SpendPublic: keys.SpendPublic.ToArray(),
+            ViewPrivate: keys.ViewPrivate.ToArray(),
+            ViewPublic: keys.ViewPublic.ToArray()
+        }
+        let request = generation
+        let session = input.Session
+        fileIssue = ""
+        input.Ui.Actions.Run(ct -> ExportKeys(session, owner, path, copy, request, ct))
+    }
+
+    private async func ExportKeys(
+        session WalletSession,
+        owner Window,
+        path string,
+        keys WalletViewKeys,
+        request int32,
+        token CancellationToken
+    ) {
+        var issue = ""
+        try {
+            await session.Keys.SaveViewKeysAsync(path, keys, token)
+        } catch (failure Exception) {
+            issue = failure.Message
+        } finally {
+            keys.Dispose()
+        }
+        owner.TryPost(
+            () -> {
+                if request != generation {
+                    return
+                }
+                fileIssue = issue.Length == 0 ? "Saved": issue
+                Rebuild()
+            }
         )
     }
 
@@ -2298,6 +2386,9 @@ class SettingsDialogs : Cell, IDisposable {
         )
         let content = Container{Gap: AppTheme.Space14}
         let actions = List[Blob]()
+        if fileIssue.Length > 0 {
+            content.Add(Label(ui, ui.Strings.Explain(fileIssue), AppTheme.Type13, AppTheme.Pink, ""))
+        }
         if viewOnlyCreated.Length > 0 {
             content.Add(
                 Container{
@@ -2332,7 +2423,9 @@ class SettingsDialogs : Cell, IDisposable {
                         viewOnlyName,
                         value -> {
                             viewOnlyName = value
+                            filenameIssue = ""
                         },
+                        issue: filenameIssue,
                         labelled: false
                     )
                 )
@@ -2439,6 +2532,15 @@ class SettingsDialogs : Cell, IDisposable {
             return
         }
         let filename = viewOnlyName.Trim()
+        filenameIssue = ""
+        fileIssue = ""
+        try {
+            WalletValidation.ValidateFilename(filename)
+        } catch (failure Exception) {
+            filenameIssue = failure.Message
+            Rebuild()
+            return
+        }
         let candidate = viewOnlyPassword.ToCharArray()
         passwordIssue = if password == viewOnlyPassword {
             "View-only file password must differ from the wallet password"
@@ -2501,7 +2603,7 @@ class SettingsDialogs : Cell, IDisposable {
                     return
                 }
                 creating = false
-                passwordIssue = issue
+                fileIssue = issue
                 if issue.Length == 0 {
                     password = ""
                     viewOnlyPassword = ""

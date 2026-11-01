@@ -118,7 +118,8 @@ class WalletSession : IDisposable {
                 go AutoLock(ctx)
                 go RestartOwned(ctx)
                 go ManageEvents(ctx)
-                go Messages.Sync(ctx)
+                let messages = Messages
+                go messages.Sync(ctx)
             }
         } catch (error OperationCanceledException) when shutdown.IsCancellationRequested { } catch (error Exception) {
             ReportBackgroundFailure(error)
@@ -379,51 +380,61 @@ class WalletSession : IDisposable {
         }
     }
 
+    func SettingsDirectoryExists(path string) bool -> Directory.Exists(path)
+
+    func OpenSettingsDirectoryAsync(path string, ct CancellationToken) Task {
+        ct.ThrowIfCancellationRequested()
+        let start = System.Diagnostics.ProcessStartInfo(
+            OperatingSystem.IsWindows() ? "explorer.exe": OperatingSystem.IsMacOS() ? "open": "xdg-open"
+        )
+        start.ArgumentList.Add(path)
+        System.Diagnostics.Process.Start(start)?.Dispose()
+        return Task.CompletedTask
+    }
+
+    async func ReadSettingsChainAsync(value WalletSettings, ct CancellationToken) SettingsChainResult {
+        let data = DirectoryInfo(value.DataDirectory)
+        var result = SettingsChainResult{}
+        if data.Exists {
+            for file in data.EnumerateFiles(
+                "*",
+                EnumerationOptions{
+                    RecurseSubdirectories: true,
+                    IgnoreInaccessible: true,
+                    AttributesToSkip: FileAttributes.ReparsePoint
+                }
+            ) {
+                ct.ThrowIfCancellationRequested()
+                result.Size += file.Length
+            }
+            try {
+                result.Wallets = Library.DataWallets().Count
+            } catch (failure Exception) {
+                result.Wallets = -1
+            }
+            let saved = FileInfo(Path.Combine(data.FullName, "checkpoints.dat"))
+            if saved.Exists && saved.Length <= 1048576 {
+                result.Local = Checkpoints.Height(Checkpoints.Parse(File.ReadAllBytes(saved.FullName)))
+            }
+        }
+        result.Free = DriveInfo(
+            OperatingSystem.IsWindows() ? Path.GetPathRoot(data.FullName) ?? data.FullName:
+            data.Exists ? data.FullName: data.Parent?.FullName ?? "/"
+        ).AvailableFreeSpace
+        result.Trusted = value.Network == "mainnet" ?
+        Checkpoints.Height(Checkpoints.Parse(Resources.Resource("Gyroid.Checkpoints.Mainnet"))): uint64(0)
+        try {
+            result.AutoSave = await CheckpointAutoSaveAsync(nil, ct)
+        } catch (cancelled OperationCanceledException) {
+            throw cancelled
+        } catch (failure Exception) { }
+        return result
+    }
+
     async func ApplySettingsAsync(value WalletSettings, ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            let next = settings.Copy()
-            next.Network = value.Network
-            next.Endpoint = value.Endpoint
-            next.DataDirectory = value.DataDirectory
-            next.WalletDirectory = value.WalletDirectory
-            next.BinaryPath = value.BinaryPath
-            next.ListenAddress = value.ListenAddress
-            if next.Network != settings.Network {
-                if next.DataDirectory == settings.DataDirectory &&
-                    (
-                    next.DataDirectory == SettingsStore.DefaultData(settings.Network) ||
-                        next.DataDirectory == settings.DiscoveredDataDirectory
-                ) {
-                    next.DataDirectory = ""
-                    next.WalletDirectory = ""
-                }
-                if next.Endpoint == settings.Endpoint {
-                    next.Endpoint = ""
-                }
-                if next.BinaryPath == settings.BinaryPath {
-                    next.BinaryPath = ""
-                }
-                next.ActiveWallet = ""
-                next.DiscoveredDataDirectory = ""
-                next.DiscoveredEndpoint = ""
-                next.DiscoveredBinaryPath = ""
-                next.DiscoveredWalletFile = ""
-                next.LauncherBinaryPath = ""
-                NodeDiscovery.Discover(next)
-            }
-            SettingsValidation.Validate(next)
-            if next.BinaryPath != settings.BinaryPath && next.BinaryPath.Length > 0 {
-                let program = NodeDiscovery.ProgramError(next.BinaryPath)
-                if program.Length > 0 {
-                    throw WalletException(program)
-                }
-            }
-            if next.Network != settings.Network && Path.GetFullPath(next.DataDirectory) == Path.GetFullPath(
-                settings.DataDirectory
-            ) {
-                throw WalletException("Choose a separate data directory when changing network")
-            }
+            let next = SettingsValidation.Prepare(value, settings)
             StopEvents()
             await UnloadCoreAsync(ct)
             await SettingsStore.SaveAsync(next, ct, settings)

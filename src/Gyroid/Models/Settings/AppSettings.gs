@@ -18,4 +18,11 @@ open class AppSettings {
     var StartInTray bool
     var BackgroundLockMinutes int32
     var LoadError string = ""
+    shared {
+        func WalletBasename(filename string) string {
+            let suffix = filename.EndsWith(".wallet.dat", System.StringComparison.Ordinal) ? 11:
+            filename.EndsWith(".dat", System.StringComparison.Ordinal) ? 4: 0
+            return filename.Substring(0, filename.Length - suffix)
+        }
+    }
 }

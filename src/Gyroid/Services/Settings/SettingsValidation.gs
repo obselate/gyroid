@@ -9,6 +9,49 @@ import System.Net.Sockets
 
 class SettingsValidation {
     shared {
+        func Prepare(value WalletSettings, current WalletSettings) WalletSettings {
+            let next = current.Copy()
+            next.Network = value.Network
+            next.Endpoint = value.Endpoint
+            next.DataDirectory = value.DataDirectory
+            next.WalletDirectory = value.WalletDirectory
+            next.BinaryPath = value.BinaryPath
+            next.ListenAddress = value.ListenAddress
+            if next.Network != current.Network {
+                if next.DataDirectory == current.DataDirectory &&
+                    (
+                    next.DataDirectory == SettingsStore.DefaultData(current.Network) ||
+                        next.DataDirectory == current.DiscoveredDataDirectory
+                ) {
+                    next.DataDirectory = ""
+                    next.WalletDirectory = ""
+                }
+                if next.Endpoint == current.Endpoint {
+                    next.Endpoint = ""
+                }
+                next.ActiveWallet = ""
+                next.DiscoveredDataDirectory = ""
+                next.DiscoveredEndpoint = ""
+                next.DiscoveredBinaryPath = ""
+                next.DiscoveredWalletFile = ""
+                next.LauncherBinaryPath = ""
+                NodeDiscovery.Discover(next)
+            }
+            Validate(next)
+            if next.BinaryPath != current.BinaryPath && next.BinaryPath.Length > 0 {
+                let issue = NodeDiscovery.ProgramError(next.BinaryPath)
+                if issue.Length > 0 {
+                    throw WalletException(issue)
+                }
+            }
+            if next.Network != current.Network && Path.GetFullPath(next.DataDirectory) == Path.GetFullPath(
+                current.DataDirectory
+            ) {
+                throw WalletException("Choose a separate data directory when changing network")
+            }
+            return next
+        }
+
         func Validate(settings AppSettings) {
             if settings.Network != "mainnet" && settings.Network != "testnet" {
                 throw WalletException("Network must be mainnet or testnet")

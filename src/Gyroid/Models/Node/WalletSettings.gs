@@ -40,3 +40,12 @@ class WalletSettings : AppSettings {
         BinaryPath != other.BinaryPath ||
         ListenAddress != other.ListenAddress
 }
+
+data struct SettingsChainResult {
+    var Size int64
+    var Wallets int32
+    var Free int64
+    var Trusted uint64
+    var Local uint64
+    var AutoSave bool?
+}
