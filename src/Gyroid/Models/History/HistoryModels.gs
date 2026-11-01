@@ -52,3 +52,126 @@ data class WalletSend {
         return true
     }
 }
+
+data struct HistoryRecipient {
+    var Index int32
+    var Address string
+    var Amount uint64
+    var Memo string
+    var Privacy bool
+    var Language string
+}
+
+enum HistoryRowKind {
+    Received,
+    Mined,
+    Sent,
+    Pending
+}
+
+data struct HistoryRow {
+    var Key string
+    var Kind HistoryRowKind
+    var TxId string
+    var Index int32
+    var Amount uint64
+    var SentAmount uint64
+    var Fee uint64
+    var Self bool
+    var Memo string
+    var Indices[]int32
+    var Height uint64
+    var Maturity WalletMaturity
+    var Time int64
+    var State string
+    var Recipients[]HistoryRecipient
+    var ProofRecipients[]HistoryRecipient
+    var Open bool
+    var Revision int32
+    var Privacy bool
+    var Language string
+    var Width float64
+}
+
+data struct HistoryPreparation {
+    var Snapshot WalletSnapshot
+    var Outputs System.Collections.Generic.IReadOnlyList[WalletOutput]
+    var ExportOutputs System.Collections.Generic.IReadOnlyList[WalletOutput]
+    var Previous[]HistoryRow
+    var PreviousShown[]HistoryRow
+    var PreviousExport[]HistoryRow
+    var Tip uint64
+    var Times System.Collections.Generic.Dictionary[uint64, int64]
+    var Privacy bool
+    var Language string
+    var Width float64
+    var Complete bool
+}
+
+data struct HistorySummary {
+    var Received uint64
+    var Sent uint64
+    var Fees uint64
+    var Mined uint64
+}
+
+data struct HistoryRibbonBin {
+    var Received uint64
+    var Mined uint64
+    var Sent uint64
+    var ReceivedCount int32
+    var MinedCount int32
+    var SentCount int32
+    var Time int64
+}
+
+data struct HistoryPrepared {
+    var Rows[]HistoryRow
+    var Shown[]HistoryRow
+    var Export[]HistoryRow
+    var Summary HistorySummary
+    var Low uint64
+    var ExportCount int32
+    var Span uint64
+}
+
+data struct HistoryRibbonData {
+    var Bins[]HistoryRibbonBin
+    var Received[]float64
+    var Mined[]float64
+    var Sent[]float64
+    var Top float64
+}
+
+data struct HistoryArrival {
+    var Kind string
+    var Amount uint64
+    var Source string
+    var Confirmations uint64
+    var Required uint64
+    var Blocks uint64
+    var TxId string
+    var OutputIndex int32
+    var Height uint64
+    var Self bool
+}
+
+data struct HistoryActivity {
+    var Kind string
+    var Amount uint64
+    var Label string
+    var Status string
+    var Ready bool
+    var Order uint64
+    var Timestamp int64
+    var TxId string
+    var OutputIndex int32
+    var Height uint64
+    var Confirmations uint64
+    var Required uint64
+}
+
+data struct HistoryOverview {
+    var Arrivals[]HistoryArrival
+    var Activity[]HistoryActivity
+}
