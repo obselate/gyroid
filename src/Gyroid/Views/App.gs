@@ -156,7 +156,6 @@ partial class App : Cell, IDisposable {
                 },
                 History: wallet.Snapshot.History,
                 Sends: wallet.Snapshot.Sends,
-                Clipboard: ui.Actions.ClipboardText,
                 Source: NetworkSource{
                     Wallet: wallet.Settings.ActiveWallet,
                     Network: wallet.Settings.Network,

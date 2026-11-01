@@ -26,7 +26,6 @@ data struct NetworkInput {
     var Node NetworkStatusInput
     var History[]WalletOutput
     var Sends[]WalletSend
-    var Clipboard[]char
     var Source NetworkSource
     var Language string
     var Width float64
@@ -154,7 +153,6 @@ class NetworkPage : Cell, IDisposable {
                         Blocks: report.Blocks,
                         History: input.History,
                         Sends: input.Sends,
-                        Clipboard: input.Clipboard,
                         Language: input.Language,
                         Height: input.Height
                     }
@@ -167,7 +165,6 @@ class NetworkPage : Cell, IDisposable {
                         Banned: report.Banned,
                         PeerId: input.Node.PeerId,
                         IdentityAge: input.Node.IdentityAge,
-                        Clipboard: input.Clipboard,
                         Width: input.Width,
                         Language: input.Language
                     }
@@ -300,7 +297,6 @@ data struct NetworkBlocksInput {
     var Blocks[]NetworkBlock
     var History[]WalletOutput
     var Sends[]WalletSend
-    var Clipboard[]char
     var Language string
     var Height float64
 }
@@ -318,7 +314,6 @@ data struct NetworkRibbonInput {
     var Chart NetworkChartInput
     var History[]WalletOutput
     var Sends[]WalletSend
-    var Clipboard[]char
 }
 
 class NetworkBlocks : Cell[NetworkBlocksInput] {
@@ -347,7 +342,7 @@ class NetworkBlocks : Cell[NetworkBlocksInput] {
             Cell.Mount[NetworkChartInput, NetworkTimeChart]("network-times", chart),
             Cell.Mount[NetworkRibbonInput, NetworkRibbon](
                 "network-ribbon",
-                NetworkRibbonInput{Chart: chart, History: input.History, Sends: input.Sends, Clipboard: input.Clipboard}
+                NetworkRibbonInput{Chart: chart, History: input.History, Sends: input.Sends}
             )
         }
     }
@@ -424,14 +419,29 @@ class NetworkHeading {
     }
 }
 
-class NetworkRibbon : Cell[NetworkRibbonInput] {
+class NetworkRibbon : Cell[NetworkRibbonInput], IDisposable {
     private let ribbonPlot ElementHandle = ElementHandle()
+    private var actions UiService?
+    private let clipboardChanged Action
 
     init() {
+        clipboardChanged = () -> Rebuild()
         ribbonPlot.MetricsChanged += _ -> Rebuild()
     }
 
+    public func Dispose() {
+        if let source = actions {
+            source.ClipboardChanged -= clipboardChanged
+        }
+        actions = nil
+    }
+
     protected override func Build(input NetworkRibbonInput) Blob {
+        if actions != input.Chart.Ui.Actions {
+            Dispose()
+            actions = input.Chart.Ui.Actions
+            input.Chart.Ui.Actions.ClipboardChanged += clipboardChanged
+        }
         let chart = input.Chart
         let blocks = chart.Blocks
         let tip = blocks.Length > 0 ? blocks[blocks.Length - 1]: NetworkBlock()
@@ -702,22 +712,36 @@ data struct NetworkPeersInput {
     var Banned[]BannedPeer
     var PeerId string
     var IdentityAge string
-    var Clipboard[]char
     var Width float64
     var Language string
 }
 
-class NetworkPeers : Cell[NetworkPeersInput] {
+class NetworkPeers : Cell[NetworkPeersInput], IDisposable {
     private var tab string = "peers"
     private var hovered string = ""
     private var revealed bool
     private let hoverPeer Action[string]
+    private var actions UiService?
+    private let clipboardChanged Action
 
     init() {
+        clipboardChanged = () -> Rebuild()
         hoverPeer = Hover
     }
 
+    public func Dispose() {
+        if let source = actions {
+            source.ClipboardChanged -= clipboardChanged
+        }
+        actions = nil
+    }
+
     protected override func Build(input NetworkPeersInput) Blob {
+        if actions != input.Ui.Actions {
+            Dispose()
+            actions = input.Ui.Actions
+            input.Ui.Actions.ClipboardChanged += clipboardChanged
+        }
         let ui = input.Ui
         let card = WalletParts.Card(
             ui,
