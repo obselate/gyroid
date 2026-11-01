@@ -100,7 +100,7 @@ partial class App {
                     Bottom: 0,
                     ControlParts.Progress(
                         ui.Strings.Get("syncing"),
-                        percent!!/ 100.0,
+                        percent / 100.0,
                         AppTheme.Lime,
                         60,
                         2,
