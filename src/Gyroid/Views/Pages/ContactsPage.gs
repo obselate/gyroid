@@ -50,7 +50,7 @@ class ContactsPage : Cell[ContactsInput] {
                     ui,
                     MaterialIcons.Create("person_add", AppTheme.Icon16, editing == "" ? AppTheme.Lime: AppTheme.Body),
                     ui.Strings.Get("Add contact"),
-                    () -> Edit("", ""),
+                    () -> Edit(input, "", ""),
                     input.Busy,
                     editing == "",
                     AppTheme.ControlRegular
@@ -84,8 +84,8 @@ class ContactsPage : Cell[ContactsInput] {
         return card
     }
 
-    private func Edit(label string, destination string) {
-        if editing != nil || ContactsInput(Input).Contacts.Count == 0 {
+    private func Edit(input ContactsInput, label string, destination string) {
+        if editing != nil || input.Contacts.Count == 0 {
             editorHandle.ScrollIntoView()
             return
         }
@@ -133,7 +133,7 @@ class ContactsPage : Cell[ContactsInput] {
                 ui,
                 MaterialIcons.Create("edit", AppTheme.Icon16, AppTheme.Body),
                 ui.Strings.Get("Edit") + " " + label,
-                () -> Edit(label, destination),
+                () -> Edit(input, label, destination),
                 input.Busy,
                 size: AppTheme.ControlRegular
             ),
@@ -161,13 +161,12 @@ class ContactsPage : Cell[ContactsInput] {
             Original: original,
             Destination: destination,
             Handle: editorHandle,
-            OnSave: Save,
+            OnSave: (label, address) -> Save(input, label, address),
             OnCancel: Reset
         }
     )
 
-    private func Save(label string, destination string) {
-        let input = ContactsInput(Input)
+    private func Save(input ContactsInput, label string, destination string) {
         let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
         next.Remove(editing ?? "")
         next[label] = destination
@@ -255,7 +254,12 @@ class ContactEditor : Cell[ContactEditorInput] {
         let label = name.Trim()
         let taken = label != input.Original && input.Contacts.ContainsKey(label)
         let destinationName = AddressBook.IsDestination(label)
-        let form = WalletForm(ui, !input.Busy && !taken && !destinationName, Save, []string{label, address})
+        let form = WalletForm(
+            ui,
+            !input.Busy && !taken && !destinationName,
+            () -> Save(input),
+            []string{label, address}
+        )
         let fields = Container{
             FlexDirection: FlexDirection.Row,
             Gap: AppTheme.Space10,
@@ -318,8 +322,7 @@ class ContactEditor : Cell[ContactEditorInput] {
         }
     }
 
-    private func Save() {
-        let input = ContactEditorInput(Input)
+    private func Save(input ContactEditorInput) {
         try {
             let destination = WalletValidation.ValidateDestination(contactAddress ?? input.Destination)
             if !destination.StartsWith("$", StringComparison.Ordinal) {
