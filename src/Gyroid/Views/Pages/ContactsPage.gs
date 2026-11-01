@@ -13,6 +13,7 @@ import Gyroid.Services
 import Gyroid.Services.WalletText
 import System
 import System.Collections.Generic
+import System.Linq
 import System.Threading
 import System.Threading.Tasks
 
@@ -56,7 +57,7 @@ class ContactsPage : Cell, IDisposable {
 
     init() {
         rowKey = row -> "contact-row-" + row.Name
-        rowBuilder = row -> Row(current, row.Name, row.Destination, row.Valid)
+        rowBuilder = row -> Row(row)
     }
 
     public func Accept(input ContactsInput) {
@@ -68,8 +69,8 @@ class ContactsPage : Cell, IDisposable {
             current.Busy != input.Busy ||
             current.Language != input.Language
         current = input
+        Rebuild()
         if !prepare {
-            Rebuild()
             return
         }
         generation++
@@ -78,27 +79,28 @@ class ContactsPage : Cell, IDisposable {
             lifetime = source
             let token = source.Token
             let id = generation
-            go Prepare(input, window, id, token)
+            let previous = rows
+            go Prepare(input, previous, window, id, token)
         }
     }
 
-    private func Prepare(input ContactsInput, window Window, id int32, token CancellationToken) {
+    private func Prepare(input ContactsInput, previous[]ContactRow, window Window, id int32, token CancellationToken) {
         try {
-            let contacts = AddressBook.PrepareContacts(input.Contacts, token)
-            let prepared = List[ContactRow](contacts.Length)
-            for contact in contacts {
+            let prepared = List[ContactRow](input.Contacts.Count)
+            for (name, destination) in input.Contacts {
+                token.ThrowIfCancellationRequested()
                 prepared.Add(
                     ContactRow{
-                        Name: contact.Name,
-                        Destination: contact.Destination,
-                        Valid: contact.Valid,
+                        Name: name,
+                        Destination: destination,
+                        Valid: AddressBook.IsDestination(destination),
                         Privacy: input.Privacy,
                         Busy: input.Busy,
                         Language: input.Language
                     }
                 )
             }
-            let result = prepared.ToArray()
+            let result = prepared.SequenceEqual(previous) ? previous: prepared.ToArray()
             window.TryPost(
                 () -> {
                     if id == generation {
@@ -132,8 +134,6 @@ class ContactsPage : Cell, IDisposable {
 
     private var deleting string = ""
 
-    private let editorHandle ElementHandle = ElementHandle{}
-
     private let listHandle ElementHandle = ElementHandle{}
 
     override func Build() Blob {
@@ -163,9 +163,9 @@ class ContactsPage : Cell, IDisposable {
             let destination = input.Contacts.TryGetValue(key, out let address) ? address: ""
             card.Add(Editor(input, key, destination))
         }
-        let list = VirtualRows(rows, 56, rowKey, rowBuilder, false)
+        let list = VirtualRows(rows, 48 + AppTheme.Space8, rowKey, rowBuilder, false)
         list.Handle = listHandle
-        list.Height = rows.Length * 56
+        list.Height = rows.Length * (48 + AppTheme.Space8)
         list.FlexShrink = 1
         list.MinHeight = 0
         card.Add(ListParts.Viewport(list, Style{FlexShrink: 1}, grow: false))
@@ -180,7 +180,6 @@ class ContactsPage : Cell, IDisposable {
 
     private func Edit(input ContactsInput, label string) {
         if editing != nil || input.Contacts.Count == 0 {
-            editorHandle.ScrollIntoView()
             return
         }
         editing = label
@@ -196,11 +195,11 @@ class ContactsPage : Cell, IDisposable {
         Rebuild()
     }
 
-    private func Row(input ContactsInput, label string, destination string, valid bool) Blob {
-        let ui = input.Ui
+    private func Row(row ContactRow) Blob {
+        let ui = current.Ui
         return Container{
             BasedOn: AppTheme.ListRowStyle,
-            Key: "contact-row-" + label,
+            Key: "contact-row-" + row.Name,
             Height: 48,
             FlexShrink: 0,
             Margin: Edges{Bottom: AppTheme.Space8},
@@ -208,15 +207,15 @@ class ContactsPage : Cell, IDisposable {
             BorderWidth: AppTheme.Border1,
             BorderRadius: AppTheme.Radius10,
             BackgroundColor: AppTheme.Surface,
-            Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: label},
+            Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: row.Name},
             MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
-            Grow(Label(ui, label, AppTheme.Type14, AppTheme.Ink, "")),
+            Grow(Label(ui, row.Name, AppTheme.Type14, AppTheme.Ink, "")),
             Container{
                 FlexShrink: 1,
                 MinWidth: 0,
                 Label(
                     ui,
-                    valid ? Hidden(input.Privacy, Short(destination)): ui.Strings.Get("Invalid"),
+                    row.Valid ? Hidden(row.Privacy, Short(row.Destination)): ui.Strings.Get("Invalid"),
                     AppTheme.Type13,
                     AppTheme.Dim,
                     ""
@@ -225,17 +224,17 @@ class ContactsPage : Cell, IDisposable {
             Icon(
                 ui,
                 MaterialIcons.Create("edit", AppTheme.Icon16, AppTheme.Body),
-                ui.Strings.Get("Edit") + " " + label,
-                () -> Edit(input, label),
-                input.Busy,
+                ui.Strings.Get("Edit") + " " + row.Name,
+                () -> Edit(current, row.Name),
+                row.Busy,
                 size: AppTheme.ControlRegular
             ),
             Icon(
                 ui,
                 MaterialIcons.Create("delete", AppTheme.Icon16, AppTheme.Body),
-                ui.Strings.Get("Delete") + " " + label,
-                () -> deleting = label,
-                input.Busy,
+                ui.Strings.Get("Delete") + " " + row.Name,
+                () -> deleting = row.Name,
+                row.Busy,
                 size: AppTheme.ControlRegular
             )
         }
@@ -253,7 +252,6 @@ class ContactsPage : Cell, IDisposable {
             Network: input.Network,
             Original: original,
             Destination: destination,
-            Handle: editorHandle,
             Draft: draft,
             OnSave: (label, address) -> Save(input, label, address),
             OnCancel: Reset
@@ -270,7 +268,6 @@ class ContactsPage : Cell, IDisposable {
             .Actions
             .Run(
             ct -> {
-                ct.ThrowIfCancellationRequested()
                 result = AddressBook.StoreContacts(input.Contacts, original, label, destination)
                 return Task.CompletedTask
             },
@@ -334,7 +331,6 @@ data struct ContactEditorInput {
     var Network string
     var Original string
     var Destination string
-    var Handle ElementHandle
     var Draft ContactDraft
     var OnSave Action[string, string]
     var OnCancel Action
@@ -401,7 +397,6 @@ class ContactEditor : Cell[ContactEditorInput] {
         }
         return Container{
             BasedOn: AppTheme.TileStyle,
-            Handle: input.Handle,
             Gap: AppTheme.Space12,
             Padding: AppTheme.Space12,
             FlexShrink: 0,
