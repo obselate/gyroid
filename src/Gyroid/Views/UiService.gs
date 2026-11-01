@@ -58,6 +58,8 @@ class UiService {
 
     private var clipboardOwner[]uint8 = []uint8{}
 
+    prop ClipboardOwner ReadOnlyMemory[uint8] -> ReadOnlyMemory[uint8](clipboardOwner)
+
     let Decoding Dictionary[string, int64] = Dictionary[string, int64]()
 
     var DecodeSeed int32

@@ -3,7 +3,6 @@ package Gyroid.Views
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Gyroid.Components
 import Gyroid.Components.ControlParts
@@ -39,28 +38,24 @@ class ContactsPage : Cell[ContactsInput] {
 
     protected override func Build(input ContactsInput) Blob {
         let ui = input.Ui
-        let card = WalletParts.Card(ui, gap: AppTheme.Space14, radius: AppTheme.Radius14)
-        card.Width = Percent(100)
-        card.MaxWidth = Math.Clamp(640 + Math.Max(0, input.Height - 640) * 0.6, 640.0, 900.0)
-        card.MaxHeight = Percent(100)
+        let card = WalletParts.PageCard(
+            ui,
+            maxWidth: Math.Clamp(640 + Math.Max(0, input.Height - 640) * 0.6, 640.0, 900.0),
+            fill: true
+        )
         card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space8,
-                FlexShrink: 0,
-                Grow(Label(ui, ui.Strings.Get("contacts"), AppTheme.Type17, AppTheme.Ink, "")),
-                WalletParts.Square(
+            WalletParts.Header(
+                Label(ui, ui.Strings.Get("contacts"), AppTheme.Type17, AppTheme.Ink, ""),
+                trailing: Icon(
                     ui,
-                    "person_add",
+                    MaterialIcons.Create("person_add", AppTheme.Icon16, input.Busy ? AppTheme.Body: AppTheme.Lime),
                     ui.Strings.Get("Add contact"),
-                    editing == "",
-                    input.Busy,
                     () -> Edit("", ""),
-                    AppTheme.ControlRegular,
-                    AppTheme.Body
+                    input.Busy,
+                    editing == "",
+                    AppTheme.ControlRegular
                 )
-            }
+            )
         )
         let list = Container{
             Gap: AppTheme.Space8,
@@ -81,7 +76,7 @@ class ContactsPage : Cell[ContactsInput] {
                 }
             )
         }
-        card.Add(list)
+        card.Add(ListParts.Viewport(list, grow: false))
         if deleting.Length > 0 {
             card.Add(DeleteDialog(input))
         }
@@ -131,28 +126,24 @@ class ContactsPage : Cell[ContactsInput] {
                     ""
                 )
             },
-            WalletParts.Square(
+            Icon(
                 ui,
-                "edit",
+                MaterialIcons.Create("edit", AppTheme.Icon16, input.Busy ? AppTheme.Body: AppTheme.Lime),
                 ui.Strings.Get("Edit") + " " + label,
-                false,
-                input.Busy,
                 () -> Edit(label, destination),
-                AppTheme.ControlRegular,
-                AppTheme.Body
-            ),
-            WalletParts.Square(
-                ui,
-                "delete",
-                ui.Strings.Get("Delete") + " " + label,
-                false,
                 input.Busy,
+                size: AppTheme.ControlRegular
+            ),
+            Icon(
+                ui,
+                MaterialIcons.Create("delete", AppTheme.Icon16, input.Busy ? AppTheme.Body: AppTheme.Lime),
+                ui.Strings.Get("Delete") + " " + label,
                 () -> {
                     deleting = label
                     Rebuild()
                 },
-                AppTheme.ControlRegular,
-                AppTheme.Body
+                input.Busy,
+                size: AppTheme.ControlRegular
             )
         }
     }
@@ -175,53 +166,43 @@ class ContactsPage : Cell[ContactsInput] {
             Container{
                 Width: 180,
                 FlexShrink: 0,
-                form.Entry(
-                    TextField{
-                        AccessibilityName: ui.Strings.Get("Name"),
-                        Placeholder: ui.Strings.Get("Name"),
-                        Value: contactName,
-                        Controlled: true,
-                        Disabled: input.Busy,
-                        Invalid: taken || destinationName,
-                        IssueText: if destinationName {
-                            ui.Strings.Get("Name cannot be an address")
-                        } else if taken {
-                            ui.Strings.Get("Name already exists")
-                        } else {
-                            nil
-                        },
-                        Leading: MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
-                        OnChange: value -> {
-                            contactName = value
-                            Rebuild()
-                        }
-                    }
+                form.Field(
+                    "Name",
+                    contactName,
+                    value -> {
+                        contactName = value
+                        Rebuild()
+                    },
+                    issue: if destinationName {
+                        "Name cannot be an address"
+                    } else if taken {
+                        "Name already exists"
+                    } else {
+                        ""
+                    },
+                    disabled: input.Busy,
+                    labelled: false,
+                    leading: MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
+                    placeholder: ui.Strings.Get("Name"),
+                    contentDirection: nil
                 )
             },
             Grow(
                 Container{
                     MinWidth: 0,
-                    form.Entry(
-                        TextField{
-                            AccessibilityName: ui.Strings.Get("Address"),
-                            Placeholder: ui.Strings.Get("Address"),
-                            Value: contactAddress,
-                            Controlled: true,
-                            Password: input.Privacy,
-                            Disabled: input.Busy,
-                            Invalid: issue.Length > 0,
-                            IssueText: if issue.Length > 0 {
-                                ui.Strings.Explain(issue)
-                            } else {
-                                nil
-                            },
-                            ContentDirection: Direction.LeftToRight,
-                            OnChange: value -> {
-                                contactAddress = value.Trim()
-                                issue = ""
-                                Rebuild()
-                            }
-                        }
+                    form.Field(
+                        "Address",
+                        contactAddress,
+                        value -> {
+                            contactAddress = value.Trim()
+                            issue = ""
+                            Rebuild()
+                        },
+                        issue: issue,
+                        disabled: input.Busy,
+                        labelled: false,
+                        hidden: input.Privacy,
+                        placeholder: ui.Strings.Get("Address")
                     )
                 }
             )

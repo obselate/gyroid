@@ -31,16 +31,15 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
 
     private var hold int32
 
+    private var copiedOwner ReadOnlyMemory[uint8]
+
     protected override func Build(input SeedPageInput) Blob {
         let ui = input.Ui
-        let card = WalletParts.Card(ui, gap: AppTheme.Space14, radius: AppTheme.Radius14)
-        card.Width = Percent(100)
-        card.MaxWidth = 760
-        card.MaxHeight = Percent(100)
+        let card = WalletParts.PageCard(ui, maxWidth: 760, fill: true)
         card.Add(Label(ui, ui.Strings.Get("recovery phrase"), AppTheme.Type17, AppTheme.Ink, ""))
         if input.Words.Length == 0 {
             if input.Issue.Length > 0 {
-                card.Add(Label(ui, ui.Strings.Explain(input.Issue), AppTheme.Type13, AppTheme.Pink, ""))
+                card.Add(MessageParts.Problem(ui, input.Issue))
                 card.Add(Button(ui, "Retry", input.OnRetry, input.Busy, true))
             }
             return card
@@ -51,6 +50,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             visible = false
             saved = false
             hold = Random.Shared.Next()
+            copiedOwner = ReadOnlyMemory[uint8].Empty
         }
         let grid = Container{Gap: AppTheme.Space6, FlexShrink: 0}
         var line = Container{}
@@ -91,7 +91,21 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                 }
             )
         )
-        actions.Add(Button(ui, "Copy", () -> ui.Actions.Copy(words, 30000)))
+        let copied = !copiedOwner.IsEmpty && copiedOwner.Equals(ui.Actions.ClipboardOwner)
+        actions.Add(
+            Button(
+                ui,
+                copied ? "Copied": "Copy",
+                () -> {
+                    let previous = ui.Actions.ClipboardOwner
+                    ui.Actions.Copy(words, 30000)
+                    if !previous.Equals(ui.Actions.ClipboardOwner) {
+                        copiedOwner = ui.Actions.ClipboardOwner
+                    }
+                    Rebuild()
+                }
+            )
+        )
         actions.Add(Button(ui, "Export", () -> Export(input), input.Busy))
         actions.Add(Container{FlexGrow: 1})
         if !input.FromWallet {

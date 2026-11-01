@@ -3,7 +3,6 @@ package Gyroid.Views
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Gyroid.Components
 import Gyroid.Components.ControlParts
@@ -67,29 +66,21 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             activeWallet = input.ActiveWallet
             Load(input)
         }
-        let card = WalletParts.Card(ui, gap: AppTheme.Space14, radius: AppTheme.Radius14)
-        card.Width = Percent(100)
-        card.MaxWidth = 560
-        card.MaxHeight = Percent(100)
+        let card = WalletParts.PageCard(ui, maxWidth: 560, fill: true)
         if form.Length > 0 {
             return Form(input, card)
         }
         let loaded = input.State != WalletState.Unloaded
-        let header = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: AppTheme.Space8,
-            FlexShrink: 0,
-            Grow(Label(ui, ui.Strings.Get("wallets"), AppTheme.Type17, AppTheme.Ink, "")),
-            WalletParts.Square(
+        let header = WalletParts.Header(
+            Label(ui, ui.Strings.Get("wallets"), AppTheme.Type17, AppTheme.Ink, ""),
+            trailing: Icon(
                 ui,
-                "settings",
+                MaterialIcons.Create("settings", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
                 ui.Strings.Get("Settings"),
-                false,
-                input.Busy,
-                () -> input.OnNavigate(AppPage.Settings)
+                () -> input.OnNavigate(AppPage.Settings),
+                input.Busy
             )
-        }
+        )
         card.Add(header)
         card.Add(Label(ui, input.Session.Settings.WalletDirectory, AppTheme.Type12, AppTheme.Dim, ""))
         if wallets.Count == 0 {
@@ -116,16 +107,16 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 Container{
                     Handle: menuAnchor,
                     FlexShrink: 0,
-                    WalletParts.Square(
+                    Icon(
                         ui,
-                        "add",
+                        MaterialIcons.Create("add", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
                         ui.Strings.Get("Add wallet"),
-                        menu,
-                        input.Busy,
                         () -> {
                             menu = !menu
                             Rebuild()
-                        }
+                        },
+                        input.Busy,
+                        menu
                     ),
                     Menu(input)
                 }
@@ -140,7 +131,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             for (filename, used) in wallets {
                 list.Add(Row(input, filename, used, loaded))
             }
-            card.Add(list)
+            card.Add(ListParts.Viewport(list, grow: false))
         }
         if issue.Length > 0 && opened.Length == 0 {
             card.Add(Issue(ui))
@@ -190,15 +181,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         )
     }
 
-    private func Issue(ui Presentation) Blob -> Text{
-        Content: ui.Strings.Explain(issue),
-        FontFamily: AppTheme.Font,
-        FontSize: AppTheme.Type12,
-        Color: AppTheme.Pink,
-        TextWrap: TextWrap.Wrap,
-        FlexShrink: 0,
-        Accessibility: Accessibility{Role: AccessibilityRole.Alert, Name: ui.Strings.Explain(issue)}
-    }
+    private func Issue(ui Presentation) Blob -> MessageParts.Problem(ui, issue)
 
     private func Tile(input LibraryInput, icon string, label string, primary bool, click Action) Blob {
         let ui = input.Ui
@@ -362,13 +345,12 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         }
         if active {
             head.Add(
-                WalletParts.Square(
+                Icon(
                     ui,
-                    "download",
+                    MaterialIcons.Create("download", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
                     ui.Strings.Get("Unload"),
-                    false,
-                    input.Busy,
-                    () -> ui.Actions.Run(ct -> input.Session.UnloadAsync(ct))
+                    () -> ui.Actions.Run(ct -> input.Session.UnloadAsync(ct)),
+                    input.Busy
                 )
             )
         }
@@ -400,21 +382,18 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 Grow(
                     Container{
                         MinWidth: 0,
-                        unlock.Entry(
-                            TextField{
-                                AccessibilityName: ui.Strings.Get("Password"),
-                                Value: password,
-                                Controlled: true,
-                                Password: true,
-                                RevealButton: true,
-                                Invalid: issue.Length > 0,
-                                Disabled: input.Busy,
-                                OnChange: value -> {
-                                    password = value
-                                    issue = ""
-                                    Rebuild()
-                                }
-                            }
+                        unlock.Field(
+                            "Password",
+                            password,
+                            value -> {
+                                password = value
+                                issue = ""
+                                Rebuild()
+                            },
+                            secret: true,
+                            disabled: input.Busy,
+                            labelled: false,
+                            invalid: issue.Length > 0
                         )
                     }
                 ),
@@ -483,23 +462,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         }
         let fields = WalletForm(ui, !input.Busy, () -> Submit(input), required)
         card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space12,
-                FlexShrink: 0,
-                WalletParts.Square(
-                    ui,
-                    "arrow_back",
-                    ui.Strings.Get("Back"),
-                    false,
-                    input.Busy,
-                    () -> {
-                        Clear()
-                        issue = ""
-                        Rebuild()
-                    }
-                ),
+            WalletParts.Header(
                 Label(
                     ui,
                     ui.Strings.Get(
@@ -512,8 +475,19 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                     AppTheme.Type17,
                     AppTheme.Ink,
                     ""
+                ),
+                leading: Icon(
+                    ui,
+                    MaterialIcons.Create("arrow_back", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
+                    ui.Strings.Get("Back"),
+                    () -> {
+                        Clear()
+                        issue = ""
+                        Rebuild()
+                    },
+                    input.Busy
                 )
-            }
+            )
         )
         card.Add(
             fields.Row(
