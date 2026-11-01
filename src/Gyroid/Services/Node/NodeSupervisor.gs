@@ -440,10 +440,7 @@ class NodeSupervisor : IDisposable {
             WalletValidation.ValidateFilename(Path.GetFileName(configuredWallet))
             walletFile = configuredWallet
         }
-        if NodeJson.Text(original.RootElement, "wallet_file") == walletFile && original.RootElement.TryGetProperty(
-            "full_sync",
-            out let sync
-        ) &&
+        if configuredWallet == walletFile && original.RootElement.TryGetProperty("full_sync", out let sync) &&
             (sync.ValueKind == JsonValueKind.True || sync.ValueKind == JsonValueKind.False) &&
             sync.GetBoolean() == syncEnabled &&
             (installed || NodeJson.Text(original.RootElement, "listen") == settings.ListenAddress) {
