@@ -160,7 +160,9 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     }
 
     private func Load(input LibraryInput) {
-        Clear()
+        if form.Length == 0 {
+            Clear()
+        }
         opened = input.ActiveWallet
         wallets.Clear()
         try {
