@@ -260,7 +260,20 @@ class PrivateFiles {
         }
 
         func Cookie(path string) string {
-            let token = ReadText(path, 1024, true).Trim()
+            var token string
+            try {
+                token = ReadText(path, 1024, true).Trim()
+            } catch (error WalletException) {
+                throw WalletException(
+                    switch error.Message {
+                        case "File does not exist": "Node access file is missing"
+                        case "File access was denied": "Access to the configured API cookie was denied"
+                        case "File could not be opened": "Node access file could not be opened"
+                        case "File could not be inspected": "Node access file could not be inspected"
+                        default: error.Message
+                    }
+                )
+            }
             if token.Length != 64 {
                 throw WalletException("API cookie must contain exactly 64 hexadecimal characters")
             }
