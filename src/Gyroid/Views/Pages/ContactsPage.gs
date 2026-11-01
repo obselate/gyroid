@@ -30,11 +30,11 @@ class ContactsPage : Cell[ContactsInput] {
 
     private var deleting string = ""
 
-    private var contactName string = ""
+    private var editorDestination string = ""
 
-    private var contactAddress string = ""
+    private let editorHandle ElementHandle = ElementHandle{}
 
-    private var issue string = ""
+    private let listHandle ElementHandle = ElementHandle{}
 
     protected override func Build(input ContactsInput) Blob {
         let ui = input.Ui
@@ -58,6 +58,7 @@ class ContactsPage : Cell[ContactsInput] {
             )
         )
         let list = Container{
+            Handle: listHandle,
             Gap: AppTheme.Space8,
             MinHeight: 0,
             FlexShrink: 1,
@@ -65,12 +66,12 @@ class ContactsPage : Cell[ContactsInput] {
             ScrollbarY: Theme.Read().Scrollbar
         }
         if editing == "" || input.Contacts.Count == 0 && editing == nil {
-            list.Add(Editor(input, ""))
+            list.Add(Editor(input, "", ""))
         }
         for (label, destination) in input.Contacts {
             list.Add(
                 if label == editing {
-                    Editor(input, label)
+                    Editor(input, label, editorDestination)
                 } else {
                     Row(input, label, destination)
                 }
@@ -84,18 +85,20 @@ class ContactsPage : Cell[ContactsInput] {
     }
 
     private func Edit(label string, destination string) {
+        if editing != nil || Input.Contacts.Count == 0 {
+            editorHandle.ScrollIntoView()
+            return
+        }
         editing = label
-        contactName = label
-        contactAddress = destination
-        issue = ""
-        Rebuild()
+        editorDestination = destination
+        if label == "" {
+            listHandle.JumpTo(0, 0)
+        }
     }
 
     private func Reset() {
         editing = nil
-        contactName = ""
-        contactAddress = ""
-        issue = ""
+        editorDestination = ""
         Rebuild()
     }
 
@@ -138,111 +141,37 @@ class ContactsPage : Cell[ContactsInput] {
                 ui,
                 MaterialIcons.Create("delete", AppTheme.Icon16, AppTheme.Body),
                 ui.Strings.Get("Delete") + " " + label,
-                () -> {
-                    deleting = label
-                    Rebuild()
-                },
+                () -> deleting = label,
                 input.Busy,
                 size: AppTheme.ControlRegular
             )
         }
     }
 
-    private func Editor(input ContactsInput, original string) Blob {
-        let ui = input.Ui
-        let label = contactName.Trim()
-        let taken = label != original && input.Contacts.ContainsKey(label)
-        let destinationName = AddressBook.IsDestination(label)
-        let form = WalletForm(
-            ui,
-            !input.Busy && !taken && !destinationName,
-            () -> Save(input),
-            []string{label, contactAddress}
-        )
-        let fields = Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: AppTheme.Space10,
-            FlexShrink: 0,
-            Container{
-                Width: 180,
-                FlexShrink: 0,
-                form.Field(
-                    "Name",
-                    contactName,
-                    value -> {
-                        contactName = value
-                        Rebuild()
-                    },
-                    issue: if destinationName {
-                        "Name cannot be an address"
-                    } else if taken {
-                        "Name already exists"
-                    } else {
-                        ""
-                    },
-                    disabled: input.Busy,
-                    labelled: false,
-                    leading: MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
-                    placeholder: ui.Strings.Get("Name"),
-                    inheritDirection: true
-                )
-            },
-            Grow(
-                Container{
-                    MinWidth: 0,
-                    form.Field(
-                        "Address",
-                        contactAddress,
-                        value -> {
-                            contactAddress = value.Trim()
-                            issue = ""
-                            Rebuild()
-                        },
-                        issue: issue,
-                        disabled: input.Busy,
-                        labelled: false,
-                        hidden: input.Privacy,
-                        placeholder: ui.Strings.Get("Address")
-                    )
-                }
-            )
+    private func Editor(input ContactsInput, original string, destination string) Blob ->
+    Cell.Mount[ContactEditorInput, ContactEditor](
+        "contact-editor-" + original,
+        ContactEditorInput{
+            Ui: input.Ui,
+            Contacts: input.Contacts,
+            Privacy: input.Privacy,
+            Busy: input.Busy,
+            Language: input.Language,
+            Network: input.Network,
+            Original: original,
+            Destination: destination,
+            Handle: editorHandle,
+            OnSave: Save,
+            OnCancel: Reset
         }
-        return Container{
-            BasedOn: AppTheme.TileStyle,
-            Key: "edit",
-            Gap: AppTheme.Space12,
-            Padding: AppTheme.Space12,
-            FlexShrink: 0,
-            BackgroundColor: AppTheme.Raised,
-            fields,
-            ActionRow(
-                []Blob{
-                    Button(ui, "Cancel", () -> Reset(), input.Busy || input.Contacts.Count == 0),
-                    Button(ui, "Save", form.Submit, !form.CanSubmit, true)
-                }
-            )
-        }
-    }
+    )
 
-    private func Save(input ContactsInput) {
-        let label = contactName.Trim()
-        let original = editing ?? ""
-        try {
-            let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
-            next.Remove(original)
-            let destination = WalletValidation.ValidateDestination(contactAddress)
-            if !destination.StartsWith("$", StringComparison.Ordinal) {
-                let addressIssue = WalletValidation.AddressIssue(destination, input.Network)
-                if addressIssue.Length > 0 {
-                    throw WalletException(addressIssue)
-                }
-            }
-            next[label] = destination
-            Store(input, next, () -> Reset())
-        } catch (failure WalletException) {
-            issue = failure.Message
-            Rebuild()
-        }
+    private func Save(label string, destination string) {
+        let input = Input
+        let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
+        next.Remove(editing ?? "")
+        next[label] = destination
+        Store(input, next, Reset)
     }
 
     private func Store(input ContactsInput, next SortedDictionary[string, string], done Action) {
@@ -263,10 +192,7 @@ class ContactsPage : Cell[ContactsInput] {
 
     private func DeleteDialog(input ContactsInput) Blob {
         let ui = input.Ui
-        let close Action = () -> {
-            deleting = ""
-            Rebuild()
-        }
+        let close Action = () -> deleting = ""
         return WalletParts.Modal(
             ui,
             "delete-contact",
@@ -298,5 +224,113 @@ class ContactsPage : Cell[ContactsInput] {
                 OnClose = close
             }
         )
+    }
+}
+
+data struct ContactEditorInput {
+    var Ui Presentation
+    var Contacts SortedDictionary[string, string]
+    var Privacy bool
+    var Busy bool
+    var Language string
+    var Network string
+    var Original string
+    var Destination string
+    var Handle ElementHandle
+    var OnSave Action[string, string]
+    var OnCancel Action
+}
+
+class ContactEditor : Cell[ContactEditorInput] {
+    private var contactName string? = nil
+
+    private var contactAddress string? = nil
+
+    private var issue string = ""
+
+    protected override func Build(input ContactEditorInput) Blob {
+        let ui = input.Ui
+        let name = contactName ?? input.Original
+        let address = contactAddress ?? input.Destination
+        let label = name.Trim()
+        let taken = label != input.Original && input.Contacts.ContainsKey(label)
+        let destinationName = AddressBook.IsDestination(label)
+        let form = WalletForm(ui, !input.Busy && !taken && !destinationName, Save, []string{label, address})
+        let fields = Container{
+            FlexDirection: FlexDirection.Row,
+            Gap: AppTheme.Space10,
+            FlexShrink: 0,
+            Container{
+                Width: 180,
+                FlexShrink: 0,
+                form.Field(
+                    "Name",
+                    name,
+                    value -> contactName = value,
+                    issue: if destinationName {
+                        "Name cannot be an address"
+                    } else if taken {
+                        "Name already exists"
+                    } else {
+                        ""
+                    },
+                    disabled: input.Busy,
+                    labelled: false,
+                    leading: MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
+                    placeholder: ui.Strings.Get("Name"),
+                    inheritDirection: true
+                )
+            },
+            Grow(
+                Container{
+                    MinWidth: 0,
+                    form.Field(
+                        "Address",
+                        address,
+                        value -> {
+                            contactAddress = value.Trim()
+                            issue = ""
+                        },
+                        issue: issue,
+                        disabled: input.Busy,
+                        labelled: false,
+                        hidden: input.Privacy,
+                        placeholder: ui.Strings.Get("Address")
+                    )
+                }
+            )
+        }
+        return Container{
+            BasedOn: AppTheme.TileStyle,
+            Key: "edit",
+            Handle: input.Handle,
+            Gap: AppTheme.Space12,
+            Padding: AppTheme.Space12,
+            FlexShrink: 0,
+            BackgroundColor: AppTheme.Raised,
+            fields,
+            ActionRow(
+                []Blob{
+                    Button(ui, "Cancel", input.OnCancel, input.Busy || input.Contacts.Count == 0),
+                    Button(ui, "Save", form.Submit, !form.CanSubmit, true)
+                }
+            )
+        }
+    }
+
+    private func Save() {
+        let input = Input
+        try {
+            let destination = WalletValidation.ValidateDestination(contactAddress ?? input.Destination)
+            if !destination.StartsWith("$", StringComparison.Ordinal) {
+                let addressIssue = WalletValidation.AddressIssue(destination, input.Network)
+                if addressIssue.Length > 0 {
+                    throw WalletException(addressIssue)
+                }
+            }
+            input.OnSave((contactName ?? input.Original).Trim(), destination)
+        } catch (failure WalletException) {
+            issue = failure.Message
+        }
     }
 }
