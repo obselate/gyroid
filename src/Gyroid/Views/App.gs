@@ -300,7 +300,6 @@ partial class App : Cell, IDisposable {
                     Privacy: ui.Privacy,
                     Busy: ui.Working(),
                     Language: ui.Strings.Language,
-                    Clipboard: ui.Actions.ClipboardText,
                     Height: height,
                     ChooseFile: chooseFile,
                     Request: receiveRequest

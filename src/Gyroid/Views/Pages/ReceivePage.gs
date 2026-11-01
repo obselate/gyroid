@@ -36,7 +36,6 @@ data struct ReceivePageInput {
     var Privacy bool
     var Busy bool
     var Language string
-    var Clipboard[]char
     var Height float64
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
 }
@@ -79,7 +78,6 @@ data struct ReceivePresentationInput {
     var Busy bool
     var Paid bool
     var Language string
-    var Clipboard[]char
     var Height float64
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var Change Action[string, string]
@@ -180,7 +178,6 @@ class ReceivePage : Cell {
             Busy: input.Busy,
             Paid: paid != nil,
             Language: input.Language,
-            Clipboard: input.Clipboard,
             Height: input.Height,
             ChooseFile: input.ChooseFile,
             Change: change,
@@ -340,8 +337,21 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
     private var qrCode QrCode?
     private var qrPath VectorPath = VectorPath.Empty
     private var generation int32
+    private var actions UiService?
+    private let clipboardChanged Action
+
+    init() {
+        clipboardChanged = () -> Rebuild()
+    }
 
     protected override func Build(input ReceivePresentationInput) Blob {
+        if actions != input.Ui.Actions {
+            if let source = actions {
+                source.ClipboardChanged -= clipboardChanged
+            }
+            actions = input.Ui.Actions
+            input.Ui.Actions.ClipboardChanged += clipboardChanged
+        }
         let ui = input.Ui
         let draft = input.Draft
         let empty = draft.Amount.Length == 0 && draft.Memo.Length == 0
@@ -409,7 +419,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                 Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: AppTheme.Black}
             )
         }
-        let copied = shown != "qr" && ReadOnlySpan[char](input.Clipboard).SequenceEqual(
+        let copied = shown != "qr" && ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
             System.MemoryExtensions.AsSpan(payload)
         )
         let options = [empty ? 2: 3]NavigationItem
@@ -565,6 +575,10 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
 
     public func Dispose() {
         generation++
+        if let source = actions {
+            source.ClipboardChanged -= clipboardChanged
+        }
+        actions = nil
     }
 
     private func QrPath(code QrCode) VectorPath {
