@@ -420,7 +420,16 @@ partial class App : Cell, IDisposable {
                 }
             )
         }
-        revealSeed = buffer -> RevealSeed(buffer, true)
+        revealSeed = words -> {
+            if closed || wallet.Snapshot.State != WalletState.Unlocked || wallet.LockQueued {
+                Array.Clear(words)
+                return
+            }
+            ClearSeed()
+            seed = words
+            seedFromWallet = true
+            Open(AppPage.Seed)
+        }
         retrySeed = () -> {
             if let buffer = seedPassword {
                 RevealSeed(buffer.ToArray(), false)
