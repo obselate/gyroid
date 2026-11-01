@@ -899,70 +899,36 @@ class SettingsStartup : Cell {
                 }
             ),
             form.Row("Node URL", value.Endpoint, text -> value.Endpoint = text, disabled: Pinned("ENDPOINT")),
-            form.Row(
+            PathRow(
+                input,
+                form,
                 "Data",
                 value.DataDirectory,
+                FileDialogKind.Folder,
                 text -> value.DataDirectory = text,
-                disabled: Pinned("DATA_DIR"),
-                trailing: Button(
-                    ui,
-                    "Browse",
-                    () -> input.ChooseFile.Invoke(
-                        FileDialogKind.Folder,
-                        "Data",
-                        value.DataDirectory,
-                        text -> {
-                            value.DataDirectory = text
-                            Rebuild()
-                        }
-                    ),
-                    input.Busy || Pinned("DATA_DIR")
-                )
+                "DATA_DIR"
             ),
-            form.Row(
+            PathRow(
+                input,
+                form,
                 "Wallets",
                 value.WalletDirectory,
+                FileDialogKind.Folder,
                 text -> value.WalletDirectory = text,
-                disabled: Pinned("WALLET_DIR"),
-                trailing: Button(
-                    ui,
-                    "Browse",
-                    () -> input.ChooseFile.Invoke(
-                        FileDialogKind.Folder,
-                        "Wallets",
-                        value.WalletDirectory,
-                        text -> {
-                            value.WalletDirectory = text
-                            Rebuild()
-                        }
-                    ),
-                    input.Busy || Pinned("WALLET_DIR")
-                )
+                "WALLET_DIR"
             ),
-            form.Row(
+            PathRow(
+                input,
+                form,
                 "Node program",
                 value.BinaryPath,
+                FileDialogKind.OpenFile,
                 text -> {
                     value.BinaryPath = text
                     programIssue = ""
                 },
-                issue: programIssue,
-                disabled: Pinned("BINARY"),
-                trailing: Button(
-                    ui,
-                    "Browse",
-                    () -> input.ChooseFile.Invoke(
-                        FileDialogKind.OpenFile,
-                        "Node program",
-                        value.BinaryPath,
-                        text -> {
-                            value.BinaryPath = text
-                            programIssue = ""
-                            Rebuild()
-                        }
-                    ),
-                    input.Busy || Pinned("BINARY")
-                )
+                "BINARY",
+                programIssue
             )
         }
         if state.ListenVisible {
@@ -981,6 +947,36 @@ class SettingsStartup : Cell {
         }
         fields.Add(ActionRow([]Blob{Button(ui, "Save", form.Submit, !form.CanSubmit, true)}))
         return fields
+    }
+
+    private func PathRow(
+        input SettingsPageInput,
+        form WalletForm,
+        label string,
+        value string,
+        kind FileDialogKind,
+        changed Action[string],
+        variable string,
+        issue string = ""
+    ) Blob -> Container{
+        FlexDirection: FlexDirection.Row,
+        AlignItems: AlignItems.FlexStart,
+        Gap: AppTheme.Space8,
+        Grow(form.Row(label, value, changed, issue: issue, disabled: Pinned(variable))),
+        Button(
+            input.Ui,
+            "Browse",
+            () -> input.ChooseFile.Invoke(
+                kind,
+                label,
+                Path.IsPathFullyQualified(value) ? value: Home(),
+                text -> {
+                    changed.Invoke(text)
+                    Rebuild()
+                }
+            ),
+            input.Busy || Pinned(variable)
+        )
     }
 
     private func SaveSettings(input SettingsPageInput) {
