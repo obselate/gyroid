@@ -183,7 +183,14 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                     Math.Ceiling(float64(status.ChainHeight - status.Height) / status.SyncRate / 60)
                 )
                 readings.Add(
-                    NodeReading(ui, "Speed", String.Format(ui.Strings.Get("{0} blk/s"), Math.Round(status.SyncRate)))
+                    NodeReading(
+                        ui,
+                        "Speed",
+                        String.Format(
+                            ui.Strings.Get("{0} blk/s"),
+                            status.SyncRate.ToString(status.SyncRate < 1 ? "G2": "0", CultureInfo.InvariantCulture)
+                        )
+                    )
                 )
                 readings.Add(NodeReading(ui, "Remaining", String.Format(ui.Strings.Get("~{0} min"), minutes)))
             }
@@ -193,7 +200,10 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                     NodeReading(
                         ui,
                         "Last block",
-                        Count(status.Height) + " · " + time.ToString("HH:mm", CultureInfo.InvariantCulture)
+                        Count(status.Height) + " · " + time.ToString(
+                            time.Date == DateTime.Today ? "HH:mm": "yyyy-MM-dd HH:mm",
+                            CultureInfo.InvariantCulture
+                        )
                     )
                 )
             }

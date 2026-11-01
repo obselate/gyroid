@@ -53,6 +53,15 @@ partial class App : Cell, IDisposable {
     private var paymentActivated bool
     private var paymentRevision int32
     private var lastWallet string = ""
+    private var walletGeneration int32
+    private var pageGeneration int32
+    private var operationGeneration int32
+    private var refreshGeneration int32
+    private var chooserGeneration int32
+    private var seedGeneration int32
+    private var createGeneration int32
+    private var contactsGeneration int32
+    private var preferenceGeneration int32
 
     private let miningHistory MiningHistory = MiningHistory()
     private let toolsState ToolsState = ToolsState()
@@ -87,7 +96,6 @@ partial class App : Cell, IDisposable {
     private var lastState WalletState
 
     private var error string = ""
-    private var connectionError string = ""
 
     private var refreshing bool
 
@@ -341,6 +349,7 @@ partial class App : Cell, IDisposable {
         openReceive = () -> Navigate(AppPage.Receive)
         finishSeed = () -> FinishSeed()
         contactsChanged = next -> {
+            contactsGeneration++
             contacts = next
         }
         selectSection = section -> {
@@ -381,12 +390,10 @@ partial class App : Cell, IDisposable {
                 OnClose: closeSettings
             }
         )
-        revealSeed = buffer -> {
-            Run(ct -> ShowSeed(wallet.Keys.RevealSeedAsync(buffer, ct), true), nil, buffer)
-        }
+        revealSeed = buffer -> RevealSeed(buffer, true)
         retrySeed = () -> {
             if let buffer = seedPassword {
-                Run(ct -> ShowSeed(wallet.Keys.RevealSeedAsync(buffer, ct), false))
+                RevealSeed(buffer.ToArray(), false)
             }
         }
         configureSeed = cell -> cell.Accept(
@@ -403,7 +410,13 @@ partial class App : Cell, IDisposable {
                 OnRetry: retrySeed
             }
         )
-        createWallet = (filename, buffer) -> Run(ct -> CreateWallet(filename, buffer, ct))
+        createWallet = (filename, buffer) -> {
+            createGeneration++
+            let request = createGeneration
+            let generation = walletGeneration
+            let page = pageGeneration
+            Run(ct -> CreateWallet(filename, buffer, request, generation, page, ct), nil, buffer)
+        }
         backupSeed = buffer -> StartSeed(buffer)
         closeSettings = () -> Back()
         configureLibrary = cell -> cell.Accept(
@@ -431,7 +444,6 @@ partial class App : Cell, IDisposable {
         ApplyPreferences()
         background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
         appIcon = ImageSource.Decode(Resources.Resource("Gyroid.Icon.png"))
-        LoadContacts()
     }
 
     func Activate(request ApplicationActivation) {
@@ -570,6 +582,7 @@ partial class App : Cell, IDisposable {
         )
         lastState = wallet.Snapshot.State
         lastWallet = wallet.Settings.ActiveWallet
+        LoadContacts()
         Tick()
     }
 
@@ -675,13 +688,15 @@ partial class App : Cell, IDisposable {
     private func Sync() {
         let node = wallet.Node.Status
         let snapshot = wallet.Snapshot
-        if connectionError.Length > 0 && wallet.NodeError.Length == 0 && node.Running {
-            if error == connectionError {
-                error = ""
-            }
-            connectionError = ""
-        }
         let walletChanged = wallet.Settings.ActiveWallet != lastWallet
+        if walletChanged || snapshot.State != lastState {
+            if walletChanged {
+                walletGeneration++
+            }
+            refreshGeneration++
+            refreshing = false
+            refreshError = ""
+        }
         ObserveMessages()
         if snapshot.State != WalletState.Unlocked || walletChanged {
             ClearSeed()
@@ -717,53 +732,107 @@ partial class App : Cell, IDisposable {
         Rebuild()
     }
 
-    private async func CreateWallet(filename string, buffer[]char, ct CancellationToken) {
-        try {
-            await wallet.CreateAsync(filename, buffer, ct)
-        } catch (failure Exception) {
-            Array.Clear(buffer)
-            throw failure
+    private async func CreateWallet(
+        filename string,
+        buffer[]char,
+        request int32,
+        generation int32,
+        page int32,
+        ct CancellationToken
+    ) {
+        await wallet.CreateAsync(filename, buffer, ct)
+        let password = buffer.ToArray()
+        let cleanup = ct.Register(() -> Array.Clear(password))
+        if window?.TryPost(
+            () -> {
+                cleanup.Dispose()
+                if closed ||
+                    request != createGeneration ||
+                    page != pageGeneration ||
+                    (walletGeneration != generation && walletGeneration != generation + 1) ||
+                    wallet
+                    .Settings
+                    .ActiveWallet != filename {
+                    Array.Clear(password)
+                    return
+                }
+                StartSeed(password)
+            }
+        ) != true {
+            cleanup.Dispose()
+            Array.Clear(password)
         }
-        StartSeed(buffer)
     }
 
     private func StartSeed(buffer[]char) {
-        if window?.TryPost(
-            () -> {
-                if wallet.Snapshot.State != WalletState.Unlocked || wallet.LockQueued {
-                    Array.Clear(buffer)
-                    return
-                }
-                ClearSeed()
-                seedPassword = buffer
-                seed = []char{}
-                Open(AppPage.Seed)
-                retrySeed()
-            }
-        ) != true {
+        if closed || wallet.Snapshot.State != WalletState.Unlocked || wallet.LockQueued {
             Array.Clear(buffer)
+            return
         }
+        ClearSeed()
+        seedPassword = buffer
+        seed = []char{}
+        Open(AppPage.Seed)
+        retrySeed()
     }
 
-    private async func ShowSeed(task Task[[]char], fromWallet bool) {
+    private func RevealSeed(buffer[]char, fromWallet bool) {
+        seedGeneration++
+        let request = seedGeneration
+        let generation = walletGeneration
+        let identity = wallet.Settings.ActiveWallet
+        let page = pageGeneration
+        Run(ct -> ShowSeed(buffer, fromWallet, request, generation, identity, page, ct), nil, buffer)
+    }
+
+    private async func ShowSeed(
+        buffer[]char,
+        fromWallet bool,
+        request int32,
+        generation int32,
+        identity string,
+        page int32,
+        ct CancellationToken
+    ) {
         var words[]char
         try {
-            words = await task
+            words = await wallet.Keys.RevealSeedAsync(buffer, ct)
         } catch (failure WalletException) {
-            if seedPassword == nil {
+            if fromWallet {
                 throw failure
             }
+            let message = failure.Message
             window?.TryPost(
                 () -> {
-                    seedIssue = failure.Message
-                    Rebuild()
+                    if !closed &&
+                        request == seedGeneration &&
+                        generation == walletGeneration &&
+                        identity == wallet
+                        .Settings
+                        .ActiveWallet &&
+                        page == pageGeneration {
+                        seedIssue = message
+                        Rebuild()
+                    }
                 }
             )
             return
         }
+        let cleanup = ct.Register(() -> Array.Clear(words))
         if window?.TryPost(
             () -> {
-                if wallet.Snapshot.State != WalletState.Unlocked || wallet.LockQueued {
+                cleanup.Dispose()
+                if closed ||
+                    request != seedGeneration ||
+                    generation != walletGeneration ||
+                    identity != wallet
+                    .Settings
+                    .ActiveWallet ||
+                    page != pageGeneration ||
+                    wallet
+                    .Snapshot
+                    .State != WalletState.Unlocked ||
+                    wallet.LockQueued {
                     Array.Clear(words)
                     return
                 }
@@ -773,11 +842,13 @@ partial class App : Cell, IDisposable {
                 Open(AppPage.Seed)
             }
         ) != true {
+            cleanup.Dispose()
             Array.Clear(words)
         }
     }
 
     private func ClearSeed() {
+        seedGeneration++
         if let password = seedPassword {
             Array.Clear(password)
         }
@@ -810,14 +881,43 @@ partial class App : Cell, IDisposable {
     }
 
     private func LoadContacts() {
-        try {
-            contacts = AddressBook.ReadContacts(message -> error = message)
-        } catch (failure WalletException) {
-            error = failure.Message
+        guard let host = window else {
+            return
         }
+        contactsGeneration++
+        let request = contactsGeneration
+        workers.Writer.TryWrite(WindowWork(ct -> ReadContacts(host, request, ct)))
+    }
+
+    private func ReadContacts(host Window, request int32, ct CancellationToken) Task {
+        var message = ""
+        var result SortedDictionary[string, string]?
+        try {
+            result = AddressBook.ReadContacts(value -> message = value)
+        } catch (failure WalletException) {
+            message = failure.Message
+        }
+        host.TryPost(
+            () -> {
+                if closed || request != contactsGeneration || ct.IsCancellationRequested {
+                    return
+                }
+                if let next = result {
+                    if !contacts.SequenceEqual(next) {
+                        contacts = next
+                    }
+                }
+                if message.Length > 0 {
+                    error = message
+                }
+                Rebuild()
+            }
+        )
+        return Task.CompletedTask
     }
 
     private func Open(target AppPage) {
+        pageGeneration++
         upgradeShown = false
         if target == AppPage.Messages {
             messageOverlay?.CloseDrawer()
@@ -838,6 +938,7 @@ partial class App : Cell, IDisposable {
     }
 
     private func Back() {
+        pageGeneration++
         upgradeShown = false
         ClearSeed()
         error = ""
@@ -885,10 +986,25 @@ partial class App : Cell, IDisposable {
     }
 
     private func Run(task Func[CancellationToken, Task], done Action? = nil, secret[]?char = nil, extra[]?char = nil) {
+        operationGeneration++
+        let request = operationGeneration
+        let generation = walletGeneration
+        let identity = wallet.Settings.ActiveWallet
+        let page = pageGeneration
         ui.Operations++
         error = ""
         Rebuild()
-        workers.Writer.TryWrite(WindowWork((ct CancellationToken) -> Complete(task, done, secret, extra, ct)))
+        if !workers.Writer.TryWrite(
+            WindowWork(ct -> Complete(task, done, secret, extra, request, generation, identity, page, ct))
+        ) {
+            ui.Operations--
+            if let buffer = secret {
+                Array.Clear(buffer)
+            }
+            if let buffer = extra {
+                Array.Clear(buffer)
+            }
+        }
     }
 
     private async func Complete(
@@ -896,15 +1012,21 @@ partial class App : Cell, IDisposable {
         done Action?,
         secret[]?char,
         extra[]?char,
+        request int32,
+        generation int32,
+        identity string,
+        page int32,
         ct CancellationToken
     ) {
         var message = ""
         var unknown = false
+        var connectionFailure = false
         try {
             await task(ct)
         } catch (failure WalletException) {
             message = failure.Message
             unknown = failure.OutcomeUnknown
+            connectionFailure = message == wallet.NodeError
         } catch (failure IOException) {
             message = failure.Message
         } catch (failure UnauthorizedAccessException) {
@@ -925,20 +1047,23 @@ partial class App : Cell, IDisposable {
                     return
                 }
                 ui.Operations--
-                if unknown {
+                let current = request == operationGeneration &&
+                    generation == walletGeneration &&
+                    identity == wallet
+                    .Settings
+                    .ActiveWallet &&
+                    page == pageGeneration
+                if unknown && generation == walletGeneration && identity == wallet.Settings.ActiveWallet {
                     screen = if wallet.Snapshot.State == WalletState.Unlocked {
                         AppPage.Send
                     } else {
                         AppPage.None
                     }
                     Refresh()
-                } else {
-                    error = message
-                    if message.Length > 0 && message == wallet.NodeError {
-                        connectionError = message
-                    }
+                } else if current {
+                    error = connectionFailure ? "": message
                 }
-                if message == "" {
+                if current && message == "" {
                     done?.Invoke()
                 }
                 Sync()
@@ -951,15 +1076,27 @@ partial class App : Cell, IDisposable {
             return
         }
         refreshing = true
-        workers.Writer.TryWrite(WindowWork((ct CancellationToken) -> RefreshAsync(statusOnly, ct)))
+        refreshGeneration++
+        let request = refreshGeneration
+        let generation = walletGeneration
+        let identity = wallet.Settings.ActiveWallet
+        let unlocked = wallet.Snapshot.State == WalletState.Unlocked
+        workers.Writer.TryWrite(WindowWork(ct -> RefreshAsync(statusOnly, unlocked, request, generation, identity, ct)))
     }
 
-    private async func RefreshAsync(statusOnly bool, ct CancellationToken) {
+    private async func RefreshAsync(
+        statusOnly bool,
+        unlocked bool,
+        request int32,
+        generation int32,
+        identity string,
+        ct CancellationToken
+    ) {
         var message = ""
         try {
             if statusOnly {
                 await wallet.RefreshStatusAsync(ct)
-            } else if wallet.Snapshot.State == WalletState.Unlocked {
+            } else if unlocked {
                 await wallet.RefreshAsync(ct)
             } else {
                 await wallet.RefreshNodeAsync(ct)
@@ -971,7 +1108,13 @@ partial class App : Cell, IDisposable {
         }
         window?.TryPost(
             () -> {
-                if closed || ct.IsCancellationRequested {
+                if closed ||
+                    request != refreshGeneration ||
+                    generation != walletGeneration ||
+                    identity != wallet
+                    .Settings
+                    .ActiveWallet ||
+                    ct.IsCancellationRequested {
                     return
                 }
                 refreshing = false
@@ -983,17 +1126,43 @@ partial class App : Cell, IDisposable {
         )
     }
 
-    private async func ChooseFile(kind FileDialogKind, title string, initialPath string, chosen Action[string]) {
+    private func ChooseFile(kind FileDialogKind, title string, initialPath string, chosen Action[string]) {
         guard let host = window else {
             return
         }
-        var message = ""
-        var path = ""
+        chooserGeneration++
+        let request = chooserGeneration
+        let generation = walletGeneration
+        let identity = wallet.Settings.ActiveWallet
+        let page = pageGeneration
         try {
-            let result = await host.ShowFileDialogAsync(
+            let pending = host.ShowFileDialogAsync(
                 kind,
                 FileDialogOptions{Title: ui.Strings.Get(title), InitialPath: initialPath}
             )
+            workers.Writer.TryWrite(
+                WindowWork(ct -> CompleteFileChoice(host, pending, chosen, request, generation, identity, page, ct))
+            )
+        } catch (failure Exception) {
+            error = "File dialog unavailable"
+            Rebuild()
+        }
+    }
+
+    private async func CompleteFileChoice(
+        host Window,
+        pending Task[FileDialogResult],
+        chosen Action[string],
+        request int32,
+        generation int32,
+        identity string,
+        page int32,
+        ct CancellationToken
+    ) {
+        var message = ""
+        var path = ""
+        try {
+            let result = await pending.WaitAsync(ct)
             if result.Status == FileDialogStatus.Success && result.Paths.Count > 0 {
                 path = result.Paths[0]
             } else if result.Status != FileDialogStatus.Cancelled {
@@ -1004,7 +1173,14 @@ partial class App : Cell, IDisposable {
         }
         host.TryPost(
             () -> {
-                if closed {
+                if closed ||
+                    request != chooserGeneration ||
+                    generation != walletGeneration ||
+                    identity != wallet
+                    .Settings
+                    .ActiveWallet ||
+                    page != pageGeneration ||
+                    ct.IsCancellationRequested {
                     return
                 }
                 if path.Length > 0 {
@@ -1032,34 +1208,52 @@ partial class App : Cell, IDisposable {
         Open(target)
     }
 
-    private async func TogglePrivacy() {
+    private func TogglePrivacy() {
         ui.Privacy = !ui.Privacy
+        let value = ui.Privacy
         UpdateTray()
         Rebuild()
-        try {
-            await wallet.SavePrivacyAsync(ui.Privacy)
-        } catch (failure Exception) {
-            window?.TryPost(
-                () -> {
-                    error = "Privacy setting could not be saved"
-                    Rebuild()
-                }
-            )
-        }
+        SavePreference(ct -> wallet.SavePrivacyAsync(value, ct), "Privacy setting could not be saved")
     }
 
-    private async func SetLanguage(language string) {
+    private func SetLanguage(language string) {
         ui.Strings.Language = language
         ui.Actions.Decoding.Clear()
         UpdateTray()
         Rebuild()
+        SavePreference(ct -> wallet.SaveLanguageAsync(language, ct), "Language setting could not be saved")
+    }
+
+    private func SavePreference(task Func[CancellationToken, Task], message string) {
+        preferenceGeneration++
+        let request = preferenceGeneration
+        let generation = walletGeneration
+        let identity = wallet.Settings.ActiveWallet
+        workers.Writer.TryWrite(WindowWork(ct -> CompletePreference(task, message, request, generation, identity, ct)))
+    }
+
+    private async func CompletePreference(
+        task Func[CancellationToken, Task],
+        message string,
+        request int32,
+        generation int32,
+        identity string,
+        ct CancellationToken
+    ) {
         try {
-            await wallet.SaveLanguageAsync(language)
+            await task(ct)
         } catch (failure Exception) {
             window?.TryPost(
                 () -> {
-                    error = "Language setting could not be saved"
-                    Rebuild()
+                    if !closed &&
+                        request == preferenceGeneration &&
+                        generation == walletGeneration &&
+                        identity == wallet
+                        .Settings
+                        .ActiveWallet {
+                        error = message
+                        Rebuild()
+                    }
                 }
             )
         }
