@@ -719,7 +719,19 @@ partial class App : Cell {
             Ui: ui,
             Snapshot: snapshot,
             Window: window,
-            Tip: wallet.Node.Status.Height,
+            Tip: wallet
+                .Node
+                .Status
+                .Running ? wallet
+                .Node
+                .Status
+                .Height: snapshot
+                .Balance
+                ?.ChainHeight ??
+                wallet
+                .Node
+                .Status
+                .Height,
             Privacy: ui.Privacy,
             Language: ui.Strings.Language,
             Decode: ui.Actions.Progress("page"),
