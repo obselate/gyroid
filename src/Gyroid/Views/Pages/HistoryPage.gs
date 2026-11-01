@@ -1207,7 +1207,6 @@ class HistoryPage : Cell[HistoryInput] {
                 BorderColor = exporting ? AppTheme.StrongEdge: AppTheme.Edge,
                 BackgroundColor = exporting ? AppTheme.FaintRule: AppTheme.Raised
             },
-            handle: exportAnchor,
             hasPopup: true,
             expanded: exporting
         )
@@ -1262,6 +1261,7 @@ class HistoryPage : Cell[HistoryInput] {
             }
         }
         return Container{
+            Handle: exportAnchor,
             FlexShrink: 0,
             button,
             Cell.Mount[PopoverInput, Popover](
