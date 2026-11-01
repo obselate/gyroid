@@ -467,9 +467,9 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         busy = true
         generation++
         let id = generation
-        input.OnUnlock(
+        input.OnUnlock.Invoke(
             text,
-            ct -> OpenWallet(session, active, filename, secret, value -> message = value, ct),
+            (ct CancellationToken) -> OpenWallet(session, active, filename, secret, value -> message = value, ct),
             () -> {
                 if id != generation || lifetime.IsCancellationRequested {
                     return

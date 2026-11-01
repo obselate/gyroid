@@ -263,19 +263,22 @@ partial class App : Cell {
                 ChooseFile: chooseFile,
                 OnNavigate: navigate,
                 OnCreate: createWallet,
-                OnUnlock: (password, work, completed) -> Run(
-                    work,
-                    () -> {
-                        try {
-                            completed()
-                            if wallet.Snapshot.State == WalletState.Unlocked && wallet.Keys.BackupPending {
-                                backupSeed(password.ToCharArray())
+                OnUnlock: (password, work, completed) -> {
+                    var retained = password
+                    Run(
+                        work,
+                        () -> {
+                            try {
+                                completed()
+                                if wallet.Snapshot.State == WalletState.Unlocked && wallet.Keys.BackupPending {
+                                    backupSeed(retained.ToCharArray())
+                                }
+                            } finally {
+                                retained = ""
                             }
-                        } finally {
-                            password = ""
                         }
-                    }
-                )
+                    )
+                }
             }
         )
         ApplyPreferences()
