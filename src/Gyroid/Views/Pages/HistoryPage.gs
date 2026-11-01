@@ -807,7 +807,7 @@ class HistoryPage : Cell, IDisposable {
 class HistoryRibbon : Cell {
     private var current HistoryRibbonInput
     private var days float64
-    private var marks List[uint64] = List[uint64]()
+    private let marks List[uint64] = List[uint64]()
     private var hoverCell HistoryRibbonHover?
     private var plotHeight float64
     private let configureHover Action[HistoryRibbonHover]
@@ -834,7 +834,7 @@ class HistoryRibbon : Cell {
         current = input
         days = float64(input.Span) / 288
         let mark = days <= 1 ? 48UL: days <= 7 ? 288UL: 288UL * uint64(Math.Ceiling(days / 6))
-        marks = List[uint64]()
+        marks.Clear()
         var at = input.Tip - Math.Min(input.Tip, mark)
         while at > input.Low + mark * 3 / 10 {
             marks.Add(at)
