@@ -23,7 +23,7 @@ data struct NetworkInput {
     var Ui Presentation
     var Session WalletSession
     var Window Window?
-    var Node NodeStatus
+    var Node NetworkStatusInput
     var History[]WalletOutput
     var Sends[]WalletSend
     var Clipboard[]char
@@ -31,6 +31,15 @@ data struct NetworkInput {
     var Language string
     var Width float64
     var Height float64
+}
+
+data struct NetworkStatusInput {
+    var Height uint64
+    var Mempool uint64
+    var MempoolBytes uint64
+    var PeerId string
+    var IdentityAge string
+    var BestHash string
 }
 
 data struct NetworkSource {

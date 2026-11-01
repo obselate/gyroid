@@ -136,7 +136,14 @@ partial class App : Cell {
                 Ui: ui,
                 Session: wallet,
                 Window: window,
-                Node: wallet.Node.Status,
+                Node: NetworkStatusInput{
+                    Height: wallet.Node.Status.Height,
+                    Mempool: wallet.Node.Status.Mempool,
+                    MempoolBytes: wallet.Node.Status.MempoolBytes,
+                    PeerId: wallet.Node.Status.PeerId,
+                    IdentityAge: wallet.Node.Status.IdentityAge,
+                    BestHash: wallet.Node.Status.BestHash
+                },
                 History: wallet.Snapshot.History,
                 Sends: wallet.Snapshot.Sends,
                 Clipboard: ui.Actions.ClipboardText,
