@@ -193,22 +193,23 @@ partial class App : Cell {
             let snapshot = wallet.Snapshot
             region.Accept(
                 ToolsInput{
-                    Session: wallet,
-                    Ui: ui,
+                    Region: ToolsRegionInput{
+                        Session: wallet,
+                        Ui: ui,
+                        State: toolsState,
+                        Identity: wallet.Settings.Network + ":" + wallet.Settings.ActiveWallet,
+                        Busy: ui.Working(),
+                        Privacy: ui.Privacy,
+                        Language: ui.Strings.Language,
+                        Compact: width < 1100
+                    },
                     State: toolsState,
-                    Wallet: wallet.Settings.ActiveWallet,
-                    Network: wallet.Settings.Network,
                     ViewOnly: snapshot.ViewOnly,
                     Outputs: snapshot.Balance?.Outputs ?? uint64(0),
                     MemoErrors: snapshot.Balance?.MemoErrors ?? uint64(0),
                     Peers: wallet.Node.Status.Peers,
-                    Report: toolsState.Report,
-                    Auditing: toolsState.Audit?.IsCompleted == false,
                     Section: screen,
                     AutoLock: wallet.Settings.AutoLockMinutes,
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
                     Width: width,
                     Height: height,
                     OnNavigate: navigate,

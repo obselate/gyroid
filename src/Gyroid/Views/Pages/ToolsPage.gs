@@ -26,26 +26,26 @@ import System.Threading.Tasks
 class ToolsState {
     var Tab string = "sign"
     var Report OutputReport? = nil
-    var Audit Task[OutputReport]? = nil
+    var SignMessage string = ""
+    var SignSignature string = ""
+    var VerifyAddress string = ""
+    var VerifyMessage string = ""
+    var VerifySignature string = ""
+    var ProofTransaction string = ""
+    var ProofKey string = ""
+    var ProofAddress string = ""
+    var ProofAmount string = ""
 }
 
 data struct ToolsInput {
-    var Session WalletSession
-    var Ui Presentation
+    var Region ToolsRegionInput
     var State ToolsState
-    var Wallet string
-    var Network string
     var ViewOnly bool
     var Outputs uint64
     var MemoErrors uint64
     var Peers uint64
-    var Report OutputReport?
-    var Auditing bool
     var Section AppPage
     var AutoLock int32
-    var Privacy bool
-    var Busy bool
-    var Language string
     var Width float64
     var Height float64
     var OnNavigate Action[AppPage]
@@ -56,31 +56,18 @@ data struct ToolsInput {
 data struct ToolsRegionInput {
     var Session WalletSession
     var Ui Presentation
+    var State ToolsState
     var Busy bool
     var Privacy bool
     var Language string
-    var Width float64
-    var Height float64
+    var Compact bool
     var Identity string
-}
-
-data struct ToolsPrivacyInput {
-    var Region ToolsRegionInput
-    var State ToolsState
-    var Report OutputReport?
-    var Auditing bool
-    var ViewOnly bool
-    var Outputs uint64
-    var MemoErrors uint64
-    var Peers uint64
-    var AutoLock int32
-    var OnNavigate Action[AppPage]
-    var OnPrivacy Action
-    var OnNodeSettings Action
 }
 
 data struct ToolsPhraseInput {
     var Region ToolsRegionInput
+    var Width float64
+    var Height float64
     var OnClose Action
     var OnChecked Action[DateTime?]
 }
@@ -88,8 +75,6 @@ data struct ToolsPhraseInput {
 data struct ToolsHealthInput {
     var Region ToolsRegionInput
     var State ToolsState
-    var Report OutputReport?
-    var Auditing bool
     var Outputs uint64
 }
 
@@ -103,25 +88,7 @@ class ToolsPage : Cell {
     private var current ToolsInput
 
     init() {
-        configurePrivacy = region -> {
-            let input = current
-            region.Accept(
-                ToolsPrivacyInput{
-                    Region: Region(input),
-                    State: input.State,
-                    Report: input.Report,
-                    Auditing: input.Auditing,
-                    ViewOnly: input.ViewOnly,
-                    Outputs: input.Outputs,
-                    MemoErrors: input.MemoErrors,
-                    Peers: input.Peers,
-                    AutoLock: input.AutoLock,
-                    OnNavigate: input.OnNavigate,
-                    OnPrivacy: input.OnPrivacy,
-                    OnNodeSettings: input.OnNodeSettings
-                }
-            )
-        }
+        configurePrivacy = region -> region.Accept(current)
     }
 
     func Accept(input ToolsInput) {
@@ -131,24 +98,13 @@ class ToolsPage : Cell {
         }
     }
 
-    private func Region(input ToolsInput) ToolsRegionInput -> ToolsRegionInput{
-        Session: input.Session,
-        Ui: input.Ui,
-        Busy: input.Busy,
-        Privacy: input.Privacy,
-        Language: input.Language,
-        Width: input.Width,
-        Height: input.Height,
-        Identity: input.Network + ":" + input.Wallet
-    }
-
     override func Build() Blob {
         let input = current
         if input.Section == AppPage.Privacy {
-            return Cell.Mount[ToolsPrivacyRegion]("privacy-readings", configurePrivacy)
+            return Cell.Mount[ToolsPrivacyRegion]("privacy-" + input.Region.Identity, configurePrivacy)
         }
-        let ui = input.Ui
-        let region = Region(input)
+        let region = input.Region
+        let ui = region.Ui
         let tab = input.ViewOnly && input.State.Tab == "sign" ? "verify": input.State.Tab
         let ids = input.ViewOnly ? []string{"verify", "proof", "health"}: []string{"sign", "verify", "proof", "health"}
         let items = [ids.Length]NavigationItem
@@ -170,35 +126,13 @@ class ToolsPage : Cell {
             )
         )
         card.Add(
-            Container{
-                Display: tab == "sign" ? Display.Flex: Display.None,
-                Cell.Mount[ToolsRegionInput, ToolsSignRegion]("sign-" + region.Identity, region)
-            }
-        )
-        card.Add(
-            Container{
-                Display: tab == "verify" ? Display.Flex: Display.None,
-                Cell.Mount[ToolsRegionInput, ToolsVerifyRegion]("verify-" + region.Identity, region)
-            }
-        )
-        card.Add(
-            Container{
-                Display: tab == "proof" ? Display.Flex: Display.None,
-                Cell.Mount[ToolsRegionInput, ToolsProofRegion]("proof-" + region.Identity, region)
-            }
-        )
-        card.Add(
-            Container{
-                Display: tab == "health" ? Display.Flex: Display.None,
-                Cell.Mount[ToolsHealthInput, ToolsHealthRegion](
+            switch tab {
+                case "sign": Cell.Mount[ToolsRegionInput, ToolsSignRegion]("sign-" + region.Identity, region)
+                case "verify": Cell.Mount[ToolsRegionInput, ToolsVerifyRegion]("verify-" + region.Identity, region)
+                case "proof": Cell.Mount[ToolsRegionInput, ToolsProofRegion]("proof-" + region.Identity, region)
+                default: Cell.Mount[ToolsHealthInput, ToolsHealthRegion](
                     "health-" + region.Identity,
-                    ToolsHealthInput{
-                        Region: region,
-                        State: input.State,
-                        Report: input.Report,
-                        Auditing: input.Auditing,
-                        Outputs: input.Outputs
-                    }
+                    ToolsHealthInput{Region: region, State: input.State, Outputs: input.Outputs}
                 )
             }
         )
@@ -207,14 +141,15 @@ class ToolsPage : Cell {
 }
 
 class ToolsPrivacyRegion : Cell, IDisposable {
-    private var current ToolsPrivacyInput
-    private var identity string = ""
+    private var current ToolsInput
+    private var loaded bool
     private var checking bool
     private var checkedAt DateTime?
     private var fileMode UnixFileMode?
     private var generation int32
+    private var auditing bool
     private var auditIssue string = ""
-    private var lifetime CancellationTokenSource = CancellationTokenSource()
+    private let lifetime CancellationTokenSource = CancellationTokenSource()
     private let closePhrase Action
     private let checkedPhrase Action[DateTime?]
 
@@ -224,60 +159,56 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             Rebuild()
         }
         checkedPhrase = date -> {
-            if !lifetime.IsCancellationRequested {
+            if generation == 0 {
                 checkedAt = date
                 Rebuild()
             }
         }
     }
 
-    func Accept(input ToolsPrivacyInput) {
-        let changed = !current.Equals(input)
+    func Accept(input ToolsInput) {
+        if current.Equals(input) {
+            return
+        }
         current = input
-        if identity != input.Region.Identity {
-            identity = input.Region.Identity
-            generation++
-            lifetime.Cancel()
-            lifetime.Dispose()
-            lifetime = CancellationTokenSource()
-            checking = false
-            checkedAt = nil
-            fileMode = nil
+        if !loaded {
+            loaded = true
             if let window = input.Region.Ui.Actions.window {
-                go ReadChecks(input.Region.Session, window, identity, generation, lifetime.Token)
+                go ReadChecks(input.Region.Session, window, input.Region.Identity, generation)
             }
         }
-        if changed {
-            Rebuild()
-        }
+        Rebuild()
     }
 
-    private func ReadChecks(session WalletSession, window Window, identity string, run int32, token CancellationToken) {
-        using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, window.Closed)
+    private func ReadChecks(session WalletSession, window Window, identity string, run int32) {
         try {
-            linked.Token.ThrowIfCancellationRequested()
             let date = session.Checks.PhraseChecked()
-            var mode UnixFileMode? = nil
+            var mode UnixFileMode?
             try {
                 mode = session.Checks.WalletFileMode()
             } catch (failure Exception) { }
-            let active = linked.Token
             window.TryPost(
                 () -> {
-                    if run == generation && identity == current.Region.Identity && !active.IsCancellationRequested {
+                    if run == generation && identity == ReadWalletIdentity(session) {
                         checkedAt = date
                         fileMode = mode
                         Rebuild()
                     }
                 }
             )
-        } catch (failure OperationCanceledException) { } catch (failure Exception) { }
+        } catch (failure Exception) { }
     }
 
     override func Build() Blob -> if checking {
         Cell.Mount[ToolsPhraseInput, ToolsPhraseRegion](
             "phrase-check",
-            ToolsPhraseInput{Region: current.Region, OnClose: closePhrase, OnChecked: checkedPhrase}
+            ToolsPhraseInput{
+                Region: current.Region,
+                Width: current.Width,
+                Height: current.Height,
+                OnClose: closePhrase,
+                OnChecked: checkedPhrase
+            }
         )
     } else {
         Privacy(current)
@@ -289,13 +220,12 @@ class ToolsPrivacyRegion : Cell, IDisposable {
         lifetime.Dispose()
     }
 
-    private func Privacy(input ToolsPrivacyInput) Blob {
+    private func Privacy(input ToolsInput) Blob {
         let context = input.Region
         let ui = context.Ui
-        let compact = context.Width < 1100
+        let compact = context.Compact
         let size = compact ? AppTheme.Type16: AppTheme.Type20
-        let report = input.Report
-        let auditing = input.Auditing
+        let report = input.State.Report
         let stale = report?.Stale.Length ?? 0
         let shared = UnixFileMode.GroupRead |
         UnixFileMode.GroupWrite |
@@ -393,9 +323,6 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             Gap: AppTheme.Space8,
             FlexGrow: 1
         }
-        if let value = report {
-            outputsFoot.Add(Note(context, ui.Strings.Get("checked") + " " + value.Checked.ToString("HH:mm")))
-        }
         outputsFoot.Add(Container{FlexGrow: 1})
         if !auditing {
             outputsFoot.Add(
@@ -427,8 +354,6 @@ class ToolsPrivacyRegion : Cell, IDisposable {
         }
         let fileFoot = if exposed {
             Small(context, "Fix", true, () -> RestrictFile(input))
-        } else if let mode = fileMode {
-            Note(context, "0" + Convert.ToString(int32(mode), 8))
         } else {
             Container{}
         }
@@ -460,11 +385,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
                 context.Privacy ? "visibility_off": "visibility",
                 "hide amounts",
                 amountsValue,
-                if context.Privacy {
-                    Container{}
-                } else {
-                    Note(context, ui.Strings.Get("amounts visible"))
-                },
+                Container{},
                 []string{"Hides amounts and addresses on screen"}
             ),
             Tile(
@@ -489,7 +410,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
                     peers == 0 ? AppTheme.Orange: AppTheme.Ink,
                     size
                 ),
-                Note(context, peers == 0 ? ui.Strings.Get("sends wait"): "Dandelion"),
+                Container{},
                 []string{"Your sends travel through Dandelion before they spread", "With 0 peers, sends wait"}
             ),
             Tile(
@@ -536,7 +457,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             )
         }
         let passed = warnings.Count((warning bool) -> !warning)
-        let card = WalletParts.PageCard(context.Ui, context.Width, context.Height)
+        let card = WalletParts.PageCard(context.Ui, input.Width, input.Height)
         card.Add(
             WalletParts.Header(
                 Label(ui, ui.Strings.Get("privacy"), AppTheme.Type17, AppTheme.Ink, ""),
@@ -573,7 +494,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
     }
 
     private func Tile(
-        input ToolsPrivacyInput,
+        input ToolsInput,
         key string,
         icon string,
         label string,
@@ -582,7 +503,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
         lines[]string
     ) Blob {
         let ui = input.Region.Ui
-        let compact = input.Region.Width < 1100
+        let compact = input.Region.Compact
         let top = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
@@ -616,54 +537,26 @@ class ToolsPrivacyRegion : Cell, IDisposable {
         }
     }
 
-    private func Audit(input ToolsPrivacyInput) {
-        if input.State.Audit?.IsCompleted == false {
+    private func Audit(input ToolsInput) {
+        if auditing {
             return
         }
         guard let window = input.Region.Ui.Actions.window else {
             return
         }
-        let completion = TaskCompletionSource[OutputReport](TaskCreationOptions.RunContinuationsAsynchronously)
-        input.State.Audit = completion.Task
+        let session = input.Region.Session
+        let identity = input.Region.Identity
+        let run = generation
+        auditing = true
         auditIssue = ""
-        current = current with{Auditing = true}
-        go AuditOutputs(input, window, completion, generation, lifetime.Token)
-    }
-
-    private async func AuditOutputs(
-        input ToolsPrivacyInput,
-        window Window,
-        completion TaskCompletionSource[OutputReport],
-        run int32,
-        token CancellationToken
-    ) {
-        using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, window.Closed)
-        var report OutputReport?
-        var error = ""
-        try {
-            let value = await input.Region.Session.Checks.CheckOutputsAsync(linked.Token)
-            report = value
-            completion.TrySetResult(value)
-        } catch (failure OperationCanceledException) {
-            completion.TrySetCanceled()
-            return
-        } catch (failure Exception) {
-            completion.TrySetCanceled()
-            error = failure.Message
-        }
-        let active = linked.Token
-        window.TryPost(
-            () -> {
-                if run == generation &&
-                    input
-                    .Region
-                    .Identity == current
-                    .Region
-                    .Identity &&
-                    !active
-                    .IsCancellationRequested {
+        go AuditOutputs(
+            session,
+            window,
+            lifetime.Token,
+            (report, error) -> {
+                if run == generation && identity == ReadWalletIdentity(session) {
                     input.State.Report = report
-                    current = current with{Report = report, Auditing = false}
+                    auditing = false
                     auditIssue = error
                     Rebuild()
                 }
@@ -671,27 +564,19 @@ class ToolsPrivacyRegion : Cell, IDisposable {
         )
     }
 
-    private func RestrictFile(input ToolsPrivacyInput) {
+    private func RestrictFile(input ToolsInput) {
         let session = input.Region.Session
         let run = generation
-        let token = lifetime.Token
         var mode UnixFileMode?
-        input
-            .Region
-            .Ui
-            .Actions
-            .Run(
+        let actions = input.Region.Ui.Actions
+        actions.Run(
             ct -> {
                 session.Checks.RestrictWalletFile()
                 mode = session.Checks.WalletFileMode()
                 return Task.CompletedTask
             },
             () -> {
-                if run == generation &&
-                    input
-                    .Region
-                    .Identity == ReadWalletIdentity(session) &&
-                    !token.IsCancellationRequested {
+                if run == generation && input.Region.Identity == ReadWalletIdentity(session) {
                     fileMode = mode
                     Rebuild()
                 }
@@ -720,11 +605,11 @@ class ToolsLockRegion : Cell[ToolsLockInput] {
                 Expanded: editing
             },
             OnClick: () -> editing = !editing,
-            Arc(ui, LockShare(input.AutoLock), context.Width < 1100 ? 20.0: 26.0),
+            Arc(LockShare(input.AutoLock), context.Compact ? 20.0: 26.0),
             Label(
                 ui,
                 LockText(input),
-                context.Width < 1100 ? AppTheme.Type16: AppTheme.Type20,
+                context.Compact ? AppTheme.Type16: AppTheme.Type20,
                 input.AutoLock == 0 ? AppTheme.Orange: AppTheme.Ink,
                 ""
             )
@@ -777,7 +662,6 @@ class ToolsLockRegion : Cell[ToolsLockInput] {
 }
 
 class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
-    private var phraseForm WalletForm
     private var step string = "show"
     private var password string = ""
     private var asked[]int32 = []int32{}
@@ -791,13 +675,6 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     private var issue string = ""
     private var generation int32
     private let lifetime CancellationTokenSource = CancellationTokenSource()
-
-    private func EndPhrase(onClose Action) {
-        password = ""
-        typed = ""
-        Array.Clear(answers)
-        onClose()
-    }
 
     private func Reveal(input ToolsRegionInput) {
         guard let window = input.Ui.Actions.window else {
@@ -828,13 +705,10 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         try {
             phrase = await session.Keys.PhraseAsync(secret, linked.Token)
             let completed = TaskCompletionSource[bool](TaskCreationOptions.RunContinuationsAsynchronously)
-            let active = linked.Token
             if window.TryPost(
                 () -> {
                     try {
-                        if run == generation &&
-                            identity == ReadWalletIdentity(session) &&
-                            !active.IsCancellationRequested {
+                        if run == generation && identity == ReadWalletIdentity(session) {
                             Ask(phrase)
                             busy = false
                             Rebuild()
@@ -848,10 +722,9 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             }
         } catch (failure OperationCanceledException) { } catch (failure Exception) {
             let message = failure.Message
-            let active = linked.Token
             window.TryPost(
                 () -> {
-                    if run == generation && identity == ReadWalletIdentity(session) && !active.IsCancellationRequested {
+                    if run == generation && identity == ReadWalletIdentity(session) {
                         busy = false
                         issue = message
                         Rebuild()
@@ -922,13 +795,9 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         let session = input.Region.Session
         let identity = input.Region.Identity
         let run = generation
-        let token = lifetime.Token
         var date DateTime?
-        input
-            .Region
-            .Ui
-            .Actions
-            .Run(
+        let actions = input.Region.Ui.Actions
+        actions.Run(
             async (ct) -> {
                 await session.Checks.MarkPhraseCheckedAsync()
                 date = session.Checks.PhraseChecked()
@@ -936,7 +805,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             () -> {
                 if identity == ReadWalletIdentity(session) {
                     input.OnChecked(date)
-                    if run == generation && !token.IsCancellationRequested {
+                    if run == generation {
                         checkedAt = date
                         Rebuild()
                     }
@@ -957,7 +826,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     protected override func Build(request ToolsPhraseInput) Blob {
         let input = request.Region
         let ui = input.Ui
-        phraseForm = if step == "show" {
+        let phraseForm = if step == "show" {
             WalletForm(ui, !input.Busy && !busy, () -> Reveal(input), []string{password}, () -> Rebuild())
         } else {
             WalletForm(
@@ -968,8 +837,8 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
                 () -> Rebuild()
             )
         }
-        let compact = input.Width < 1100
-        let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
+        let compact = input.Compact
+        let card = WalletParts.PageCard(input.Ui, request.Width, request.Height)
         let stepper = Stepper{
             AccessibilityName: ui.Strings.Get("recovery phrase"),
             Labels: []string{ui.Strings.Get("show"), ui.Strings.Get("check"), ui.Strings.Get("done")},
@@ -1001,7 +870,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             FlexShrink: 0
         }
         if step != "done" {
-            footer.Add(Button(ui, "Back", () -> EndPhrase(request.OnClose)))
+            footer.Add(Button(ui, "Back", request.OnClose))
         }
         footer.Add(Container{FlexGrow: 1})
         if step == "show" {
@@ -1025,7 +894,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         }
         let gap = compact ? AppTheme.Space8: AppTheme.Space10
         let height = compact ? 40.0: 46.0
-        let grid = SegmentGrid(words / 4, 4, index -> Slot(input, index), gap, gap, height, height)
+        let grid = SegmentGrid(words / 4, 4, index -> Slot(input, index, phraseForm), gap, gap, height, height)
         grid.FlexGrow = 0
         grid.FlexShrink = 0
         card.Add(grid)
@@ -1098,7 +967,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         footer.Add(progress)
         footer.Add(
             if step == "done" {
-                Button(ui, "Done", () -> EndPhrase(request.OnClose), false, true)
+                Button(ui, "Done", request.OnClose, false, true)
             } else {
                 Button(ui, "Continue", phraseForm.Submit, !phraseForm.CanSubmit)
             }
@@ -1110,9 +979,9 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         return card
     }
 
-    private func Slot(input ToolsRegionInput, index int32) Blob {
+    private func Slot(input ToolsRegionInput, index int32, phraseForm WalletForm) Blob {
         let ui = input.Ui
-        let compact = input.Width < 1100
+        let compact = input.Compact
         let position = Array.IndexOf(asked, index)
         let solved = position >= 0 && (position < found || step == "done")
         let active = step == "check" && position == found
@@ -1180,30 +1049,33 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
 }
 
 class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
-    private var message string = ""
-    private var signature string = ""
     private var busy bool
     private var issue string = ""
     private var generation int32
     private let lifetime CancellationTokenSource = CancellationTokenSource()
 
     protected override func Build(input ToolsRegionInput) Blob {
-        let form = WalletForm(input.Ui, !busy && !input.Busy, () -> Sign(input), []string{message}, () -> Rebuild())
+        let form = WalletForm(
+            input.Ui,
+            !busy && !input.Busy,
+            () -> Sign(input),
+            []string{input.State.SignMessage},
+            () -> Rebuild()
+        )
         let root = Container{
             Gap: AppTheme.Space16,
             form.Field(
                 "Message",
-                message,
+                input.State.SignMessage,
                 value -> {
-                    message = value
-                    signature = ""
-                    generation++
+                    input.State.SignMessage = value
+                    input.State.SignSignature = ""
                 },
                 disabled: busy
             )
         }
-        if signature.Length > 0 {
-            root.Add(Copyable(input.Ui, "Signature", signature, Grouped(signature)))
+        if input.State.SignSignature.Length > 0 {
+            root.Add(Copyable(input.Ui, "Signature", input.State.SignSignature, Grouped(input.State.SignSignature)))
         }
         if issue.Length > 0 {
             root.Add(MessageParts.Problem(input.Ui, issue))
@@ -1222,10 +1094,19 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         issue = ""
         generation++
         Rebuild()
-        go SignMessage(input.Session, window, message, input.Identity, generation, lifetime.Token)
+        go SignMessage(
+            input.State,
+            input.Session,
+            window,
+            input.State.SignMessage,
+            input.Identity,
+            generation,
+            lifetime.Token
+        )
     }
 
     private async func SignMessage(
+        state ToolsState,
         session WalletSession,
         window Window,
         message string,
@@ -1243,12 +1124,11 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        let active = linked.Token
         window.TryPost(
             () -> {
-                if run == generation && identity == ReadWalletIdentity(session) && !active.IsCancellationRequested {
+                if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
-                    signature = value
+                    state.SignSignature = value
                     issue = error
                     Rebuild()
                 }
@@ -1264,9 +1144,6 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
 }
 
 class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
-    private var signer string = ""
-    private var message string = ""
-    private var signature string = ""
     private var verdict bool?
     private var busy bool
     private var issue string = ""
@@ -1278,18 +1155,33 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
             input.Ui,
             !busy && !input.Busy,
             () -> Verify(input),
-            []string{signer, message, signature},
+            []string{input.State.VerifyAddress, input.State.VerifyMessage, input.State.VerifySignature},
             () -> {
                 verdict = nil
-                generation++
                 Rebuild()
             }
         )
         let root = Container{
             Gap: AppTheme.Space16,
-            form.Field("Address", signer, value -> signer = value.Trim(), secret: input.Privacy, disabled: busy),
-            form.Field("Message", message, value -> message = value, disabled: busy),
-            form.Field("Signature", signature, value -> signature = value.Trim(), disabled: busy),
+            form.Field(
+                "Address",
+                input.State.VerifyAddress,
+                value -> input.State.VerifyAddress = value.Trim(),
+                secret: input.Privacy,
+                disabled: busy
+            ),
+            form.Field(
+                "Message",
+                input.State.VerifyMessage,
+                value -> input.State.VerifyMessage = value,
+                disabled: busy
+            ),
+            form.Field(
+                "Signature",
+                input.State.VerifySignature,
+                value -> input.State.VerifySignature = value.Trim(),
+                disabled: busy
+            ),
             ActionRow(
                 []Blob{
                     Verdict(input, verdict),
@@ -1312,7 +1204,16 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
         issue = ""
         generation++
         Rebuild()
-        go VerifyMessage(input.Session, window, signer, message, signature, input.Identity, generation, lifetime.Token)
+        go VerifyMessage(
+            input.Session,
+            window,
+            input.State.VerifyAddress,
+            input.State.VerifyMessage,
+            input.State.VerifySignature,
+            input.Identity,
+            generation,
+            lifetime.Token
+        )
     }
 
     private async func VerifyMessage(
@@ -1335,10 +1236,9 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        let active = linked.Token
         window.TryPost(
             () -> {
-                if run == generation && identity == ReadWalletIdentity(session) && !active.IsCancellationRequested {
+                if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
                     verdict = error.Length == 0 ? value: nil
                     issue = error
@@ -1356,10 +1256,6 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
 }
 
 class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
-    private var transaction string = ""
-    private var proofKey string = ""
-    private var address string = ""
-    private var amount string = ""
     private var verdict bool?
     private var busy bool
     private var issue string = ""
@@ -1371,10 +1267,14 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
             input.Ui,
             !busy && !input.Busy,
             () -> Verify(input),
-            []string{transaction, proofKey, address, amount},
+            []string{
+                input.State.ProofTransaction,
+                input.State.ProofKey,
+                input.State.ProofAddress,
+                input.State.ProofAmount
+            },
             () -> {
                 verdict = nil
-                generation++
                 Rebuild()
             }
         )
@@ -1382,14 +1282,32 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
             Gap: AppTheme.Space16,
             form.Field(
                 "Transaction",
-                transaction,
-                value -> transaction = value.Trim(),
+                input.State.ProofTransaction,
+                value -> input.State.ProofTransaction = value.Trim(),
                 secret: input.Privacy,
                 disabled: busy
             ),
-            form.Field("Proof key", proofKey, value -> proofKey = value.Trim(), secret: input.Privacy, disabled: busy),
-            form.Field("Address", address, value -> address = value.Trim(), secret: input.Privacy, disabled: busy),
-            form.Field("Amount", amount, value -> amount = value.Trim(), secret: input.Privacy, disabled: busy),
+            form.Field(
+                "Proof key",
+                input.State.ProofKey,
+                value -> input.State.ProofKey = value.Trim(),
+                secret: input.Privacy,
+                disabled: busy
+            ),
+            form.Field(
+                "Address",
+                input.State.ProofAddress,
+                value -> input.State.ProofAddress = value.Trim(),
+                secret: input.Privacy,
+                disabled: busy
+            ),
+            form.Field(
+                "Amount",
+                input.State.ProofAmount,
+                value -> input.State.ProofAmount = value.Trim(),
+                secret: input.Privacy,
+                disabled: busy
+            ),
             ActionRow(
                 []Blob{
                     Verdict(input, verdict),
@@ -1415,10 +1333,10 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
         go VerifyProof(
             input.Session,
             window,
-            transaction,
-            proofKey,
-            address,
-            amount,
+            input.State.ProofTransaction,
+            input.State.ProofKey,
+            input.State.ProofAddress,
+            input.State.ProofAmount,
             input.Identity,
             generation,
             lifetime.Token
@@ -1446,10 +1364,9 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        let active = linked.Token
         window.TryPost(
             () -> {
-                if run == generation && identity == ReadWalletIdentity(session) && !active.IsCancellationRequested {
+                if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
                     verdict = error.Length == 0 ? value: nil
                     issue = error
@@ -1469,7 +1386,6 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
 class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
     private var generation int32
     private let lifetime CancellationTokenSource = CancellationTokenSource()
-    private var auditReport OutputReport?
     private var auditing bool
     private var auditIssue string = ""
 
@@ -1483,8 +1399,8 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
         let input = view.Region
         let card = Container{Gap: AppTheme.Space16}
         let ui = input.Ui
-        let compact = input.Width < 1100
-        let report = auditReport ?? view.Report
+        let compact = input.Compact
+        let report = view.State.Report
         let stale = report?.Stale.Length ?? 0
         let total = report?.Total ?? view.Outputs
         let stats = Container{
@@ -1580,7 +1496,7 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
         if auditIssue.Length > 0 {
             card.Add(MessageParts.Problem(ui, auditIssue))
         }
-        card.Add(ActionRow([]Blob{Button(ui, "Check", () -> Audit(view), input.Busy || view.Auditing || auditing)}))
+        card.Add(ActionRow([]Blob{Button(ui, "Check", () -> Audit(view), input.Busy || auditing)}))
         return card
     }
 
@@ -1672,50 +1588,24 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
     }
 
     private func Audit(input ToolsHealthInput) {
-        if input.State.Audit?.IsCompleted == false {
+        if auditing {
             return
         }
         guard let window = input.Region.Ui.Actions.window else {
             return
         }
-        let completion = TaskCompletionSource[OutputReport](TaskCreationOptions.RunContinuationsAsynchronously)
-        input.State.Audit = completion.Task
-        auditIssue = ""
+        let session = input.Region.Session
+        let identity = input.Region.Identity
+        let run = generation
         auditing = true
-        go AuditOutputs(input, window, completion, generation, lifetime.Token)
-    }
-
-    private async func AuditOutputs(
-        input ToolsHealthInput,
-        window Window,
-        completion TaskCompletionSource[OutputReport],
-        run int32,
-        token CancellationToken
-    ) {
-        using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, window.Closed)
-        var report OutputReport?
-        var error = ""
-        try {
-            let value = await input.Region.Session.Checks.CheckOutputsAsync(linked.Token)
-            report = value
-            completion.TrySetResult(value)
-        } catch (failure OperationCanceledException) {
-            completion.TrySetCanceled()
-            return
-        } catch (failure Exception) {
-            completion.TrySetCanceled()
-            error = failure.Message
-        }
-        let active = linked.Token
-        window.TryPost(
-            () -> {
-                if run == generation &&
-                    input
-                    .Region
-                    .Identity == ReadWalletIdentity(input.Region.Session) &&
-                    !active.IsCancellationRequested {
+        auditIssue = ""
+        go AuditOutputs(
+            session,
+            window,
+            lifetime.Token,
+            (report, error) -> {
+                if run == generation && identity == ReadWalletIdentity(session) {
                     input.State.Report = report
-                    auditReport = report
                     auditing = false
                     auditIssue = error
                     Rebuild()
@@ -1727,6 +1617,25 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
 
 class ToolsParts {
     shared {
+        async func AuditOutputs(
+            session WalletSession,
+            window Window,
+            token CancellationToken,
+            publish Action[OutputReport?, string]
+        ) {
+            using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, window.Closed)
+            var report OutputReport?
+            var error = ""
+            try {
+                report = await session.Checks.CheckOutputsAsync(linked.Token)
+            } catch (failure OperationCanceledException) {
+                return
+            } catch (failure Exception) {
+                error = failure.Message
+            }
+            window.TryPost(() -> publish(report, error))
+        }
+
         func ReadWalletIdentity(session WalletSession) string ->
         session.Settings.Network + ":" + session.Settings.ActiveWallet
 
@@ -1745,7 +1654,7 @@ class ToolsParts {
             }
         )
 
-        func Arc(ui Presentation, fraction float64, size float64) Blob ->
+        func Arc(fraction float64, size float64) Blob ->
         Ring(fraction, fraction > 0 ? AppTheme.Lime: Color.Transparent, AppTheme.Rule, size, AppTheme.Border3)
 
         func Number(input ToolsRegionInput, key string, label string, value string, color Color, size float64) Blob ->
