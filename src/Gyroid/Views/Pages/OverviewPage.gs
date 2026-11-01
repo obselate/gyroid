@@ -88,9 +88,6 @@ data struct OverviewNetworkInput {
     var MempoolBytes uint64
     var LastBlockTime int64
     var BestHash string
-    var Hashrate float64
-    var Difficulty uint64
-    var Blocks[]NetworkBlock
     var Width float64
     var Language string
     var Wallet string
@@ -142,6 +139,8 @@ class OverviewPage : Cell[OverviewInput] {
     private var hovering bool
     private let hover Action[bool]
     private var arrivals List[Arrival] = List[Arrival]()
+    private var outputs[]WalletOutput = []WalletOutput{}
+    private var sends[]WalletSend = []WalletSend{}
 
     init() {
         configureNetwork = cell -> cell.Accept(networkInput)
@@ -159,6 +158,12 @@ class OverviewPage : Cell[OverviewInput] {
         if !next.SequenceEqual(arrivals) {
             arrivals = next
         }
+        if !outputs.SequenceEqual(input.Snapshot.History) {
+            outputs = input.Snapshot.History
+        }
+        if !sends.SequenceEqual(input.Snapshot.Sends) {
+            sends = input.Snapshot.Sends
+        }
         networkInput = OverviewNetworkInput{
             Ui: input.Ui,
             Session: input.Session.Node,
@@ -173,9 +178,6 @@ class OverviewPage : Cell[OverviewInput] {
             MempoolBytes: input.Node.MempoolBytes,
             LastBlockTime: input.Node.LastBlockTime,
             BestHash: input.Node.BestHash,
-            Hashrate: input.Session.Node.Network.Hashrate,
-            Difficulty: input.Session.Node.Network.Difficulty,
-            Blocks: input.Session.Node.Network.Blocks,
             Width: input.Width,
             Language: language,
             Wallet: input.Session.Node.Settings.ActiveWallet,
@@ -186,8 +188,8 @@ class OverviewPage : Cell[OverviewInput] {
         }
         recentInput = OverviewRecentInput{
             Ui: input.Ui,
-            Outputs: input.Snapshot.History,
-            Sends: input.Snapshot.Sends,
+            Outputs: outputs,
+            Sends: sends,
             Address: input.Snapshot.Address,
             History: input.Session.History,
             Messages: input.Session.Messages,
@@ -783,6 +785,7 @@ class OverviewNetwork : Cell, IDisposable {
 
     func Accept(next OverviewNetworkInput) {
         if source == next {
+            Read()
             return
         }
         if source.Session != next.Session ||
@@ -791,20 +794,20 @@ class OverviewNetwork : Cell, IDisposable {
             source.Network != next.Network ||
             source.Endpoint != next.Endpoint ||
             source.ProcessId != next.ProcessId ||
-            source.Window != next.Window {
+            source.Window != next
+            .Window {
             generation++
             request?.Cancel()
             request?.Dispose()
             request = nil
             loadedHeight = nil
             loadedHash = ""
+            let report = next.Session.Network
+            hashrate = report.Hashrate
+            difficulty = report.Difficulty
+            blocks = report.Blocks
         }
         source = next
-        hashrate = next.Hashrate
-        difficulty = next.Difficulty
-        if !blocks.SequenceEqual(next.Blocks) {
-            blocks = next.Blocks
-        }
         Rebuild()
         Read()
     }
@@ -850,8 +853,10 @@ class OverviewNetwork : Cell, IDisposable {
                     if changed || blocksChanged {
                         Rebuild()
                     }
+                    Read()
+                } else {
+                    loadedHeight = nil
                 }
-                Read()
             }
         )
     }
