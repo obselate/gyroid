@@ -31,7 +31,7 @@ data struct SyncSample {
 
 data struct SyncState {
     var Step int32
-    var PhaseStarted bool
+    var ExecutedPhases int32
     var DownloadPercent int32
     var Peers uint64
     var Limit uint64
@@ -54,7 +54,6 @@ class SyncPage : Cell, IDisposable {
     private var state SyncState
     private var pending SyncState
     private var accepted bool
-    private var visited int32
     private var now float64
     private var stalled bool
     private var generation int32
@@ -88,7 +87,7 @@ class SyncPage : Cell, IDisposable {
         let node = next.Node
         let value = SyncState{
             Step: Step(node),
-            PhaseStarted: node.Phase != NodePhase.Detecting && (node.Phase != NodePhase.None || node.Running),
+            ExecutedPhases: node.ExecutedPhases,
             DownloadPercent: node.DownloadPercent ?? 0,
             Peers: node.Peers,
             LocalHeight: node.Height,
@@ -118,7 +117,7 @@ class SyncPage : Cell, IDisposable {
             state.Network != value.Network ||
             state.Endpoint != value.Endpoint ||
             state.Step != value.Step ||
-            state.PhaseStarted != value.PhaseStarted {
+            state.ExecutedPhases != value.ExecutedPhases {
             updateTimer?.Dispose()
             updateTimer = nil
             Apply(value)
@@ -160,7 +159,6 @@ class SyncPage : Cell, IDisposable {
         )
         if restarted {
             connectedAt = 0
-            visited = 0
             peerSamples.Clear()
             rateSamples.Clear()
         }
@@ -168,9 +166,6 @@ class SyncPage : Cell, IDisposable {
         let progressChanged = !accepted || restarted || state.Progress != value.Progress || state.Step != value.Step
         state = value
         accepted = true
-        if state.PhaseStarted {
-            visited |= 1 << state.Step
-        }
         if state.Step != 3 {
             connectedAt = 0
         } else if connectedAt == 0 {
@@ -242,7 +237,7 @@ class SyncPage : Cell, IDisposable {
                     Ui: ui,
                     Language: input.Language,
                     Step: step,
-                    Visited: visited,
+                    ExecutedPhases: node.ExecutedPhases,
                     CheckpointHeight: node.CheckpointHeight,
                     Peers: node.Peers
                 }
@@ -428,7 +423,7 @@ data struct SyncStepsInput {
     var Ui Presentation
     var Language string
     var Step int32
-    var Visited int32
+    var ExecutedPhases int32
     var CheckpointHeight uint64
     var Peers uint64
 }
@@ -459,7 +454,8 @@ class SyncSteps : Cell[SyncStepsInput] {
         FontSize: AppTheme.Type13,
         CreateStep: (state, index, label) -> {
             let current = index == state.CurrentIndex
-            let skipped = index < state.CurrentIndex && (node.Visited & (1 << index)) == 0
+            let skipped = index < state.CurrentIndex &&
+                (node.ExecutedPhases & (1 << (index + int32(NodePhase.Core)))) == 0
             let done = index < state.CurrentIndex && !skipped
             let detail = if done && index == 1 && node.CheckpointHeight > 0 {
                 Count(node.CheckpointHeight)

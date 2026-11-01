@@ -37,6 +37,7 @@ class NodeStatus {
     var DataDirectory string = ""
     var Executable string = ""
     var Phase NodePhase = NodePhase.None
+    var ExecutedPhases int32
     var DownloadPercent int32?
     var UpgradeDate string = ""
     var UpgradeDeadline string = ""
@@ -67,6 +68,7 @@ class NodeStatus {
         DataDirectory == other.DataDirectory &&
         Executable == other.Executable &&
         Phase == other.Phase &&
+        ExecutedPhases == other.ExecutedPhases &&
         DownloadPercent == other.DownloadPercent &&
         UpgradeDate == other.UpgradeDate &&
         UpgradeDeadline == other.UpgradeDeadline &&

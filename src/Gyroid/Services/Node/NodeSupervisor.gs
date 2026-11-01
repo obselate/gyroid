@@ -30,6 +30,9 @@ class NodeSupervisor : IDisposable {
     var Phase NodePhase = NodePhase.None
     var DownloadPercent int32?
     var CheckpointHeight uint64
+    private var executedPhases int32
+    private var progressNetwork string = ""
+    private var progressEndpoint string = ""
 
     prop NeedsRestart bool -> process != nil && !Owned
 
@@ -68,6 +71,9 @@ class NodeSupervisor : IDisposable {
         }
         if Owned {
             throw WalletException("Owned daemon is running but its API is not ready")
+        }
+        lock ownership {
+            executedPhases = 0
         }
         if settings.BinaryPath.Length == 0 || settings.BinaryPath == CoreRelease.InstallationPath() && !File.Exists(
             settings.BinaryPath
@@ -285,6 +291,7 @@ class NodeSupervisor : IDisposable {
             executable
         }
         CoreProcess.VerifyNetwork(pid, settings.Network)
+        ObservePhase(settings, NodePhase.None)
         if !Owned {
             settings.OwnedProcessId = 0
         } else if settings.OwnedProcessId != pid {
@@ -300,6 +307,7 @@ class NodeSupervisor : IDisposable {
     }
 
     async func TryAttachAsync(settings WalletSettings, ct CancellationToken) bool {
+        ObservePhase(settings, NodePhase.None)
         if await ReachableAsync(settings.Endpoint, ct) {
             Attach(settings)
             return true
@@ -398,9 +406,30 @@ class NodeSupervisor : IDisposable {
     }
 
     func ReportProgress(phase NodePhase, percent int32?) {
-        Phase = phase
-        DownloadPercent = percent
+        lock ownership {
+            RecordPhase(phase)
+            Phase = phase
+            DownloadPercent = percent
+        }
         Progress?.Invoke()
+    }
+
+    func ObservePhase(settings WalletSettings, phase NodePhase) int32 {
+        lock ownership {
+            if progressNetwork != settings.Network || progressEndpoint != settings.Endpoint {
+                progressNetwork = settings.Network
+                progressEndpoint = settings.Endpoint
+                executedPhases = 0
+            }
+            return RecordPhase(phase)
+        }
+    }
+
+    private func RecordPhase(phase NodePhase) int32 {
+        if phase != NodePhase.None && phase != NodePhase.Detecting {
+            executedPhases |= 1 << int32(phase)
+        }
+        return executedPhases
     }
 
     private async func SaveCheckpointsAsync(settings WalletSettings, ct CancellationToken) bool {

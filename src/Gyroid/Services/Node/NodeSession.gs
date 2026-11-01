@@ -29,7 +29,12 @@ class NodeSession : IDisposable {
         Api = NodeApi(settings)
         Supervisor.Exited = () -> Exited?.Invoke()
         Supervisor.Progress = () -> {
-            let current = NodeStatus{... Status, Phase: Supervisor.Phase, DownloadPercent: Supervisor.DownloadPercent}
+            let current = NodeStatus{
+                ... Status,
+                Phase: Supervisor.Phase,
+                DownloadPercent: Supervisor.DownloadPercent,
+                ExecutedPhases: Supervisor.ObservePhase(Settings, Supervisor.Phase)
+            }
             if !Status.Matches(current) {
                 Status = current
                 Changed?.Invoke()
@@ -111,6 +116,13 @@ class NodeSession : IDisposable {
             using let status = await Api.JsonAsync("status", ct: ct)
             let root = status.RootElement
             let version = NodeJson.Text(root, "version")
+            let phase = if Supervisor.Phase != NodePhase.None {
+                Supervisor.Phase
+            } else if NodeJson.Flag(root, "syncing") {
+                NodePhase.ChainSync
+            } else {
+                NodePhase.None
+            }
             let current = NodeStatus{
                 Source: Supervisor.Source,
                 Owned: Supervisor.Owned,
@@ -134,14 +146,12 @@ class NodeSession : IDisposable {
                 Endpoint: Settings.Endpoint,
                 DataDirectory: Settings.DataDirectory,
                 Executable: Supervisor.Executable,
-                Phase: if Supervisor.Phase != NodePhase.None {
-                    Supervisor.Phase
-                } else if NodeJson.Flag(root, "syncing") {
-                    NodePhase.ChainSync
-                } else {
-                    NodePhase.None
-                },
+                Phase: phase,
                 DownloadPercent: Supervisor.DownloadPercent,
+                ExecutedPhases: Supervisor.ObservePhase(Settings, phase),
+            }
+            if current.Peers == 0 && (phase == NodePhase.None || phase == NodePhase.ChainSync) {
+                current.ExecutedPhases = Supervisor.ObservePhase(Settings, NodePhase.Connecting)
             }
             if Settings.Network == "mainnet" && root.TryGetProperty("network_upgrade", out let upgrade) &&
                 upgrade.ValueKind == JsonValueKind
@@ -209,6 +219,7 @@ class NodeSession : IDisposable {
             },
             Phase: Supervisor.Phase,
             DownloadPercent: Supervisor.DownloadPercent,
+            ExecutedPhases: Supervisor.ObservePhase(Settings, Supervisor.Phase),
             CheckpointHeight: Supervisor.CheckpointHeight,
         }
     }
