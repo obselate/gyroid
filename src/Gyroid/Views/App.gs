@@ -189,25 +189,34 @@ partial class App : Cell {
             settingsSection = "node"
             Navigate(AppPage.Settings)
         }
-        configureTools = region -> region.Accept(
-            ToolsInput{
-                Session: wallet,
-                Ui: ui,
-                State: toolsState,
-                Snapshot: wallet.Snapshot,
-                Node: wallet.Node.Status,
-                Section: screen,
-                AutoLock: wallet.Settings.AutoLockMinutes,
-                Privacy: ui.Privacy,
-                Busy: ui.Working(),
-                Language: ui.Strings.Language,
-                Width: width,
-                Height: height,
-                OnNavigate: navigate,
-                OnPrivacy: togglePrivacy,
-                OnNodeSettings: openNodeSettings
-            }
-        )
+        configureTools = region -> {
+            let snapshot = wallet.Snapshot
+            region.Accept(
+                ToolsInput{
+                    Session: wallet,
+                    Ui: ui,
+                    State: toolsState,
+                    Address: snapshot.Address,
+                    Network: wallet.Settings.Network,
+                    ViewOnly: snapshot.ViewOnly,
+                    Outputs: snapshot.Balance?.Outputs ?? uint64(0),
+                    MemoErrors: snapshot.Balance?.MemoErrors ?? uint64(0),
+                    Peers: wallet.Node.Status.Peers,
+                    Report: toolsState.Report,
+                    Auditing: toolsState.Audit?.IsCompleted == false,
+                    Section: screen,
+                    AutoLock: wallet.Settings.AutoLockMinutes,
+                    Privacy: ui.Privacy,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    Width: width,
+                    Height: height,
+                    OnNavigate: navigate,
+                    OnPrivacy: togglePrivacy,
+                    OnNodeSettings: openNodeSettings
+                }
+            )
+        }
         showUpgrade = () -> {
             upgradeShown = true
             Rebuild()

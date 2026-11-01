@@ -33,8 +33,14 @@ data struct ToolsInput {
     var Session WalletSession
     var Ui Presentation
     var State ToolsState
-    var Snapshot WalletSnapshot
-    var Node NodeStatus
+    var Address string
+    var Network string
+    var ViewOnly bool
+    var Outputs uint64
+    var MemoErrors uint64
+    var Peers uint64
+    var Report OutputReport?
+    var Auditing bool
     var Section AppPage
     var AutoLock int32
     var Privacy bool
@@ -103,12 +109,12 @@ class ToolsPage : Cell {
                 ToolsPrivacyInput{
                     Region: Region(input),
                     State: input.State,
-                    Report: input.State.Report,
-                    Auditing: input.State.Audit?.IsCompleted == false,
-                    ViewOnly: input.Snapshot.ViewOnly,
-                    Outputs: input.Snapshot.Balance?.Outputs ?? uint64(0),
-                    MemoErrors: input.Snapshot.Balance?.MemoErrors ?? uint64(0),
-                    Peers: input.Node.Peers,
+                    Report: input.Report,
+                    Auditing: input.Auditing,
+                    ViewOnly: input.ViewOnly,
+                    Outputs: input.Outputs,
+                    MemoErrors: input.MemoErrors,
+                    Peers: input.Peers,
                     AutoLock: input.AutoLock,
                     OnNavigate: input.OnNavigate,
                     OnPrivacy: input.OnPrivacy,
@@ -133,7 +139,7 @@ class ToolsPage : Cell {
         Language: input.Language,
         Width: input.Width,
         Height: input.Height,
-        Identity: input.Session.Settings.Network + ":" + input.Snapshot.Address
+        Identity: input.Network + ":" + input.Address
     }
 
     override func Build() Blob {
@@ -143,10 +149,8 @@ class ToolsPage : Cell {
         }
         let ui = input.Ui
         let region = Region(input)
-        let tab = input.Snapshot.ViewOnly && input.State.Tab == "sign" ? "verify": input.State.Tab
-        let ids = input
-            .Snapshot
-            .ViewOnly ? []string{"verify", "proof", "health"}: []string{"sign", "verify", "proof", "health"}
+        let tab = input.ViewOnly && input.State.Tab == "sign" ? "verify": input.State.Tab
+        let ids = input.ViewOnly ? []string{"verify", "proof", "health"}: []string{"sign", "verify", "proof", "health"}
         let items = [ids.Length]NavigationItem
         for index in 0 ... ids.Length {
             items[index] = NavigationItem{Id: ids[index], Label: ui.Strings.Get(ids[index])}
@@ -191,9 +195,9 @@ class ToolsPage : Cell {
                     ToolsHealthInput{
                         Region: region,
                         State: input.State,
-                        Report: input.State.Report,
-                        Auditing: input.State.Audit?.IsCompleted == false,
-                        Outputs: input.Snapshot.Balance?.Outputs ?? uint64(0)
+                        Report: input.Report,
+                        Auditing: input.Auditing,
+                        Outputs: input.Outputs
                     }
                 )
             }
