@@ -17,6 +17,14 @@ class PrivacyChecks {
         this.session = session
     }
 
+    func ReadChecks() PrivacyCheckResult {
+        var mode UnixFileMode?
+        try {
+            mode = WalletFileMode()
+        } catch (failure Exception) { }
+        return PrivacyCheckResult{PhraseChecked: PhraseChecked(), WalletFileMode: mode}
+    }
+
     private func PhraseStatePath() string -> SettingsStore.ConfigurationPath() + ".phrase-checks.json"
 
     private func WalletKey() string -> session.settings.Network + ":" + Convert.ToHexString(
@@ -40,7 +48,7 @@ class PrivacyChecks {
         }
     }
 
-    async func MarkPhraseCheckedAsync() {
+    async func MarkPhraseCheckedAsync() DateTime? {
         session.RequireUnlocked()
         let path = PhraseStatePath()
         Directory.CreateDirectory(
@@ -71,6 +79,7 @@ class PrivacyChecks {
             true,
             false
         )
+        return PhraseChecked()
     }
 
     func WalletFileMode() UnixFileMode? {
@@ -80,11 +89,12 @@ class PrivacyChecks {
         return File.GetUnixFileMode(session.Library.WalletPath(session.settings.ActiveWallet))
     }
 
-    func RestrictWalletFile() {
+    func RestrictWalletFile() UnixFileMode? {
         File.SetUnixFileMode(
             session.Library.WalletPath(session.settings.ActiveWallet),
             UnixFileMode.UserRead | UnixFileMode.UserWrite
         )
+        return WalletFileMode()
     }
 
     async func CheckOutputsAsync(ct CancellationToken = default(CancellationToken)) OutputReport {
@@ -176,10 +186,13 @@ class PrivacyChecks {
             session.RequireUnlocked()
             using let outputs = await session.Node.Api.JsonAsync("wallet/outputs", ct: ct)
             using let found = await session.Node.Api.JsonAsync("tx/" + Uri.EscapeDataString(txid), ct: ct)
-            let owned = HashSet[string](StringComparer.OrdinalIgnoreCase)
+            let owned = Dictionary[string, uint64](StringComparer.OrdinalIgnoreCase)
             for output in outputs.RootElement.GetProperty("outputs").EnumerateArray() {
-                owned.Add(NodeJson.Text(output, "one_time_pub"))
+                if NodeJson.Flag(output, "spent") || NodeJson.Text(output, "status") == "spent" {
+                    owned[NodeJson.Text(output, "one_time_pub")] = NodeJson.Number(output, "spent_height")
+                }
             }
+            let height = NodeJson.OptionalNumber(found.RootElement, "block_height") ?? uint64(0)
             let tx = found.RootElement.GetProperty("tx")
             let rings = List[int32]()
             var size = 0
@@ -188,7 +201,7 @@ class PrivacyChecks {
                 var matches = 0
                 var index = 0
                 for member in input.GetProperty("ring_members").EnumerateArray() {
-                    if owned.Contains(Hex(member)) {
+                    if height > 0 && owned.TryGetValue(Hex(member), out let spentHeight) && spentHeight == height {
                         real = index
                         matches++
                     }

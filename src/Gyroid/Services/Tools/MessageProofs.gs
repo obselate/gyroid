@@ -1,5 +1,6 @@
 package Gyroid.Services
 
+import System
 import System.Threading
 
 class MessageProofs {
@@ -53,6 +54,7 @@ class MessageProofs {
     }
 
     async func VerifyCoreAsync(address string, message string, signature string, ct CancellationToken) bool {
+        signature = signature.Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "")
         try {
             using let response = await session
                 .Node

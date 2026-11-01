@@ -1,6 +1,12 @@
 package Gyroid.Models
 
 import System
+import System.IO
+
+struct PrivacyCheckResult {
+    var PhraseChecked DateTime?
+    var WalletFileMode UnixFileMode?
+}
 
 class StaleOutput {
     var Height uint64
