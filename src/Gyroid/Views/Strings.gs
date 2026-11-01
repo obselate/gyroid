@@ -676,6 +676,7 @@ class Strings {
             case "hide values on start": "启动时隐藏数值"
             case "12 words": "12 个词"
             case "About recovery phrase": "关于助记词"
+            case "Keep these words secret": "请保密这些助记词"
             case "The 12 words restore this wallet and can spend it": "这 12 个词可以恢复此钱包，并能花费其中的币"
             case "mode": "模式"
             case "automatic": "自动"

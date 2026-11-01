@@ -23,16 +23,28 @@ data struct SeedPageInput {
     var OnRetry Action
 }
 
-class SeedPage : Cell[SeedPageInput], IDisposable {
-    private var shown[]?char
+class SeedPage : Cell[SeedPageInput] {
+    private let configureActions Action[SeedActions]
 
-    private var visible bool
-
-    private var saved bool
-
-    private var hold int32
-
-    private var copiedOwner ReadOnlyMemory[uint8]
+    init() {
+        configureActions = cell -> {
+            if Input is SeedPageInput source {
+                cell.Accept(
+                    SeedActionsInput{
+                        Keys: source.Session.Keys,
+                        Ui: source.Ui,
+                        Words: source.Words,
+                        ClipboardOwner: source.ClipboardOwner,
+                        FromWallet: source.FromWallet,
+                        Busy: source.Busy,
+                        Language: source.Language,
+                        ChooseFile: source.ChooseFile,
+                        OnDone: source.OnDone
+                    }
+                )
+            }
+        }
+    }
 
     protected override func Build(input SeedPageInput) Blob {
         let ui = input.Ui
@@ -45,34 +57,55 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             }
             return card
         }
-        let words = input.Words
-        if !Object.ReferenceEquals(words, shown) {
-            shown = words
+        card.Add(Cell.Mount[SeedActions]("seed-actions", configureActions))
+        return card
+    }
+}
+
+data struct SeedActionsInput {
+    var Keys WalletKeys
+    var Ui Presentation
+    var Words[]char
+    var ClipboardOwner ReadOnlyMemory[uint8]
+    var FromWallet bool
+    var Busy bool
+    var Language string
+    var ChooseFile Action[FileDialogKind, string, string, Action[string]]
+    var OnDone Action
+}
+
+class SeedActions : Cell, IDisposable {
+    private var input SeedActionsInput
+    private var visible bool
+    private var saved bool
+    private var hold int32
+    private var copiedOwner ReadOnlyMemory[uint8]
+    private var generation int32
+
+    func Accept(next SeedActionsInput) {
+        if input.Equals(next) {
+            return
+        }
+        if !Object.ReferenceEquals(input.Words, next.Words) {
+            generation++
             visible = false
             saved = false
             hold = Random.Shared.Next()
             copiedOwner = ReadOnlyMemory[uint8].Empty
         }
-        let grid = Container{Gap: AppTheme.Space6, FlexShrink: 0}
-        var line = Container{}
-        var start = 0
-        var index = 1
-        var position = 0
-        while position <= words.Length {
-            if position == words.Length || words[position] == ' ' {
-                if position > start {
-                    if index % 4 == 1 {
-                        line = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space6}
-                        grid.Add(line)
-                    }
-                    line.Add(Word(ui, index, words, start, position - start))
-                    index++
-                }
-                start = position + 1
-            }
-            position++
-        }
-        card.Add(grid)
+        input = next
+        Rebuild()
+    }
+
+    override func Build() Blob {
+        let ui = input.Ui
+        let content = Container{Gap: AppTheme.Space12}
+        content.Add(
+            Cell.Mount[SeedPhraseInput, SeedPhrase](
+                "seed-phrase",
+                SeedPhraseInput{Ui: ui, Words: input.Words, Visible: visible, Hold: hold, Language: input.Language}
+            )
+        )
         let actions = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
@@ -88,7 +121,6 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                     if !visible {
                         hold = Random.Shared.Next()
                     }
-                    Rebuild()
                 }
             )
         )
@@ -99,31 +131,37 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                 copied ? "Copied": "Copy",
                 () -> {
                     let previous = ui.Actions.ClipboardOwner
-                    ui.Actions.Copy(words, 30000)
+                    ui.Actions.Copy(input.Words, 30000)
                     if !previous.Equals(ui.Actions.ClipboardOwner) {
                         copiedOwner = ui.Actions.ClipboardOwner
                     }
-                    Rebuild()
                 }
             )
         )
         actions.Add(Button(ui, "Export", () -> Export(input), input.Busy))
-        actions.Add(Container{FlexGrow: 1})
+        var completion = actions
         if !input.FromWallet {
-            actions.Add(
+            content.Add(actions)
+            completion = Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: AppTheme.Space8,
+                FlexShrink: 0
+            }
+            completion.Add(
                 (
                     AppTheme.Checkbox with{
                         Label = ui.Strings.Get("I saved these words"),
                         State = saved ? AccessibilityChecked.True: AccessibilityChecked.False,
                         OnChange = state -> {
                             saved = state == AccessibilityChecked.True
-                            Rebuild()
                         }
                     }
                 ).Build()
             )
         }
-        actions.Add(
+        completion.Add(Container{FlexGrow: 1})
+        completion.Add(
             Button(
                 ui,
                 input.FromWallet ? "Done": "Continue",
@@ -132,19 +170,80 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                 true
             )
         )
-        card.Add(actions)
-        return card
+        content.Add(completion)
+        return content
     }
 
-    private func Word(ui Presentation, index int32, words[]char, start int32, length int32) Blob {
+    private func Export(input SeedActionsInput) {
+        let current = generation
+        input.ChooseFile.Invoke(
+            FileDialogKind.SaveFile,
+            "Export",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt"),
+            (path string) -> {
+                if current == generation {
+                    input.Ui.Actions.Run(ct -> input.Keys.ExportSeedAsync(path, input.Words, ct))
+                }
+            }
+        )
+    }
+
+    func Dispose() {
+        generation++
+        visible = false
+        saved = false
+        input = default
+        copiedOwner = ReadOnlyMemory[uint8].Empty
+    }
+}
+
+data struct SeedPhraseInput {
+    var Ui Presentation
+    var Words[]char
+    var Visible bool
+    var Hold int32
+    var Language string
+}
+
+class SeedPhrase : Cell[SeedPhraseInput] {
+    protected override func Build(input SeedPhraseInput) Blob {
+        let grid = Container{Gap: AppTheme.Space6, FlexShrink: 0}
+        var line = Container{}
+        var start = 0
+        var index = 1
+        var position = 0
+        while position <= input.Words.Length {
+            if position == input.Words.Length || input.Words[position] == ' ' {
+                if position > start {
+                    if index % 4 == 1 {
+                        line = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space6}
+                        grid.Add(line)
+                    }
+                    line.Add(Word(input, index, start, position - start))
+                    index++
+                }
+                start = position + 1
+            }
+            position++
+        }
+        if input.Visible {
+            grid.Add(
+                Label(input.Ui, input.Ui.Strings.Get("Keep these words secret"), AppTheme.Type12, AppTheme.Body, "")
+            )
+        }
+        return grid
+    }
+
+    private func Word(input SeedPhraseInput, index int32, start int32, length int32) Blob {
+        let ui = input.Ui
         var word = ""
-        if visible {
+        if input.Visible {
             var low = 0
             var high = Bip39Wordlist.Words.Length - 1
             while low <= high {
                 let middle = low + (high - low) / 2
                 let candidate = Bip39Wordlist.Words[middle]
-                let order = ReadOnlySpan[char](words, start, length).CompareTo(
+                let order = ReadOnlySpan[char](input.Words, start, length).CompareTo(
                     System.MemoryExtensions.AsSpan(candidate),
                     StringComparison.Ordinal
                 )
@@ -172,35 +271,18 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             BorderColor: AppTheme.Rule,
             BackgroundColor: AppTheme.Surface,
             Accessibility: Accessibility{
-                Name: if visible {
+                Name: if input.Visible {
                     word
                 } else {
                     index.ToString() + " " + ui.Strings.Get("hidden")
                 }
             },
             Label(ui, index.ToString(), AppTheme.Type12, AppTheme.Dim, ""),
-            if visible {
+            if input.Visible {
                 Label(ui, word, AppTheme.Type14, AppTheme.Lime, "")
             } else {
-                Frame(ui, String('x', length), 0, hold ^ index, Random(hold ^ index), AppTheme.Type14, AppTheme.Body)
+                Frame(ui, "xxxxxxxx", 0, input.Hold ^ index, Random(input.Hold ^ index), AppTheme.Type14, AppTheme.Body)
             }
         }
-    }
-
-    private func Export(input SeedPageInput) {
-        input.ChooseFile.Invoke(
-            FileDialogKind.SaveFile,
-            "Export",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt"),
-            (path string) -> {
-                if let words = shown {
-                    input.Ui.Actions.Run(ct -> input.Session.Keys.ExportSeedAsync(path, words, ct))
-                }
-            }
-        )
-    }
-
-    func Dispose() {
-        shown = nil
     }
 }
