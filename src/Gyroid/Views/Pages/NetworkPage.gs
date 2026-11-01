@@ -1058,6 +1058,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
                 plot.Add(Lines(width, height, PathBuilder(0, 0, width, height).MoveTo(x, y).LineTo(px, py), color))
             }
             let dot = Dot(px, py, radius, color)
+            dot.Key = "peer:" + peer.Id
             dot.BorderWidth = active ? 1.5: AppTheme.Border0
             dot.BorderColor = AppTheme.Ink
             dot.OnPointerEnter = (event PointerEvent) -> input.Hover(peer.Id)
