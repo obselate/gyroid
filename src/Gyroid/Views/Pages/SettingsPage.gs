@@ -160,6 +160,7 @@ class SettingsPage : Cell {
     private var dialogs SettingsDialogs?
     private var advancedOwner SettingsAdvanced?
     private var nodeOwner SettingsNode?
+    private var mountedSection string = ""
     private let startupDraft SettingsStartupDraft = SettingsStartupDraft()
     private let openDialog Action[string]
     private let openPurge Action[string, string, int32]
@@ -197,7 +198,10 @@ class SettingsPage : Cell {
     }
 
     func Accept(input SettingsPageInput) {
-        if input.Section != current.Section {
+        let section = input.Section == "wallet" && input.Snapshot.State != WalletState.Unlocked ?
+        "general": input.Section
+        if section != mountedSection {
+            mountedSection = section
             generalOwner = nil
             nodeOwner = nil
             walletOwner = nil
