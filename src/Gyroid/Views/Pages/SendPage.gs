@@ -16,9 +16,10 @@ import System
 import System.Collections.Generic
 import System.Linq
 import System.Text
-import System.Threading.Tasks
+import System.Threading
 
 class SendRow {
+    let Id string = Guid.NewGuid().ToString("N")
     var Address string = ""
     var Amount string = ""
     var Memo string = ""
@@ -43,23 +44,110 @@ data struct SendPageInput {
     var OnSent Action
 }
 
-class SendPage : Cell[SendPageInput] {
+data struct SendDisplay {
+    var Ui Presentation
+    var Window Window?
+    var Contacts SortedDictionary[string, string]
+    var Network string
+    var Privacy bool
+    var Busy bool
+    var Language string
+    var Height float64
+}
+
+data struct SendEditorInput {
+    var Display SendDisplay
+    var Row SendRow
+    var Address string
+    var Amount string
+    var Memo string
+    var MemoOpen bool
+    var Suggest bool
+    var Index int32
+    var Count int32
+    var Spendable uint64
+    var Over bool
+    var Submit Action
+    var Changed Action
+    var Remove Action[SendRow]
+    var Maximum Action
+}
+
+class SendPage : Cell, IDisposable {
+    private var input SendPageInput
     private var rows List[SendRow]
-    private var reviewFocus bool
-    private var form WalletForm
-
     private var estimate SendEstimate?
-
     private var sent SendEstimate?
-
     private var result SendResult?
+    private var reviewRows[]SendReviewRow = []SendReviewRow{}
+    private let lifetime CancellationTokenSource = CancellationTokenSource()
+    private var request CancellationTokenSource?
+    private var generation int32
+    private var disposed bool
+    private var canSubmit bool
+    private var reviewFocus bool
+    private var walletName string = ""
+    private let changed Action
+    private let submit Action
+    private let remove Action[SendRow]
+    private let maximum Action
 
-    private var openRow int32 = -1
+    init() {
+        changed = () -> Rebuild()
+        submit = () -> {
+            if canSubmit {
+                Review()
+            }
+        }
+        remove = row -> {
+            rows.Remove(row)
+            Rebuild()
+        }
+        maximum = () -> Maximum()
+    }
 
-    protected override func Build(input SendPageInput) Blob {
-        rows = input.Rows
+    public func Accept(next SendPageInput) {
+        if input.Session != next.Session ||
+            input.Network != next.Network ||
+            input.Rows != next.Rows ||
+            walletName != next
+            .Session
+            .Settings
+            .ActiveWallet {
+            generation++
+            request?.Cancel()
+            estimate = nil
+            sent = nil
+            result = nil
+        }
+        input = next
+        rows = next.Rows
+        walletName = next.Session.Settings.ActiveWallet
         if rows.Count == 0 {
             rows.Add(SendRow())
+        }
+        Rebuild()
+    }
+
+    public func Dispose() {
+        disposed = true
+        generation++
+        lifetime.Cancel()
+        request?.Cancel()
+        request?.Dispose()
+        lifetime.Dispose()
+    }
+
+    override func Build() Blob {
+        let display = SendDisplay{
+            Ui: input.Ui,
+            Window: input.Window,
+            Contacts: input.Contacts,
+            Network: input.Network,
+            Privacy: input.Privacy,
+            Busy: input.Busy,
+            Language: input.Language,
+            Height: input.Height
         }
         let ui = input.Ui
         let spendable = input.Snapshot.Balance?.Spendable ?? uint64(0)
@@ -69,65 +157,80 @@ class SendPage : Cell[SendPageInput] {
         for row in rows {
             let atoms = Atoms(row.Amount)
             total = Add(total, atoms ?? uint64(0))
-            ready = ready && atoms != nil && Kind(input, row.Address).Length > 0 && WalletValidation.MemoIssue(row.Memo)
-                .Length == 0
+            ready = ready && atoms != nil && SendRecipientEditor.Kind(display, row.Address)
+                .Length > 0 &&
+                WalletValidation
+                .MemoIssue(row.Memo).Length == 0
         }
         let over = total > spendable
-        form = WalletForm(ui, ready && !over && total > 0, () -> Review(input), []string{})
+        canSubmit = ready && !over && total > 0
         let maxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
         let card = WalletParts.PageCard(ui, maxWidth, input.Height, maxWidth, true)
         card.Add(
-            WalletParts.Header(
-                Label(ui, ui.Strings.Get("send"), AppTheme.Type17, AppTheme.Ink, ""),
-                AppTheme.Space12,
-                if input.Snapshot.Balance?.Spendable != nil {
-                    Figure(ui, "Spendable", WalletText.Amount(ui.Privacy, spendable), AppTheme.Ink, AppTheme.Type14, "")
-                } else {
-                    Container{}
+            Cell.Mount[SendSummaryInput, SendSummary](
+                "summary",
+                SendSummaryInput{
+                    Ui: ui,
+                    Privacy: input.Privacy,
+                    Language: input.Language,
+                    Spendable: input.Snapshot.Balance?.Spendable
                 }
             )
         )
         if multi {
             let size = AppTheme.GetTotalSize(input.Height)
             let sum = Hidden(ui.Privacy, WalletAmount.Format(total))
-            card.Add(Hero(input, Label(ui, sum, size, AppTheme.Lime, ""), sum.Length, size))
-            let list = Container{Gap: AppTheme.Space8, MinHeight: 0, FlexShrink: 1, OverflowY: Overflow.Scroll}
-            for index in 0 ... rows.Count {
-                list.Add(Recipient(input, index))
-            }
-            card.Add(ListParts.Viewport(list, grow: false))
-        } else {
-            let size = AppTheme.GetAmountSize(input.Height)
-            card.Add(Hero(input, Amount(input, over, size), rows[0].Amount.Length, size))
-            let amountIssue = WalletValidation.AmountIssue(rows[0].Amount)
-            if amountIssue.Length > 0 {
-                card.Add(Status(ui, ui.Strings.Get(amountIssue), AppTheme.Pink, "warning"))
-            }
-            card.Add(
-                Container{Gap: AppTheme.Space10, FlexShrink: 0, AddressField(input, rows[0]), MemoField(input, rows[0])}
+            card.Add(SendRecipientEditor.Hero(display, Label(ui, sum, size, AppTheme.Lime, ""), sum.Length, size, nil))
+        }
+        let list = Container{Gap: AppTheme.Space8, MinHeight: 0, FlexShrink: multi ? 1: 0}
+        if multi {
+            list.OverflowY = Overflow.Scroll
+        }
+        for index in 0 ... rows.Count {
+            let row = rows[index]
+            list.Add(
+                Cell.Mount[SendEditorInput, SendRecipientEditor](
+                    row.Id,
+                    SendEditorInput{
+                        Display: display,
+                        Row: row,
+                        Address: row.Address,
+                        Amount: row.Amount,
+                        Memo: row.Memo,
+                        MemoOpen: row.MemoOpen,
+                        Suggest: row.Suggest,
+                        Index: index,
+                        Count: rows.Count,
+                        Spendable: spendable,
+                        Over: !multi && over,
+                        Submit: submit,
+                        Changed: changed,
+                        Remove: remove,
+                        Maximum: maximum
+                    }
+                )
             )
         }
-        card.Add(Bar(input, rows.Select((row SendRow) -> Atoms(row.Amount) ?? uint64(0)).ToArray(), 0, 0, spendable))
+        if multi {
+            card.Add(ListParts.Viewport(list, grow: false))
+        } else {
+            card.Add(list)
+        }
         card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                JustifyContent: JustifyContent.FlexEnd,
-                FlexShrink: 0,
-                Figure(
-                    ui,
-                    "Remaining",
-                    if over {
-                        "−" + WalletText.Amount(ui.Privacy, total - spendable)
-                    } else {
-                        WalletText.Amount(ui.Privacy, spendable - total)
-                    },
-                    over ? AppTheme.Pink: AppTheme.Ink,
-                    AppTheme.Type14,
-                    ""
-                )
-            }
+            Cell.Mount[SendBalanceInput, SendBalance](
+                "totals",
+                SendBalanceInput{
+                    Display: display,
+                    Amounts: rows.Select(row -> Atoms(row.Amount) ?? uint64(0)).ToArray(),
+                    Names: rows.Select(row -> SendRecipientEditor.Name(display, row.Address)).ToArray(),
+                    Ids: rows.Select(row -> row.Id).ToArray(),
+                    Spendable: spendable,
+                    Total: total,
+                    Remaining: true
+                }
+            )
         )
-        let review = Button(ui, "Review", form.Submit, !form.CanSubmit, true, reviewFocus, input.Busy)
+        let review = Button(ui, "Review", submit, !canSubmit, true, reviewFocus, input.Busy)
         reviewFocus = false
         review.MinWidth = 140
         let addRecipient = ControlParts.Button(
@@ -135,7 +238,6 @@ class SendPage : Cell[SendPageInput] {
             "recipient",
             () -> {
                 rows.Add(SendRow())
-                Rebuild()
             },
             input.Busy,
             busy: false,
@@ -180,54 +282,325 @@ class SendPage : Cell[SendPageInput] {
             )
         }
         if let pending = estimate {
-            card.Add(Confirm(input, pending, spendable))
+            card.Add(
+                Cell.Mount[SendReviewInput, SendReview](
+                    "review",
+                    SendReviewInput{
+                        Display: display,
+                        Estimate: pending,
+                        Rows: reviewRows,
+                        Spendable: spendable,
+                        Submit: () -> Submit(),
+                        Close: () -> {
+                            if !input.Busy {
+                                estimate = nil
+                                reviewFocus = true
+                                Rebuild()
+                            }
+                        }
+                    }
+                )
+            )
         }
         return card
     }
 
-    private func Hero(input SendPageInput, amount Blob, digits int32, size float64) Blob {
-        let ui = input.Ui
-        let hero = Container{
-            AlignItems: AlignItems.Center,
-            Gap: AppTheme.Space14,
-            FlexShrink: 0,
-            Padding: Edges{Top: AppTheme.GetHeroPadding(input.Height), Bottom: AppTheme.GetHeroPadding(input.Height)},
-            Container{
-                Width: Percent(100),
-                TextAlign: TextAlign.Center,
-                amount,
-                Container{
-                    Position: PositionType.Absolute,
-                    Left: Percent(50),
-                    Bottom: size * 0.25,
-                    Margin: Edges{Left: Math.Max(1, digits) * size * 0.3 + AppTheme.Space12},
-                    Label(ui, "BNT", AppTheme.Type14, AppTheme.Dim, "")
-                }
-            }
+    private func Atoms(text string) uint64? {
+        try {
+            return WalletAmount.Parse(text)
+        } catch (error WalletException) {
+            return nil
         }
-        if rows.Count == 1 {
-            let spendable = input.Snapshot.Balance?.Spendable ?? uint64(0)
-            hero.Add(
-                Container{
-                    FlexDirection: FlexDirection.Row,
-                    Gap: AppTheme.Space8,
-                    Share(input, "25%", spendable, () -> Fill(spendable / 4)),
-                    Share(input, "50%", spendable, () -> Fill(spendable / 2)),
-                    Share(input, "max", spendable, () -> Maximum(input))
-                }
-            )
-        } else {
-            hero.Padding = Edges{
-                Top: AppTheme.GetAmountPadding(input.Height),
-                Bottom: AppTheme.GetAmountPadding(input.Height)
-            }
-        }
-        return hero
     }
 
-    private func Amount(input SendPageInput, over bool, size float64) Blob {
-        let ui = input.Ui
+    shared {
+        func Add(left uint64, right uint64) uint64 -> if left > uint64.MaxValue - right {
+            uint64.MaxValue
+        } else {
+            left + right
+        }
+    }
+
+    private func BeginRequest() CancellationToken {
+        request?.Cancel()
+        request?.Dispose()
+        let current = CancellationTokenSource.CreateLinkedTokenSource(
+            lifetime.Token,
+            input.Window?.Closed ?? default(CancellationToken)
+        )
+        request = current
+        generation++
+        return current.Token
+    }
+
+    private func Current(id int32, session WalletSession, network string, wallet string) bool ->
+    !disposed &&
+        id == generation &&
+        input.Session == session &&
+        input.Network == network &&
+        session
+        .Settings
+        .Network == network &&
+        session
+        .Settings
+        .ActiveWallet == wallet
+
+    private func Review() {
+        if !canSubmit {
+            return
+        }
+        let session = input.Session
+        let network = input.Network
+        let wallet = walletName
+        let token = BeginRequest()
+        let id = generation
+        let drafts = rows.Select(row -> SendReviewRow{Id: row.Id, Address: row.Address}).ToArray()
+        let requests = rows.Select(
+            row -> WalletRecipient{
+                Address: AddressBook.Resolve(input.Contacts, row.Address),
+                Amount: Atoms(row.Amount) ?? uint64(0),
+                Memo: row.Memo
+            }
+        )
+            .ToArray()
+        var found SendEstimate?
+        input
+            .Ui
+            .Actions
+            .Run(
+            async (ct) -> {
+                using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, ct)
+                found = await session.Send.EstimateAsync(requests, linked.Token)
+            },
+            () -> {
+                if Current(id, session, network, wallet) {
+                    estimate = found
+                    reviewRows = drafts
+                    Rebuild()
+                }
+            }
+        )
+    }
+
+    private func Maximum() {
         let row = rows[0]
+        let display = SendDisplay{Contacts: input.Contacts, Network: input.Network}
+        let address = if SendRecipientEditor.Kind(display, row.Address).Length > 0 {
+            AddressBook.Resolve(input.Contacts, row.Address.Trim())
+        } else {
+            input.Snapshot.Address
+        }
+        let memo = row.Memo
+        let session = input.Session
+        let network = input.Network
+        let wallet = walletName
+        let token = BeginRequest()
+        let id = generation
+        var amount uint64
+        input
+            .Ui
+            .Actions
+            .Run(
+            async (ct) -> {
+                using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, ct)
+                amount = await session.Send.MaximumAsync([]WalletRecipient{}, address, memo, linked.Token)
+            },
+            () -> {
+                if Current(id, session, network, wallet) && rows.Contains(row) {
+                    row.Amount = WalletAmount.Format(amount)
+                    Rebuild()
+                }
+            }
+        )
+    }
+
+    private func Submit() {
+        guard let pending = estimate else {
+            return
+        }
+        if input.Busy {
+            return
+        }
+        estimate = nil
+        let session = input.Session
+        let network = input.Network
+        let wallet = walletName
+        let id = generation
+        let drafts = rows
+        let draftIds = rows.Select(row -> row.Id).ToArray()
+        let onSent = input.OnSent
+        var outcome SendResult?
+        input
+            .Ui
+            .Actions
+            .Run(
+            async (ct) -> {
+                outcome = await session.Send.SubmitAsync(pending, ct)
+            },
+            () -> {
+                if session.Settings.Network != network || session.Settings.ActiveWallet != wallet {
+                    return
+                }
+                if drafts.Select(row -> row.Id).SequenceEqual(draftIds) {
+                    drafts.Clear()
+                    drafts.Add(SendRow())
+                }
+                if Current(id, session, network, wallet) {
+                    if outcome?.Fee > 0 {
+                        sent = pending
+                        result = outcome
+                    } else {
+                        sent = nil
+                        result = nil
+                    }
+                    Rebuild()
+                }
+                onSent()
+            }
+        )
+    }
+}
+
+class SendRecipientEditor : Cell[SendEditorInput] {
+    private var form WalletForm
+
+    protected override func Build(input SendEditorInput) Blob {
+        let display = input.Display
+        form = WalletForm(display.Ui, true, input.Submit, []string{})
+        if input.Count > 1 {
+            return Recipient(display, input)
+        }
+        let size = AppTheme.GetAmountSize(display.Height)
+        let content = Container{Gap: AppTheme.GetPageGap(display.Height), FlexShrink: 0}
+        content.Add(Hero(display, Amount(display, input, size), input.Amount.Length, size, input))
+        let issue = WalletValidation.AmountIssue(input.Amount)
+        if issue.Length > 0 {
+            content.Add(Status(display.Ui, display.Ui.Strings.Get(issue), AppTheme.Pink, "warning"))
+        }
+        content.Add(
+            Container{Gap: AppTheme.Space10, FlexShrink: 0, AddressField(display, input), MemoField(display, input)}
+        )
+        return content
+    }
+    shared {
+        func Hero(input SendDisplay, amount Blob, digits int32, size float64, editor SendEditorInput?) Blob {
+            let ui = input.Ui
+            let hero = Container{
+                AlignItems: AlignItems.Center,
+                Gap: AppTheme.Space14,
+                FlexShrink: 0,
+                Padding: Edges{
+                    Top: AppTheme.GetHeroPadding(input.Height),
+                    Bottom: AppTheme.GetHeroPadding(input.Height)
+                },
+                Container{
+                    Width: Percent(100),
+                    TextAlign: TextAlign.Center,
+                    amount,
+                    Container{
+                        Position: PositionType.Absolute,
+                        Left: Percent(50),
+                        Bottom: size * 0.25,
+                        Margin: Edges{Left: Math.Max(1, digits) * size * 0.3 + AppTheme.Space12},
+                        Label(ui, "BNT", AppTheme.Type14, AppTheme.Dim, "")
+                    }
+                }
+            }
+            if let item = editor {
+                let spendable = item.Spendable
+                hero.Add(
+                    Container{
+                        FlexDirection: FlexDirection.Row,
+                        Gap: AppTheme.Space8,
+                        Share(
+                            input,
+                            "25%",
+                            spendable,
+                            () -> {
+                                item.Row.Amount = WalletAmount.Format(spendable / 4)
+                                item.Changed()
+                            }
+                        ),
+                        Share(
+                            input,
+                            "50%",
+                            spendable,
+                            () -> {
+                                item.Row.Amount = WalletAmount.Format(spendable / 2)
+                                item.Changed()
+                            }
+                        ),
+                        Share(input, "max", spendable, item.Maximum)
+                    }
+                )
+            } else {
+                hero.Padding = Edges{
+                    Top: AppTheme.GetAmountPadding(input.Height),
+                    Bottom: AppTheme.GetAmountPadding(input.Height)
+                }
+            }
+            return hero
+        }
+
+        private func Share(input SendDisplay, label string, atoms uint64, click Action) Blob -> ControlParts.Button(
+            input.Ui,
+            label,
+            click,
+            input.Busy || atoms == 0,
+            busy: false,
+            appearance: AppTheme.CompactButton with{BackgroundColor = AppTheme.Black, TextColor = AppTheme.Body}
+        )
+
+        func Name(input SendDisplay, value string) string {
+            let text = value.Trim()
+            return if Kind(input, text) == "contact" || text.StartsWith("$", StringComparison.Ordinal) {
+                text
+            } else {
+                Short(text)
+            }
+        }
+
+        func Kind(input SendDisplay, value string) string {
+            let text = value.Trim()
+            return if text.Length == 0 || Issue(input, text).Length > 0 {
+                ""
+            } else if !AddressBook.IsDestination(text) && PaymentLink.Parse(text) == nil && input.Contacts.ContainsKey(
+                text
+            ) {
+                "contact"
+            } else if text.StartsWith("$", StringComparison.Ordinal) {
+                "handle"
+            } else if text.Length >= 64 {
+                "address"
+            } else {
+                ""
+            }
+        }
+
+        private func Issue(input SendDisplay, text string) string {
+            if text.Length == 0 || !input.Contacts.ContainsKey(text) &&
+                input
+                .Contacts
+                .Keys
+                .Any((name string) -> name.StartsWith(text, StringComparison.OrdinalIgnoreCase)) {
+                return ""
+            }
+            let destination = AddressBook.Resolve(input.Contacts, text)
+            try {
+                if destination.StartsWith("$", StringComparison.Ordinal) {
+                    BlocknetIdService.Normalize(destination)
+                    return ""
+                }
+                return WalletValidation.AddressIssue(WalletValidation.ValidateAddress(destination), input.Network)
+            } catch (error WalletException) {
+                return error.Message
+            }
+        }
+    }
+
+    private func Amount(input SendDisplay, editor SendEditorInput, size float64) Blob {
+        let ui = input.Ui
+        let row = editor.Row
         return form.Bind(
             AppTheme.FieldInput with{
                 AccessibilityName = ui.Strings.Get("Amount"),
@@ -237,7 +610,7 @@ class SendPage : Cell[SendPageInput] {
                 Password = input.Privacy,
                 Disabled = input.Busy,
                 FontSize = size,
-                TextColor = over ? AppTheme.Pink: AppTheme.Lime,
+                TextColor = editor.Over ? AppTheme.Pink: AppTheme.Lime,
                 BackgroundColor = Color.Transparent,
                 BorderWidth = AppTheme.Border0,
                 FocusRingWidth = AppTheme.Border0,
@@ -246,55 +619,22 @@ class SendPage : Cell[SendPageInput] {
                 Width = Percent(100),
                 OnChange = value -> {
                     row.Amount = value.Trim()
-                    Rebuild()
+                    editor.Changed()
                 }
             }
         )
             .Build()
     }
 
-    private func Fill(atoms uint64) {
-        rows[0].Amount = WalletAmount.Format(atoms)
-        Rebuild()
-    }
-
-    private func Maximum(input SendPageInput) {
-        let row = rows[0]
-        let text = row.Address.Trim()
-        let address = if Kind(input, text).Length > 0 {
-            AddressBook.Resolve(input.Contacts, text)
-        } else {
-            input.Snapshot.Address
-        }
-        var amount uint64
-        input
-            .Ui
-            .Actions
-            .Run(
-            async (ct) -> {
-                amount = await input.Session.Send.MaximumAsync([]WalletRecipient{}, address, row.Memo, ct)
-            },
-            () -> Fill(amount)
-        )
-    }
-
-    private func Share(input SendPageInput, label string, atoms uint64, click Action) Blob -> ControlParts.Button(
-        input.Ui,
-        label,
-        click,
-        input.Busy || atoms == 0,
-        busy: false,
-        appearance: AppTheme.CompactButton with{BackgroundColor = AppTheme.Black, TextColor = AppTheme.Body}
-    )
-
-    private func Recipient(input SendPageInput, index int32) Blob {
+    private func Recipient(input SendDisplay, editor SendEditorInput) Blob {
         let ui = input.Ui
-        let row = rows[index]
+        let row = editor.Row
+        let index = editor.Index
         let memoUsed = Encoding.UTF8.GetByteCount(row.Memo)
         let line = Container{
             Gap: AppTheme.Space8,
             FlexShrink: 0,
-            ZIndex: rows.Count - index,
+            ZIndex: editor.Count - index,
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.FlexStart,
@@ -306,7 +646,7 @@ class SendPage : Cell[SendPageInput] {
                     JustifyContent: JustifyContent.Center,
                     Label(ui, (index + 1).ToString(), AppTheme.Type12, AppTheme.Dim, "")
                 },
-                Grow(AddressField(input, row)),
+                Grow(AddressField(input, editor)),
                 Container{
                     Width: 150,
                     TextAlign: TextAlign.Right,
@@ -321,7 +661,7 @@ class SendPage : Cell[SendPageInput] {
                             Invalid: WalletValidation.AmountIssue(row.Amount).Length > 0,
                             OnChange: value -> {
                                 row.Amount = value.Trim()
-                                Rebuild()
+                                editor.Changed()
                             }
                         }
                     )
@@ -336,7 +676,6 @@ class SendPage : Cell[SendPageInput] {
                     ui.Strings.Get("Memo"),
                     () -> {
                         row.MemoOpen = !row.MemoOpen
-                        Rebuild()
                     },
                     input.Busy,
                     row.MemoOpen,
@@ -348,10 +687,7 @@ class SendPage : Cell[SendPageInput] {
                     ui,
                     MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.Dim),
                     ui.Strings.Get("Remove recipient"),
-                    () -> {
-                        rows.RemoveAt(index)
-                        Rebuild()
-                    },
+                    () -> editor.Remove(row),
                     input.Busy,
                     size: AppTheme.ControlCompact,
                     style: AppTheme.DisclosureStyle
@@ -362,15 +698,16 @@ class SendPage : Cell[SendPageInput] {
             line.Add(
                 Container{
                     Padding: Edges{Left: AppTheme.Space24, Right: AppTheme.ControlRegular * 2},
-                    MemoField(input, row)
+                    MemoField(input, editor)
                 }
             )
         }
         return line
     }
 
-    private func AddressField(input SendPageInput, row SendRow) Blob {
+    private func AddressField(input SendDisplay, editor SendEditorInput) Blob {
         let ui = input.Ui
+        let row = editor.Row
         let text = row.Address.Trim()
         let issue = Issue(input, text)
         let kind = Kind(input, text)
@@ -395,7 +732,6 @@ class SendPage : Cell[SendPageInput] {
                     ui.Strings.Get("contacts"),
                     () -> {
                         row.Suggest = !row.Suggest
-                        Rebuild()
                     },
                     input.Busy,
                     row.Suggest,
@@ -440,7 +776,7 @@ class SendPage : Cell[SendPageInput] {
                             row.Address = value
                             row.Suggest = true
                         }
-                        Rebuild()
+                        editor.Changed()
                     }
                 }
             )
@@ -475,7 +811,7 @@ class SendPage : Cell[SendPageInput] {
                 OnClick: () -> {
                     row.Address = name
                     row.Suggest = false
-                    Rebuild()
+                    editor.Changed()
                 },
                 MaterialIcons.Create("person", AppTheme.Icon14, AppTheme.Dim),
                 Grow(
@@ -522,8 +858,9 @@ class SendPage : Cell[SendPageInput] {
         return field
     }
 
-    private func MemoField(input SendPageInput, row SendRow) Blob {
+    private func MemoField(input SendDisplay, editor SendEditorInput) Blob {
         let ui = input.Ui
+        let row = editor.Row
         let issue = WalletValidation.MemoIssue(row.Memo)
         return form.Entry(
             TextField{
@@ -561,23 +898,69 @@ class SendPage : Cell[SendPageInput] {
                 },
                 OnChange: value -> {
                     row.Memo = value
-                    Rebuild()
+                    editor.Changed()
                 }
             }
         )
     }
+}
 
-    private func Bar(input SendPageInput, amounts[]uint64, fee uint64, change uint64, spendable uint64) Blob {
+data struct SendBalanceInput {
+    var Display SendDisplay
+    var Amounts[]uint64
+    var Names[]string
+    var Ids[]string
+    var Spendable uint64
+    var Total uint64
+    var Fee uint64
+    var Change uint64
+    var Remaining bool
+}
+
+class SendBalance : Cell[SendBalanceInput] {
+    protected override func Build(input SendBalanceInput) Blob {
+        let ui = input.Display.Ui
+        let over = input.Total > input.Spendable
+        let content = Container{Gap: AppTheme.GetPageGap(input.Display.Height), FlexShrink: 0}
+        content.Add(Bar(input))
+        if input.Remaining {
+            content.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    JustifyContent: JustifyContent.FlexEnd,
+                    FlexShrink: 0,
+                    Figure(
+                        ui,
+                        "Remaining",
+                        over ?
+                        "−" + WalletText.Amount(ui.Privacy, input.Total - input.Spendable):
+                        WalletText.Amount(ui.Privacy, input.Spendable - input.Total),
+                        over ? AppTheme.Pink: AppTheme.Ink,
+                        AppTheme.Type14,
+                        ""
+                    )
+                }
+            )
+        }
+        return content
+    }
+
+    private func Bar(value SendBalanceInput) Blob {
+        let input = value.Display
         let ui = input.Ui
+        let amounts = value.Amounts
+        let spendable = value.Spendable
+        let fee = value.Fee
+        let change = value.Change
         let bar = Container{
             FlexDirection: FlexDirection.Row,
             Height: AppTheme.Track8,
             Gap: AppTheme.Space2,
             FlexShrink: 0
         }
-        var total = Add(fee, change)
+        var total = SendPage.Add(fee, change)
         for amount in amounts {
-            total = Add(total, amount)
+            total = SendPage.Add(total, amount)
         }
         if input.Privacy || spendable == 0 {
             bar.Add(BarSegment(1, AppTheme.Edge))
@@ -604,13 +987,7 @@ class SendPage : Cell[SendPageInput] {
                         FlexDirection: FlexDirection.Row,
                         JustifyContent: JustifyContent.SpaceBetween,
                         Gap: AppTheme.Space24,
-                        Label(
-                            ui,
-                            Name(input, rows[other].Address),
-                            AppTheme.Type13,
-                            other == index ? AppTheme.Ink: AppTheme.Dim,
-                            ""
-                        ),
+                        Label(ui, value.Names[other], AppTheme.Type13, other == index ? AppTheme.Ink: AppTheme.Dim, ""),
                         Label(
                             ui,
                             WalletAmount.Format(amounts[other]),
@@ -623,7 +1000,7 @@ class SendPage : Cell[SendPageInput] {
             }
             bar.Add(
                 Cell.Mount[TooltipInput, Tooltip](
-                    "share" + index.ToString(),
+                    value.Ids[index],
                     TooltipInput{
                         Window: input.Window,
                         Target: segment,
@@ -644,16 +1021,34 @@ class SendPage : Cell[SendPageInput] {
         bar.Add(BarSegment(float64(spendable - total), AppTheme.Edge))
         return bar
     }
+}
 
-    private func Confirm(input SendPageInput, pending SendEstimate, spendable uint64) Blob {
+data struct SendReviewRow {
+    var Id string
+    var Address string
+}
+
+data struct SendReviewInput {
+    var Display SendDisplay
+    var Estimate SendEstimate
+    var Rows[]SendReviewRow
+    var Spendable uint64
+    var Submit Action
+    var Close Action
+}
+
+class SendReview : Cell[SendReviewInput] {
+    private var openRow string = ""
+
+    protected override func Build(input SendReviewInput) Blob -> Confirm(input)
+
+    private func Confirm(value SendReviewInput) Blob {
+        let input = value.Display
+        let pending = value.Estimate
+        let spendable = value.Spendable
         let ui = input.Ui
         let compact = input.Height < 700
-        let close Action = () -> {
-            estimate = nil
-            openRow = -1
-            reviewFocus = true
-            Rebuild()
-        }
+        let close = value.Close
         let list = Container{
             MinHeight: 0,
             FlexShrink: 1,
@@ -662,7 +1057,7 @@ class SendPage : Cell[SendPageInput] {
             BorderColor: AppTheme.Rule
         }
         for index in 0 ... pending.Recipients.Length {
-            list.Add(Recipient(input, pending, index))
+            list.Add(Recipient(value, index))
         }
         let remaining = spendable - Math.Min(spendable, pending.Total)
         let content = Container{
@@ -682,12 +1077,17 @@ class SendPage : Cell[SendPageInput] {
                 alignment: AlignItems.Baseline
             ),
             ListParts.Viewport(list, grow: false),
-            Bar(
-                input,
-                pending.Recipients.Select((recipient WalletRecipient) -> recipient.Amount).ToArray(),
-                pending.Fee,
-                pending.Change,
-                spendable
+            Cell.Mount[SendBalanceInput, SendBalance](
+                "review-totals",
+                SendBalanceInput{
+                    Display: input,
+                    Amounts: pending.Recipients.Select(recipient -> recipient.Amount).ToArray(),
+                    Names: value.Rows.Select(row -> SendRecipientEditor.Name(input, row.Address)).ToArray(),
+                    Ids: value.Rows.Select(row -> row.Id).ToArray(),
+                    Fee: pending.Fee,
+                    Change: pending.Change,
+                    Spendable: spendable
+                }
             ),
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -735,14 +1135,14 @@ class SendPage : Cell[SendPageInput] {
                 Content: content,
                 Footer: ActionRow(
                     []Blob{
-                        ControlParts.Button(ui, "Cancel", close, busy: false),
-                        ControlParts.Button(ui, "Send", () -> Submit(input), input.Busy, true, busy: input.Busy)
+                        ControlParts.Button(ui, "Cancel", close, input.Busy, busy: false),
+                        ControlParts.Button(ui, "Send", value.Submit, input.Busy, true, busy: false)
                     }
                 ),
                 ConfirmText: ui.Strings.Get("Send"),
                 CancelText: ui.Strings.Get("Cancel"),
                 ConfirmDisabled: input.Busy,
-                OnConfirm: () -> Submit(input),
+                OnConfirm: value.Submit,
                 OnCancel: close,
                 OnClose: close
             }
@@ -751,19 +1151,22 @@ class SendPage : Cell[SendPageInput] {
 
     private let changeLines[]string = []string{"Returns to this wallet. Spendable after 10 confirmations"}
 
-    private func Recipient(input SendPageInput, pending SendEstimate, index int32) Blob {
+    private func Recipient(value SendReviewInput, index int32) Blob {
+        let input = value.Display
+        let pending = value.Estimate
         let ui = input.Ui
         let recipient = pending.Recipients[index]
         let handle = pending.Handles[index]
-        let expanded = openRow == index
-        let typed = rows[index].Address.Trim()
+        let id = value.Rows[index].Id
+        let expanded = openRow == id
+        let typed = value.Rows[index].Address.Trim()
         let head = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space10,
             MinWidth: 0
         }
-        if Kind(input, typed) == "contact" {
+        if SendRecipientEditor.Kind(input, typed) == "contact" {
             head.Add(Label(ui, Hidden(ui.Privacy, typed), AppTheme.Type14, AppTheme.Ink, ""))
         }
         if handle.Length > 0 {
@@ -807,8 +1210,7 @@ class SendPage : Cell[SendPageInput] {
                 Expanded: expanded
             },
             OnClick: () -> {
-                openRow = expanded ? -1: index
-                Rebuild()
+                openRow = expanded ? "": id
             },
             head
         }
@@ -858,123 +1260,30 @@ class SendPage : Cell[SendPageInput] {
         }
         return entry
     }
+}
 
-    private func Name(input SendPageInput, value string) string {
-        let text = value.Trim()
-        return if Kind(input, text) == "contact" || text.StartsWith("$", StringComparison.Ordinal) {
-            text
+data struct SendSummaryInput {
+    var Ui Presentation
+    var Privacy bool
+    var Language string
+    var Spendable uint64?
+}
+
+class SendSummary : Cell[SendSummaryInput] {
+    protected override func Build(input SendSummaryInput) Blob -> WalletParts.Header(
+        Label(input.Ui, input.Ui.Strings.Get("send"), AppTheme.Type17, AppTheme.Ink, ""),
+        AppTheme.Space12,
+        if let spendable = input.Spendable {
+            Figure(
+                input.Ui,
+                "Spendable",
+                WalletText.Amount(input.Privacy, spendable),
+                AppTheme.Ink,
+                AppTheme.Type14,
+                ""
+            )
         } else {
-            Short(text)
+            Container{}
         }
-    }
-
-    private func Kind(input SendPageInput, value string) string {
-        let text = value.Trim()
-        return if text.Length == 0 || Issue(input, text).Length > 0 {
-            ""
-        } else if !AddressBook.IsDestination(text) && PaymentLink.Parse(text) == nil && input.Contacts.ContainsKey(
-            text
-        ) {
-            "contact"
-        } else if text.StartsWith("$", StringComparison.Ordinal) {
-            "handle"
-        } else if text.Length >= 64 {
-            "address"
-        } else {
-            ""
-        }
-    }
-
-    private func Issue(input SendPageInput, text string) string {
-        if text.Length == 0 || !input.Contacts.ContainsKey(text) &&
-            input
-            .Contacts
-            .Keys
-            .Any((name string) -> name.StartsWith(text, StringComparison.OrdinalIgnoreCase)) {
-            return ""
-        }
-        let destination = AddressBook.Resolve(input.Contacts, text)
-        try {
-            if destination.StartsWith("$", StringComparison.Ordinal) {
-                BlocknetIdService.Normalize(destination)
-                return ""
-            }
-            return WalletValidation.AddressIssue(WalletValidation.ValidateAddress(destination), input.Network)
-        } catch (error WalletException) {
-            return error.Message
-        }
-    }
-
-    private func Atoms(text string) uint64? {
-        try {
-            return WalletAmount.Parse(text)
-        } catch (error WalletException) {
-            return nil
-        }
-    }
-
-    private func Add(left uint64, right uint64) uint64 -> if left > uint64.MaxValue - right {
-        uint64.MaxValue
-    } else {
-        left + right
-    }
-
-    private func Review(input SendPageInput) {
-        let requests = rows.Select(
-            (row SendRow) -> WalletRecipient{
-                Address: AddressBook.Resolve(input.Contacts, row.Address),
-                Amount: Atoms(row.Amount) ?? uint64(0),
-                Memo: row.Memo
-            }
-        )
-            .ToArray()
-        var task Task[SendEstimate]
-        input
-            .Ui
-            .Actions
-            .Run(
-            ct -> {
-                task = input.Session.Send.EstimateAsync(requests, ct)
-                return task
-            },
-            () -> {
-                estimate = task.Result
-                Rebuild()
-            }
-        )
-    }
-
-    private func Submit(input SendPageInput) {
-        guard let pending = estimate else {
-            return
-        }
-        if input.Busy {
-            return
-        }
-        estimate = nil
-        openRow = -1
-        var task Task[SendResult]
-        input
-            .Ui
-            .Actions
-            .Run(
-            ct -> {
-                task = input.Session.Send.SubmitAsync(pending, ct)
-                return task
-            },
-            () -> {
-                rows.Clear()
-                rows.Add(SendRow())
-                if task.Result.Fee > 0 {
-                    sent = pending
-                    result = task.Result
-                } else {
-                    sent = nil
-                    result = nil
-                }
-                Rebuild()
-                input.OnSent()
-            }
-        )
-    }
+    )
 }

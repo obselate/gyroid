@@ -46,6 +46,7 @@ partial class App : Cell {
     private let receiveRequest ReceiveRequest = ReceiveRequest()
     private let configureReceive Action[ReceivePage]
     private let sendRows List[SendRow] = List[SendRow]()
+    private let configureSend Action[SendPage]
     private var pendingPayment PaymentLink?
     private var confirmPaymentReplacement bool
     private var pendingPage AppPage = AppPage.None
@@ -255,6 +256,23 @@ partial class App : Cell {
             Rebuild()
         }
         sendDone = () -> Refresh()
+        configureSend = page -> page.Accept(
+            SendPageInput{
+                Session: wallet,
+                Rows: sendRows,
+                Ui: ui,
+                Window: window,
+                Snapshot: wallet.Snapshot,
+                Contacts: contacts,
+                Network: wallet.Settings.Network,
+                Privacy: ui.Privacy,
+                Busy: ui.Working(),
+                Language: ui.Strings.Language,
+                Animate: PlaybackActive(),
+                Height: height,
+                OnSent: sendDone
+            }
+        )
         chooseFile = (kind, title, path, chosen) -> ChooseFile(kind, title, path, chosen)
         configureReceive = cell -> {
             let snapshot = wallet.Snapshot
@@ -1045,24 +1063,7 @@ partial class App : Cell {
                 .Error != nil {
                 PendingSendCard()
             } else {
-                Cell.Mount[SendPageInput, SendPage](
-                    "send-" + paymentRevision.ToString(),
-                    SendPageInput{
-                        Session: wallet,
-                        Rows: sendRows,
-                        Ui: ui,
-                        Window: window,
-                        Snapshot: snapshot,
-                        Contacts: contacts,
-                        Network: wallet.Settings.Network,
-                        Privacy: ui.Privacy,
-                        Busy: ui.Working(),
-                        Language: ui.Strings.Language,
-                        Animate: PlaybackActive(),
-                        Height: height,
-                        OnSent: sendDone
-                    }
-                )
+                Cell.Mount[SendPage]("send-" + paymentRevision.ToString(), configureSend)
             }
         } else if page == AppPage.Receive {
             Cell.Mount[ReceivePage]("receive", configureReceive)
