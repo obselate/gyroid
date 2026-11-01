@@ -367,8 +367,8 @@ class MiningCommand : Cell[MiningCommandInput] {
 }
 
 class MiningSetup : Cell[MiningSetupInput] {
-    private let fewer ElementHandle = ElementHandle()
-    private let more ElementHandle = ElementHandle()
+    private var fewer ElementHandle?
+    private var more ElementHandle?
 
     protected override func Build(input MiningSetupInput) Blob {
         let ui = input.Ui
@@ -383,14 +383,14 @@ class MiningSetup : Cell[MiningSetupInput] {
             ui.Strings.Get("Fewer threads"),
             () -> {
                 if threads == 2 {
-                    more.Focus()
+                    more?.Focus()
                 }
                 input.SetThreads(threads - 1)
             },
             threads <= 1,
             size: AppTheme.ControlCompact
         )
-        fewerButton.Handle = fewer
+        fewer = fewerButton.Handle
         let moreButton = ControlParts.Icon(
             ui,
             MaterialIcons.Create(
@@ -401,14 +401,14 @@ class MiningSetup : Cell[MiningSetupInput] {
             ui.Strings.Get("More threads"),
             () -> {
                 if threads == cores - 1 {
-                    fewer.Focus()
+                    fewer?.Focus()
                 }
                 input.SetThreads(threads + 1)
             },
             threads <= 0 || threads >= cores,
             size: AppTheme.ControlCompact
         )
-        moreButton.Handle = more
+        more = moreButton.Handle
         return Container{
             Gap: AppTheme.Space16,
             FlexShrink: 0,
