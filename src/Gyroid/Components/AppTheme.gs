@@ -182,6 +182,7 @@ class AppTheme {
             Color: Ink,
             FontFamily: Font,
             FontSize: Type14,
+            FlexDirection: FlexDirection.Row,
             Gap: Space8,
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center
