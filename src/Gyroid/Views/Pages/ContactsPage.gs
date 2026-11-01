@@ -77,7 +77,7 @@ class ContactsPage : Cell[ContactsInput] {
                 }
             )
         }
-        card.Add(ListParts.Viewport(list, grow: false))
+        card.Add(ListParts.Viewport(list, Style{FlexShrink: 1}, grow: false))
         if deleting.Length > 0 {
             card.Add(DeleteDialog(input))
         }
