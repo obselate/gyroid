@@ -96,6 +96,7 @@ data struct OverviewRecentInput {
     var Width float64
     var Language string
     var Network string
+    var Wallet string
     var Arrivals List[Arrival]
     var OnNavigate Action[AppPage]
     var Hovering bool
@@ -138,7 +139,7 @@ class OverviewPage : Cell[OverviewInput] {
             Report: input.Session.Node.Network,
             Width: input.Width,
             Language: language,
-            Wallet: input.Snapshot.Address,
+            Wallet: input.Session.Node.Settings.ActiveWallet,
             Network: input.Session.Node.Settings.Network,
             OnNavigate: input.OnNavigate
         }
@@ -155,6 +156,7 @@ class OverviewPage : Cell[OverviewInput] {
             Width: input.Width,
             Language: language,
             Network: input.Session.Node.Settings.Network,
+            Wallet: input.Session.Node.Settings.ActiveWallet,
             Arrivals: arrivals,
             Hovering: hovering,
             OnNavigate: input.OnNavigate
@@ -855,8 +857,8 @@ class OverviewNetwork : Cell, IDisposable {
         let sync = !online ? "": node.Syncing ? "/ " + Count(node.ChainHeight): ui.Strings.Get("synced")
         let age = Math.Max(0L, DateTimeOffset.Now.ToUnixTimeSeconds() - node.LastBlockTime)
         let last = node.LastBlockTime == 0 ? "-": String.Format(
-            ui.Strings.Get(age < 3600 ? "{0}m ago": "{0}h ago"),
-            age < 3600 ? age / 60: age / 3600
+            ui.Strings.Get(age < 3600 ? "{0}m ago": age < 86400 ? "{0}h ago": "{0} days"),
+            age < 3600 ? age / 60: age < 86400 ? age / 3600: age / 86400
         )
         let first = Container{
             FlexDirection: FlexDirection.Row,
@@ -922,11 +924,7 @@ class OverviewRecent : Cell, IDisposable {
     func Accept(next OverviewRecentInput) {
         let replaced = source.History != next.History ||
             source.Api != next.Api ||
-            source
-            .Snapshot
-            ?.Address != next
-            .Snapshot
-            .Address ||
+            source.Wallet != next.Wallet ||
             source.Network != next.Network ||
             source.Window != next.Window
         let changed = replaced || source.Snapshot != next.Snapshot
@@ -1050,7 +1048,13 @@ class OverviewRecent : Cell, IDisposable {
                     Number(ui, input.Privacy, Fixed(item.Amount), Fade(AppTheme.Ink, faded), Fade(AppTheme.Dim, faded))
                 },
                 Grow(
-                    Label(ui, Hidden(input.Privacy, SafeText(item.Source, 512)), AppTheme.Type13, Fade(AppTheme.Dim, faded), "")
+                    Label(
+                        ui,
+                        Hidden(input.Privacy, SafeText(item.Source, 512)),
+                        AppTheme.Type13,
+                        Fade(AppTheme.Dim, faded),
+                        ""
+                    )
                 ),
                 Container{
                     Width: input.Width < 1200 ? 110.0: 160.0,
