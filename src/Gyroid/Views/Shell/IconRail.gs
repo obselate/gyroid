@@ -8,7 +8,6 @@ import Goo.Widgets.Navigation
 import Gyroid.Components
 import Gyroid.Components.TextParts
 import System
-import System.Collections.Generic
 import System.Linq
 
 partial class App {
@@ -53,7 +52,8 @@ partial class App {
             (AppPage.Privacy, "privacy", ui.Privacy ? "visibility_off": "visibility"),
             (AppPage.Settings, "settings", "settings")
         }
-        let items = List[NavigationItem](wallet.Snapshot.ViewOnly ? 11: 12)
+        let items = [wallet.Snapshot.ViewOnly ? 11: 12]NavigationItem
+        var index = 0
         for (destination, label, icon) in entries {
             if destination == AppPage.Send && wallet.Snapshot.ViewOnly {
                 continue
@@ -71,29 +71,26 @@ partial class App {
                     Label(ui, count, AppTheme.Type11, color, "")
                 }
             }
-            items.Add(
-                NavigationItem{
-                    Id: destination.ToString(),
-                    Label: name,
-                    AccessibilityName: name + (count.Length > 0 ? " " + count: ""),
-                    Content: content,
-                    Disabled: blocked
-                }
-            )
-        }
-        items.Add(
-            NavigationItem{
-                Id: "lock",
-                Label: ui.Strings.Get("lock"),
-                Content: MaterialIcons.Create("lock", AppTheme.Icon20, wallet.LockQueued ? AppTheme.Dim: AppTheme.Body),
-                Disabled: wallet.LockQueued
+            items[index] = NavigationItem{
+                Id: destination.ToString(),
+                Label: name,
+                AccessibilityName: name + (count.Length > 0 ? " " + count: ""),
+                Content: content,
+                Disabled: blocked
             }
-        )
+            index++
+        }
+        items[index] = NavigationItem{
+            Id: "lock",
+            Label: ui.Strings.Get("lock"),
+            Content: MaterialIcons.Create("lock", AppTheme.Icon20, wallet.LockQueued ? AppTheme.Dim: AppTheme.Body),
+            Disabled: wallet.LockQueued
+        }
         return ControlParts.Navigation(
             ui,
             "sidebar",
             NavigationRailInput{
-                Items: items.ToArray(),
+                Items: items,
                 SelectedId: page.ToString(),
                 AccessibilityName: ui.Strings.Get("Navigation"),
                 ActiveMarker: false,
