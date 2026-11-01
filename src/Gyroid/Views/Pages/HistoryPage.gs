@@ -751,12 +751,17 @@ class HistoryPage : Cell[HistoryInput] {
         let pending = row.Height == 0
         let mature = !pending && row.Maturity.Ready
         let lit = pending ? 0: int32(row.Maturity.Count * 10 / row.Maturity.Required)
-        let segments = Container{FlexDirection: FlexDirection.Row, Gap: compact ? AppTheme.Space2: AppTheme.Space4}
+        let segments = Container{
+            FlexDirection: FlexDirection.Row,
+            FlexShrink: 1,
+            Gap: compact ? AppTheme.Space2: AppTheme.Space4
+        }
         for index in 0 ... 10 {
             segments.Add(
                 Container{
                     Width: compact ? 9.0: 12.0,
                     Height: compact ? 5.0: 6.0,
+                    FlexShrink: 1,
                     BorderRadius: AppTheme.Radius1,
                     BackgroundColor: index >= lit ? AppTheme.Rule: mature ? AppTheme.LimeMuted: AppTheme.Orange
                 }
