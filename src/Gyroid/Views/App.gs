@@ -902,15 +902,20 @@ partial class App : Cell, IDisposable {
                 if closed || request != contactsGeneration || ct.IsCancellationRequested {
                     return
                 }
+                var changed = false
                 if let next = result {
                     if !contacts.SequenceEqual(next) {
                         contacts = next
+                        changed = true
                     }
                 }
-                if message.Length > 0 {
+                if message.Length > 0 && error != message {
                     error = message
+                    changed = true
                 }
-                Rebuild()
+                if changed {
+                    Rebuild()
+                }
             }
         )
         return Task.CompletedTask
@@ -1063,7 +1068,7 @@ partial class App : Cell, IDisposable {
                 } else if current {
                     error = connectionFailure ? "": message
                 }
-                if current && message == "" {
+                if request == operationGeneration && page == pageGeneration && message == "" {
                     done?.Invoke()
                 }
                 Sync()
