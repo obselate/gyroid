@@ -5,6 +5,7 @@ import Goo.Widgets
 import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
+import Goo.Widgets.Navigation
 import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
@@ -96,26 +97,19 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
     }
 
-    private func Small(input ToolsInput, label string, primary bool, action Action) Blob {
-        let ui = input.Ui
-        let color = primary ? AppTheme.Lime: AppTheme.Ink
-        let button = Goo
-            .Button{
-            BasedOn: AppTheme.ButtonStyle,
-            Height: AppTheme.ControlCompact,
-            Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
-            FlexShrink: 0,
-            BorderColor: primary ? AppTheme.Lime: AppTheme.Edge,
-            Hover: Style{BackgroundColor: primary ? AppTheme.LimeQuiet: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Disabled: input.Busy,
-            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
-            OnClick: action,
-            Label(ui, ui.Strings.Get(label), AppTheme.Type12, color, "")
+    private func Small(input ToolsInput, label string, primary bool, action Action) Blob ->
+    Button(
+        input.Ui,
+        label,
+        action,
+        input.Busy,
+        primary,
+        appearance: (primary ? AppTheme.PrimaryButton: AppTheme.Button) with{
+            Height = AppTheme.ControlCompact,
+            PaddingHorizontal = AppTheme.Space10,
+            FontSize = AppTheme.Type12
         }
-        WidgetKeyBindings.BindActivation(button)
-        return button
-    }
+    )
 
     private func Info(input ToolsInput, key string, topic string, lines[]string) Blob ->
     Cell.Mount[InfoTipInput, InfoTip](
@@ -129,59 +123,11 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
     )
 
-    private func Arc(ui Presentation, fraction float64, size float64) Blob {
-        let track = PathBuilder(0, 0, size, size)
-        let arc = PathBuilder(0, 0, size, size)
-        let middle = size / 2
-        let radius = middle - 2
-        for index in 0 ... 33 {
-            let turn = index / 32.0 * Math.PI * 2
-            let sweep = turn * fraction - Math.PI / 2
-            if index == 0 {
-                track.MoveTo(middle + radius, middle)
-                arc.MoveTo(middle + radius * Math.Cos(sweep), middle + radius * Math.Sin(sweep))
-            } else {
-                track.LineTo(middle + radius * Math.Cos(turn), middle + radius * Math.Sin(turn))
-                arc.LineTo(middle + radius * Math.Cos(sweep), middle + radius * Math.Sin(sweep))
-            }
-        }
-        return Container{
-            Width: size,
-            Height: size,
-            FlexShrink: 0,
-            Shape{
-                Position: PositionType.Absolute,
-                Width: size,
-                Height: size,
-                Path: track.Build(),
-                Fit: ShapeFit.Fill,
-                BorderWidth: AppTheme.Border3,
-                BorderColor: AppTheme.Rule
-            },
-            Shape{
-                Position: PositionType.Absolute,
-                Width: size,
-                Height: size,
-                Path: arc.Build(),
-                Fit: ShapeFit.Fill,
-                BorderWidth: AppTheme.Border3,
-                BorderColor: fraction > 0 ? AppTheme.Lime: Color.Transparent
-            }
-        }
-    }
+    private func Arc(ui Presentation, fraction float64, size float64) Blob ->
+    Ring(fraction, fraction > 0 ? AppTheme.Lime: Color.Transparent, AppTheme.Rule, size, AppTheme.Border3)
 
     private func Number(input ToolsInput, key string, label string, value string, color Color, size float64) Blob ->
-    Cell.Mount[DecodeValueInput, DecodeValue](
-        key,
-        DecodeValueInput{
-            Value: value,
-            Ui: input.Ui,
-            Name: input.Ui.Strings.Get(label) + " " + value,
-            Size: size,
-            Color: color,
-            FractionColor: color
-        }
-    )
+    Value(input.Ui, key, input.Ui.Strings.Get(label) + " " + value, value, size, color, color)
 
     private func Minutes(input ToolsInput, minutes int32) string -> switch minutes {
         case 0: input.Ui.Strings.Get("never")
@@ -490,14 +436,10 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             )
         )
         let gap = compact ? AppTheme.Space8: AppTheme.Space12
-        let grid = Container{Gap: gap, FlexShrink: 0}
-        for row in 0 ... 2 {
-            let line = Container{FlexDirection: FlexDirection.Row, Gap: gap}
-            for column in 0 ... 4 {
-                line.Add(tiles[row * 4 + column])
-            }
-            grid.Add(line)
-        }
+        let height = compact ? 124.0: Math.Clamp(input.Height * 0.19, 136, 210)
+        let grid = SegmentGrid(2, 4, index -> tiles[index], gap, gap, height, height)
+        grid.FlexGrow = 0
+        grid.FlexShrink = 0
         card.Add(grid)
         return card
     }
@@ -594,40 +536,21 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         input.AutoLock.ToString() + " " + input.Ui.Strings.Get("min")
     }
 
-    private func LockChoices(input ToolsInput) Blob {
-        let ui = input.Ui
-        let compact = input.Width < 1100
-        let row = ChoiceGroup(ui, Accessibility{Name: ui.Strings.Get("auto-lock")})
-        for minutes in[]int32{5, 15, 60, 0} {
-            let chosen = minutes == input.AutoLock
-            let button = Choice(
-                ui,
-                Minutes(input, minutes),
-                chosen,
-                () -> {
-                    editing = false
-                    if !chosen {
-                        ui.Actions.Run(ct -> input.Session.SaveAutoLockAsync(minutes, ct))
-                    }
-                },
-                Accessibility{
-                    Role: AccessibilityRole.Radio,
-                    Name: Minutes(input, minutes),
-                    Checked: chosen ? AccessibilityChecked.True: AccessibilityChecked.False
-                },
-                Edges{
-                    Left: compact ? AppTheme.Space6: AppTheme.Space10,
-                    Right: compact ? AppTheme.Space6: AppTheme.Space10,
-                    Top: AppTheme.Space4,
-                    Bottom: AppTheme.Space4
-                },
-                compact ? AppTheme.Type13: AppTheme.Type14,
-                input.Busy
-            )
-            row.Add(button)
+    private func LockChoices(input ToolsInput) Blob -> Segment(
+        input.Ui,
+        "auto-lock",
+        []string{"5", "15", "60", "0"},
+        []string{Minutes(input, 5), Minutes(input, 15), Minutes(input, 60), Minutes(input, 0)},
+        input.AutoLock.ToString(),
+        input.Busy,
+        value -> {
+            editing = false
+            let minutes = Int32.Parse(value)
+            if minutes != input.AutoLock {
+                input.Ui.Actions.Run(ct -> input.Session.SaveAutoLockAsync(minutes, ct))
+            }
         }
-        return row
-    }
+    )
 
     private func Audit(input ToolsInput) {
         if input.State.Audit?.IsCompleted == false {
@@ -785,46 +708,14 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
         let compact = input.Width < 1100
         let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
-        let stepper = Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, Gap: AppTheme.Space8}
-        let labels = []string{"show", "check", "done"}
-        for index in 0 ... 3 {
-            let label = labels[index]
-            let state = if index == 0 {
-                step == "show" ? 2: 1
-            } else if index == 1 {
-                step == "show" ? 0: step == "check" ? 2: 1
-            } else {
-                step == "done" ? 1: 0
-            }
-            if index > 0 {
-                stepper.Add(Container{Width: 26, Height: 1, BackgroundColor: state > 0 ? AppTheme.Lime: AppTheme.Edge})
-            }
-            let color = state > 0 ? AppTheme.Lime: AppTheme.Dim
-            let mark Blob = if state == 1 {
-                MaterialIcons.Create("check", AppTheme.Icon12, AppTheme.Lime)
-            } else {
-                Label(ui, (index + 1).ToString(), AppTheme.Type11, color, "")
-            }
-            stepper.Add(
-                Container{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    Gap: AppTheme.Space6,
-                    Container{
-                        Width: 22,
-                        Height: 22,
-                        BorderRadius: 11,
-                        BorderWidth: state == 1 ? AppTheme.Border0: AppTheme.Border1,
-                        BorderColor: state == 2 ? AppTheme.Lime: AppTheme.Edge,
-                        BackgroundColor: state == 1 ? AppTheme.LimeQuiet: Color.Transparent,
-                        AlignItems: AlignItems.Center,
-                        JustifyContent: JustifyContent.Center,
-                        mark
-                    },
-                    Label(ui, ui.Strings.Get(label), AppTheme.Type12, color, "")
-                }
-            )
-        }
+        let stepper = Stepper{
+            AccessibilityName: ui.Strings.Get("recovery phrase"),
+            Labels: []string{ui.Strings.Get("show"), ui.Strings.Get("check"), ui.Strings.Get("done")},
+            CurrentIndex: step == "show" ? 0: step == "check" ? 1: 2,
+            FontSize: AppTheme.Type12,
+            Height: AppTheme.ControlCompact,
+            Gap: AppTheme.Space8
+        }.Build()
         card.Add(
             WalletParts.Header(
                 Label(ui, ui.Strings.Get("recovery phrase"), AppTheme.Type17, AppTheme.Ink, ""),
@@ -869,15 +760,11 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             card.Add(footer)
             return card
         }
-        let grid = Container{Gap: compact ? AppTheme.Space8: AppTheme.Space10, FlexShrink: 0}
-        var line = Container{}
-        for index in 0 ... words {
-            if index % 4 == 0 {
-                line = Container{FlexDirection: FlexDirection.Row, Gap: compact ? AppTheme.Space8: AppTheme.Space10}
-                grid.Add(line)
-            }
-            line.Add(Slot(input, index))
-        }
+        let gap = compact ? AppTheme.Space8: AppTheme.Space10
+        let height = compact ? 40.0: 46.0
+        let grid = SegmentGrid(words / 4, 4, index -> Slot(input, index), gap, gap, height, height)
+        grid.FlexGrow = 0
+        grid.FlexShrink = 0
         card.Add(grid)
         let pick = Container{
             FlexDirection: FlexDirection.Row,
@@ -900,28 +787,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             }
         } else if wrong {
             let number = (asked[found] + 1).ToString()
-            pick.Add(MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.Pink))
-            pick.Add(
-                Label(
-                    ui,
-                    String.Format(ui.Strings.Get("That is not word {0}."), number),
-                    AppTheme.Type14,
-                    AppTheme.Pink,
-                    ""
-                )
-            )
-            pick.Add(Label(ui, ui.Strings.Get("Check your paper."), AppTheme.Type14, AppTheme.Dim, ""))
+            pick.Add(MessageParts.Problem(ui, String.Format(ui.Strings.Get("That is not word {0}."), number)))
         } else if typed.Length > 0 && suggestions.Count == 0 {
-            pick.Add(MaterialIcons.Create("warning", AppTheme.Icon16, AppTheme.Pink))
-            pick.Add(
-                Label(
-                    ui,
-                    String.Format(ui.Strings.Get("No word starts with “{0}”."), typed),
-                    AppTheme.Type14,
-                    AppTheme.Pink,
-                    ""
-                )
-            )
+            pick.Add(MessageParts.Problem(ui, String.Format(ui.Strings.Get("No word starts with “{0}”."), typed)))
         } else {
             pick.Add(
                 Label(
@@ -1077,45 +945,29 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 Rebuild()
             }
         )
-        let tabs = Container{
-            FlexDirection: FlexDirection.Row,
-            Gap: AppTheme.Space4,
-            Accessibility: Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("tools")}
-        }
+        let items = List[NavigationItem]()
         for id in[]string{"sign", "verify", "proof", "health"} {
-            if id == "sign" && viewOnly {
-                continue
+            if id != "sign" || !viewOnly {
+                items.Add(NavigationItem{Id: id, Label: ui.Strings.Get(id)})
             }
-            let button = Goo
-                .Button{
-                BasedOn: tab == id ? AppTheme.SelectedTabStyle: AppTheme.TabStyle,
-                Hover: Style{BackgroundColor: tab == id ? AppTheme.Rule: AppTheme.Rule},
-                Focus: Theme.Read().FocusStyle,
-                Accessibility: Accessibility{
-                    Role: AccessibilityRole.Tab,
-                    Name: ui.Strings.Get(id),
-                    Selected: tab == id
-                },
-                OnClick: () -> {
-                    state.Tab = id
-                    ResetVerdict()
-                    Rebuild()
-                },
-                Label(ui, ui.Strings.Get(id), AppTheme.Type13, tab == id ? AppTheme.Ink: AppTheme.Body, "")
-            }
-            WidgetKeyBindings.BindActivation(button)
-            tabs.Add(button)
         }
+        let tabs = Tabs(
+            ui,
+            "tools-tabs",
+            "tools",
+            items.ToArray(),
+            tab,
+            id -> {
+                state.Tab = id
+                ResetVerdict()
+                Rebuild()
+            }
+        )
         let card = WalletParts.PageCard(input.Ui, input.Width, input.Height)
         card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space16,
-                FlexShrink: 0,
-                Label(ui, ui.Strings.Get("tools"), AppTheme.Type17, AppTheme.Ink),
+            WalletParts.Header(
                 tabs,
-                Container{FlexGrow: 1},
+                AppTheme.Space16,
                 if tab == "health" {
                     Info(
                         input,
@@ -1130,7 +982,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 } else {
                     Container{}
                 }
-            }
+            )
         )
         if tab == "health" {
             Health(input, card)
@@ -1230,7 +1082,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         card.Add(values)
         if let value = report && stale > 0 {
             let table = Container{
-                FlexShrink: 1,
+                FlexGrow: 1,
                 MinHeight: 0,
                 Overflow: Overflow.Scroll,
                 ScrollbarY: Theme.Read().Scrollbar
@@ -1251,27 +1103,9 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                     )
                 )
             }
-            card.Add(table)
+            card.Add(ListParts.Viewport(table))
         } else {
-            let empty = Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.Center,
-                Gap: AppTheme.Space10,
-                Height: 112,
-                FlexShrink: 0,
-                BorderWidth: Edges{Top: AppTheme.Border1},
-                BorderColor: AppTheme.Rule
-            }
-            if report == nil {
-                empty.Add(Label(ui, ui.Strings.Get("not checked"), AppTheme.Type13, AppTheme.Dim, ""))
-            } else {
-                empty.Add(MaterialIcons.Create("check", AppTheme.Icon18, AppTheme.Mint))
-                empty.Add(
-                    Label(ui, ui.Strings.Get("all outputs on the main chain"), AppTheme.Type13, AppTheme.Mint, "")
-                )
-            }
-            card.Add(empty)
+            card.Add(ListParts.Empty(ui, report == nil ? "not checked": "all outputs on the main chain"))
         }
         card.Add(ActionRow([]Blob{Button(ui, "Check", () -> Audit(input), input.Busy)}))
     }
@@ -1321,15 +1155,8 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
         }
     }
 
-    private func Reading(input ToolsInput, label string, value string, color Color) Blob -> Container{
-        FlexGrow: 1,
-        FlexBasis: 0,
-        MinWidth: 0,
-        Gap: AppTheme.Space4,
-        Accessibility: Accessibility{Name: input.Ui.Strings.Get(label) + " " + value},
-        Label(input.Ui, input.Ui.Strings.Get(label), AppTheme.Type12, AppTheme.Dim, ""),
-        Label(input.Ui, value, AppTheme.Type14, color, "")
-    }
+    private func Reading(input ToolsInput, label string, value string, color Color) Blob ->
+    KeyValue(input.Ui, label, value, valueColor: color, size: AppTheme.Type14)
 
     private func Row(input ToolsInput, cells[]string, heading bool, color Color) Blob {
         let ui = input.Ui
