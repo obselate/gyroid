@@ -1211,6 +1211,7 @@ class SendReview : Cell[SendReviewInput] {
             },
             OnClick: () -> {
                 openRow = expanded ? "": id
+                Rebuild()
             },
             head
         }
