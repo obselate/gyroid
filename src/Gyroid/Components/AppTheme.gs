@@ -172,16 +172,16 @@ class AppTheme {
         }
         let DangerButton ActionButton = Button with{BackgroundColor = DangerQuiet, BorderColor = Pink, TextColor = Pink}
         let ButtonStyle Style = Style{
-            Height: Button.Height!!,
-            MinWidth: Button.MinWidth!!,
-            Padding: Edges{Left: Button.PaddingHorizontal!!, Right: Button.PaddingHorizontal!!},
-            BorderRadius: Button.BorderRadius!!,
-            BorderWidth: Button.BorderWidth!!,
-            BorderColor: Button.BorderColor!!,
-            BackgroundColor: Button.BackgroundColor!!,
-            Color: Button.TextColor!!,
-            FontFamily: Button.FontFamily!!,
-            FontSize: Button.FontSize,
+            Height: ControlRegular,
+            MinWidth: 64,
+            Padding: Edges{Left: Space14, Right: Space14},
+            BorderRadius: Radius8,
+            BorderWidth: Border1,
+            BorderColor: Edge,
+            BackgroundColor: Control,
+            Color: Ink,
+            FontFamily: Font,
+            FontSize: Type14,
             Gap: Space8,
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center
