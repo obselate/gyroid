@@ -121,7 +121,19 @@ class ContactsPage : Cell[ContactsInput] {
             Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: label},
             MaterialIcons.Create("person", 16, ui.Dim),
             Grow(Label(ui, label, 14, ui.Ink, "")),
-            Container{FlexShrink: 1, MinWidth: 0, Label(ui, Hidden(ui.Privacy, Short(destination)), 13, ui.Dim, "")},
+            Container{
+                FlexShrink: 1,
+                MinWidth: 0,
+                Label(
+                    ui,
+                    AddressBook.IsDestination(destination) ? Hidden(ui.Privacy, Short(destination)): ui.Strings.Get(
+                        "Invalid"
+                    ),
+                    13,
+                    ui.Dim,
+                    ""
+                )
+            },
             WalletParts.Square(
                 ui,
                 "edit",

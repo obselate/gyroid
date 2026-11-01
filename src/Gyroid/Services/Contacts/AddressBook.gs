@@ -40,8 +40,10 @@ class AddressBook {
             try {
                 using let json = JsonDocument.Parse(PrivateFiles.ReadText(path, 1048576))
                 for entry in json.RootElement.EnumerateObject() {
+                    contacts[entry.Name] = entry.Value.ValueKind == JsonValueKind.String ?
+                    entry.Value.GetString() ?? "": entry.Value.GetRawText()
                     try {
-                        contacts[entry.Name] = WalletValidation.ValidateDestination(entry.Value.GetString() ?? "")
+                        contacts[entry.Name] = WalletValidation.ValidateDestination(contacts[entry.Name])
                     } catch (error Exception) {
                         report("Address book file is invalid")
                     }
@@ -53,11 +55,7 @@ class AddressBook {
         }
 
         func WriteContacts(contacts SortedDictionary[string, string]) {
-            ReadContacts(
-                message -> {
-                    throw WalletException(message)
-                }
-            )
+            ReadContacts(message -> { })
             let path = ContactsPath()
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "")
             PrivateFiles
