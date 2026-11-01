@@ -43,7 +43,7 @@ class ControlParts {
                 BasedOn: AppTheme.SegmentStyle,
                 Padding: padding,
                 BackgroundColor: selected ? AppTheme.Rule: Color.Transparent,
-                Hover: Style{BackgroundColor: AppTheme.Rule},
+                Hover: Style{BackgroundColor: selected ? AppTheme.StrongRule: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Disabled: disabled,
                 Accessibility: accessibility,
@@ -107,7 +107,7 @@ class ControlParts {
                 BorderRadius: AppTheme.Radius8,
                 BackgroundColor: active ? AppTheme.Rule: Color.Transparent,
                 Disabled: disabled,
-                Hover: Style{BackgroundColor: AppTheme.Rule},
+                Hover: Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Button,

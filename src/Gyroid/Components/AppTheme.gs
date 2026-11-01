@@ -91,24 +91,24 @@ class AppTheme {
         let Blue Color = Color.Parse("#00aaff")
         let Mint Color = Color.Parse("#00ffaa")
         let Violet Color = Color.Parse("#aa00ff")
-        let LimeQuiet Color = Tint(Lime, 0.1)
-        let OrangeQuiet Color = Tint(Orange, 0.1)
-        let OrangeStrong Color = Tint(Orange, 0.7)
-        let LimeMuted Color = Tint(Lime, 0.45)
-        let BlueQuiet Color = Tint(Blue, 0.1)
-        let PinkQuiet Color = Tint(Pink, 0.1)
-        let PinkSoft Color = Tint(Pink, 0.25)
-        let BlueStrong Color = Tint(Blue, 0.7)
-        let MintStrong Color = Tint(Mint, 0.7)
-        let LimeSoft Color = Tint(Lime, 0.25)
-        let OrangeMuted Color = Tint(Orange, 0.45)
-        let LimeStrong Color = Tint(Lime, 0.7)
-        let BlueSoft Color = Tint(Blue, 0.25)
-        let MintSoft Color = Tint(Mint, 0.25)
-        let MintQuiet Color = Tint(Mint, 0.1)
-        let MintMuted Color = Tint(Mint, 0.45)
+        let LimeQuiet Color = Shade(Lime, 0.1)
+        let OrangeQuiet Color = Shade(Orange, 0.1)
+        let OrangeStrong Color = Shade(Orange, 0.7)
+        let LimeMuted Color = Shade(Lime, 0.45)
+        let BlueQuiet Color = Shade(Blue, 0.1)
+        let PinkQuiet Color = Shade(Pink, 0.1)
+        let PinkSoft Color = Shade(Pink, 0.25)
+        let BlueStrong Color = Shade(Blue, 0.7)
+        let MintStrong Color = Shade(Mint, 0.7)
+        let LimeSoft Color = Shade(Lime, 0.25)
+        let OrangeMuted Color = Shade(Orange, 0.45)
+        let LimeStrong Color = Shade(Lime, 0.7)
+        let BlueSoft Color = Shade(Blue, 0.25)
+        let MintSoft Color = Shade(Mint, 0.25)
+        let MintQuiet Color = Shade(Mint, 0.1)
+        let MintMuted Color = Shade(Mint, 0.45)
 
-        func Tint(color Color, strength float64) Color ->
+        func Shade(color Color, strength float64) Color ->
         Color.FromNormalized(color.R * float32(strength), color.G * float32(strength), color.B * float32(strength), 1)
 
         let Button ActionButton = ActionButton{
@@ -131,7 +131,7 @@ class AppTheme {
         let PrimaryButton ActionButton = Button with{
             BackgroundColor = Lime,
             TextColor = Black,
-            HoverBackgroundColor = Lime
+            HoverBackgroundColor = LimeStrong
         }
         let DangerButton ActionButton = Button with{BackgroundColor = PinkQuiet, BorderColor = Pink, TextColor = Pink}
         let ButtonStyle Style = Style{
