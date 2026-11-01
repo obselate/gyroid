@@ -499,7 +499,7 @@ class OverviewPage : Cell[OverviewInput] {
             card.BorderColor = AppTheme.StrongRule
         }
         let header = WalletParts.Header(
-            Label(ui, ui.Strings.Get("balance"), AppTheme.Type12, AppTheme.Body, ""),
+            Grow(Label(ui, ui.Strings.Get("balance"), AppTheme.Type12, AppTheme.Body, "")),
             AppTheme.Space10
         )
         if input.Privacy {
