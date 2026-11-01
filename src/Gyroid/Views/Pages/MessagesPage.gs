@@ -331,32 +331,32 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         panel.FlexShrink = 0
         panel.MinHeight = 0
         panel.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space4,
+            WalletParts.Header(
                 Grow(Label(ui, ui.Strings.Get("messages"), AppTheme.Type17, AppTheme.Ink, "")),
-                WalletParts.Square(
-                    ui,
-                    "person_add",
-                    ui.Strings.Get("New conversation"),
-                    false,
-                    busy,
-                    () -> Begin("direct"),
-                    AppTheme.ControlCompact,
-                    AppTheme.Body
-                ),
-                WalletParts.Square(
-                    ui,
-                    "group_add",
-                    ui.Strings.Get("New group"),
-                    false,
-                    busy || input.Session.Messages.Mode != MessengerMode.Send,
-                    () -> Begin("group"),
-                    AppTheme.ControlCompact,
-                    AppTheme.Body
-                )
-            }
+                AppTheme.Space4,
+                value: Container{
+                    FlexDirection: FlexDirection.Row,
+                    Gap: AppTheme.Space4,
+                    Icon(
+                        ui,
+                        MaterialIcons.Create("person_add", AppTheme.Icon16, AppTheme.Body),
+                        ui.Strings.Get("New conversation"),
+                        () -> Begin("direct"),
+                        busy,
+                        size: AppTheme.ControlCompact,
+                        style: AppTheme.IconButtonStyle
+                    ),
+                    Icon(
+                        ui,
+                        MaterialIcons.Create("group_add", AppTheme.Icon16, AppTheme.Body),
+                        ui.Strings.Get("New group"),
+                        () -> Begin("group"),
+                        busy || input.Session.Messages.Mode != MessengerMode.Send,
+                        size: AppTheme.ControlCompact,
+                        style: AppTheme.IconButtonStyle
+                    )
+                }
+            )
         )
         let list = Container{
             FlexGrow: 1,
@@ -388,7 +388,8 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Button,
-                    Name: Hidden(ui.Privacy, conversation.Title) + " " + conversation.Unread.ToString(),
+                    Name: Hidden(ui.Privacy, conversation.Title) +
+                        (conversation.Unread > 0 ? " " + conversation.Unread.ToString(): ""),
                     Selected: conversation.Id == selected
                 },
                 OnClick: () -> Select(input, conversation),
@@ -438,20 +439,13 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             WidgetKeyBindings.BindActivation(row)
             list.Add(row)
         }
-        panel.Add(list)
+        panel.Add(ListParts.Viewport(list))
         return panel
     }
 
     private func Header(input MessagesInput, conversation Conversation) Blob {
         let ui = input.Ui
-        let header = Container{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: AppTheme.Space6,
-            Padding: AppTheme.Space14,
-            FlexShrink: 0,
-            BorderWidth: Edges{Bottom: AppTheme.Border1},
-            BorderColor: AppTheme.Rule,
+        let header = WalletParts.Header(
             Grow(
                 Container{
                     Gap: AppTheme.Space4,
@@ -470,60 +464,58 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                         ""
                     )
                 }
-            )
-        }
+            ),
+            AppTheme.Space6
+        )
+        header.Padding = AppTheme.Space14
+        header.BorderWidth = Edges{Bottom: AppTheme.Border1}
+        header.BorderColor = AppTheme.Rule
         if !conversation.IsGroup && !input.Contacts.Values.Contains(conversation.Id) {
             header.Add(
-                WalletParts.Square(
+                Icon(
                     ui,
-                    "person_add",
+                    MaterialIcons.Create("person_add", AppTheme.Icon16, AppTheme.Body),
                     ui.Strings.Get("Add contact"),
-                    false,
-                    busy,
                     () -> {
                         Begin("contact")
                         address = conversation.Id
                     },
-                    AppTheme.ControlCompact,
-                    AppTheme.Body
+                    busy,
+                    size: AppTheme.ControlCompact,
+                    style: AppTheme.IconButtonStyle
                 )
             )
         }
         header.Add(
-            WalletParts.Square(
+            Icon(
                 ui,
-                "delete",
+                MaterialIcons.Create("delete", AppTheme.Icon16, busy ? AppTheme.Dim: AppTheme.Body),
                 ui.Strings.Get("Remove conversation"),
-                false,
-                busy,
                 () -> Begin("remove"),
-                AppTheme.ControlCompact,
-                AppTheme.Dim
+                busy,
+                size: AppTheme.ControlCompact,
+                style: AppTheme.IconButtonStyle
             )
         )
         if input.Drawer {
             header.Add(
-                WalletParts.Square(
+                Icon(
                     ui,
-                    "open_in_full",
+                    MaterialIcons.Create("open_in_full", AppTheme.Icon16, AppTheme.Body),
                     ui.Strings.Get("Open messages"),
-                    false,
-                    false,
                     input.OnOpen,
-                    AppTheme.ControlCompact,
-                    AppTheme.Body
+                    size: AppTheme.ControlCompact,
+                    style: AppTheme.IconButtonStyle
                 )
             )
             header.Add(
-                WalletParts.Square(
+                Icon(
                     ui,
-                    "close",
+                    MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.Body),
                     ui.Strings.Get("Close"),
-                    false,
-                    false,
                     input.OnClose,
-                    AppTheme.ControlCompact,
-                    AppTheme.Body
+                    size: AppTheme.ControlCompact,
+                    style: AppTheme.IconButtonStyle
                 )
             )
         }
@@ -539,6 +531,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         let cap = Math.Max(0, maximum - 1)
         let title = group ? "New group": remove ? "Remove conversation": contact ? "Add contact": "New conversation"
         let content = Container{Gap: AppTheme.Space12, MinHeight: 0}
+        let form = WalletForm(ui, !busy, nil, []string{}, () -> Rebuild())
         let close Action = () -> {
             if busy {
                 return
@@ -549,39 +542,10 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         if remove {
             content.Add(Label(ui, Hidden(ui.Privacy, conversation?.Title ?? ""), AppTheme.Type14, AppTheme.Ink, ""))
         } else {
-            content.Add(
-                Entry(
-                    ui,
-                    TextField{
-                        Value: name,
-                        Controlled: true,
-                        Disabled: busy,
-                        Placeholder: ui.Strings.Get("Name"),
-                        AccessibilityName: ui.Strings.Get("Name"),
-                        OnChange: value -> {
-                            name = value
-                            Rebuild()
-                        }
-                    }
-                )
-            )
+            content.Add(form.Field("Name", name, value -> name = value, disabled: busy))
             if !group {
                 content.Add(
-                    Entry(
-                        ui,
-                        TextField{
-                            Value: address,
-                            Controlled: true,
-                            Disabled: busy,
-                            Password: ui.Privacy,
-                            Placeholder: ui.Strings.Get("Address"),
-                            AccessibilityName: ui.Strings.Get("Address"),
-                            OnChange: value -> {
-                                address = value.Trim()
-                                Rebuild()
-                            }
-                        }
-                    )
+                    form.Field("Address", address, value -> address = value.Trim(), disabled: busy, hidden: ui.Privacy)
                 )
             }
             if !contact {
@@ -633,7 +597,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             }
         }
         if issue.Length > 0 {
-            content.Add(Label(ui, ui.Strings.Explain(issue), AppTheme.Type12, AppTheme.Pink, ""))
+            content.Add(MessageParts.Problem(ui, issue))
         }
         return WalletParts.Modal(
             ui,

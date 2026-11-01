@@ -127,13 +127,24 @@ partial class App {
                     messageToast = nil
                     Rebuild()
                 },
-                Container{
-                    FlexDirection: FlexDirection.Row,
-                    Gap: AppTheme.Space8,
-                    MaterialIcons.Create("chat_bubble", AppTheme.Icon16, AppTheme.Lime),
-                    Grow(Label(ui, Hidden(ui.Privacy, conversation.Title), AppTheme.Type13, AppTheme.Ink, "")),
-                    Label(ui, ui.Strings.Get("Reply"), AppTheme.Type11, AppTheme.Lime, "")
-                },
+                WalletParts.Header(
+                    Grow(
+                        Text{
+                            Content: Hidden(ui.Privacy, conversation.Title),
+                            FontFamily: AppTheme.Font,
+                            FontSize: AppTheme.Type13,
+                            Color: AppTheme.Ink,
+                            TextWrap: TextWrap.Wrap,
+                            MinWidth: 0
+                        }
+                    ),
+                    AppTheme.Space8,
+                    value: Container{
+                        FlexShrink: 0,
+                        Label(ui, ui.Strings.Get("Reply"), AppTheme.Type11, AppTheme.Lime, "")
+                    },
+                    leading: MaterialIcons.Create("chat_bubble", AppTheme.Icon16, AppTheme.Lime)
+                ),
                 Label(ui, Hidden(ui.Privacy, MessagesPage.Preview(latest.Text)), AppTheme.Type12, AppTheme.Body, "")
             }
             WidgetKeyBindings.BindActivation(toast)

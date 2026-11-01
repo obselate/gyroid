@@ -24,7 +24,7 @@ partial class App {
         let pending = wallet.Send.Pending
         let content = WalletParts.Card(ui, gap: AppTheme.Space10)
         content.FlexShrink = 0
-        content.Add(Label(ui, ui.Strings.Get("Pending send"), AppTheme.Type14, AppTheme.Orange))
+        content.Add(WalletParts.Header(Label(ui, ui.Strings.Get("Pending send"), AppTheme.Type14, AppTheme.Orange)))
         let outcome = wallet.Send.Outcome
         let message = if wallet.Send.Error.Length > 0 {
             ui.Strings.Explain(wallet.Send.Error)
@@ -35,15 +35,19 @@ partial class App {
         } else {
             ui.Strings.Get("Send failed") + ": " + (outcome.Error ?? "")
         }
-        content.Add(
-            Text{
-                Content: message,
-                FontFamily: AppTheme.Font,
-                FontSize: AppTheme.Type13,
-                Color: AppTheme.Ink,
-                TextWrap: TextWrap.Wrap
-            }
-        )
+        if wallet.Send.Error.Length > 0 || pending == nil && outcome.TxId.Length == 0 {
+            content.Add(MessageParts.Problem(ui, message))
+        } else {
+            content.Add(
+                Text{
+                    Content: message,
+                    FontFamily: AppTheme.Font,
+                    FontSize: AppTheme.Type13,
+                    Color: AppTheme.Ink,
+                    TextWrap: TextWrap.Wrap
+                }
+            )
+        }
         let actions = List[Blob]{
             Button(
                 ui,
