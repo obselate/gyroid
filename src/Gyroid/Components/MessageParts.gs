@@ -86,13 +86,13 @@ class MessageBubble : Cell[MessageBubbleInput] {
             "HH:mm"
         )
         let delivered = message.State == MessageState.Confirmed && message.Confirmations > 0
-        let statusColor = message.Outgoing ? (delivered ? ui.SuccessStroke: ui.Black.WithAlpha(0.6)): ui.Dim
+        let statusColor = message.Outgoing ? ui.Black.WithAlpha(0.85): ui.Body
         let metadata = Container{
             FlexDirection: FlexDirection.Row,
             JustifyContent: JustifyContent.FlexEnd,
             AlignItems: AlignItems.Center,
             Gap: 4,
-            Label(ui, time, 10, statusColor, "")
+            Label(ui, time, 11, statusColor, "")
         }
         if message.Outgoing && message.State != MessageState.Failed {
             let tip = delivered ? ui
