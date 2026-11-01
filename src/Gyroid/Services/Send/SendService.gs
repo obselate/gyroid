@@ -411,11 +411,15 @@ class SendService {
 
     shared {
         func PrepareDraft(row SendRow, contacts SortedDictionary[string, string], network string) {
-            row.AmountIssue = WalletValidation.AmountIssue(row.Amount)
+            row.AmountIssue = ""
             row.Atoms = nil
-            try {
-                row.Atoms = WalletAmount.Parse(row.Amount)
-            } catch (error WalletException) { }
+            if row.Amount.Length > 0 {
+                try {
+                    row.Atoms = WalletAmount.Parse(row.Amount)
+                } catch (error WalletException) {
+                    row.AmountIssue = error.Message
+                }
+            }
             row.MemoIssue = WalletValidation.MemoIssue(row.Memo)
             let text = row.Address.Trim()
             row.Destination = AddressBook.Resolve(contacts, text)
