@@ -424,7 +424,7 @@ class NodeSupervisor : IDisposable {
         let syncEnabled = fullSync || original.RootElement.TryGetProperty("full_sync", out let configuredSync) &&
             configuredSync.ValueKind == JsonValueKind.True
         let installed = settings.DataDirectory == settings.DiscoveredDataDirectory
-        let walletFile = Path.Combine(
+        var walletFile = Path.Combine(
             settings.WalletDirectory,
             if settings.ActiveWallet.Length > 0 {
                 settings.ActiveWallet
@@ -432,6 +432,14 @@ class NodeSupervisor : IDisposable {
                 "default.wallet.dat"
             }
         )
+        let configuredWallet = NodeJson.Text(original.RootElement, "wallet_file")
+        if settings.ActiveWallet.Length == 0 && Path.IsPathFullyQualified(configuredWallet) && File.Exists(
+            configuredWallet
+        ) &&
+            Path.GetRelativePath(settings.WalletDirectory, configuredWallet) == Path.GetFileName(configuredWallet) {
+            WalletValidation.ValidateFilename(Path.GetFileName(configuredWallet))
+            walletFile = configuredWallet
+        }
         if NodeJson.Text(original.RootElement, "wallet_file") == walletFile && original.RootElement.TryGetProperty(
             "full_sync",
             out let sync

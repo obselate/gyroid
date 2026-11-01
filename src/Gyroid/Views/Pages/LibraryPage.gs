@@ -169,9 +169,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         } catch (failure WalletException) {
             issue = failure.Message
         }
-        if opened.Length > 0 && !wallets.ContainsKey(opened) {
-            wallets[opened] = DateTime.MinValue
-        }
     }
 
     private func Start(kind string) {
