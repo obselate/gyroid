@@ -815,6 +815,7 @@ class Strings {
             case "Your sends travel through Dandelion before they spread": "你的发送先经过 Dandelion 再广播"
             case "block gone": "区块已移除"
             case "tx gone": "交易已移除"
+            case "Wallet name must be a filename of at most 180 characters ending in .dat, without /, \\, .. or invalid filename characters": "钱包名称须为不超过 180 个字符且以 .dat 结尾的文件名，不能包含 /、\\、.. 或无效的文件名字符"
             default: key
         }
     }

@@ -10,7 +10,7 @@ import System.Text
 class WalletAmount {
     shared {
         func Parse(text string) uint64 {
-            if text.Length == 0 || text.Length > 30 || text[0] < '0' || text[0] > '9' {
+            if text.Length == 0 || text[0] < '0' || text[0] > '9' {
                 throw WalletException("Enter a positive decimal BNT amount")
             }
             var value uint64 = 0
@@ -30,15 +30,20 @@ class WalletAmount {
                         throw WalletException("Amount supports at most 8 decimal places")
                     }
                 }
-                let digit = uint64(character - '0')
-                if value > (uint64.MaxValue - digit) / uint64(10) {
-                    throw WalletException("Amount exceeds the supported range")
+                if text.Length <= 30 {
+                    let digit = uint64(character - '0')
+                    if value > (uint64.MaxValue - digit) / uint64(10) {
+                        throw WalletException("Amount exceeds the supported range")
+                    }
+                    value = value * 10 + digit
                 }
-                value = value * 10 + digit
                 digits = digits + 1
             }
             if digits == 0 || decimals == 0 {
                 throw WalletException("Enter a complete positive BNT amount")
+            }
+            if text.Length > 30 {
+                throw WalletException("Amount exceeds the supported range")
             }
             var places = if decimals < 0 {
                 8
@@ -206,7 +211,7 @@ class WalletValidation {
             ) ||
                 filename.Contains('/') || filename.Contains('\\') || filename.Contains("..") ||
                 filename != Path.GetFileName(filename) || filename.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 {
-                throw WalletException("Wallet name must be a basename ending in .dat")
+                throw WalletException("Wallet name must be a filename of at most 180 characters ending in .dat, without /, \\, .. or invalid filename characters")
             }
         }
 
