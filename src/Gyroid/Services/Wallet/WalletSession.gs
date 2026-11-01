@@ -994,14 +994,18 @@ class WalletSession : IDisposable {
             }
             let sends = await History.ReadSendsAsync(ct)
             let root = balance.RootElement
-            let change = NodeJson.OptionalNumber(root, "pending_unconfirmed") ?? uint64(0)
+            let change = NodeJson.OptionalNumber(root, "pending_unconfirmed") ??
+                snapshot
+                .Balance
+                ?.Unconfirmed ??
+                uint64(0)
             let amounts = WalletBalance{
                 Scanning: NodeJson.Flag(root, "scanning"),
                 ScanHeight: NodeJson.Number(root, "synced_height"),
                 ChainHeight: NodeJson.Number(root, "chain_height"),
-                Balance: NodeJson.OptionalNumber(root, "total") + change,
-                Spendable: NodeJson.OptionalNumber(root, "spendable"),
-                Pending: NodeJson.OptionalNumber(root, "pending") + change,
+                Balance: (NodeJson.OptionalNumber(root, "total") + change) ?? snapshot.Balance?.Balance,
+                Spendable: NodeJson.OptionalNumber(root, "spendable") ?? snapshot.Balance?.Spendable,
+                Pending: (NodeJson.OptionalNumber(root, "pending") + change) ?? snapshot.Balance?.Pending,
                 Unconfirmed: change,
                 Outputs: NodeJson.OptionalNumber(root, "outputs_total") ?? uint64(0),
                 MemoErrors: NodeJson.OptionalNumber(root, "memo_decrypt_failures") ?? uint64(0)

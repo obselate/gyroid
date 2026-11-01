@@ -475,17 +475,15 @@ class OverviewPage : Cell[OverviewInput] {
         let unconfirmed = balance?.Unconfirmed ?? uint64(0)
         let confirming = (balance?.Pending ?? uint64(0)) - unconfirmed
         let known = balance?.Balance != nil
-        let scanning = input.Snapshot.ScanBehind(input.Node.Height)
+        let scanning = balance?.Scanning == true
         let value = if masked {
             "••••••••"
         } else if known {
             Fixed(total)
         } else {
-            ui.Strings.Get(scanning ? "Scanning": "Unavailable")
+            ui.Strings.Get("Unavailable")
         }
-        let color = if scanning {
-            ui.Orange
-        } else if masked || !known || total == 0 {
+        let color = if masked || !known || total == 0 {
             ui.Dim
         } else {
             ui.Lime

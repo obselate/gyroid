@@ -195,7 +195,6 @@ class Strings {
             case "Gyroid": "Gyroid"
             case "Lock": "锁定"
             case "Quit": "退出"
-            case "Scanning": "扫描中"
             case "Unavailable": "不可用"
             case "Balance": "余额"
             case "Available": "可用"
