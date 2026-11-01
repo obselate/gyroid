@@ -423,7 +423,6 @@ class MiningSetup : Cell[MiningSetupInput] {
                             ),
                             ui.Strings.Get("Fewer threads"),
                             () -> input.SetThreads(threads - 1),
-                            threads <= 1,
                             size: AppTheme.ControlCompact
                         ),
                         Container{
@@ -451,7 +450,6 @@ class MiningSetup : Cell[MiningSetupInput] {
                             ),
                             ui.Strings.Get("More threads"),
                             () -> input.SetThreads(threads + 1),
-                            threads <= 0 || threads >= cores,
                             size: AppTheme.ControlCompact
                         )
                     }
