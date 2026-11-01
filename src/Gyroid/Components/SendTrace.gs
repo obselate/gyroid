@@ -1,8 +1,8 @@
 package Gyroid.Components
 
 import Goo
-import Goo.Widgets.Actions
 import Goo.Widgets.Icons
+import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
 import Gyroid.Models
@@ -149,13 +149,12 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
             ""
         )
         let txid = Label(ui, Hidden(ui.Privacy, result.TxId.Substring(0, 8)), AppTheme.Type12, AppTheme.Ink, "")
-        let close = (
-            AppTheme.IconButton with{
-                Icon = MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.Body),
-                AccessibilityName = ui.Strings.Get("Close"),
-                OnClick = input.OnClose
-            }
-        ).Build()
+        let close = Icon(
+            ui,
+            MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.Body),
+            ui.Strings.Get("Close"),
+            input.OnClose
+        )
         let strip = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: if compact {

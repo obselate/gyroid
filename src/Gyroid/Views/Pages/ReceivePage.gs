@@ -4,6 +4,8 @@ import Goo
 import Goo.Widgets
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
+import Goo.Widgets.Layout
+import Goo.Widgets.Navigation
 import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
@@ -117,8 +119,15 @@ class ReceivePage : Cell[ReceivePageInput] {
                 status.Add(Label(ui, confirmations.ToString() + "/10", AppTheme.Type13, AppTheme.Dim, ""))
             }
         } else if let output = possible {
-            status.Add(Badge(ui, ui.Strings.Get("possible payment"), AppTheme.Orange, "warning"))
-            status.Add(Label(ui, Amount(ui.Privacy, output.Amount), AppTheme.Type14, AppTheme.Ink, ""))
+            status.Add(
+                Label(
+                    ui,
+                    ui.Strings.Get("possible payment") + " " + Amount(ui.Privacy, output.Amount),
+                    AppTheme.Type14,
+                    AppTheme.Orange,
+                    ""
+                )
+            )
             status.Add(
                 Cell.Mount[InfoTipInput, InfoTip](
                     "possible",
@@ -183,35 +192,24 @@ class ReceivePage : Cell[ReceivePageInput] {
         let copied = shown != "qr" && ReadOnlySpan[char](input.Clipboard).SequenceEqual(
             System.MemoryExtensions.AsSpan(payload)
         )
-        let tabs = ChoiceGroup(ui, Accessibility{Role: AccessibilityRole.TabList, Name: ui.Strings.Get("Share as")})
-        tabs.FlexShrink = 0
-        for (id, label) in[]KeyValuePair[string, string]{
-            KeyValuePair[string, string]("link", "Link"),
-            KeyValuePair[string, string]("address", "Address"),
-            KeyValuePair[string, string]("qr", "QR")
-        } {
-            if id == "link" && empty {
-                continue
-            }
-            let button = Choice(
-                ui,
-                ui.Strings.Get(label),
-                shown == id,
-                () -> {
-                    request.Format = id
-                    Rebuild()
-                },
-                Accessibility{Role: AccessibilityRole.Tab, Name: ui.Strings.Get(label), Selected: shown == id},
-                AppTheme.Space0,
-                AppTheme.Type13
-            )
-            button.FlexGrow = 1
-            button.FlexBasis = 0
-            button.Height = AppTheme.ControlCompact
-            button.AlignItems = AlignItems.Center
-            button.JustifyContent = JustifyContent.Center
-            tabs.Add(button)
+        let options = List[NavigationItem]()
+        if !empty {
+            options.Add(NavigationItem{Id: "link", Label: ui.Strings.Get("Link")})
         }
+        options.Add(NavigationItem{Id: "address", Label: ui.Strings.Get("Address")})
+        options.Add(NavigationItem{Id: "qr", Label: ui.Strings.Get("QR")})
+        let tabs = Tabs(
+            ui,
+            "share-as",
+            "Share as",
+            options.ToArray(),
+            shown,
+            id -> {
+                request.Format = id
+                Rebuild()
+            },
+            true
+        )
         let grouped = Grouped(input.Address)
         let first = grouped.IndexOf(' ')
         let preview = Text{
@@ -252,6 +250,7 @@ class ReceivePage : Cell[ReceivePageInput] {
             field.OnClick = () -> ui.Actions.Copy(payload, 120000)
             WidgetKeyBindings.BindActivation(field)
         }
+        let disabled = input.Busy || shown != "address" && (amountIssue.Length > 0 || memoIssue.Length > 0)
         let action = if paid != nil {
             Action(
                 input,
@@ -260,7 +259,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 AppTheme.Ink,
                 AppTheme.Edge,
                 AppTheme.Raised,
-                "",
+                disabled,
                 () -> {
                     request.Amount = ""
                     request.Memo = ""
@@ -269,16 +268,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 }
             )
         } else if copied {
-            Action(
-                input,
-                "check",
-                "Copied",
-                AppTheme.Mint,
-                AppTheme.Mint,
-                AppTheme.MintQuiet,
-                "clears in 2 min",
-                () -> { }
-            )
+            Action(input, "check", "Copied", AppTheme.Mint, AppTheme.Mint, AppTheme.MintQuiet, disabled, () -> { })
         } else if shown == "qr" {
             Action(
                 input,
@@ -287,7 +277,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 AppTheme.Lime,
                 AppTheme.Lime,
                 AppTheme.LimeQuiet,
-                "",
+                disabled,
                 () -> SaveQr(input)
             )
         } else {
@@ -298,31 +288,25 @@ class ReceivePage : Cell[ReceivePageInput] {
                 AppTheme.Lime,
                 AppTheme.Lime,
                 AppTheme.LimeQuiet,
-                "",
+                disabled,
                 () -> ui.Actions.Copy(payload, 120000)
             )
         }
-        action.Disabled = input.Busy || shown != "address" && (amountIssue.Length > 0 || memoIssue.Length > 0)
-        let card = WalletParts.Card(
+        let card = WalletParts.PageCard(
             ui,
-            input.Height < 700 ? AppTheme.Space16: AppTheme.Space22,
-            radius: AppTheme.Radius14
+            900,
+            input.Height,
+            fill: true,
+            padding: input.Height < 700 ? AppTheme.Space16: AppTheme.Space22,
+            gap: AppTheme.Space16
         )
         let form = WalletForm(ui, false, nil, []string{})
-        card.Width = Percent(100)
-        card.MaxWidth = 900
-        card.MaxHeight = Percent(100)
         card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.SpaceBetween,
-                Gap: AppTheme.Space12,
-                MinHeight: 26,
-                FlexShrink: 0,
+            WalletParts.Header(
                 Label(ui, ui.Strings.Get("receive"), AppTheme.Type17, AppTheme.Ink, ""),
+                AppTheme.Space12,
                 status
-            }
+            )
         )
         card.Add(
             Container{
@@ -351,7 +335,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                                 TextAlign: TextAlign.Right,
                                 FlexBasis: 0,
                                 MinWidth: 0,
-                                form.Entry(
+                                form.Amount(
                                     TextField{
                                         AccessibilityName: ui.Strings.Get("Amount"),
                                         Placeholder: ui.Strings.Get("amount"),
@@ -365,7 +349,6 @@ class ReceivePage : Cell[ReceivePageInput] {
                                         } else {
                                             nil
                                         },
-                                        Trailing: Label(ui, "BNT", AppTheme.Type12, AppTheme.Dim, ""),
                                         OnChange: value -> {
                                             request.Amount = value.Trim()
                                             Rebuild()
@@ -376,43 +359,36 @@ class ReceivePage : Cell[ReceivePageInput] {
                             Grow(
                                 Container{
                                     MinWidth: 0,
-                                    form.Entry(
-                                        TextField{
-                                            AccessibilityName: ui.Strings.Get("Memo"),
-                                            Placeholder: ui.Strings.Get("memo"),
-                                            Value: request.Memo,
-                                            Controlled: true,
-                                            Password: input.Privacy,
-                                            Disabled: input.Busy || paid != nil,
-                                            Invalid: memoIssue.Length > 0,
-                                            IssueText: if memoIssue.Length > 0 {
-                                                ui.Strings.Explain(memoIssue)
-                                            } else {
-                                                nil
-                                            },
-                                            Leading: MaterialIcons.Create("notes", AppTheme.Icon16, AppTheme.Dim),
-                                            Trailing: Container{
-                                                FlexDirection: FlexDirection.Row,
-                                                AlignItems: AlignItems.Center,
-                                                Gap: AppTheme.Space8,
-                                                Label(
-                                                    ui,
-                                                    Hidden(ui.Privacy, request.Reference),
-                                                    AppTheme.Type14,
-                                                    AppTheme.Dim,
-                                                    ""
-                                                ),
-                                                Meter(
-                                                    ui,
-                                                    Encoding.UTF8.GetByteCount(full),
-                                                    WalletValidation.MemoLimit,
-                                                    true
-                                                )
-                                            },
-                                            OnChange: value -> {
-                                                request.Memo = value
-                                                Rebuild()
-                                            }
+                                    form.Field(
+                                        "Memo",
+                                        request.Memo,
+                                        value -> {
+                                            request.Memo = value
+                                            Rebuild()
+                                        },
+                                        issue: memoIssue,
+                                        disabled: input.Busy || paid != nil,
+                                        labelled: false,
+                                        hidden: input.Privacy,
+                                        placeholder: ui.Strings.Get("memo"),
+                                        leading: MaterialIcons.Create("notes", AppTheme.Icon16, AppTheme.Dim),
+                                        trailing: Container{
+                                            FlexDirection: FlexDirection.Row,
+                                            AlignItems: AlignItems.Center,
+                                            Gap: AppTheme.Space8,
+                                            Label(
+                                                ui,
+                                                Hidden(ui.Privacy, request.Reference),
+                                                AppTheme.Type14,
+                                                AppTheme.Dim,
+                                                ""
+                                            ),
+                                            Meter(
+                                                ui,
+                                                Encoding.UTF8.GetByteCount(full),
+                                                WalletValidation.MemoLimit,
+                                                true
+                                            )
                                         }
                                     )
                                 }
@@ -433,30 +409,22 @@ class ReceivePage : Cell[ReceivePageInput] {
         color Color,
         border Color,
         fill Color,
-        note string,
+        disabled bool,
         click Action
-    ) Blob {
-        let ui = input.Ui
-        let button = Goo
-            .Button{
-            BasedOn: AppTheme.ButtonStyle,
-            FlexShrink: 0,
-            BorderColor: border,
-            BackgroundColor: fill,
-            Disabled: input.Busy,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
-            OnClick: click,
-            MaterialIcons.Create(icon, AppTheme.Icon16, color),
-            Label(ui, ui.Strings.Get(label), AppTheme.Type14, color, "")
+    ) Blob -> ControlParts
+        .Button(
+        input.Ui,
+        label,
+        click,
+        disabled,
+        busy: false,
+        appearance: AppTheme.Button with{
+            BorderColor = border,
+            BackgroundColor = fill,
+            TextColor = color,
+            Leading = MaterialIcons.Create(icon, AppTheme.Icon16, disabled ? AppTheme.Dim: color)
         }
-        WidgetKeyBindings.BindActivation(button)
-        if note.Length > 0 {
-            button.Add(Label(ui, ui.Strings.Get(note), AppTheme.Type14, AppTheme.Dim, ""))
-        }
-        return button
-    }
+    )
 
     private func Payment(input ReceivePageInput, reference bool) WalletOutput? {
         let request = input.Request

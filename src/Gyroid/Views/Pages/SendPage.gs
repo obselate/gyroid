@@ -75,29 +75,26 @@ class SendPage : Cell[SendPageInput] {
         }
         let over = total > spendable
         form = WalletForm(ui, ready && !over && total > 0, () -> Review(input), []string{})
-        let card = WalletParts.Card(
+        let maxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
+        let card = WalletParts.PageCard(
             ui,
+            maxWidth,
+            input.Height,
+            maxWidth,
+            true,
             compact ? AppTheme.Space16: AppTheme.Space22,
-            compact ? AppTheme.Space14: AppTheme.Space16,
-            AppTheme.Radius14
+            compact ? AppTheme.Space14: AppTheme.Space16
         )
-        card.Width = Percent(100)
-        card.MaxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
-        card.MaxHeight = Percent(100)
         card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                JustifyContent: JustifyContent.SpaceBetween,
-                Gap: AppTheme.Space12,
-                FlexShrink: 0,
+            WalletParts.Header(
                 Label(ui, ui.Strings.Get("send"), AppTheme.Type17, AppTheme.Ink, ""),
+                AppTheme.Space12,
                 if input.Snapshot.Balance?.Spendable != nil {
                     Figure(ui, "Spendable", WalletText.Amount(ui.Privacy, spendable), AppTheme.Ink, AppTheme.Type14, "")
                 } else {
                     Container{}
                 }
-            }
+            )
         )
         if multi {
             let size = AppTheme.GetTotalSize(input.Height)
@@ -107,7 +104,7 @@ class SendPage : Cell[SendPageInput] {
             for index in 0 ... rows.Count {
                 list.Add(Recipient(input, index))
             }
-            card.Add(list)
+            card.Add(ListParts.Viewport(list, grow: false))
         } else {
             let size = AppTheme.GetAmountSize(input.Height)
             card.Add(Hero(input, Amount(input, over, size), rows[0].Amount.Length, size))
@@ -139,28 +136,28 @@ class SendPage : Cell[SendPageInput] {
                 )
             }
         )
-        let review = Button(ui, "Review", form.Submit, !form.CanSubmit, true, reviewFocus)
+        let review = Button(ui, "Review", form.Submit, !form.CanSubmit, true, reviewFocus, input.Busy)
         reviewFocus = false
         review.MinWidth = 140
-        let addRecipient = Goo
-            .Button{
-            BasedOn: AppTheme.ButtonStyle,
-            Height: AppTheme.ControlCompact,
-            Padding: Edges{Left: AppTheme.Space6, Right: AppTheme.Space6},
-            BackgroundColor: Color.Transparent,
-            BorderWidth: AppTheme.Border0,
-            Disabled: input.Busy,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Add recipient")},
-            OnClick: () -> {
+        let addRecipient = ControlParts.Button(
+            ui,
+            "recipient",
+            () -> {
                 rows.Add(SendRow())
                 Rebuild()
             },
-            MaterialIcons.Create("add", AppTheme.Icon16, AppTheme.Lime),
-            Label(ui, ui.Strings.Get("recipient"), AppTheme.Type14, AppTheme.Lime, "")
-        }
-        WidgetKeyBindings.BindActivation(addRecipient)
+            input.Busy,
+            busy: false,
+            appearance: AppTheme.Button with{
+                Height = AppTheme.ControlCompact,
+                PaddingHorizontal = AppTheme.Space6,
+                BackgroundColor = Color.Transparent,
+                BorderWidth = AppTheme.Border0,
+                TextColor = AppTheme.Lime,
+                Leading = MaterialIcons.Create("add", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Lime),
+                AccessibilityName = ui.Strings.Get("Add recipient")
+            }
+        )
         card.Add(
             Container{
                 FlexDirection: FlexDirection.Row,
@@ -292,24 +289,19 @@ class SendPage : Cell[SendPageInput] {
         )
     }
 
-    private func Share(input SendPageInput, label string, atoms uint64, click Action) Blob {
-        let ui = input.Ui
-        let button = Goo
-            .Button{
-            BasedOn: AppTheme.ButtonStyle,
-            Height: AppTheme.ControlCompact,
-            BorderColor: AppTheme.Edge,
-            BackgroundColor: AppTheme.Black,
-            Disabled: input.Busy || atoms == 0,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
-            Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
-            OnClick: click,
-            Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, "")
+    private func Share(input SendPageInput, label string, atoms uint64, click Action) Blob -> ControlParts.Button(
+        input.Ui,
+        label,
+        click,
+        input.Busy || atoms == 0,
+        busy: false,
+        appearance: AppTheme.Button with{
+            Height = AppTheme.ControlCompact,
+            BackgroundColor = AppTheme.Black,
+            FontSize = AppTheme.Type12,
+            TextColor = AppTheme.Body
         }
-        WidgetKeyBindings.BindActivation(button)
-        return button
-    }
+    )
 
     private func Recipient(input SendPageInput, index int32) Blob {
         let ui = input.Ui
@@ -335,7 +327,7 @@ class SendPage : Cell[SendPageInput] {
                     Width: 150,
                     TextAlign: TextAlign.Right,
                     FlexShrink: 0,
-                    form.Entry(
+                    form.Amount(
                         TextField{
                             AccessibilityName: ui.Strings.Get("Amount") + " " + (index + 1).ToString(),
                             Value: row.Amount,
@@ -343,7 +335,6 @@ class SendPage : Cell[SendPageInput] {
                             Password: input.Privacy,
                             Disabled: input.Busy,
                             Invalid: WalletValidation.AmountIssue(row.Amount).Length > 0,
-                            Trailing: Label(ui, "BNT", AppTheme.Type12, AppTheme.Dim, ""),
                             OnChange: value -> {
                                 row.Amount = value.Trim()
                                 Rebuild()
@@ -351,31 +342,39 @@ class SendPage : Cell[SendPageInput] {
                         }
                     )
                 },
-                ExpandButton(
+                Icon(
                     ui,
                     if memoUsed > 0 {
                         Meter(ui, memoUsed, WalletValidation.MemoLimit, false)
                     } else {
                         MaterialIcons.Create("notes", AppTheme.Icon16, AppTheme.Dim)
                     },
-                    "Memo",
-                    row.MemoOpen,
-                    input.Busy,
+                    ui.Strings.Get("Memo"),
                     () -> {
                         row.MemoOpen = !row.MemoOpen
                         Rebuild()
-                    }
+                    },
+                    input.Busy,
+                    row.MemoOpen,
+                    AppTheme.ControlCompact,
+                    Style{
+                        BasedOn: AppTheme.DisclosureStyle,
+                        Margin: Edges{Top: AppTheme.Space4},
+                        BackgroundColor: row.MemoOpen ? AppTheme.Rule: Color.Transparent
+                    },
+                    row.MemoOpen
                 ),
-                ExpandButton(
+                Icon(
                     ui,
                     MaterialIcons.Create("close", AppTheme.Icon16, AppTheme.Dim),
-                    "Remove recipient",
-                    false,
-                    input.Busy,
+                    ui.Strings.Get("Remove recipient"),
                     () -> {
                         rows.RemoveAt(index)
                         Rebuild()
-                    }
+                    },
+                    input.Busy,
+                    size: AppTheme.ControlCompact,
+                    style: Style{BasedOn: AppTheme.DisclosureStyle, Margin: Edges{Top: AppTheme.Space4}}
                 )
             }
         }
@@ -410,16 +409,23 @@ class SendPage : Cell[SendPageInput] {
             trailing.Add(MaterialIcons.Create("check", AppTheme.Icon16, AppTheme.Mint))
         } else if text.Length == 0 && input.Contacts.Count > 0 {
             trailing.Add(
-                ExpandButton(
+                Icon(
                     ui,
                     MaterialIcons.Create("menu_book", AppTheme.Icon16, AppTheme.Body),
-                    "contacts",
-                    row.Suggest,
-                    input.Busy,
+                    ui.Strings.Get("contacts"),
                     () -> {
                         row.Suggest = !row.Suggest
                         Rebuild()
-                    }
+                    },
+                    input.Busy,
+                    row.Suggest,
+                    AppTheme.ControlCompact,
+                    Style{
+                        BasedOn: AppTheme.DisclosureStyle,
+                        Margin: Edges{Top: AppTheme.Space4},
+                        BackgroundColor: row.Suggest ? AppTheme.Rule: Color.Transparent
+                    },
+                    row.Suggest
                 )
             )
         }
@@ -556,13 +562,7 @@ class SendPage : Cell[SendPageInput] {
                 } else {
                     nil
                 },
-                Leading: Container{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Center,
-                    Gap: AppTheme.Space6,
-                    Label(ui, ui.Strings.Get("Memo"), AppTheme.Type12, AppTheme.Body, ""),
-                    Label(ui, ui.Strings.Get("(optional)"), AppTheme.Type12, AppTheme.Dim, "")
-                },
+                Leading: Label(ui, ui.Strings.Get("Memo"), AppTheme.Type12, AppTheme.Body, ""),
                 Trailing: Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
@@ -693,25 +693,19 @@ class SendPage : Cell[SendPageInput] {
             Gap: compact ? AppTheme.Space14: AppTheme.Space16,
             MinHeight: 0,
             FlexShrink: 1,
-            Container{
-                Gap: AppTheme.Space6,
-                FlexShrink: 0,
-                Label(ui, ui.Strings.Get("send"), AppTheme.Type14, AppTheme.Dim, ""),
-                Container{
-                    FlexDirection: FlexDirection.Row,
-                    AlignItems: AlignItems.Baseline,
-                    Gap: AppTheme.Space10,
-                    Label(
-                        ui,
-                        WalletText.Amount(ui.Privacy, pending.Total),
-                        AppTheme.GetReviewAmountSize(input.Height),
-                        AppTheme.Lime,
-                        ""
-                    ),
-                    Label(ui, "BNT", AppTheme.Type14, AppTheme.Dim, "")
-                }
-            },
-            list,
+            WalletParts.Header(
+                Label(
+                    ui,
+                    WalletText.Amount(ui.Privacy, pending.Total),
+                    AppTheme.GetReviewAmountSize(input.Height),
+                    AppTheme.Lime,
+                    ""
+                ),
+                AppTheme.Space10,
+                value: Label(ui, "BNT", AppTheme.Type14, AppTheme.Dim, ""),
+                alignment: AlignItems.Baseline
+            ),
+            ListParts.Viewport(list, grow: false),
             Bar(
                 input,
                 pending.Recipients.Select((recipient WalletRecipient) -> recipient.Amount).ToArray(),
@@ -763,6 +757,12 @@ class SendPage : Cell[SendPageInput] {
                 MaxHeight: Percent(100),
                 Padding: compact ? AppTheme.Space20: AppTheme.Space22,
                 Content: content,
+                Footer: ActionRow(
+                    []Blob{
+                        ControlParts.Button(ui, "Cancel", close, busy: false),
+                        ControlParts.Button(ui, "Send", () -> Submit(input), input.Busy, true, busy: input.Busy)
+                    }
+                ),
                 ConfirmText: ui.Strings.Get("Send"),
                 CancelText: ui.Strings.Get("Cancel"),
                 ConfirmDisabled: input.Busy,
