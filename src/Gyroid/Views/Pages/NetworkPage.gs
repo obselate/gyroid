@@ -865,8 +865,8 @@ class NetworkPeers : Cell, IDisposable {
         let list = rows.Length == 0 && tab == "banned" ?
         ListParts.Empty(ui, "no banned peers"): VirtualRows(rows, tab == "peers" ? 30: 44, rowKey, rowBuilder, false)
         list.MinHeight = 0
-        list.FlexGrow = 1
-        list.FlexBasis = 0
+        list.FlexGrow = rows.Length > 0 ? 1: 0
+        list.FlexBasis = rows.Length > 0 ? 0: Length.Auto
         let viewport = ListParts.Viewport(list, Style{MinHeight: 0, MaxHeight: Percent(45)}, grow: rows.Length > 0)
         card.Add(viewport)
         let identity = input.PeerId
