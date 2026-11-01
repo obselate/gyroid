@@ -63,7 +63,6 @@ class SendPage : Cell[SendPageInput] {
         }
         let ui = input.Ui
         let spendable = input.Snapshot.Balance?.Spendable ?? uint64(0)
-        let compact = input.Height < 700
         let multi = rows.Count > 1
         var total uint64 = 0
         var ready = !input.Busy
@@ -76,15 +75,7 @@ class SendPage : Cell[SendPageInput] {
         let over = total > spendable
         form = WalletForm(ui, ready && !over && total > 0, () -> Review(input), []string{})
         let maxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, input.Height - 640) * 0.6, 600.0, 900.0)
-        let card = WalletParts.PageCard(
-            ui,
-            maxWidth,
-            input.Height,
-            maxWidth,
-            true,
-            compact ? AppTheme.Space16: AppTheme.Space22,
-            compact ? AppTheme.Space14: AppTheme.Space16
-        )
+        let card = WalletParts.PageCard(ui, maxWidth, input.Height, maxWidth, true)
         card.Add(
             WalletParts.Header(
                 Label(ui, ui.Strings.Get("send"), AppTheme.Type17, AppTheme.Ink, ""),
@@ -148,9 +139,7 @@ class SendPage : Cell[SendPageInput] {
             },
             input.Busy,
             busy: false,
-            appearance: AppTheme.Button with{
-                Height = AppTheme.ControlCompact,
-                PaddingHorizontal = AppTheme.Space6,
+            appearance: AppTheme.CompactButton with{
                 BackgroundColor = Color.Transparent,
                 BorderWidth = AppTheme.Border0,
                 TextColor = AppTheme.Lime,
@@ -295,12 +284,7 @@ class SendPage : Cell[SendPageInput] {
         click,
         input.Busy || atoms == 0,
         busy: false,
-        appearance: AppTheme.Button with{
-            Height = AppTheme.ControlCompact,
-            BackgroundColor = AppTheme.Black,
-            FontSize = AppTheme.Type12,
-            TextColor = AppTheme.Body
-        }
+        appearance: AppTheme.CompactButton with{BackgroundColor = AppTheme.Black, TextColor = AppTheme.Body}
     )
 
     private func Recipient(input SendPageInput, index int32) Blob {
@@ -357,11 +341,7 @@ class SendPage : Cell[SendPageInput] {
                     input.Busy,
                     row.MemoOpen,
                     AppTheme.ControlCompact,
-                    Style{
-                        BasedOn: AppTheme.DisclosureStyle,
-                        Margin: Edges{Top: AppTheme.Space4},
-                        BackgroundColor: row.MemoOpen ? AppTheme.Rule: Color.Transparent
-                    },
+                    AppTheme.DisclosureStyle,
                     row.MemoOpen
                 ),
                 Icon(
@@ -374,7 +354,7 @@ class SendPage : Cell[SendPageInput] {
                     },
                     input.Busy,
                     size: AppTheme.ControlCompact,
-                    style: Style{BasedOn: AppTheme.DisclosureStyle, Margin: Edges{Top: AppTheme.Space4}}
+                    style: AppTheme.DisclosureStyle
                 )
             }
         }
@@ -420,11 +400,7 @@ class SendPage : Cell[SendPageInput] {
                     input.Busy,
                     row.Suggest,
                     AppTheme.ControlCompact,
-                    Style{
-                        BasedOn: AppTheme.DisclosureStyle,
-                        Margin: Edges{Top: AppTheme.Space4},
-                        BackgroundColor: row.Suggest ? AppTheme.Rule: Color.Transparent
-                    },
+                    AppTheme.DisclosureStyle,
                     row.Suggest
                 )
             )

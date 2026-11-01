@@ -292,14 +292,7 @@ class ReceivePage : Cell[ReceivePageInput] {
                 () -> ui.Actions.Copy(payload, 120000)
             )
         }
-        let card = WalletParts.PageCard(
-            ui,
-            900,
-            input.Height,
-            fill: true,
-            padding: input.Height < 700 ? AppTheme.Space16: AppTheme.Space22,
-            gap: AppTheme.Space16
-        )
+        let card = WalletParts.PageCard(ui, 900, input.Height, fill: true)
         let form = WalletForm(ui, false, nil, []string{})
         card.Add(
             WalletParts.Header(
