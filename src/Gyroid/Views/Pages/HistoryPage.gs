@@ -25,7 +25,6 @@ import System.Threading.Tasks
 
 data struct HistoryInput {
     var Session WalletSession
-    var Wallet string
     var Ui Presentation
     var Snapshot WalletSnapshot
     var Window Window?
@@ -42,13 +41,6 @@ data struct HistoryRecipient {
     var Address string
     var Amount uint64
     var Memo string
-}
-
-data struct HistoryRibbonRow {
-    var Kind HistoryRowKind
-    var Height uint64
-    var Amount uint64
-    var Time int64
 }
 
 enum HistoryRowKind {
@@ -82,20 +74,20 @@ data struct HistoryRow {
 }
 
 data struct HistoryIdentity {
-    var Session WalletSession
     var Network string
     var Wallet string
-    var Address string
-    var Endpoint string
+}
+
+data struct HistoryReadSource {
     var Api NodeApi
-    var ProcessId int32
+    var Endpoint string
     var Start int64
     var Running bool
 }
 
 data struct HistoryRibbonInput {
     var Ui Presentation
-    var Rows[]HistoryRibbonRow
+    var Rows[]HistoryRow
     var Times Dictionary[uint64, int64]
     var Revision int32
     var Tip uint64
@@ -116,6 +108,7 @@ data struct HistoryListInput {
     var Window Window?
     var Address string
     var Identity HistoryIdentity
+    var Source HistoryReadSource
     var Rows[]HistoryRow
     var Privacy bool
     var Language string
@@ -128,19 +121,11 @@ data struct HistoryListInput {
     var LoadMore Action
 }
 
-data struct HistoryObserverInput {
-    var Session WalletSession
-    var Window Window?
-    var Identity HistoryIdentity
-    var Transaction string
-    var Lens ObserverLensInput
-}
-
 data struct HistoryExportInput {
     var Ui Presentation
     var Session WalletSession
-    var Window Window?
-    var Identity HistoryIdentity
+    var Network string
+    var Wallet string
     var Tip uint64
     var Cutoff uint64
     var Period string
@@ -155,9 +140,9 @@ data struct HistoryExportInput {
 
 class HistoryPage : Cell, IDisposable {
     private var current HistoryInput
-    private var accepted bool
     private var disposed bool
     private var identity HistoryIdentity
+    private var source HistoryReadSource
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var periodRequest CancellationTokenSource?
     private var timesRequest CancellationTokenSource?
@@ -172,7 +157,11 @@ class HistoryPage : Cell, IDisposable {
     private var span uint64 = 1
     private var shown[]HistoryRow = []HistoryRow{}
     private var allRows[]HistoryRow = []HistoryRow{}
-    private var ribbonRows[]HistoryRibbonRow = []HistoryRibbonRow{}
+    private var cutoff uint64
+    private var received uint64
+    private var sent uint64
+    private var fees uint64
+    private var mined uint64
     private let recipientSnapshots Dictionary[string, []HistoryRecipient] = Dictionary[string, []HistoryRecipient]()
     private var fetching bool
     private var loading bool
@@ -208,8 +197,12 @@ class HistoryPage : Cell, IDisposable {
         configureList = cell -> cell.Accept(listInput)
         configureExport = cell -> cell.Accept(exportInput)
         selectRange = (start, end) -> {
+            if from == start && to == end {
+                return
+            }
             from = start
             to = end
+            PrepareRange()
             Rebuild()
         }
         markRow = height -> ribbon?.Mark(height)
@@ -220,13 +213,13 @@ class HistoryPage : Cell, IDisposable {
 
     shared {
         public func SourceIdentity(session WalletSession) HistoryIdentity -> HistoryIdentity{
-            Session: session,
             Network: session.settings.Network,
-            Wallet: session.settings.ActiveWallet,
-            Address: session.Snapshot.Address,
-            Endpoint: session.settings.Endpoint,
+            Wallet: session.settings.ActiveWallet
+        }
+
+        public func ReadSource(session WalletSession) HistoryReadSource -> HistoryReadSource{
             Api: session.Node.Api,
-            ProcessId: session.settings.OwnedProcessId,
+            Endpoint: session.settings.Endpoint,
             Start: session.Node.Api.verifiedStart,
             Running: session.Node.Status.Running
         }
@@ -234,8 +227,18 @@ class HistoryPage : Cell, IDisposable {
 
     public func Accept(input HistoryInput) {
         let next = SourceIdentity(input.Session)
-        if disposed || (accepted && current.Equals(input) && next.Equals(identity)) {
+        let nextSource = ReadSource(input.Session)
+        if disposed || (current.Equals(input) && next.Equals(identity) && nextSource.Equals(source)) {
             return
+        }
+        let resumePagination = loading && !nextSource.Equals(source)
+        let pendingTimes = nextSource.Equals(source) ? Array.Empty[uint64](): requested.Except(times.Keys).ToArray()
+        if !nextSource.Equals(source) {
+            CancelRequests()
+            requested.IntersectWith(times.Keys)
+            failedTimes = nil
+            failedPeriod = nil
+            source = nextSource
         }
         if !next.Equals(identity) {
             CancelRequests()
@@ -251,17 +254,20 @@ class HistoryPage : Cell, IDisposable {
             from = 0
             to = 0
         }
-        accepted = true
         current = input
+        PrepareRows()
         ResolveRange()
-        RequestTimes(input.Snapshot.History.Take(50).Select(output -> output.BlockHeight))
+        RequestTimes(pendingTimes.Concat(input.Snapshot.History.Take(50).Select(output -> output.BlockHeight)))
         ContinueLoading()
+        if resumePagination {
+            LoadMore()
+        }
         Rebuild()
     }
 
-    private func Active(id HistoryIdentity) bool -> !disposed && identity.Equals(id) && SourceIdentity(
+    private func Active(id HistoryIdentity) bool -> SourceIdentity(current.Session).Equals(id) && ReadSource(
         current.Session
-    ).Equals(id)
+    ).Equals(source)
 
     private func CancelRequests() {
         periodGeneration++
@@ -319,30 +325,52 @@ class HistoryPage : Cell, IDisposable {
         }
     }
 
-    override func Build() Blob {
-        let input = current
-        let ui = input.Ui
-        let compact = input.Width < 1000
-        let nextRows = Collect(input).ToArray()
-        if !allRows.SequenceEqual(nextRows) {
-            allRows = nextRows
+    private func PrepareRows() {
+        let rows = Collect(current).ToArray()
+        if !allRows.SequenceEqual(rows) {
+            allRows = rows
         }
-        let all = allRows
-        let tip = input.Tip
-        let resolved = resolvedPeriod == period
-        let cutoff = period == "all" ? 0UL: resolved ? periodStart: tip + 1
-        let oldest = all.Length > 0 && all[all.Length - 1].Height > 0 ? all[all.Length - 1].Height: tip
+        PrepareRange()
+    }
+
+    private func PrepareRange() {
+        let tip = current.Tip
+        cutoff = period == "all" ? 0UL: resolvedPeriod == period ? periodStart: tip + 1
+        let oldest = allRows.Length > 0 &&
+            allRows[allRows.Length - 1].Height > 0 ? allRows[allRows.Length - 1].Height: tip
         low = period == "all" ? oldest > 0 ? oldest - 1: 0UL: Math.Min(tip, cutoff > 0 ? cutoff - 1: 0UL)
         span = Math.Max(1UL, tip - low)
         let first = to > 0 ? Math.Max(from, cutoff): cutoff
         let last = to > 0 ? to: tip
-        let nextShown = all.Where(
+        let rows = allRows.Where(
             (row HistoryRow) -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last
         )
             .ToArray()
-        if !shown.SequenceEqual(nextShown) {
-            shown = nextShown
+        if !shown.SequenceEqual(rows) {
+            shown = rows
         }
+        received = 0
+        sent = 0
+        fees = 0
+        mined = 0
+        for row in shown {
+            if row.Kind == HistoryRowKind.Received {
+                received += row.Amount
+            } else if row.Kind == HistoryRowKind.Mined {
+                mined += row.Amount
+            } else {
+                sent += row.Self ? 0UL: row.Amount
+                fees += row.Fee
+            }
+        }
+    }
+
+    override func Build() Blob {
+        let input = current
+        let ui = input.Ui
+        let compact = input.Width < 1000
+        let all = allRows
+        let tip = input.Tip
         let panel = WalletParts.Card(
             ui,
             Edges{Top: AppTheme.Space12, Bottom: AppTheme.Space12, Left: AppTheme.Space20, Right: AppTheme.Space20},
@@ -367,6 +395,7 @@ class HistoryPage : Cell, IDisposable {
                     to = 0
                     ResolveRange()
                     ContinueLoading()
+                    PrepareRange()
                     Rebuild()
                 }
             )
@@ -389,6 +418,7 @@ class HistoryPage : Cell, IDisposable {
                         ui.Strings.Get("clear range"),
                         () -> {
                             to = 0
+                            PrepareRange()
                             Rebuild()
                         },
                         size: AppTheme.ControlCompact,
@@ -408,8 +438,8 @@ class HistoryPage : Cell, IDisposable {
         exportInput = HistoryExportInput{
             Ui: ui,
             Session: input.Session,
-            Window: input.Window,
-            Identity: identity,
+            Network: identity.Network,
+            Wallet: identity.Wallet,
             Cutoff: cutoff,
             Tip: tip,
             Period: period,
@@ -423,16 +453,9 @@ class HistoryPage : Cell, IDisposable {
         }
         bar.Add(Cell.Mount[HistoryExport]("history-export", configureExport))
         panel.Add(bar)
-        let nextRibbon = all.Select(
-            row -> HistoryRibbonRow{Kind: row.Kind, Height: row.Height, Amount: row.Amount, Time: row.Time}
-        )
-            .ToArray()
-        if !ribbonRows.SequenceEqual(nextRibbon) {
-            ribbonRows = nextRibbon
-        }
         ribbonInput = HistoryRibbonInput{
             Ui: ui,
-            Rows: ribbonRows,
+            Rows: allRows,
             Times: times,
             Revision: timesRevision,
             Tip: tip,
@@ -467,6 +490,7 @@ class HistoryPage : Cell, IDisposable {
             Window: input.Window,
             Address: input.Snapshot.Address,
             Identity: identity,
+            Source: source,
             Rows: shown,
             Privacy: input.Privacy,
             Language: input.Language,
@@ -578,20 +602,6 @@ class HistoryPage : Cell, IDisposable {
 
     private func Summary(input HistoryInput) Blob {
         let ui = input.Ui
-        var received = 0UL
-        var sent = 0UL
-        var fees = 0UL
-        var mined = 0UL
-        for row in shown {
-            if row.Kind == HistoryRowKind.Received {
-                received += row.Amount
-            } else if row.Kind == HistoryRowKind.Mined {
-                mined += row.Amount
-            } else {
-                sent += row.Self ? 0UL: row.Amount
-                fees += row.Fee
-            }
-        }
         let gain = received + mined
         let loss = sent + fees
         let net = (gain >= loss ? "+": "−") + Amount(ui.Privacy, gain >= loss ? gain - loss: loss - gain)
@@ -690,9 +700,6 @@ class HistoryPage : Cell, IDisposable {
                     return
                 }
                 fetching = false
-                if ct.IsCancellationRequested {
-                    return
-                }
                 for entry in fetched {
                     times[entry.Key] = entry.Value
                 }
@@ -701,6 +708,7 @@ class HistoryPage : Cell, IDisposable {
                 }
                 if fetched.Count > 0 {
                     timesRevision++
+                    PrepareRows()
                     Rebuild()
                 }
             }
@@ -745,11 +753,9 @@ class HistoryPage : Cell, IDisposable {
                     return
                 }
                 loading = false
-                if !ct.IsCancellationRequested {
-                    paginationIssue = issue
-                    if issue.Length == 0 {
-                        ContinueLoading()
-                    }
+                paginationIssue = issue
+                if issue.Length == 0 {
+                    ContinueLoading()
                 }
                 Rebuild()
             }
@@ -777,9 +783,6 @@ class HistoryPage : Cell, IDisposable {
                     return
                 }
                 resolving = false
-                if ct.IsCancellationRequested {
-                    return
-                }
                 if selected != period {
                     ResolveRange()
                     return
@@ -791,6 +794,7 @@ class HistoryPage : Cell, IDisposable {
                     resolvedPeriod = selected
                     resolvedTip = input.Tip
                     periodStart = start
+                    PrepareRange()
                     ContinueLoading()
                     Rebuild()
                 }
@@ -802,15 +806,19 @@ class HistoryPage : Cell, IDisposable {
 
 class HistoryRibbon : Cell {
     private var current HistoryRibbonInput
-    private var accepted bool
-    private var dragging bool
-    private var anchor uint64
-    private var hover int32 = -1
-    private var marked uint64
+    private var days float64
+    private var marks List[uint64] = List[uint64]()
+    private var hoverCell HistoryRibbonHover?
+    private var plotHeight float64
+    private let configureHover Action[HistoryRibbonHover]
     private var plotWidth float64
     private let plot ElementHandle = ElementHandle()
 
     init() {
+        configureHover = cell -> {
+            hoverCell = cell
+            cell.Accept(current, plotWidth, plotHeight)
+        }
         plot.MetricsChanged += metrics -> {
             if metrics.BorderBox.Width != plotWidth {
                 plotWidth = metrics.BorderBox.Width
@@ -820,14 +828,13 @@ class HistoryRibbon : Cell {
     }
 
     public func Accept(input HistoryRibbonInput) {
-        if accepted && current.Equals(input) {
+        if current.Equals(input) {
             return
         }
-        accepted = true
         current = input
-        let days = float64(input.Span) / 288
+        days = float64(input.Span) / 288
         let mark = days <= 1 ? 48UL: days <= 7 ? 288UL: 288UL * uint64(Math.Ceiling(days / 6))
-        let marks = List[uint64]()
+        marks = List[uint64]()
         var at = input.Tip - Math.Min(input.Tip, mark)
         while at > input.Low + mark * 3 / 10 {
             marks.Add(at)
@@ -837,12 +844,7 @@ class HistoryRibbon : Cell {
         Rebuild()
     }
 
-    public func Mark(height uint64) {
-        if marked != height {
-            marked = height
-            Rebuild()
-        }
-    }
+    public func Mark(height uint64) -> hoverCell?.Mark(height)
 
     override func Build() Blob {
         let input = current
@@ -857,6 +859,7 @@ class HistoryRibbon : Cell {
         let tip = input.Tip
         let width = plotWidth
         let height = compact ? 60.0: input.Width >= 1700 ? 110.0: 84.0
+        plotHeight = height
         let columns = int32(Math.Max(40.0, Math.Min(float64(span), Math.Floor(width / 3))))
         let size = float64(span) / columns
         let received = [columns]float64
@@ -903,55 +906,6 @@ class HistoryRibbon : Cell {
             Handle: plot,
             Height: height,
             FlexShrink: 0,
-            Focusable: true,
-            Accessibility: Accessibility{Name: ui.Strings.Get("block range")},
-            Focus: Theme.Read().FocusStyle,
-            OnPointerDown: (event PointerEvent) -> {
-                event.Capture()
-                dragging = true
-                anchor = HeightAt(event.Position.X)
-                Select(anchor, anchor)
-            },
-            OnPointerMove: (event PointerEvent) -> {
-                let at = HeightAt(event.Position.X)
-                if dragging {
-                    Select(Math.Min(anchor, at), Math.Max(anchor, at))
-                } else {
-                    let column = Math.Min(columns - 1, int32(Math.Max(0.0, event.Position.X) / step))
-                    if column != hover {
-                        hover = column
-                    }
-                }
-            },
-            OnPointerUp: (event PointerEvent) -> {
-                dragging = false
-                if to - from < 2 {
-                    let column = Math.Min(columns - 1, int32(Math.Max(0.0, event.Position.X) / step))
-                    Select(low + 1 + uint64(column * size), Math.Min(tip, low + uint64((column + 1) * size)))
-                }
-            },
-            OnPointerLeave: (event PointerEvent) -> {
-                if hover >= 0 {
-                    hover = -1
-                }
-            },
-            OnKeyDown: (event KeyEvent) -> {
-                let block = uint64(Math.Max(1.0, size))
-                if event.Key == Key.Escape && to > 0 {
-                    current.OnSelect(0, 0)
-                } else if event.Key == Key.Left || event.Key == Key.Right {
-                    let start = to > 0 ? from: tip - block + 1
-                    let end = to > 0 ? to: tip
-                    let shift = event.Key == Key.Left ? -int64(block): int64(block)
-                    let next = uint64(Math.Clamp(int64(start) + shift, int64(low + 1), int64(tip)))
-                    if event.Modifiers.Shift {
-                        Select(Math.Min(next, end), end)
-                    } else {
-                        Select(next, Math.Min(tip, next + block - 1))
-                    }
-                    event.PreventDefault()
-                }
-            },
             Container{
                 Position: PositionType.Absolute,
                 Left: 0,
@@ -993,48 +947,12 @@ class HistoryRibbon : Cell {
             area.Add(Handle(left, height))
             area.Add(Handle(right, height))
         }
-        let cursor = if hover >= 0 && !dragging {
-            (hover + 0.5) * step
-        } else if marked > low {
-            Offset(marked)
-        } else {
-            -1.0
-        }
-        if cursor >= 0 {
-            area.Add(
-                Container{
-                    Position: PositionType.Absolute,
-                    Left: cursor,
-                    Width: 1,
-                    Top: 0,
-                    Bottom: 0,
-                    BackgroundColor: AppTheme.Thumb,
-                    HitTestSelf: false
-                }
-            )
-        }
-        if hover >= 0 && !dragging {
-            area.Add(Tip(input, all, hover, size, step, width))
-        }
-        let days = float64(span) / 288
-        let mark = if days <= 1 {
-            48UL
-        } else if days <= 7 {
-            288UL
-        } else {
-            288UL * uint64(Math.Ceiling(days / 6))
-        }
+        area.Add(Cell.Mount[HistoryRibbonHover]("history-ribbon-hover", configureHover))
         let axis = Container{
             Height: 18,
             FlexShrink: 0,
             BorderWidth: Edges{Top: AppTheme.Border1},
             BorderColor: AppTheme.Edge
-        }
-        let marks = List[uint64]()
-        var at = tip - Math.Min(tip, mark)
-        while at > low + mark * 3 / 10 {
-            marks.Add(at)
-            at -= Math.Min(at, mark)
         }
         for value in marks {
             let seconds = times.GetValueOrDefault(value)
@@ -1088,16 +1006,6 @@ class HistoryRibbon : Cell {
         1.0
     )
 
-    private func HeightAt(x float64) uint64 -> Math.Max(
-        current.Low + 1,
-        current.Low + uint64(Math.Round(Math.Clamp(x / Math.Max(1.0, plotWidth), 0.0, 1.0) * current.Span))
-    )
-
-    private func Select(start uint64, end uint64) {
-        hover = -1
-        current.OnSelect(start, end)
-    }
-
     private func Shade(left float64, right float64) Blob -> Container{
         Position: PositionType.Absolute,
         Left: left,
@@ -1126,10 +1034,135 @@ class HistoryRibbon : Cell {
             BackgroundColor: AppTheme.Lime
         }
     }
+}
+
+class HistoryRibbonHover : Cell {
+    private var current HistoryRibbonInput
+    private var plotWidth float64
+    private var plotHeight float64
+    private var dragging bool
+    private var anchor uint64
+    private var hover int32 = -1
+    private var marked uint64
+
+    public func Accept(input HistoryRibbonInput, width float64, height float64) {
+        if current.Equals(input) && plotWidth == width && plotHeight == height {
+            return
+        }
+        current = input
+        plotWidth = width
+        plotHeight = height
+        Rebuild()
+    }
+
+    public func Mark(height uint64) {
+        if marked != height {
+            marked = height
+            Rebuild()
+        }
+    }
+
+    override func Build() Blob {
+        let input = current
+        let low = input.Low
+        let span = input.Span
+        let tip = input.Tip
+        let from = input.From
+        let to = input.To
+        let width = plotWidth
+        let columns = int32(Math.Max(40.0, Math.Min(float64(span), Math.Floor(width / 3))))
+        let size = float64(span) / columns
+        let step = width / columns
+        let area = Container{
+            Position: PositionType.Absolute,
+            Left: 0,
+            Top: 0,
+            Width: width,
+            Height: plotHeight,
+            Focusable: true,
+            Accessibility: Accessibility{Name: input.Ui.Strings.Get("block range")},
+            Focus: Theme.Read().FocusStyle,
+            OnPointerDown: (event PointerEvent) -> {
+                event.Capture()
+                dragging = true
+                anchor = HeightAt(event.Position.X)
+                Select(anchor, anchor)
+            },
+            OnPointerMove: (event PointerEvent) -> {
+                let at = HeightAt(event.Position.X)
+                if dragging {
+                    Select(Math.Min(anchor, at), Math.Max(anchor, at))
+                } else {
+                    hover = Math.Min(columns - 1, int32(Math.Max(0.0, event.Position.X) / step))
+                }
+            },
+            OnPointerUp: (event PointerEvent) -> {
+                dragging = false
+                if to - from < 2 {
+                    let column = Math.Min(columns - 1, int32(Math.Max(0.0, event.Position.X) / step))
+                    Select(low + 1 + uint64(column * size), Math.Min(tip, low + uint64((column + 1) * size)))
+                }
+            },
+            OnPointerLeave: (event PointerEvent) -> {
+                hover = -1
+            },
+            OnKeyDown: (event KeyEvent) -> {
+                let block = uint64(Math.Max(1.0, size))
+                if event.Key == Key.Escape && to > 0 {
+                    current.OnSelect(0, 0)
+                } else if event.Key == Key.Left || event.Key == Key.Right {
+                    let start = to > 0 ? from: tip - block + 1
+                    let end = to > 0 ? to: tip
+                    let shift = event.Key == Key.Left ? -int64(block): int64(block)
+                    let next = uint64(Math.Clamp(int64(start) + shift, int64(low + 1), int64(tip)))
+                    if event.Modifiers.Shift {
+                        Select(Math.Min(next, end), end)
+                    } else {
+                        Select(next, Math.Min(tip, next + block - 1))
+                    }
+                    event.PreventDefault()
+                }
+            }
+        }
+        let cursor = if hover >= 0 && !dragging {
+            (hover + 0.5) * step
+        } else if marked > low {
+            width * Math.Clamp((float64(marked) - low) / span, 0.0, 1.0)
+        } else {
+            -1.0
+        }
+        if cursor >= 0 {
+            area.Add(
+                Container{
+                    Position: PositionType.Absolute,
+                    Left: cursor,
+                    Width: 1,
+                    Top: 0,
+                    Bottom: 0,
+                    BackgroundColor: AppTheme.Thumb,
+                    HitTestSelf: false
+                }
+            )
+        }
+        if hover >= 0 && !dragging {
+            area.Add(Tip(input, input.Rows, hover, size, step, width))
+        }
+        return area
+    }
+
+    private func HeightAt(x float64) uint64 -> Math.Max(
+        current.Low + 1,
+        current.Low + uint64(Math.Round(Math.Clamp(x / Math.Max(1.0, plotWidth), 0.0, 1.0) * current.Span))
+    )
+
+    private func Select(start uint64, end uint64) {
+        hover = -1
+        current.OnSelect(start, end)
+    }
 
     private func Tip(
         input HistoryRibbonInput,
-        all[]HistoryRibbonRow,
+        all[]HistoryRow,
         column int32,
         size float64,
         step float64,
@@ -1138,7 +1171,7 @@ class HistoryRibbon : Cell {
         let ui = input.Ui
         let start = current.Low + 1 + uint64(column * size)
         let end = Math.Max(start, current.Low + uint64((column + 1) * size))
-        let inside = all.Where((row HistoryRibbonRow) -> row.Height >= start && row.Height <= end).ToArray()
+        let inside = all.Where((row HistoryRow) -> row.Height >= start && row.Height <= end).ToArray()
         let tip = Container{
             Gap: AppTheme.Space4,
             Label(ui, start == end ? Count(start): Count(start) + " – " + Count(end), AppTheme.Type12, AppTheme.Ink, "")
@@ -1147,9 +1180,9 @@ class HistoryRibbon : Cell {
             tip.Add(Label(ui, Moment(inside[0].Time), AppTheme.Type12, AppTheme.Dim, ""))
         }
         for category in[]HistoryRowKind{HistoryRowKind.Received, HistoryRowKind.Mined, HistoryRowKind.Sent} {
-            let rows = inside.Where((row HistoryRibbonRow) -> row.Kind == category).ToArray()
+            let rows = inside.Where((row HistoryRow) -> row.Kind == category).ToArray()
             if rows.Length > 0 {
-                let total = rows.Aggregate(0UL, (sum uint64, row HistoryRibbonRow) -> sum + row.Amount)
+                let total = rows.Aggregate(0UL, (sum uint64, row HistoryRow) -> sum + row.Amount)
                 tip.Add(
                     Label(
                         ui,
@@ -1180,8 +1213,6 @@ class HistoryRibbon : Cell {
 
 class HistoryTransactions : Cell, IDisposable {
     private var current HistoryListInput
-    private var accepted bool
-    private var disposed bool
     private var expanded string = ""
     private var tab string = "details"
     private var revision int32
@@ -1192,28 +1223,32 @@ class HistoryTransactions : Cell, IDisposable {
     private var proofIssue string = ""
     private var observed string = ""
     private var observerRow HistoryRow
-    private var observerInput HistoryObserverInput
-    private let configureObserver Action[HistoryObserver]
+    private var observeRequest CancellationTokenSource?
+    private var observeGeneration int32
+    private var view ObserverView?
+    private var viewLoading bool
+    private var viewIssue string = ""
     private let closeObserver Action
     private let proveObserved Action
     private var shown[]HistoryRow = []HistoryRow{}
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var proofRequest CancellationTokenSource?
     private var proofGeneration int32
-    private var saveRequest CancellationTokenSource?
-    private var saveGeneration int32
     private let list ElementHandle = ElementHandle()
     private var firstVisible int32
     private let rowKey Func[HistoryRow, string]
     private let rowBuilder Func[HistoryRow, Blob]
 
     init() {
-        configureObserver = cell -> cell.Accept(observerInput)
         closeObserver = () -> {
+            observeGeneration++
+            observeRequest?.Cancel()
             observed = ""
             Rebuild()
         }
         proveObserved = () -> {
+            observeGeneration++
+            observeRequest?.Cancel()
             observed = ""
             tab = "proof"
             revision++
@@ -1234,46 +1269,61 @@ class HistoryTransactions : Cell, IDisposable {
     }
 
     public func Accept(input HistoryListInput) {
-        if disposed || (accepted && current.Equals(input)) {
+        if current.Equals(input) {
             return
         }
-        if accepted && !current.Identity.Equals(input.Identity) {
+        let sourceChanged = !current.Source.Equals(input.Source)
+        let restartProof = sourceChanged && proofFor.Length > 0 && proofKey.Length == 0 && proofIssue.Length == 0
+        let restartObserver = sourceChanged && viewLoading
+        if sourceChanged || !current.Identity.Equals(input.Identity) {
             proofGeneration++
             proofRequest?.Cancel()
-            saveGeneration++
-            saveRequest?.Cancel()
+            observeGeneration++
+            observeRequest?.Cancel()
+        }
+        if !current.Identity.Equals(input.Identity) {
             expanded = ""
             observed = ""
             proofFor = ""
             proofKey = ""
         }
-        accepted = true
         current = input
+        if restartProof {
+            let row = Array.FindIndex(input.Rows, (row HistoryRow) -> row.TxId == proofFor)
+            if row >= 0 {
+                Prove(input.Rows[row])
+            }
+        }
+        if restartObserver && observed.Length > 0 {
+            Observe(observed)
+        }
         input.RequestTimes(input.Rows.Skip(Math.Max(0, firstVisible - 10)).Take(50).Select(row -> row.Height))
         RefreshRows()
     }
 
     private func RefreshRows() {
-        shown = current
+        let rows = current
             .Rows
             .Select(row -> row with{Open = row.Key == expanded, Revision = row.Key == expanded ? revision: 0})
             .ToArray()
+        if !shown.SequenceEqual(rows) {
+            shown = rows
+        }
         Rebuild()
     }
 
     public func Dispose() {
-        disposed = true
         proofGeneration++
-        saveGeneration++
+        observeGeneration++
         lifetime.Cancel()
         proofRequest?.Dispose()
-        saveRequest?.Dispose()
+        observeRequest?.Dispose()
         lifetime.Dispose()
     }
 
-    private func Active(id HistoryIdentity) bool -> !disposed && current.Identity.Equals(id) &&
+    private func Active(id HistoryIdentity) bool -> HistoryPage.SourceIdentity(current.Session).Equals(id) &&
         HistoryPage
-        .SourceIdentity(current.Session).Equals(id)
+        .ReadSource(current.Session).Equals(current.Source)
 
     override func Build() Blob {
         let input = current
@@ -1295,28 +1345,25 @@ class HistoryTransactions : Cell, IDisposable {
             let row = shown[lensRow]
             let portal = Portal()
             observerRow = row
-            observerInput = HistoryObserverInput{
-                Session: input.Session,
-                Window: input.Window,
-                Identity: input.Identity,
-                Transaction: row.TxId,
-                Lens: ObserverLensInput{
-                    Ui: ui,
-                    Amount: row.SentAmount,
-                    Fee: row.Fee,
-                    State: row.State,
-                    Confirmations: row.Maturity.Confirmations,
-                    Memo: row.Recipients.Select(entry -> entry.Memo).FirstOrDefault(value -> value.Length > 0) ?? "",
-                    Recipient: WalletText.Short(row.Recipients.FirstOrDefault().Address ?? "") +
-                        (row.Recipients.Length > 1 ? " +" + (row.Recipients.Length - 1).ToString(): ""),
-                    Privacy: input.Privacy,
-                    Language: input.Language,
-                    Width: input.Width,
-                    OnProve: proveObserved,
-                    OnClose: closeObserver
-                }
+            let lens = ObserverLensInput{
+                Ui: ui,
+                View: view,
+                Loading: viewLoading,
+                Error: viewIssue,
+                Amount: row.SentAmount,
+                Fee: row.Fee,
+                State: row.State,
+                Confirmations: row.Maturity.Confirmations,
+                Memo: row.Recipients.Select(entry -> entry.Memo).FirstOrDefault(value -> value.Length > 0) ?? "",
+                Recipient: WalletText.Short(row.Recipients.FirstOrDefault().Address ?? "") +
+                    (row.Recipients.Length > 1 ? " +" + (row.Recipients.Length - 1).ToString(): ""),
+                Privacy: input.Privacy,
+                Language: input.Language,
+                Width: input.Width,
+                OnProve: proveObserved,
+                OnClose: closeObserver
             }
-            portal.Add(Cell.Mount[HistoryObserver]("history-observer", configureObserver))
+            portal.Add(Cell.Mount[ObserverLensInput, ObserverLens]("history-observer", lens))
             panel.Add(portal)
         }
         return panel
@@ -1529,10 +1576,7 @@ class HistoryTransactions : Cell, IDisposable {
                     ui,
                     MaterialIcons.Create("visibility", AppTheme.Icon16, AppTheme.Body),
                     ui.Strings.Get("observer view"),
-                    () -> {
-                        observed = row.TxId
-                        RefreshRows()
-                    }
+                    () -> Observe(row.TxId)
                 )
             }
             if tab == "proof" {
@@ -1844,7 +1888,7 @@ class HistoryTransactions : Cell, IDisposable {
             let valid = await proofs.VerifyProofAsync(transaction, key, recipient, amount, ct)
             window.TryPost(
                 () -> {
-                    if !Active(id) || generation != proofGeneration || ct.IsCancellationRequested {
+                    if !Active(id) || generation != proofGeneration {
                         return
                     }
                     proofKey = key
@@ -1883,10 +1927,6 @@ class HistoryTransactions : Cell, IDisposable {
     private func SaveProof(row HistoryRow) {
         let input = current
         let text = ProofText(row)
-        let id = input.Identity
-        saveRequest?.Cancel()
-        saveGeneration++
-        let selected = saveGeneration
         input.ChooseFile.Invoke(
             FileDialogKind.SaveFile,
             "save",
@@ -1894,99 +1934,36 @@ class HistoryTransactions : Cell, IDisposable {
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 "proof-" + row.TxId.Substring(0, 8) + ".txt"
             ),
-            path -> {
-                if !Active(id) || selected != saveGeneration {
-                    return
-                }
-                guard let window = input.Window else {
-                    return
-                }
-                saveRequest?.Cancel()
-                saveRequest?.Dispose()
-                let request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
-                saveRequest = request
-                go WriteProof(input, path, text, selected, request.Token)
-            }
+            path -> input.Ui.Actions.Run(ct -> Write(path, text, ct))
         )
-    }
-
-    private async func WriteProof(
-        input HistoryListInput,
-        path string,
-        text string,
-        selected int32,
-        ct CancellationToken
-    ) {
-        try {
-            await Write(path, text, ct)
-        } catch (error OperationCanceledException) { } catch (error Exception) {
-            let issue = error.Message
-            input.Window?.TryPost(
-                () -> {
-                    if !Active(input.Identity) || selected != saveGeneration {
-                        return
-                    }
-                    proofIssue = issue
-                    revision++
-                    RefreshRows()
-                }
-            )
-        }
     }
 
     private func Write(path string, text string, ct CancellationToken) Task {
         let bytes = Encoding.UTF8.GetBytes(text)
         return PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(bytes, ct).AsTask(), true, false)
     }
-}
 
-class HistoryObserver : Cell, IDisposable {
-    private var current HistoryObserverInput
-    private var accepted bool
-    private var disposed bool
-    private var generation int32
-    private var view ObserverView?
-    private var loading bool
-    private var issue string = ""
-    private let lifetime CancellationTokenSource = CancellationTokenSource()
-    private var request CancellationTokenSource?
-
-    public func Accept(input HistoryObserverInput) {
-        if disposed || (accepted && current.Equals(input)) {
-            return
-        }
-        let changed = !accepted || !current.Identity.Equals(input.Identity) || current.Transaction != input.Transaction
-        accepted = true
-        current = input
-        if changed {
-            generation++
-            request?.Cancel()
-            request?.Dispose()
-            request = nil
-            view = nil
-            issue = ""
-            loading = false
-            if let window = input.Window {
-                let pending = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
-                request = pending
-                loading = true
-                let selected = generation
-                let checks = input.Session.Checks
-                let transaction = input.Transaction
-                let id = input.Identity
-                go Observe(window, checks, transaction, id, selected, pending.Token)
-            }
+    private func Observe(transaction string) {
+        observed = transaction
+        observeGeneration++
+        observeRequest?.Cancel()
+        observeRequest?.Dispose()
+        view = nil
+        viewIssue = ""
+        viewLoading = false
+        if let window = current.Window {
+            let request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
+            observeRequest = request
+            viewLoading = true
+            let selected = observeGeneration
+            let checks = current.Session.Checks
+            let id = current.Identity
+            go LoadObserver(window, checks, transaction, id, selected, request.Token)
         }
         Rebuild()
     }
 
-    private func Active(id HistoryIdentity, selected int32) bool -> !disposed &&
-        generation == selected &&
-        current
-        .Identity
-        .Equals(id) && HistoryPage.SourceIdentity(current.Session).Equals(id)
-
-    private async func Observe(
+    private async func LoadObserver(
         window Window,
         checks PrivacyChecks,
         transaction string,
@@ -1998,88 +1975,51 @@ class HistoryObserver : Cell, IDisposable {
             let result = await checks.ObserveAsync(transaction, ct)
             window.TryPost(
                 () -> {
-                    if !Active(id, selected) || ct.IsCancellationRequested {
+                    if selected != observeGeneration || !Active(id) {
                         return
                     }
-                    loading = false
+                    viewLoading = false
                     view = result
                     Rebuild()
                 }
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
-            let message = error.Message
+            let issue = error.Message
             window.TryPost(
                 () -> {
-                    if !Active(id, selected) {
+                    if selected != observeGeneration || !Active(id) {
                         return
                     }
-                    loading = false
-                    issue = message
+                    viewLoading = false
+                    viewIssue = issue
                     Rebuild()
                 }
             )
         }
     }
-
-    public func Dispose() {
-        disposed = true
-        generation++
-        lifetime.Cancel()
-        request?.Dispose()
-        lifetime.Dispose()
-    }
-
-    override func Build() Blob -> Cell.Mount[ObserverLensInput, ObserverLens](
-        "lens",
-        current.Lens with{View = view, Loading = loading, Error = issue}
-    )
 }
 
-class HistoryExport : Cell, IDisposable {
+class HistoryExport : Cell {
     private var current HistoryExportInput
-    private var accepted bool
-    private var disposed bool
     private var exporting bool
     private var exportRows int32
     private var format string = "csv"
     private var memos bool = true
-    private var issue string = ""
-    private var generation int32
-    private let lifetime CancellationTokenSource = CancellationTokenSource()
-    private var request CancellationTokenSource?
     private let exportAnchor ElementHandle = ElementHandle()
 
     public func Accept(input HistoryExportInput) {
-        if disposed || (accepted && current.Equals(input)) {
+        if current.Equals(input) {
             return
         }
-        if accepted && !current.Identity.Equals(input.Identity) {
-            generation++
-            request?.Cancel()
+        if current.Network != input.Network || current.Wallet != input.Wallet {
             exporting = false
-            issue = ""
         }
-        accepted = true
         current = input
         if exporting {
             exportRows = CountRows(input)
         }
         Rebuild()
     }
-
-    public func Dispose() {
-        disposed = true
-        generation++
-        lifetime.Cancel()
-        request?.Dispose()
-        lifetime.Dispose()
-    }
-
-    private func Active(id HistoryIdentity, selected int32) bool -> !disposed &&
-        generation == selected &&
-        current
-        .Identity
-        .Equals(id) && HistoryPage.SourceIdentity(current.Session).Equals(id)
 
     override func Build() Blob {
         let input = current
@@ -2156,9 +2096,6 @@ class HistoryExport : Cell, IDisposable {
                 Button(ui, "save", () -> SaveExport(input), exportRows == 0, true)
             }
         }
-        if issue.Length > 0 {
-            content.Add(MessageParts.Problem(ui, issue))
-        }
         return Container{
             Handle: exportAnchor,
             FlexShrink: 0,
@@ -2203,51 +2140,8 @@ class HistoryExport : Cell, IDisposable {
         )
     }
 
-    private async func ExportFile(
-        input HistoryExportInput,
-        path string,
-        rows[]HistoryRow,
-        known Dictionary[uint64, int64],
-        withMemos bool,
-        suffix string,
-        selectedPeriod string,
-        selectedFrom uint64,
-        selectedTo uint64,
-        selected int32,
-        ct CancellationToken
-    ) {
-        try {
-            await WriteExport(
-                path,
-                input.Session,
-                rows,
-                input.Tip,
-                known,
-                withMemos,
-                suffix,
-                selectedPeriod,
-                selectedFrom,
-                selectedTo,
-                ct
-            )
-        } catch (error OperationCanceledException) { } catch (error Exception) {
-            let message = error.Message
-            input.Window?.TryPost(
-                () -> {
-                    if !Active(input.Identity, selected) {
-                        return
-                    }
-                    issue = message
-                    exporting = true
-                    Rebuild()
-                }
-            )
-        }
-    }
-
     private func SaveExport(input HistoryExportInput) {
         exporting = false
-        request?.Cancel()
         Rebuild()
         let rows = input.Collect()
         let known = Dictionary[uint64, int64](input.Times)
@@ -2256,41 +2150,28 @@ class HistoryExport : Cell, IDisposable {
         let selectedPeriod = input.Period
         let selectedFrom = input.From
         let selectedTo = input.To
-        issue = ""
-        generation++
-        let chooserGeneration = generation
         input.ChooseFile.Invoke(
             FileDialogKind.SaveFile,
             "save",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "history." + suffix),
-            path -> {
-                if !Active(input.Identity, chooserGeneration) {
-                    return
-                }
-                guard let window = input.Window else {
-                    return
-                }
-                request?.Cancel()
-                request?.Dispose()
-                let pending = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
-                request = pending
-                generation++
-                let selected = generation
-                let token = pending.Token
-                go ExportFile(
-                    input,
+            path -> input
+                .Ui
+                .Actions
+                .Run(
+                ct -> WriteExport(
                     path,
+                    input.Session,
                     rows,
+                    input.Tip,
                     known,
                     withMemos,
                     suffix,
                     selectedPeriod,
                     selectedFrom,
                     selectedTo,
-                    selected,
-                    token
+                    ct
                 )
-            }
+            )
         )
     }
 

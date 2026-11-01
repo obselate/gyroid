@@ -37,7 +37,6 @@ data class WindowWork(Run Func[CancellationToken, Task])
 
 partial class App : Cell {
     private let sendDone Action
-    private var historyInput HistoryInput
     private let configureHistory Action[HistoryPage]
 
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
@@ -168,7 +167,36 @@ partial class App : Cell {
                 Height: height
             }
         )
-        configureHistory = cell -> cell.Accept(historyInput)
+        configureHistory = cell -> {
+            let snapshot = wallet.Snapshot
+            cell.Accept(
+                HistoryInput{
+                    Session: wallet,
+                    Ui: ui,
+                    Snapshot: snapshot,
+                    Window: window,
+                    Tip: wallet
+                        .Node
+                        .Status
+                        .Running ? wallet
+                        .Node
+                        .Status
+                        .Height: snapshot
+                        .Balance
+                        ?.ChainHeight ??
+                        wallet
+                        .Node
+                        .Status
+                        .Height,
+                    Privacy: ui.Privacy,
+                    Language: ui.Strings.Language,
+                    Width: width,
+                    OnReceive: openReceive,
+                    OnMessage: OpenMessage,
+                    ChooseFile: chooseFile
+                }
+            )
+        }
         ui = Presentation(
             wallet.Settings.Language,
             wallet.Settings.Privacy,
@@ -911,36 +939,6 @@ partial class App : Cell {
         }
     }
 
-    private func HistoryView(snapshot WalletSnapshot) Blob {
-        historyInput = HistoryInput{
-            Session: wallet,
-            Wallet: wallet.settings.ActiveWallet,
-            Ui: ui,
-            Snapshot: snapshot,
-            Window: window,
-            Tip: wallet
-                .Node
-                .Status
-                .Running ? wallet
-                .Node
-                .Status
-                .Height: snapshot
-                .Balance
-                ?.ChainHeight ??
-                wallet
-                .Node
-                .Status
-                .Height,
-            Privacy: ui.Privacy,
-            Language: ui.Strings.Language,
-            Width: width,
-            OnReceive: openReceive,
-            OnMessage: OpenMessage,
-            ChooseFile: chooseFile
-        }
-        return Cell.Mount[HistoryPage]("history", configureHistory)
-    }
-
     override func Build() Blob {
         let theme = Theme.Read()
         let snapshot = wallet.Snapshot
@@ -1044,7 +1042,7 @@ partial class App : Cell {
         } else if page == AppPage.Mining {
             Cell.Mount[MiningPage]("mining", configureMining)
         } else if page == AppPage.Transactions {
-            HistoryView(snapshot)
+            Cell.Mount[HistoryPage]("history", configureHistory)
         } else if page == AppPage.Messages {
             MessagesView(false)
         } else if page == AppPage.Network {
