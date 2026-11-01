@@ -30,7 +30,8 @@ data struct NetworkInput {
     var Height float64
 }
 
-class NetworkPage : Cell[NetworkInput], IDisposable {
+class NetworkPage : Cell, IDisposable {
+    private var input NetworkInput
     private var report NetworkReport = NetworkReport()
     private var loaded NodeStatus? = nil
     private var source WalletSession? = nil
@@ -41,8 +42,12 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     private var failed bool
 
     public func Accept(input NetworkInput) {
-        Input = input
+        let changed = this.input != input
+        this.input = input
         if source == input.Session && loaded == input.Node && wallet == input.Session.Settings.ActiveWallet {
+            if changed {
+                Rebuild()
+            }
             return
         }
         source = input.Session
@@ -65,7 +70,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
         Rebuild()
     }
 
-    protected override func Build(input NetworkInput) Blob {
+    protected override func Build() Blob {
+        let input = this.input
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: AppTheme.Space12}
         if failed {
             page.Add(
@@ -82,7 +88,10 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                 NetworkSummaryInput{
                     Ui: input.Ui,
                     Height: input.Height,
-                    Node: input.Node,
+                    ChainHeight: input.Node.Height,
+                    Mempool: input.Node.Mempool,
+                    MempoolBytes: input.Node.MempoolBytes,
+                    Language: input.Language,
                     Hashrate: report.Hashrate,
                     Difficulty: report.Difficulty,
                     Emitted: report.Emitted,
@@ -172,7 +181,10 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
 
 data struct NetworkSummaryInput {
     var Ui Presentation
-    var Node NodeStatus
+    var ChainHeight uint64
+    var Mempool uint64
+    var MempoolBytes uint64
+    var Language string
     var Height float64
     var Hashrate float64
     var Difficulty uint64
@@ -183,7 +195,6 @@ data struct NetworkSummaryInput {
 class NetworkSummary : Cell[NetworkSummaryInput] {
     protected override func Build(input NetworkSummaryInput) Blob {
         let ui = input.Ui
-        let node = input.Node
         let change = input.PreviousDifficulty > 0 ? (
             float64(input.Difficulty) / input.PreviousDifficulty - 1
         ) * 100: 0.0
@@ -195,7 +206,7 @@ class NetworkSummary : Cell[NetworkSummaryInput] {
         )
         figures.FlexDirection = FlexDirection.Row
         figures.FlexShrink = 0
-        figures.Add(Figure(input, "Height", Count(node.Height), ""))
+        figures.Add(Figure(input, "Height", Count(input.ChainHeight), ""))
         figures.Add(Figure(input, "Hashrate", Rate(input.Hashrate), Unit(input.Hashrate)))
         figures.Add(
             Figure(
@@ -213,8 +224,8 @@ class NetworkSummary : Cell[NetworkSummaryInput] {
             Figure(
                 input,
                 "Mempool",
-                node.Mempool.ToString(),
-                ui.Strings.Get("tx") + " · " + (node.MempoolBytes / 1000.0).ToString(
+                input.Mempool.ToString(),
+                ui.Strings.Get("tx") + " · " + (input.MempoolBytes / 1000.0).ToString(
                     "0.0",
                     CultureInfo.InvariantCulture
                 ) +
@@ -514,9 +525,9 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                     Container{
                         Position: PositionType.Absolute,
                         Left: right,
-                        Top: 12,
+                        Top: AppTheme.Space22,
                         Width: 1,
-                        Height: bottom - 12,
+                        Height: bottom - AppTheme.Space22,
                         HitTestSelf: false,
                         BackgroundColor: AppTheme.OrangeStrong
                     }
@@ -525,7 +536,7 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                     Container{
                         Position: PositionType.Absolute,
                         Right: AppTheme.Space4,
-                        Top: AppTheme.Space10,
+                        Top: AppTheme.Space2,
                         Label(ui, ui.Strings.Get("10 conf"), AppTheme.Type11, AppTheme.Orange, "")
                     }
                 )
@@ -669,6 +680,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             tab,
             value -> {
                 tab = value
+                Rebuild()
             }
         )
         card.Add(
@@ -940,7 +952,6 @@ class NetworkPeers : Cell[NetworkPeersInput] {
     private func Hover(id string) {
         if hovered != id {
             hovered = id
-            Rebuild()
         }
     }
 
