@@ -140,6 +140,7 @@ partial class App : Cell {
                     Height: wallet.Node.Status.Height,
                     Mempool: wallet.Node.Status.Mempool,
                     MempoolBytes: wallet.Node.Status.MempoolBytes,
+                    Peers: wallet.Node.Status.Peers,
                     PeerId: wallet.Node.Status.PeerId,
                     IdentityAge: wallet.Node.Status.IdentityAge,
                     BestHash: wallet.Node.Status.BestHash

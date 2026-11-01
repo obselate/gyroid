@@ -37,6 +37,7 @@ data struct NetworkStatusInput {
     var Height uint64
     var Mempool uint64
     var MempoolBytes uint64
+    var Peers uint64
     var PeerId string
     var IdentityAge string
     var BestHash string
@@ -58,6 +59,7 @@ class NetworkPage : Cell, IDisposable {
     private var loading bool
     private var loadedTip string = ""
     private var loadedHeight uint64
+    private var loadedPeers uint64
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var request CancellationTokenSource? = nil
     private var generation int32
@@ -80,7 +82,18 @@ class NetworkPage : Cell, IDisposable {
             .Source
             .Running &&
             !loading &&
-            (!loaded || loadedTip != next.Node.BestHash || loadedHeight != next.Node.Height) {
+            (
+            !loaded ||
+                loadedTip != next
+                .Node
+                .BestHash ||
+                loadedHeight != next
+                .Node
+                .Height ||
+                loadedPeers != next
+                .Node
+                .Peers
+        ) {
             generation++
             request?.Dispose()
             let current = CancellationTokenSource.CreateLinkedTokenSource(
@@ -91,6 +104,7 @@ class NetworkPage : Cell, IDisposable {
             loading = true
             loadedTip = next.Node.BestHash
             loadedHeight = next.Node.Height
+            loadedPeers = next.Node.Peers
             go Load(next.Session.Node, next.Window, generation, current.Token)
         }
         if changed {
