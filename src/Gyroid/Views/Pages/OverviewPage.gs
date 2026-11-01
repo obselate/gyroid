@@ -58,8 +58,13 @@ data struct Activity {
 
 data struct OverviewBalanceInput {
     var Ui Presentation
-    var Balance WalletBalance?
-    var NodeHeight uint64
+    var Total uint64?
+    var Spendable uint64?
+    var Pending uint64?
+    var Unconfirmed uint64
+    var Scanning bool
+    var ScanHeight uint64
+    var ChainHeight uint64
     var Privacy bool
     var Height float64
     var Width float64
@@ -74,18 +79,32 @@ data struct OverviewNetworkInput {
     var Session NodeSession
     var Api NodeApi
     var Window Window?
-    var Node NodeStatus
-    var Report NetworkReport
+    var Running bool
+    var Syncing bool
+    var Height uint64
+    var ChainHeight uint64
+    var Peers uint64
+    var Mempool uint64
+    var MempoolBytes uint64
+    var LastBlockTime int64
+    var BestHash string
+    var Hashrate float64
+    var Difficulty uint64
+    var Blocks[]NetworkBlock
     var Width float64
     var Language string
     var Wallet string
     var Network string
+    var Endpoint string
+    var ProcessId int32
     var OnNavigate Action[AppPage]
 }
 
 data struct OverviewRecentInput {
     var Ui Presentation
-    var Snapshot WalletSnapshot
+    var Outputs[]WalletOutput
+    var Sends[]WalletSend
+    var Address string
     var History HistoryService
     var Messages MessagingService
     var Api NodeApi
@@ -97,6 +116,8 @@ data struct OverviewRecentInput {
     var Language string
     var Network string
     var Wallet string
+    var Endpoint string
+    var ProcessId int32
     var Arrivals List[Arrival]
     var OnNavigate Action[AppPage]
     var Hovering bool
@@ -104,7 +125,11 @@ data struct OverviewRecentInput {
 
 data struct OverviewUpgradeInput {
     var Ui Presentation
-    var Node NodeStatus
+    var Date string
+    var Deadline string
+    var Syncing bool
+    var Height uint64
+    var BlocksLeft uint64
     var Language string
     var OnUpgrade Action
 }
@@ -116,6 +141,7 @@ class OverviewPage : Cell[OverviewInput] {
     private let configureRecent Action[OverviewRecent]
     private var hovering bool
     private let hover Action[bool]
+    private var arrivals List[Arrival] = List[Arrival]()
 
     init() {
         configureNetwork = cell -> cell.Accept(networkInput)
@@ -129,23 +155,40 @@ class OverviewPage : Cell[OverviewInput] {
     protected override func Build(input OverviewInput) Blob {
         let chain = input.Snapshot.Balance?.ChainHeight ?? input.Node.Height
         let language = input.Ui.Strings.Language
-        let arrivals = Arrivals(input, chain)
+        let next = Arrivals(input, chain)
+        if !next.SequenceEqual(arrivals) {
+            arrivals = next
+        }
         networkInput = OverviewNetworkInput{
             Ui: input.Ui,
             Session: input.Session.Node,
             Api: input.Session.Node.Api,
             Window: input.Window,
-            Node: input.Node,
-            Report: input.Session.Node.Network,
+            Running: input.Node.Running,
+            Syncing: input.Node.Syncing,
+            Height: input.Node.Height,
+            ChainHeight: input.Node.Syncing ? input.Node.ChainHeight: 0,
+            Peers: input.Node.Peers,
+            Mempool: input.Node.Mempool,
+            MempoolBytes: input.Node.MempoolBytes,
+            LastBlockTime: input.Node.LastBlockTime,
+            BestHash: input.Node.BestHash,
+            Hashrate: input.Session.Node.Network.Hashrate,
+            Difficulty: input.Session.Node.Network.Difficulty,
+            Blocks: input.Session.Node.Network.Blocks,
             Width: input.Width,
             Language: language,
             Wallet: input.Session.Node.Settings.ActiveWallet,
             Network: input.Session.Node.Settings.Network,
+            Endpoint: input.Session.Node.Settings.Endpoint,
+            ProcessId: input.Session.Node.Settings.OwnedProcessId,
             OnNavigate: input.OnNavigate
         }
         recentInput = OverviewRecentInput{
             Ui: input.Ui,
-            Snapshot: input.Snapshot,
+            Outputs: input.Snapshot.History,
+            Sends: input.Snapshot.Sends,
+            Address: input.Snapshot.Address,
             History: input.Session.History,
             Messages: input.Session.Messages,
             Api: input.Session.Node.Api,
@@ -157,6 +200,8 @@ class OverviewPage : Cell[OverviewInput] {
             Language: language,
             Network: input.Session.Node.Settings.Network,
             Wallet: input.Session.Node.Settings.ActiveWallet,
+            Endpoint: input.Session.Node.Settings.Endpoint,
+            ProcessId: input.Session.Node.Settings.OwnedProcessId,
             Arrivals: arrivals,
             Hovering: hovering,
             OnNavigate: input.OnNavigate
@@ -166,7 +211,16 @@ class OverviewPage : Cell[OverviewInput] {
             page.Add(
                 Cell.Mount[OverviewUpgradeInput, OverviewUpgrade](
                     "upgrade",
-                    OverviewUpgradeInput{Ui: input.Ui, Node: input.Node, Language: language, OnUpgrade: input.OnUpgrade}
+                    OverviewUpgradeInput{
+                        Ui: input.Ui,
+                        Date: input.Node.UpgradeDate,
+                        Deadline: input.Node.UpgradeDeadline,
+                        Syncing: input.Node.Syncing,
+                        Height: input.Node.Syncing ? 0: input.Node.Height,
+                        BlocksLeft: input.Node.Syncing ? 0: input.Node.UpgradeBlocksLeft,
+                        Language: language,
+                        OnUpgrade: input.OnUpgrade
+                    }
                 )
             )
         }
@@ -180,8 +234,13 @@ class OverviewPage : Cell[OverviewInput] {
                     "balance",
                     OverviewBalanceInput{
                         Ui: input.Ui,
-                        Balance: input.Snapshot.Balance,
-                        NodeHeight: input.Node.Height,
+                        Total: input.Snapshot.Balance?.Balance,
+                        Spendable: input.Snapshot.Balance?.Spendable,
+                        Pending: input.Snapshot.Balance?.Pending,
+                        Unconfirmed: input.Snapshot.Balance?.Unconfirmed ?? uint64(0),
+                        Scanning: input.Snapshot.Balance?.Scanning == true,
+                        ScanHeight: input.Snapshot.Balance?.ScanHeight ?? uint64(0),
+                        ChainHeight: input.Snapshot.Balance?.ChainHeight ?? uint64(0),
                         Privacy: input.Privacy,
                         Height: input.Height,
                         Width: input.Width,
@@ -216,7 +275,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Self: send?.IsSelf(input.Snapshot.Address) ?? false,
                     Amount: output.Amount,
                     Source: if output.IsChange {
-                        Change(input.Ui, input.Contacts, input.Session.Messages, send)
+                        Change(input, send)
                     } else if output.Coinbase {
                         ui.Strings.Get("mined") + " · " + ui.Strings.Get("block") + " " + Count(output.BlockHeight)
                     } else if output.Memo.Length > 0 {
@@ -240,7 +299,7 @@ class OverviewPage : Cell[OverviewInput] {
                     Kind: "pool",
                     Self: pending?.IsSelf(input.Snapshot.Address) ?? false,
                     Amount: balance.Unconfirmed,
-                    Source: Change(input.Ui, input.Contacts, input.Session.Messages, pending),
+                    Source: Change(input, pending),
                     Required: 10,
                     Blocks: 11,
                     TxId: ""
@@ -249,6 +308,15 @@ class OverviewPage : Cell[OverviewInput] {
         }
         arrivals.Sort((a Arrival, b Arrival) -> a.Blocks.CompareTo(b.Blocks))
         return arrivals
+    }
+
+    private func Change(input OverviewInput, send WalletSend?) string {
+        let name = Contact(input.Contacts, input.Session.Messages, send)
+        return input.Ui.Strings.Get("change") + if name.Length > 0 {
+            " · " + name
+        } else {
+            ""
+        }
     }
 }
 
@@ -297,37 +365,6 @@ class OverviewParts {
             return memo
         }
 
-        func Change(
-            ui Presentation,
-            contacts SortedDictionary[string, string],
-            messages MessagingService,
-            send WalletSend?
-        ) string {
-            let name = Contact(contacts, messages, send)
-            return ui.Strings.Get("change") + if name.Length > 0 {
-                " · " + name
-            } else {
-                ""
-            }
-        }
-
-        func Number(ui Presentation, masked bool, text string, color Color, fraction Color) Blob {
-            if masked {
-                return Label(ui, "••••••••", AppTheme.Type14, fraction, "")
-            }
-            let point = text.IndexOf('.')
-            return Text{
-                Content: text,
-                StyleRanges: []TextStyleRange{
-                    TextStyleRange(TextRange(point, text.Length - point), Style{Color: fraction})
-                },
-                FontSize: AppTheme.Type14,
-                Color: color,
-                TextWrap: TextWrap.NoWrap,
-                FlexShrink: 0
-            }
-        }
-
         func Link(ui Presentation, label string, action Action) Blob {
             let button = Goo
                 .Button{
@@ -341,12 +378,6 @@ class OverviewParts {
             }
             WidgetKeyBindings.BindActivation(button)
             return button
-        }
-
-        func Fade(color Color, faded bool) Color -> if faded {
-            Color.FromNormalized(color.R * 0.3F + 0.014F, color.G * 0.3F + 0.014F, color.B * 0.3F + 0.014F, 1F)
-        } else {
-            color
         }
     }
 }
@@ -367,7 +398,6 @@ class OverviewUpgrade : Cell[OverviewUpgradeInput] {
 
     protected override func Build(input OverviewUpgradeInput) Blob {
         let ui = input.Ui
-        let node = input.Node
         let bar = WalletParts.Card(
             ui,
             Edges{Top: AppTheme.Space0, Bottom: AppTheme.Space0, Left: AppTheme.Space16, Right: AppTheme.Space10},
@@ -377,9 +407,7 @@ class OverviewUpgrade : Cell[OverviewUpgradeInput] {
         bar.FlexDirection = FlexDirection.Row
         bar.AlignItems = AlignItems.Center
         bar.Height = 40
-        bar.Add(
-            Label(ui, ui.Strings.Get("Network upgrade") + " " + node.UpgradeDate, AppTheme.Type12, AppTheme.Body, "")
-        )
+        bar.Add(Label(ui, ui.Strings.Get("Network upgrade") + " " + input.Date, AppTheme.Type12, AppTheme.Body, ""))
         bar.Add(
             Container{
                 Handle: strip,
@@ -387,21 +415,15 @@ class OverviewUpgrade : Cell[OverviewUpgradeInput] {
                 FlexBasis: 0,
                 MinWidth: 0,
                 if stripWidth > 0 {
-                    UpgradeTimeline(ui, node, stripWidth)
+                    UpgradeTimeline(ui, input.Date, input.Deadline, input.Syncing, input.Height, stripWidth)
                 } else {
                     Container{}
                 }
             }
         )
-        if !node.Syncing {
+        if !input.Syncing {
             bar.Add(
-                Label(
-                    ui,
-                    Count(node.UpgradeBlocksLeft) + " " + ui.Strings.Get("blocks"),
-                    AppTheme.Type14,
-                    AppTheme.Ink,
-                    ""
-                )
+                Label(ui, Count(input.BlocksLeft) + " " + ui.Strings.Get("blocks"), AppTheme.Type14, AppTheme.Ink, "")
             )
         }
         bar.Add(
@@ -435,14 +457,13 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
     protected override func Build(input OverviewBalanceInput) Blob {
         let arrivals = input.Arrivals
         let ui = input.Ui
-        let balance = input.Balance
         let masked = input.Privacy && !peeking
-        let total = balance?.Balance ?? uint64(0)
-        let ready = balance?.Spendable ?? uint64(0)
-        let unconfirmed = balance?.Unconfirmed ?? uint64(0)
-        let confirming = (balance?.Pending ?? uint64(0)) - unconfirmed
-        let known = balance?.Balance != nil
-        let scanning = balance?.Scanning == true
+        let total = input.Total ?? uint64(0)
+        let ready = input.Spendable ?? uint64(0)
+        let unconfirmed = input.Unconfirmed
+        let confirming = (input.Pending ?? uint64(0)) - unconfirmed
+        let known = input.Total != nil
+        let scanning = input.Scanning
         let value = if masked {
             "••••••••"
         } else if known {
@@ -557,8 +578,8 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                     Text{
                         Content: String.Format(
                             ui.Strings.Get("Syncing {0} / {1} · balance may be inaccurate"),
-                            Count(balance?.ScanHeight ?? uint64(0)),
-                            Count(balance?.ChainHeight ?? input.NodeHeight)
+                            Count(input.ScanHeight),
+                            Count(input.ChainHeight)
                         ),
                         FontFamily: AppTheme.Font,
                         FontSize: AppTheme.Type12,
@@ -617,12 +638,8 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                     input.Hovering ? height + 6: height,
                     14
                 )
-                segment.OnPointerEnter = (event PointerEvent) -> {
-                    input.OnHover(true)
-                }
-                segment.OnPointerLeave = (event PointerEvent) -> {
-                    input.OnHover(false)
-                }
+                segment.OnPointerEnter = (event PointerEvent) -> input.OnHover(true)
+                segment.OnPointerLeave = (event PointerEvent) -> input.OnHover(false)
                 if input.Hovering {
                     segment.BoxShadows = []BoxShadow{
                         BoxShadow{Spread: 1, Color: AppTheme.Black},
@@ -653,9 +670,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
     }
 
     private func Hide() {
-        if peeking {
-            peeking = false
-        }
+        peeking = false
     }
 
     private func Legend(
@@ -743,14 +758,17 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
 
 class OverviewNetwork : Cell, IDisposable {
     private var source OverviewNetworkInput
-    private var report NetworkReport = NetworkReport()
+    private var hashrate float64
+    private var difficulty uint64
+    private var blocks[]NetworkBlock = []NetworkBlock{}
     private let networkPlot ElementHandle = ElementHandle()
     private var plotWidth float64
     private var plotHeight float64
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var request CancellationTokenSource? = nil
     private var generation int32
-    private var loaded NodeStatus? = nil
+    private var loadedHeight uint64? = nil
+    private var loadedHash string = ""
 
     init() {
         networkPlot.MetricsChanged += _ -> {
@@ -764,73 +782,78 @@ class OverviewNetwork : Cell, IDisposable {
     }
 
     func Accept(next OverviewNetworkInput) {
-        let replaced = source.Session != next.Session ||
+        if source == next {
+            return
+        }
+        if source.Session != next.Session ||
             source.Api != next.Api ||
             source.Wallet != next.Wallet ||
             source.Network != next.Network ||
-            source.Window != next.Window
-        if replaced || source.Node != next.Node {
+            source.Endpoint != next.Endpoint ||
+            source.ProcessId != next.ProcessId ||
+            source.Window != next.Window {
             generation++
             request?.Cancel()
             request?.Dispose()
             request = nil
-            loaded = nil
+            loadedHeight = nil
+            loadedHash = ""
         }
-        if source != next {
-            source = next
-            report = next.Report
-            Rebuild()
+        source = next
+        hashrate = next.Hashrate
+        difficulty = next.Difficulty
+        if !blocks.SequenceEqual(next.Blocks) {
+            blocks = next.Blocks
         }
-        let blocks = report.Blocks
-        if blocks.Length > 0 &&
-            blocks[blocks.Length - 1].Height == next
-            .Node
-            .Height &&
-            blocks[blocks.Length - 1]
-            .Hash
-            .StartsWith(next.Node.BestHash, StringComparison.Ordinal) {
-            return
-        }
-        if !next.Node.Running || loaded == next.Node {
-            return
-        }
-        guard let window = next.Window else {
-            return
-        }
-        request?.Cancel()
-        request?.Dispose()
-        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
-        request = current
-        loaded = next.Node
-        generation++
-        go Load(next.Session, next.Api, next.Wallet, next.Network, window, generation, current.Token)
+        Rebuild()
+        Read()
     }
 
-    private async func Load(
-        session NodeSession,
-        api NodeApi,
-        wallet string,
-        network string,
-        window Window,
-        id int32,
-        token CancellationToken
-    ) {
+    private func Read() {
+        if !source.Running || request != nil || (loadedHeight == source.Height && loadedHash == source.BestHash) {
+            return
+        }
+        if blocks.Length > 0 &&
+            blocks[blocks.Length - 1].Height == source.Height &&
+            blocks[blocks.Length - 1]
+            .Hash
+            .StartsWith(source.BestHash, StringComparison.Ordinal) {
+            return
+        }
+        guard let window = source.Window else {
+            return
+        }
+        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
+        request = current
+        loadedHeight = source.Height
+        loadedHash = source.BestHash
+        go Load(source.Session, window, generation, current.Token)
+    }
+
+    private async func Load(session NodeSession, window Window, id int32, token CancellationToken) {
+        var result NetworkReport? = nil
         try {
-            let result = await session.ReadNetworkSummaryAsync(token)
-            window.TryPost(
-                () -> {
-                    if id == generation &&
-                        source.Session == session &&
-                        source.Api == api &&
-                        source.Wallet == wallet &&
-                        source.Network == network &&
-                        report != result {
-                        report = result
+            result = await session.ReadNetworkSummaryAsync(token)
+        } catch (error Exception) { }
+        window.TryPost(
+            () -> if id == generation {
+                request?.Dispose()
+                request = nil
+                if let value = result {
+                    let changed = hashrate != value.Hashrate || difficulty != value.Difficulty
+                    let blocksChanged = !blocks.SequenceEqual(value.Blocks)
+                    hashrate = value.Hashrate
+                    difficulty = value.Difficulty
+                    if blocksChanged {
+                        blocks = value.Blocks
+                    }
+                    if changed || blocksChanged {
                         Rebuild()
                     }
                 }
-            )
-        } catch (error OperationCanceledException) { } catch (error Exception) { }
+                Read()
+            }
+        )
     }
 
     public func Dispose() {
@@ -843,8 +866,7 @@ class OverviewNetwork : Cell, IDisposable {
     override func Build() Blob {
         let input = source
         let ui = input.Ui
-        let node = input.Node
-        let online = node.Running
+        let online = input.Running
         let size = input.Width < 1200 ? AppTheme.Type20: AppTheme.Type24
         let color = online ? AppTheme.Ink: AppTheme.Dim
         let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space10)
@@ -853,10 +875,10 @@ class OverviewNetwork : Cell, IDisposable {
         card.OnPointerDown = (event PointerEvent) -> if !event.IsFromInteractiveChild {
             input.OnNavigate(AppPage.Network)
         }
-        let height = !online ? ui.Strings.Get("offline"): Count(node.Height)
-        let sync = !online ? "": node.Syncing ? "/ " + Count(node.ChainHeight): ui.Strings.Get("synced")
-        let age = Math.Max(0L, DateTimeOffset.Now.ToUnixTimeSeconds() - node.LastBlockTime)
-        let last = node.LastBlockTime == 0 ? "-": String.Format(
+        let height = !online ? ui.Strings.Get("offline"): Count(input.Height)
+        let sync = !online ? "": input.Syncing ? "/ " + Count(input.ChainHeight): ui.Strings.Get("synced")
+        let age = Math.Max(0L, DateTimeOffset.Now.ToUnixTimeSeconds() - input.LastBlockTime)
+        let last = input.LastBlockTime == 0 ? "-": String.Format(
             ui.Strings.Get(age < 3600 ? "{0}m ago": age < 86400 ? "{0}h ago": "{0} days"),
             age < 3600 ? age / 60: age < 86400 ? age / 3600: age / 86400
         )
@@ -869,23 +891,23 @@ class OverviewNetwork : Cell, IDisposable {
                 height,
                 sync,
                 size,
-                !online ? AppTheme.Pink: node.Syncing ? AppTheme.Orange: AppTheme.Lime,
+                !online ? AppTheme.Pink: input.Syncing ? AppTheme.Orange: AppTheme.Lime,
                 1.85
             ),
-            TextParts.Figure(ui, "peers", Count(node.Peers), "", size, color),
+            TextParts.Figure(ui, "peers", Count(input.Peers), "", size, color),
             TextParts.Figure(ui, "last block", last, "", size, online && age > 900 ? AppTheme.Orange: color)
         }
         card.Add(first)
         let second = Container{
             FlexDirection: FlexDirection.Row,
             Gap: AppTheme.Space10,
-            TextParts.Figure(ui, "hashrate", Rate(report.Hashrate), Unit(report.Hashrate), size, color, 1.85),
-            TextParts.Figure(ui, "difficulty", Compact(report.Difficulty), "", size, color),
+            TextParts.Figure(ui, "hashrate", Rate(hashrate), Unit(hashrate), size, color, 1.85),
+            TextParts.Figure(ui, "difficulty", Compact(difficulty), "", size, color),
             TextParts.Figure(
                 ui,
                 "mempool",
-                Count(node.Mempool),
-                ui.Strings.Get("tx") + " · " + (node.MempoolBytes / 1000.0).ToString(
+                Count(input.Mempool),
+                ui.Strings.Get("tx") + " · " + (input.MempoolBytes / 1000.0).ToString(
                     "0.0",
                     CultureInfo.InvariantCulture
                 ) +
@@ -895,8 +917,7 @@ class OverviewNetwork : Cell, IDisposable {
             )
         }
         card.Add(second)
-        card.Add(NetworkParts.TimeChart(ui, report.Blocks, networkPlot, 0, _ -> { }, true, !online))
-        let blocks = report.Blocks
+        card.Add(NetworkParts.TimeChart(ui, blocks, networkPlot, 0, _ -> { }, true, !online))
         let count = blocks.Length - 1
         let average = count > 0 ? Duration(
             (blocks[blocks.Length - 1].Timestamp - blocks[blocks.Length - count - 1].Timestamp) / count
@@ -921,36 +942,49 @@ class OverviewRecent : Cell, IDisposable {
     private var request CancellationTokenSource? = nil
     private var generation int32
 
+    private var loadedOutputs[]WalletOutput = []WalletOutput{}
     func Accept(next OverviewRecentInput) {
+        if source == next {
+            return
+        }
         let replaced = source.History != next.History ||
             source.Api != next.Api ||
             source.Wallet != next.Wallet ||
             source.Network != next.Network ||
+            source.Endpoint != next.Endpoint ||
+            source.ProcessId != next.ProcessId ||
             source.Window != next.Window
-        let changed = replaced || source.Snapshot != next.Snapshot
+        let changed = replaced || !source.Outputs.SequenceEqual(next.Outputs)
         if replaced {
+            generation++
+            request?.Cancel()
+            request?.Dispose()
+            request = nil
             times.Clear()
             requested.Clear()
+            loadedOutputs = []WalletOutput{}
             expanded = ""
         }
-        if source != next {
-            source = next
-            Rebuild()
+        source = next
+        Rebuild()
+        if changed {
+            RequestTimes()
         }
-        if !changed {
+    }
+
+    private func RequestTimes() {
+        if request != nil {
             return
         }
-        generation++
-        request?.Cancel()
-        request?.Dispose()
-        request = nil
-        requested.IntersectWith(times.Keys)
-        guard let window = next.Window else {
+        guard let window = source.Window else {
             return
         }
-        let missing = next
-            .Snapshot
-            .History
+        if !loadedOutputs.SequenceEqual(source.Outputs) {
+            requested.IntersectWith(times.Keys)
+        }
+        loadedOutputs = source.Outputs
+        let missing = source
+            .Outputs
             .Take(50)
             .Select((output WalletOutput) -> output.BlockHeight)
             .Where((height uint64) -> height > 0 && !requested.Contains(height))
@@ -964,39 +998,37 @@ class OverviewRecent : Cell, IDisposable {
         }
         let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
         request = current
-        go FetchTimes(window, next.History, next.Snapshot, next.Api, next.Network, missing, generation, current.Token)
+        go FetchTimes(window, source.History, missing, generation, current.Token)
     }
 
     private async func FetchTimes(
         window Window,
         history HistoryService,
-        snapshot WalletSnapshot,
-        api NodeApi,
-        network string,
         heights[]uint64,
         id int32,
         token CancellationToken
     ) {
+        var fetched Dictionary[uint64, int64]? = nil
         try {
-            let fetched = await history.BlockTimesAsync(heights, token)
-            window.TryPost(
-                () -> {
-                    if id != generation ||
-                        source.History != history ||
-                        source.Snapshot != snapshot ||
-                        source.Api != api ||
-                        source.Network != network {
-                        return
-                    }
-                    for entry in fetched {
+            fetched = await history.BlockTimesAsync(heights, token)
+        } catch (error Exception) { }
+        window.TryPost(
+            () -> if id == generation {
+                request?.Dispose()
+                request = nil
+                if let values = fetched {
+                    for entry in values {
                         times[entry.Key] = entry.Value
                     }
-                    if fetched.Count > 0 {
+                    if values.Count > 0 {
                         Rebuild()
                     }
                 }
-            )
-        } catch (error OperationCanceledException) { } catch (error Exception) { }
+                if !source.Outputs.SequenceEqual(loadedOutputs) {
+                    RequestTimes()
+                }
+            }
+        )
     }
 
     public func Dispose() {
@@ -1004,6 +1036,29 @@ class OverviewRecent : Cell, IDisposable {
         lifetime.Cancel()
         request?.Dispose()
         lifetime.Dispose()
+    }
+
+    private func Number(ui Presentation, masked bool, text string, color Color, fraction Color) Blob {
+        if masked {
+            return Label(ui, "••••••••", AppTheme.Type14, fraction, "")
+        }
+        let point = text.IndexOf('.')
+        return Text{
+            Content: text,
+            StyleRanges: []TextStyleRange{
+                TextStyleRange(TextRange(point, text.Length - point), Style{Color: fraction})
+            },
+            FontSize: AppTheme.Type14,
+            Color: color,
+            TextWrap: TextWrap.NoWrap,
+            FlexShrink: 0
+        }
+    }
+
+    private func Fade(color Color, faded bool) Color -> if faded {
+        Color.FromNormalized(color.R * 0.3F + 0.014F, color.G * 0.3F + 0.014F, color.B * 0.3F + 0.014F, 1F)
+    } else {
+        color
     }
 
     private func Arrive(input OverviewRecentInput, item Arrival) Blob {
@@ -1116,14 +1171,9 @@ class OverviewRecent : Cell, IDisposable {
 
     private func Activities(input OverviewRecentInput, chain uint64) List[Activity] {
         let ui = input.Ui
-        let snapshot = input.Snapshot
         let items = List[Activity]()
-        let selfSends = snapshot
-            .Sends
-            .Where(send -> send.IsSelf(snapshot.Address))
-            .Select(send -> send.TxId)
-            .ToHashSet()
-        for output in snapshot.History {
+        let selfSends = input.Sends.Where(send -> send.IsSelf(input.Address)).Select(send -> send.TxId).ToHashSet()
+        for output in input.Outputs {
             let maturity = output.Maturity(chain)
             if selfSends.Contains(output.TxId) || (!output.Spent && output.BlockHeight > 0 && !maturity.Ready) {
                 continue
@@ -1153,7 +1203,7 @@ class OverviewRecent : Cell, IDisposable {
                 break
             }
         }
-        for send in snapshot.Sends.Take(50) {
+        for send in input.Sends.Take(50) {
             let label = Contact(input.Contacts, input.Messages, send)
             let self = selfSends.Contains(send.TxId)
             let maturity = WalletMaturity(send.Confirmations, 10)

@@ -2,7 +2,6 @@ package Gyroid.Components
 
 import Goo
 import Goo.Widgets.Layout
-import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Services.WalletText
 import Gyroid.Views
@@ -86,36 +85,31 @@ class LayoutParts {
             return row
         }
 
-        func UpgradeTimeline(ui Presentation, status NodeStatus, span float64) Blob {
+        func UpgradeTimeline(
+            ui Presentation,
+            upgradeDate string,
+            upgradeDeadline string,
+            syncing bool,
+            height uint64,
+            span float64
+        ) Blob {
             let style = DateTimeStyles.None
-            if !DateTime.TryParseExact(
-                status.UpgradeDate,
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                style,
-                out let date
-            ) ||
+            if !DateTime.TryParseExact(upgradeDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, style, out let date) ||
                 !DateTime
-                .TryParseExact(
-                status.UpgradeDeadline,
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                style,
-                out let deadline
-            ) {
+                .TryParseExact(upgradeDeadline, "yyyy-MM-dd", CultureInfo.InvariantCulture, style, out let deadline) {
                 return Container{}
             }
             let end = float64(CoreRelease.UpgradeHeight) + (deadline - date).TotalDays * 288
-            let now = status.Syncing ? 0.0: Math.Min(span, span * status.Height / end)
+            let now = syncing ? 0.0: Math.Min(span, span * height / end)
             let upgrade = span * CoreRelease.UpgradeHeight / end
             let bar = Container{
                 Width: span,
                 Height: 8,
                 Accessibility: Accessibility{
-                    Name: (status.Syncing ? "": Count(status.Height) + " / ") +
+                    Name: (syncing ? "": Count(height) + " / ") +
                         Count(CoreRelease.UpgradeHeight) +
                         " · " +
-                        status.UpgradeDeadline
+                        upgradeDeadline
                 },
                 Container{
                     Position: PositionType.Absolute,

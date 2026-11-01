@@ -211,7 +211,7 @@ partial class App {
                             }
                         ).Build()
                     },
-                    UpgradeTimeline(ui, status, 294),
+                    UpgradeTimeline(ui, status.UpgradeDate, status.UpgradeDeadline, status.Syncing, status.Height, 294),
                     upgradeDate
                 }
             )
