@@ -9,7 +9,6 @@ import Goo.Widgets.Layout
 import Gyroid.Components.ControlParts
 import Gyroid.Components.TextParts
 import Gyroid.Models
-import Gyroid.Services
 import Gyroid.Services.WalletText
 import Gyroid.Views
 import System
@@ -78,6 +77,9 @@ data struct MessageBubbleInput {
     var Highlight bool
     var CanRetry bool
     var Width float64
+    var Revision int64
+    var Privacy bool
+    var Language string
     var OnOpen Action[Message]
     var OnRetry Action[Message]
     var Handle ElementHandle
@@ -234,6 +236,7 @@ data struct MessageComposerInput {
     var Measure Func[string, MessageEstimate]
     var Privacy bool
     var Language string
+    var Revision int64
     var Draft string
     var Width float64
     var OnDraft Action[string]

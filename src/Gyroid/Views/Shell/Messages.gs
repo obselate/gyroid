@@ -52,7 +52,7 @@ partial class App {
         Privacy: ui.Privacy,
         Language: ui.Strings.Language,
         OnOpen: () -> Open(AppPage.Messages),
-        OnClose: () -> { },
+        OnClose: () -> messageOverlay?.CloseDrawer(),
         OnContacts: () -> {
             LoadContacts()
             Rebuild()

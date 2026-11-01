@@ -62,7 +62,7 @@ class MessagesPage : Cell, IDisposable {
             if let current = conversation {
                 return input.Session.Messages.Measure(current, text)
             }
-            return MessageEstimate()
+            throw InvalidOperationException("No conversation selected")
         }
         configureThread = child -> child.Accept(
             MessageThreadInput{
@@ -315,6 +315,7 @@ class MessagesPage : Cell, IDisposable {
                     "composer:" + current.Id,
                     MessageComposerInput{
                         Ui: ui,
+                        Revision: input.Revision,
                         ConversationId: current.Id,
                         Recipients: current.Members.Count(member -> member != service.OwnAddress),
                         CanSend: service.Mode == MessengerMode.Send,
@@ -407,6 +408,7 @@ class MessagesPage : Cell, IDisposable {
                     MessageDetailsInput{
                         Ui: ui,
                         Message: message,
+                        Revision: input.Revision,
                         CanAddContact: !message.Outgoing &&
                             message
                             .SenderAddress
@@ -795,6 +797,9 @@ class MessageThread : Cell, IDisposable {
                     MessageBubbleInput{
                         Ui: ui,
                         Message: message,
+                        Revision: input.Revision,
+                        Privacy: input.Privacy,
+                        Language: input.Language,
                         Group: current.IsGroup,
                         First: first,
                         Last: last,
@@ -1067,6 +1072,7 @@ data struct MessageDetailsInput {
     var CanAddContact bool
     var Privacy bool
     var Language string
+    var Revision int64
     var OnClose Action
     var OnContact Action
 }
