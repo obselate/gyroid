@@ -9,7 +9,6 @@ import Goo.Widgets.Navigation
 import Gyroid.Components.TextParts
 import Gyroid.Views
 import System
-import System.Collections.Generic
 
 class ControlParts {
     shared {
@@ -68,20 +67,18 @@ class ControlParts {
             equalWidth bool = false,
             key string = ""
         ) Blob {
-            let items = List[ToggleOption](ids.Length)
+            let items = [ids.Length]ToggleOption
             for index in 0 ... ids.Length {
-                items.Add(
-                    ToggleOption{
-                        Id: ids[index],
-                        Label: ui.Strings.Get(names[index]),
-                        Disabled: disabled || index >= enabledCount
-                    }
-                )
+                items[index] = ToggleOption{
+                    Id: ids[index],
+                    Label: ui.Strings.Get(names[index]),
+                    Disabled: disabled || index >= enabledCount
+                }
             }
             return Cell.Mount[ToggleGroupInput, ToggleGroup](
                 key.Length > 0 ? key: "segment-" + label,
                 ToggleGroupInput{
-                    Items: items.ToArray(),
+                    Items: items,
                     SelectedIds: []string{selected},
                     AccessibilityName: ui.Strings.Get(label),
                     CreateRoot: (_, root) -> {
