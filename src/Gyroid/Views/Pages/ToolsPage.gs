@@ -682,13 +682,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     private let suggestionRow Func[string, Blob]
 
     init() {
-        suggestionRow = word -> ControlParts.Button(
-            current.Region.Ui,
-            word,
-            () -> Answer(current, word),
-            false,
-            suggestions.Count > 0 && word == suggestions[0]
-        )
+        suggestionRow = word -> ControlParts.Button(current.Region.Ui, word, () -> Answer(current, word), false)
     }
     private let lifetime CancellationTokenSource = CancellationTokenSource()
 
@@ -796,7 +790,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     }
 
     private func Answer(input ToolsPhraseInput, word string) {
-        if found >= answers.Length || !Bip39Wordlist.Words.Contains(word) {
+        if found >= answers.Length {
             return
         }
         if word != answers[found] {
@@ -956,7 +950,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
                 )
             )
             let list = VirtualRows[string](suggestions, AppTheme.ControlRegular, suggestionKey, suggestionRow)
-            list.Height = AppTheme.ControlRegular * 2
+            list.Height = AppTheme.ControlRegular
             list.MinHeight = 0
             list.FlexGrow = 1
             pick.Add(list)
@@ -1074,7 +1068,6 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
                     input.State.SignMessage = value
                     input.State.SignSignature = ""
                 },
-                disabled: busy
             )
         }
         if input.State.SignSignature.Length > 0 {
@@ -1172,20 +1165,9 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
                 input.State.VerifyAddress,
                 value -> input.State.VerifyAddress = value.Trim(),
                 secret: input.Privacy,
-                disabled: busy
             ),
-            form.Field(
-                "Message",
-                input.State.VerifyMessage,
-                value -> input.State.VerifyMessage = value,
-                disabled: busy
-            ),
-            form.Field(
-                "Signature",
-                input.State.VerifySignature,
-                value -> input.State.VerifySignature = value.Trim(),
-                disabled: busy
-            ),
+            form.Field("Message", input.State.VerifyMessage, value -> input.State.VerifyMessage = value,),
+            form.Field("Signature", input.State.VerifySignature, value -> input.State.VerifySignature = value.Trim(),),
             ActionRow(
                 []Blob{
                     Verdict(input, verdict),
@@ -1290,28 +1272,24 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
                 input.State.ProofTransaction,
                 value -> input.State.ProofTransaction = value.Trim(),
                 secret: input.Privacy,
-                disabled: busy
             ),
             form.Field(
                 "Proof key",
                 input.State.ProofKey,
                 value -> input.State.ProofKey = value.Trim(),
                 secret: input.Privacy,
-                disabled: busy
             ),
             form.Field(
                 "Address",
                 input.State.ProofAddress,
                 value -> input.State.ProofAddress = value.Trim(),
                 secret: input.Privacy,
-                disabled: busy
             ),
             form.Field(
                 "Amount",
                 input.State.ProofAmount,
                 value -> input.State.ProofAmount = value.Trim(),
                 secret: input.Privacy,
-                disabled: busy
             ),
             ActionRow(
                 []Blob{

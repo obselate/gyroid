@@ -1,6 +1,5 @@
 package Gyroid.Services
 
-import System
 import System.Threading
 
 class MessageProofs {
