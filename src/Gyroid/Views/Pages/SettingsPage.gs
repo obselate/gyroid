@@ -1938,6 +1938,7 @@ class SettingsDialogs : Cell, IDisposable {
     private var viewOnlyCreated string = ""
     private var filenameIssue string = ""
     private var fileIssue string = ""
+    private var currentPasswordIssue string = ""
     private var creating bool
     private var purgeText string = ""
     private var purging bool
@@ -2009,6 +2010,7 @@ class SettingsDialogs : Cell, IDisposable {
         viewOnlyCreated = ""
         filenameIssue = ""
         fileIssue = ""
+        currentPasswordIssue = ""
         purgeText = ""
         issue = ""
         loading = false
@@ -2466,9 +2468,10 @@ class SettingsDialogs : Cell, IDisposable {
                         password,
                         value -> {
                             password = value
-                            passwordIssue = ""
+                            currentPasswordIssue = ""
                         },
                         true,
+                        issue: currentPasswordIssue,
                         labelled: false
                     )
                 )
@@ -2603,7 +2606,11 @@ class SettingsDialogs : Cell, IDisposable {
                     return
                 }
                 creating = false
-                fileIssue = issue
+                if issue == "Wrong wallet password" {
+                    currentPasswordIssue = issue
+                } else {
+                    fileIssue = issue
+                }
                 if issue.Length == 0 {
                     password = ""
                     viewOnlyPassword = ""
