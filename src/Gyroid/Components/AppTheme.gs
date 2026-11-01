@@ -170,6 +170,7 @@ class AppTheme {
             TextColor = Black,
             HoverBackgroundColor = LimeHover
         }
+        let DangerButton ActionButton = Button with{BackgroundColor = DangerQuiet, BorderColor = Pink, TextColor = Pink}
         let ButtonStyle Style = Style{
             Height: Button.Height!!,
             MinWidth: Button.MinWidth!!,
