@@ -23,30 +23,34 @@ data struct SeedPageInput {
     var OnRetry Action
 }
 
-class SeedPage : Cell[SeedPageInput] {
+class SeedPage : Cell {
+    private var input SeedPageInput
     private let configureActions Action[SeedActions]
 
     init() {
-        configureActions = cell -> {
-            if Input is SeedPageInput source {
-                cell.Accept(
-                    SeedActionsInput{
-                        Keys: source.Session.Keys,
-                        Ui: source.Ui,
-                        Words: source.Words,
-                        ClipboardOwner: source.ClipboardOwner,
-                        FromWallet: source.FromWallet,
-                        Busy: source.Busy,
-                        Language: source.Language,
-                        ChooseFile: source.ChooseFile,
-                        OnDone: source.OnDone
-                    }
-                )
+        configureActions = cell -> cell.Accept(
+            SeedActionsInput{
+                Keys: input.Session.Keys,
+                Ui: input.Ui,
+                Words: input.Words,
+                ClipboardOwner: input.ClipboardOwner,
+                FromWallet: input.FromWallet,
+                Busy: input.Busy,
+                Language: input.Language,
+                ChooseFile: input.ChooseFile,
+                OnDone: input.OnDone
             }
+        )
+    }
+
+    func Accept(next SeedPageInput) {
+        if !input.Equals(next) {
+            input = next
+            Rebuild()
         }
     }
 
-    protected override func Build(input SeedPageInput) Blob {
+    override func Build() Blob {
         let ui = input.Ui
         let card = WalletParts.PageCard(ui, maxWidth: 760, fill: true)
         card.Add(Label(ui, ui.Strings.Get("recovery phrase"), AppTheme.Type17, AppTheme.Ink, ""))
@@ -99,7 +103,7 @@ class SeedActions : Cell, IDisposable {
 
     override func Build() Blob {
         let ui = input.Ui
-        let content = Container{Gap: AppTheme.Space12}
+        let content = Container{Gap: AppTheme.GetPageGap(0)}
         content.Add(
             Cell.Mount[SeedPhraseInput, SeedPhrase](
                 "seed-phrase",
@@ -139,16 +143,9 @@ class SeedActions : Cell, IDisposable {
             )
         )
         actions.Add(Button(ui, "Export", () -> Export(input), input.Busy))
-        var completion = actions
+        actions.Add(Container{FlexGrow: 1})
         if !input.FromWallet {
-            content.Add(actions)
-            completion = Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space8,
-                FlexShrink: 0
-            }
-            completion.Add(
+            actions.Add(
                 (
                     AppTheme.Checkbox with{
                         Label = ui.Strings.Get("I saved these words"),
@@ -160,8 +157,7 @@ class SeedActions : Cell, IDisposable {
                 ).Build()
             )
         }
-        completion.Add(Container{FlexGrow: 1})
-        completion.Add(
+        actions.Add(
             Button(
                 ui,
                 input.FromWallet ? "Done": "Continue",
@@ -170,7 +166,7 @@ class SeedActions : Cell, IDisposable {
                 true
             )
         )
-        content.Add(completion)
+        content.Add(actions)
         return content
     }
 

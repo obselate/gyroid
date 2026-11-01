@@ -107,6 +107,7 @@ partial class App : Cell {
     private var seedIssue string = ""
 
     private let retrySeed Action
+    private let configureSeed Action[SeedPage]
 
     private var contacts SortedDictionary[string, string] = SortedDictionary[string, string](StringComparer.Ordinal)
 
@@ -231,6 +232,21 @@ partial class App : Cell {
                 Run(ct -> ShowSeed(wallet.Keys.RevealSeedAsync(buffer, ct), false))
             }
         }
+        configureSeed = cell -> cell.Accept(
+            SeedPageInput{
+                Session: wallet,
+                Ui: ui,
+                Words: seed ?? Array.Empty[char](),
+                ClipboardOwner: ui.Actions.ClipboardOwner,
+                FromWallet: seedFromWallet,
+                Busy: ui.Working(),
+                Language: ui.Strings.Language,
+                ChooseFile: chooseFile,
+                OnDone: finishSeed,
+                Issue: seedIssue,
+                OnRetry: retrySeed
+            }
+        )
         createWallet = (filename, buffer) -> Run(ct -> CreateWallet(filename, buffer, ct))
         backupSeed = buffer -> StartSeed(buffer)
         closeSettings = () -> Back()
@@ -981,23 +997,8 @@ partial class App : Cell {
                 "sync",
                 SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
             )
-        } else if let words = seed {
-            Cell.Mount[SeedPageInput, SeedPage](
-                "seed",
-                SeedPageInput{
-                    Session: wallet,
-                    Ui: ui,
-                    Words: words,
-                    ClipboardOwner: ui.Actions.ClipboardOwner,
-                    FromWallet: seedFromWallet,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    ChooseFile: chooseFile,
-                    OnDone: finishSeed,
-                    Issue: seedIssue,
-                    OnRetry: retrySeed
-                }
-            )
+        } else if seed != nil {
+            Cell.Mount[SeedPage]("seed", configureSeed)
         } else if page == AppPage.Tools || page == AppPage.Privacy {
             Cell.Mount[ToolsInput, ToolsPage](
                 "tools",
