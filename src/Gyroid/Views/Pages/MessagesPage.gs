@@ -3,7 +3,6 @@ package Gyroid.Views
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Icons
-import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import Gyroid.Components
 import Gyroid.Components.ControlParts
@@ -542,10 +541,29 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         if remove {
             content.Add(Label(ui, Hidden(ui.Privacy, conversation?.Title ?? ""), AppTheme.Type14, AppTheme.Ink, ""))
         } else {
-            content.Add(form.Field("Name", name, value -> name = value, disabled: busy))
+            content.Add(
+                form.Field(
+                    "Name",
+                    name,
+                    value -> name = value,
+                    disabled: busy,
+                    labelled: false,
+                    placeholder: ui.Strings.Get("Name"),
+                    contentDirection: nil
+                )
+            )
             if !group {
                 content.Add(
-                    form.Field("Address", address, value -> address = value.Trim(), disabled: busy, hidden: ui.Privacy)
+                    form.Field(
+                        "Address",
+                        address,
+                        value -> address = value.Trim(),
+                        disabled: busy,
+                        labelled: false,
+                        hidden: ui.Privacy,
+                        placeholder: ui.Strings.Get("Address"),
+                        contentDirection: nil
+                    )
                 )
             }
             if !contact {
