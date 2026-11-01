@@ -634,27 +634,36 @@ class ToolsLockRegion : Cell[ToolsLockInput] {
             value
         }
         if editing {
+            let chosen Action[string] = value -> {
+                editing = false
+                Rebuild()
+                let minutes = Int32.Parse(value)
+                if minutes != input.AutoLock {
+                    ui.Actions.Run(ct -> context.Session.SaveAutoLockAsync(minutes, ct))
+                }
+            }
             root.Add(
                 Segment(
                     ui,
                     "auto-lock",
-                    []string{"5", "15", "60", "0"},
-                    []string{
-                        "5 " + ui.Strings.Get("min"),
-                        "15 " + ui.Strings.Get("min"),
-                        "60 " + ui.Strings.Get("min"),
-                        ui.Strings.Get("never")
-                    },
+                    []string{"5", "15"},
+                    []string{"5m", "15m"},
                     input.AutoLock.ToString(),
                     context.Busy,
-                    value -> {
-                        editing = false
-                        Rebuild()
-                        let minutes = Int32.Parse(value)
-                        if minutes != input.AutoLock {
-                            ui.Actions.Run(ct -> context.Session.SaveAutoLockAsync(minutes, ct))
-                        }
-                    }
+                    chosen,
+                    key: "auto-lock-minutes"
+                )
+            )
+            root.Add(
+                Segment(
+                    ui,
+                    "auto-lock",
+                    []string{"60", "0"},
+                    []string{"1h", "never"},
+                    input.AutoLock.ToString(),
+                    context.Busy,
+                    chosen,
+                    key: "auto-lock-hours"
                 )
             )
         }
