@@ -738,7 +738,8 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                             Tip(ui, "peer ID", Short(peer.Id), AppTheme.Ink),
                             Tip(ui, "via", peer.Transport + " · " + peer.Family, color),
                             Tip(ui, "address", peer.Address, AppTheme.Ink)
-                        }
+                        },
+                        zIndex: 4
                     )
                 )
             }
