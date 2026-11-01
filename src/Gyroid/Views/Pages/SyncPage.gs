@@ -31,6 +31,7 @@ data struct SyncSample {
 
 data struct SyncState {
     var Step int32
+    var PhaseStarted bool
     var DownloadPercent int32
     var Peers uint64
     var Limit uint64
@@ -41,6 +42,7 @@ data struct SyncState {
     var Rate float64
     var Listen string
     var Network string
+    var Endpoint string
 }
 
 class SyncPage : Cell, IDisposable {
@@ -86,6 +88,7 @@ class SyncPage : Cell, IDisposable {
         let node = next.Node
         let value = SyncState{
             Step: Step(node),
+            PhaseStarted: node.Phase != NodePhase.Detecting && (node.Phase != NodePhase.None || node.Running),
             DownloadPercent: node.DownloadPercent ?? 0,
             Peers: node.Peers,
             LocalHeight: node.Height,
@@ -95,7 +98,8 @@ class SyncPage : Cell, IDisposable {
             CheckpointHeight: node.CheckpointHeight,
             Rate: node.SyncRate,
             Listen: node.Listen,
-            Network: node.Network
+            Network: node.Network,
+            Endpoint: node.Endpoint
         }
         let layoutChanged = !accepted ||
             input.Language != next.Language ||
@@ -110,7 +114,11 @@ class SyncPage : Cell, IDisposable {
                 lifetime = CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
             }
         }
-        if !accepted || state.Network != value.Network || state.Step != value.Step {
+        if !accepted ||
+            state.Network != value.Network ||
+            state.Endpoint != value.Endpoint ||
+            state.Step != value.Step ||
+            state.PhaseStarted != value.PhaseStarted {
             updateTimer?.Dispose()
             updateTimer = nil
             Apply(value)
@@ -143,20 +151,26 @@ class SyncPage : Cell, IDisposable {
         if accepted && state == value {
             return
         }
-        if accepted && state.Network != value.Network {
+        let restarted = accepted &&
+            (
+            state.Network != value.Network ||
+                state.Endpoint != value.Endpoint ||
+                value.Step <= 2 &&
+                value.Step < state.Step
+        )
+        if restarted {
             connectedAt = 0
             visited = 0
             peerSamples.Clear()
             rateSamples.Clear()
         }
         now = Stopwatch.GetElapsedTime(started).TotalSeconds
-        let progressChanged = !accepted ||
-            state.Progress != value.Progress ||
-            state.Step != value.Step ||
-            state.Network != value.Network
+        let progressChanged = !accepted || restarted || state.Progress != value.Progress || state.Step != value.Step
         state = value
         accepted = true
-        visited |= 1 << state.Step
+        if state.PhaseStarted {
+            visited |= 1 << state.Step
+        }
         if state.Step != 3 {
             connectedAt = 0
         } else if connectedAt == 0 {
