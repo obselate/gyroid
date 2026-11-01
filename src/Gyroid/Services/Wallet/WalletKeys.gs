@@ -16,6 +16,7 @@ class WalletKeys {
     }
 
     async func RequireBackupAsync(filename string, ct CancellationToken) {
+        ct.ThrowIfCancellationRequested()
         let path = session.Library.WalletPath(filename) + ".backup-pending"
         Directory.CreateDirectory(session.settings.WalletDirectory)
         await PrivateFiles.WriteAtomic(path, _ -> Task.CompletedTask, true, false)

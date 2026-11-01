@@ -778,6 +778,7 @@ class WalletSession : IDisposable {
                 )
             }
             state = WalletState.Unlocked
+            Keys.BackupPending = File.Exists(Library.WalletPath(settings.ActiveWallet) + ".backup-pending")
             Touch()
             try {
                 WalletLockScheduler.Cancel(settings)
