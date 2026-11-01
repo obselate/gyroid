@@ -4,9 +4,9 @@
     "net10.0": {
       "Goo": {
         "type": "Direct",
-        "requested": "[0.24.2, 0.24.2]",
-        "resolved": "0.24.2",
-        "contentHash": "oZIBGdDoOj37KjN5flhV6x39Exq62ZkmgG1t/jUzNp791s/0pgEzIY3iLGq5Sbj/eFQyMRXPPDaRa17hxaaUoA==",
+        "requested": "[0.26.0, 0.26.0]",
+        "resolved": "0.26.0",
+        "contentHash": "57wVoDpY7kae2tKiGPP0nO3IN0E9COpB5HlH0pCQ/IxxPKituYhgLMBh+E+GFu+VhhfEINKTJp3PvvYt8N1atQ==",
         "dependencies": {
           "Hexa.NET.SDL3": "1.2.17",
           "Tmds.DBus.Protocol": "0.95.1",
@@ -15,15 +15,15 @@
       },
       "Goo.Accessibility": {
         "type": "Direct",
-        "requested": "[0.24.2, 0.24.2]",
-        "resolved": "0.24.2",
-        "contentHash": "peZaA0uPmLGQM2Fz8LGfeE5oGLfisGfc2WG/1n8N2+IEi9pprzl1kDh2egvOQdL9pbLRpiSav3g2pTFW/m7iYQ=="
+        "requested": "[0.26.0, 0.26.0]",
+        "resolved": "0.26.0",
+        "contentHash": "pqlP6pKij7MT1qJgy94fwrdfFl26tFb5w4bPStlgct45jdy+iVV6xNYfVfgyTa77eXjNb5NMMTBys5oXOdpABA=="
       },
       "Goo.Widgets": {
         "type": "Direct",
-        "requested": "[0.17.0, 0.17.0]",
-        "resolved": "0.17.0",
-        "contentHash": "a4ZUwIO+3zDPM8A1GbYQruIaEeVXl1woF2Dwp6KT0MmONGi7y2I+5LEy/naFb27f1vhR+OnwyGo62Yz0nLPD/g==",
+        "requested": "[0.18.0, 0.18.0]",
+        "resolved": "0.18.0",
+        "contentHash": "d2UMNmNY5NVqzzRE4IWLS0shrZlWFJVdg5WYTSWIbhoFLaT7TA5svC3HRYZkY5Uv25ehazwgXH/uqA2KcfaF2g==",
         "dependencies": {
           "Goo": "0.24.2"
         }
@@ -87,9 +87,9 @@
     "net10.0/win-x64": {
       "Goo": {
         "type": "Direct",
-        "requested": "[0.24.2, 0.24.2]",
-        "resolved": "0.24.2",
-        "contentHash": "oZIBGdDoOj37KjN5flhV6x39Exq62ZkmgG1t/jUzNp791s/0pgEzIY3iLGq5Sbj/eFQyMRXPPDaRa17hxaaUoA==",
+        "requested": "[0.26.0, 0.26.0]",
+        "resolved": "0.26.0",
+        "contentHash": "57wVoDpY7kae2tKiGPP0nO3IN0E9COpB5HlH0pCQ/IxxPKituYhgLMBh+E+GFu+VhhfEINKTJp3PvvYt8N1atQ==",
         "dependencies": {
           "Hexa.NET.SDL3": "1.2.17",
           "Tmds.DBus.Protocol": "0.95.1",
@@ -98,9 +98,9 @@
       },
       "Goo.Accessibility": {
         "type": "Direct",
-        "requested": "[0.24.2, 0.24.2]",
-        "resolved": "0.24.2",
-        "contentHash": "peZaA0uPmLGQM2Fz8LGfeE5oGLfisGfc2WG/1n8N2+IEi9pprzl1kDh2egvOQdL9pbLRpiSav3g2pTFW/m7iYQ=="
+        "requested": "[0.26.0, 0.26.0]",
+        "resolved": "0.26.0",
+        "contentHash": "pqlP6pKij7MT1qJgy94fwrdfFl26tFb5w4bPStlgct45jdy+iVV6xNYfVfgyTa77eXjNb5NMMTBys5oXOdpABA=="
       },
       "Microsoft.DotNet.ILCompiler": {
         "type": "Direct",

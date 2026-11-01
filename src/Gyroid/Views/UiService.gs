@@ -14,7 +14,6 @@ class UiService : IDisposable {
     var window Window?
     let rebuild Action
     let playbackActive Func[bool]
-    let touch Action
     private let report Action[string]
     private let run Action[Func[CancellationToken, Task], Action?, []?char, []?char]
     private let background Action[Func[CancellationToken, Task]]
@@ -22,14 +21,12 @@ class UiService : IDisposable {
     init(
         rebuild Action,
         playbackActive Func[bool],
-        touch Action,
         report Action[string],
         run Action[Func[CancellationToken, Task], Action?, []?char, []?char],
         background Action[Func[CancellationToken, Task]]
     ) {
         this.rebuild = rebuild
         this.playbackActive = playbackActive
-        this.touch = touch
         this.report = report
         this.run = run
         this.background = background

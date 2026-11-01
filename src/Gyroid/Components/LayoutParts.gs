@@ -67,9 +67,7 @@ class LayoutParts {
             Top: 0,
             Bottom: 0,
             AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center,
-            OnPointerDown: (event PointerEvent) -> ui.Actions.touch(),
-            OnWheel: (event WheelEvent) -> ui.Actions.touch()
+            JustifyContent: JustifyContent.Center
         }
 
         func ActionRow(children[]Blob) Blob {

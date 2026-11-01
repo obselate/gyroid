@@ -248,7 +248,6 @@ partial class App : Cell, IDisposable {
             UiService(
                 () -> Rebuild(),
                 PlaybackActive,
-                Touch,
                 message -> {
                     error = message
                 },
@@ -602,10 +601,7 @@ partial class App : Cell, IDisposable {
             UpdatePlayback()
             Rebuild()
         }
-        owner.PreviewKeyPressed += (key Key, modifiers KeyModifiers) -> {
-            Touch()
-            return false
-        }
+        owner.InputActivity += kind -> Touch()
         wallet.Changed = () -> {
             let issue = wallet.NodeError
             owner.TryPost(
@@ -1592,24 +1588,6 @@ partial class App : Cell, IDisposable {
                 }
             )
         }
-        return Cell.Mount[AppActivityInput, AppActivity](
-            "window-activity",
-            AppActivityInput{Content: root, Touch: ui.Actions.touch}
-        )
-    }
-}
-
-data struct AppActivityInput {
-    var Content Blob
-    var Touch Action
-}
-
-class AppActivity : Cell[AppActivityInput] {
-    protected override func Build(input AppActivityInput) Blob -> Container{
-        Width: Percent(100),
-        Height: Percent(100),
-        OnPointerDown: (event PointerEvent) -> input.Touch(),
-        OnWheel: (event WheelEvent) -> input.Touch(),
-        input.Content
+        return root
     }
 }
