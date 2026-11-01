@@ -366,6 +366,38 @@ class MiningSetup : Cell[MiningSetupInput] {
         let total = Math.Max(1.0, Math.Round(float64(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes) / 1073741824))
         let share = Math.Min(1.0, float64(threads) * 2 / total)
         let wide = input.Height >= 700
+        let fewerButton = ControlParts.Icon(
+            ui,
+            MaterialIcons.Create("chevron_left", AppTheme.Icon14, threads > 1 ? AppTheme.Ink: AppTheme.Dim),
+            ui.Strings.Get("Fewer threads"),
+            () -> {
+                if threads == 2 {
+                    more.Focus()
+                }
+                input.SetThreads(threads - 1)
+            },
+            threads <= 1,
+            size: AppTheme.ControlCompact
+        )
+        fewerButton.Handle = fewer
+        let moreButton = ControlParts.Icon(
+            ui,
+            MaterialIcons.Create(
+                "chevron_right",
+                AppTheme.Icon14,
+                threads > 0 && threads < cores ? AppTheme.Ink: AppTheme.Dim
+            ),
+            ui.Strings.Get("More threads"),
+            () -> {
+                if threads == cores - 1 {
+                    fewer.Focus()
+                }
+                input.SetThreads(threads + 1)
+            },
+            threads <= 0 || threads >= cores,
+            size: AppTheme.ControlCompact
+        )
+        moreButton.Handle = more
         return Container{
             Gap: AppTheme.Space16,
             FlexShrink: 0,
@@ -394,7 +426,7 @@ class MiningSetup : Cell[MiningSetupInput] {
                                 ""
                             )
                         ),
-                        ThreadButton(input, true),
+                        fewerButton,
                         Container{
                             MinWidth: 22,
                             AlignItems: AlignItems.Center,
@@ -411,7 +443,7 @@ class MiningSetup : Cell[MiningSetupInput] {
                                 ""
                             )
                         },
-                        ThreadButton(input, false)
+                        moreButton
                     }
                 ),
                 Row(
@@ -446,32 +478,6 @@ class MiningSetup : Cell[MiningSetupInput] {
                 ),
             },
         }
-    }
-
-    private func ThreadButton(input MiningSetupInput, decrease bool) Blob {
-        let threads = input.Threads
-        let cores = Environment.ProcessorCount
-        let disabled = decrease ? threads <= 1: threads <= 0 || threads >= cores
-        let button = ControlParts.Icon(
-            input.Ui,
-            MaterialIcons.Create(
-                decrease ? "chevron_left": "chevron_right",
-                AppTheme.Icon14,
-                disabled ? AppTheme.Dim: AppTheme.Ink
-            ),
-            input.Ui.Strings.Get(decrease ? "Fewer threads": "More threads"),
-            () -> {
-                let value = threads + (decrease ? -1: 1)
-                if value == 1 || value == cores {
-                    (decrease ? more: fewer).Focus()
-                }
-                input.SetThreads(value)
-            },
-            disabled,
-            size: AppTheme.ControlCompact
-        )
-        button.Handle = decrease ? fewer: more
-        return button
     }
 
     private func Row(ui Presentation, wide bool, label string, value Blob) Blob ->
