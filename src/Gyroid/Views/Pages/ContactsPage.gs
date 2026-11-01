@@ -114,7 +114,6 @@ class ContactsPage : Cell[ContactsInput] {
             Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space8},
             BorderWidth: AppTheme.Border1,
             BorderRadius: AppTheme.Radius10,
-            BorderColor: AppTheme.Rule,
             BackgroundColor: AppTheme.Surface,
             Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: label},
             MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
@@ -233,7 +232,6 @@ class ContactsPage : Cell[ContactsInput] {
             Gap: AppTheme.Space12,
             Padding: AppTheme.Space12,
             FlexShrink: 0,
-            BorderColor: AppTheme.Edge,
             BackgroundColor: AppTheme.Raised,
             fields,
             ActionRow(
