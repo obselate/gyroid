@@ -1049,6 +1049,7 @@ class SendBalance : Cell[SendBalanceInput] {
                 bar.Add(segment)
                 continue
             }
+            segment.HitTestSelf = true
             let name = row.Kind == "contact" || row.Kind == "handle" ? row.Address.Trim(): Short(row.Address)
             let lines = Container{
                 FlexDirection: FlexDirection.Row,
