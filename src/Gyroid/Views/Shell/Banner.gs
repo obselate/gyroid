@@ -59,6 +59,7 @@ partial class App {
             "problem-banner",
             ShellBannerInput{
                 Ui: ui,
+                Revision: problemRevision,
                 Message: ui.Strings.Explain(message),
                 NodeError: wallet.NodeError.Length > 0,
                 RestartStopped: wallet.NodeRestartStopped,
@@ -73,6 +74,7 @@ partial class App {
 
 data struct ShellBannerInput {
     var Ui Presentation
+    var Revision int32
     var Message string
     var Warning bool
     var NodeError bool
@@ -86,10 +88,12 @@ data struct ShellBannerInput {
 class ShellBannerRegion : Cell[ShellBannerInput] {
     private var message string = ""
     private var dismissed bool
+    private var revision int32
 
     protected override func Build(input ShellBannerInput) Blob {
-        if message != input.Message {
+        if message != input.Message || revision != input.Revision {
             message = input.Message
+            revision = input.Revision
             dismissed = false
         }
         if dismissed {

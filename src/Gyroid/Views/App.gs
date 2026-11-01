@@ -87,6 +87,7 @@ partial class App : Cell, IDisposable {
 
     private var error string = ""
     private var connectionError string = ""
+    private var problemRevision int32
 
     private var refreshing bool
 
@@ -426,6 +427,7 @@ partial class App : Cell, IDisposable {
             error = ""
             refreshError = ""
             wallet.BackgroundError = ""
+            problemRevision++
         }
         ApplyPreferences()
         background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
