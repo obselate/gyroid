@@ -867,7 +867,11 @@ class NetworkPeers : Cell, IDisposable {
         list.MinHeight = 0
         list.FlexGrow = 1
         list.FlexBasis = 0
-        let viewport = ListParts.Viewport(list, Style{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, MaxHeight: Percent(45)})
+        let viewport = ListParts.Viewport(
+            list,
+            Style{MinHeight: 0, MaxHeight: Percent(45)},
+            grow: rows.Length > 0
+        )
         card.Add(viewport)
         let identity = input.PeerId
         let hours = input.IdentityHours
