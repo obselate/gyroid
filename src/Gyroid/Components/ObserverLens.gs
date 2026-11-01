@@ -13,10 +13,11 @@ import Gyroid.Services.WalletText
 import Gyroid.Views
 import System
 import System.Linq
-import System.Threading.Tasks
 
 data struct ObserverLensInput {
-    var Session WalletSession
+    var View ObserverView?
+    var Loading bool
+    var Error string
     var Ui Presentation
     var Send WalletSend
     var Recipient string
@@ -28,29 +29,10 @@ data struct ObserverLensInput {
 }
 
 class ObserverLens : Cell[ObserverLensInput] {
-    private var view ObserverView?
-    private var loading string = ""
-
     protected override func Build(input ObserverLensInput) Blob {
         let ui = input.Ui
         let send = input.Send
-        if loading != send.TxId {
-            loading = send.TxId
-            view = nil
-            var task Task[ObserverView]
-            ui.Actions.Run(
-                ct -> {
-                    task = input.Session.Checks.ObserveAsync(send.TxId, ct)
-                    return task
-                },
-                () -> {
-                    if loading == send.TxId {
-                        view = task.Result
-                        Rebuild()
-                    }
-                }
-            )
-        }
+        let view = input.View
         let compact = input.Width < 1100
         let side = compact ? 72.0: 96.0
         let size = view?.RingSize ?? 16
@@ -188,6 +170,9 @@ class ObserverLens : Cell[ObserverLensInput] {
                 height > 0 ? Public(ui, Count(height), AppTheme.Type14): Container{}
             )
         )
+        if input.Error.Length > 0 {
+            content.Add(MessageParts.Problem(ui, input.Error))
+        }
         let confirmed = send.Status == "confirmed"
         return Cell.Mount[ModalDialog, ModalDialogHost](
             "lens",
@@ -230,7 +215,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 Content = content,
                 Footer = ActionRow(
                     []Blob{
-                        Button(ui, "Prove", input.OnProve, ui.Working() || !confirmed),
+                        Button(ui, "Prove", input.OnProve, input.Loading || ui.Working() || !confirmed),
                         Button(ui, "Close", input.OnClose)
                     }
                 ),

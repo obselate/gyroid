@@ -37,6 +37,8 @@ data class WindowWork(Run Func[CancellationToken, Task])
 
 partial class App : Cell {
     private let sendDone Action
+    private var historyInput HistoryInput
+    private let configureHistory Action[HistoryPage]
 
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
     private let configureLibrary Action[LibraryPage]
@@ -166,6 +168,7 @@ partial class App : Cell {
                 Height: height
             }
         )
+        configureHistory = cell -> cell.Accept(historyInput)
         ui = Presentation(
             wallet.Settings.Language,
             wallet.Settings.Privacy,
@@ -908,9 +911,8 @@ partial class App : Cell {
         }
     }
 
-    private func HistoryView(snapshot WalletSnapshot) Blob -> Cell.Mount[HistoryInput, HistoryPage](
-        "history",
-        HistoryInput{
+    private func HistoryView(snapshot WalletSnapshot) Blob {
+        historyInput = HistoryInput{
             Session: wallet,
             Ui: ui,
             Snapshot: snapshot,
@@ -935,7 +937,8 @@ partial class App : Cell {
             OnMessage: OpenMessage,
             ChooseFile: chooseFile
         }
-    )
+        return Cell.Mount[HistoryPage]("history", configureHistory)
+    }
 
     override func Build() Blob {
         let theme = Theme.Read()
