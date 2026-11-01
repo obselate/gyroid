@@ -21,7 +21,6 @@ class MessagesViewState {
     var ConversationId string = ""
     var MessageId string = ""
     var Request int64
-    var Revision int64
     var NewConversation Conversation?
     let Drafts Dictionary[string, string] = Dictionary[string, string](StringComparer.Ordinal)
 }
@@ -29,6 +28,15 @@ class MessagesViewState {
 data struct MessagesInput {
     var Ui Presentation
     var Session WalletSession
+    var Wallet string
+    var Network string
+    var Address string
+    var Mode MessengerMode
+    var Locked bool
+    var ViewOnly bool
+    var Working bool
+    var Error string
+    var Request int64
     var State MessagesViewState
     var Contacts SortedDictionary[string, string]
     var Width float64
@@ -45,7 +53,6 @@ class MessagesPage : Cell, IDisposable {
     private var input MessagesInput
     private var conversation Conversation?
     private var selected string = ""
-    private var request int64 = -1
     private var lifetime CancellationTokenSource?
     private var selection CancellationTokenSource?
     private var generation int64
@@ -74,7 +81,7 @@ class MessagesPage : Cell, IDisposable {
                 Language: input.Language,
                 Request: input.State.Request,
                 MessageId: input.State.MessageId,
-                CanRetry: input.Session.Messages.Mode == MessengerMode.Send && !busy,
+                CanRetry: input.Mode == MessengerMode.Send && !busy && !input.Working,
                 OnOpen: message -> {
                     detail = message
                     Rebuild()
@@ -90,29 +97,14 @@ class MessagesPage : Cell, IDisposable {
     }
 
     func Accept(next MessagesInput) {
-        if disposed {
+        if disposed || next == input {
             return
         }
-        let changed = input.Revision != next.Revision ||
-            input.Width != next.Width ||
-            input.Drawer != next.Drawer ||
-            input.Privacy != next.Privacy ||
-            input.Language != next.Language ||
-            input.Contacts != next.Contacts
-        let settings = next.Session.Settings
-        let reset = walletId != settings.ActiveWallet ||
-            ownAddress != next
-            .Session
-            .Messages
-            .OwnAddress ||
-            walletNetwork != next
-            .Session
-            .Messages
-            .Network
+        let reset = walletId != next.Wallet || ownAddress != next.Address || walletNetwork != next.Network
         if reset {
-            walletId = settings.ActiveWallet
-            ownAddress = next.Session.Messages.OwnAddress
-            walletNetwork = next.Session.Messages.Network
+            walletId = next.Wallet
+            ownAddress = next.Address
+            walletNetwork = next.Network
             operationGeneration++
             busy = false
             issue = ""
@@ -144,28 +136,33 @@ class MessagesPage : Cell, IDisposable {
             selection = active
             generation++
             if let value = conversation {
-                let service = next.Session.Messages
                 let version = generation
                 let token = active.Token
                 let window = next.Ui.Actions.window
-                go SelectThread(service, value, version, token, window)
+                go SelectThread(next, value, version, token, window)
             }
-            Rebuild()
-        } else if changed || request != next.State.Request {
-            Rebuild()
         }
-        request = next.State.Request
+        Rebuild()
     }
 
     private async func SelectThread(
-        service MessagingService,
+        source MessagesInput,
         current Conversation,
         version int64,
         token CancellationToken,
         window Window?
     ) {
+        let service = source.Session.Messages
         try {
             token.ThrowIfCancellationRequested()
+            if source
+                .Session
+                .Settings
+                .ActiveWallet != source.Wallet ||
+                service.Network != source.Network ||
+                service.OwnAddress != source.Address {
+                return
+            }
             await service.Select(current, token)
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
             let error = failure.Message
@@ -222,9 +219,7 @@ class MessagesPage : Cell, IDisposable {
         var error = ""
         try {
             await action(ct)
-        } catch (failure OperationCanceledException) when ct.IsCancellationRequested {
-            return
-        } catch (failure Exception) {
+        } catch (failure Exception) when !(failure is OperationCanceledException) {
             error = failure.Message
         }
         input
@@ -262,8 +257,7 @@ class MessagesPage : Cell, IDisposable {
         input.State.MessageId = ""
         input.State.NewConversation = conversation
         input.State.Request++
-        Accept(input)
-        Rebuild()
+        Accept(MessagesInput{... input, Request: input.State.Request})
     }
 
     override func Build() Blob {
@@ -289,8 +283,8 @@ class MessagesPage : Cell, IDisposable {
                         Conversations: conversations,
                         Selected: selected,
                         Width: listWidth,
-                        Busy: busy,
-                        CanSend: service.Mode == MessengerMode.Send,
+                        Busy: busy || input.Working,
+                        CanSend: input.Mode == MessengerMode.Send,
                         Privacy: input.Privacy,
                         Language: input.Language,
                         Revision: input.Revision,
@@ -317,10 +311,10 @@ class MessagesPage : Cell, IDisposable {
                         Ui: ui,
                         Revision: input.Revision,
                         ConversationId: current.Id,
-                        Recipients: current.Members.Count(member -> member != service.OwnAddress),
-                        CanSend: service.Mode == MessengerMode.Send,
-                        Unavailable: input.Session.Snapshot.State == WalletState.Locked ? "Wallet is locked":
-                        input.Session.Snapshot.ViewOnly ? "View-only wallet": "Node not connected",
+                        Recipients: current.Members.Count(member -> member != input.Address),
+                        CanSend: input.Mode == MessengerMode.Send,
+                        Unavailable: input.Locked ? "Wallet is locked":
+                        input.ViewOnly ? "View-only wallet": "Node not connected",
                         Measure: measureDraft,
                         Privacy: input.Privacy,
                         Language: input.Language,
@@ -349,7 +343,7 @@ class MessagesPage : Cell, IDisposable {
                 }
             )
         }
-        let error = issue.Length > 0 ? issue: service.Error
+        let error = issue.Length > 0 ? issue: input.Error
         if error.Length > 0 {
             thread.Add(
                 Container{
@@ -373,6 +367,8 @@ class MessagesPage : Cell, IDisposable {
                     MessageDialogInput{
                         Ui: ui,
                         Session: input.Session,
+                        Revision: input.Revision,
+                        Working: input.Working,
                         WalletId: walletId,
                         Network: walletNetwork,
                         Contacts: input.Contacts,
@@ -387,8 +383,8 @@ class MessagesPage : Cell, IDisposable {
                             if current == nil {
                                 input.State.ConversationId = ""
                                 input.State.NewConversation = nil
-                                Accept(input)
-                                Rebuild()
+                                input.State.Request++
+                                Accept(MessagesInput{... input, Request: input.State.Request})
                             } else {
                                 Select(input, current)
                             }
@@ -409,6 +405,7 @@ class MessagesPage : Cell, IDisposable {
                         Ui: ui,
                         Message: message,
                         Revision: input.Revision,
+                        Working: input.Working,
                         CanAddContact: !message.Outgoing &&
                             message
                             .SenderAddress
@@ -455,7 +452,7 @@ class MessagesPage : Cell, IDisposable {
                         Hidden(
                             ui.Privacy,
                             conversation.IsGroup ? (
-                                conversation.Members.Count(member -> member != input.Session.Messages.OwnAddress) + 1
+                                conversation.Members.Count(member -> member != input.Address) + 1
                             ).ToString() + " " + ui.Strings.Get("members"): conversation.Handle
                         ),
                         AppTheme.Type11,
@@ -670,7 +667,6 @@ data struct MessageThreadInput {
 class MessageThread : Cell, IDisposable {
     private var input MessageThreadInput
     private var request int64 = -1
-    private var revision int64 = -1
     private var highlight string = ""
     private var lastMessage string = ""
     private var initialized bool
@@ -689,11 +685,9 @@ class MessageThread : Cell, IDisposable {
     }
 
     func Accept(next MessageThreadInput) {
-        let changed = revision != next.Revision ||
-            input.Width != next.Width ||
-            input.CanRetry != next.CanRetry ||
-            input.Privacy != next.Privacy ||
-            input.Language != next.Language
+        if next == input {
+            return
+        }
         let latest = next.Conversation?.Messages.LastOrDefault()?.Key ?? ""
         following = scroll.ScrollRange.Y - scroll.ScrollOffset.Y < AppTheme.Space16
         input = next
@@ -717,12 +711,9 @@ class MessageThread : Cell, IDisposable {
         } else if latest != lastMessage && following {
             Scroll("")
         }
-        if changed || !initialized || request != next.Request {
-            Rebuild()
-        }
         request = next.Request
         lastMessage = latest
-        revision = next.Revision
+        Rebuild()
     }
 
     private func Scroll(key string) {
@@ -805,7 +796,7 @@ class MessageThread : Cell, IDisposable {
                         Last: last,
                         Animate: added && newTransaction && initialized && ui.Actions.playbackActive(),
                         Highlight: highlight == message.Key,
-                        CanRetry: input.CanRetry,
+                        CanRetry: message.State == MessageState.Failed && input.CanRetry,
                         Width: input.Width,
                         Handle: handles[message.Key],
                         OnOpen: input.OnOpen,
@@ -831,6 +822,8 @@ data struct MessageDialogInput {
     var Address string
     var Privacy bool
     var Language string
+    var Revision int64
+    var Working bool
     var OnContacts Action
     var OnSelect Action[Conversation?]
     var OnClose Action
@@ -869,7 +862,12 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
         let destination = address
         let recipients = List[string](members)
         let identity = input.Session.Messages.OwnAddress
-        go Execute(input, title, destination, recipients, generation, identity, owner.Token)
+        let version = generation
+        let observer = owner.Token
+        input
+            .Ui
+            .Actions
+            .Background(ct -> Execute(input, title, destination, recipients, version, identity, observer, ct))
         Rebuild()
     }
 
@@ -880,6 +878,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
         recipients List[string],
         version int64,
         identity string,
+        observer CancellationToken,
         token CancellationToken
     ) {
         var result Conversation?
@@ -898,9 +897,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
             } else {
                 result = await service.OpenConversation(title, destination, token)
             }
-        } catch (failure OperationCanceledException) when token.IsCancellationRequested {
-            return
-        } catch (failure Exception) {
+        } catch (failure Exception) when !(failure is OperationCanceledException) {
             error = failure.Message
         }
         input
@@ -910,6 +907,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
             ?.TryPost(
             () -> {
                 if disposed ||
+                    observer.IsCancellationRequested ||
                     version != generation ||
                     service.OwnAddress != identity ||
                     service.Network != input.Network ||
@@ -1075,6 +1073,7 @@ data struct MessageDetailsInput {
     var Privacy bool
     var Language string
     var Revision int64
+    var Working bool
     var OnClose Action
     var OnContact Action
 }

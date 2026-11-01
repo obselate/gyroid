@@ -18,7 +18,7 @@ import System.Linq
 class MessageParts {
     shared {
         func Preview(ui Presentation, text string, size float64, color Color) Blob -> Text{
-            Content: Hidden(ui.Privacy, text.Replace("\r", " ").Replace("\n", " ")),
+            Content: Hidden(ui.Privacy, text.ReplaceLineEndings(" ")),
             FontFamily: AppTheme.Font,
             FontSize: size,
             Color: color,

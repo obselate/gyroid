@@ -26,10 +26,12 @@ partial class MessagingService {
     private var viewOnly bool
     private var generation int64
     private var revision int64
+    private var viewRevision int64
     private var appliedRevision int64 = -1
     var Error string = ""
 
     prop Conversations IReadOnlyList[Conversation] -> conversations
+    prop Revision int64 -> Interlocked.Read(ref viewRevision)
     prop OwnAddress string -> ownAddress
     prop Network string -> session.settings.Network
     prop Mode MessengerMode -> if session.State == WalletState.Locked {
@@ -90,6 +92,7 @@ partial class MessagingService {
                         sendCancellations[message] = CancellationTokenSource()
                     }
                 }
+                Interlocked.Increment(ref viewRevision)
             }
         }
         viewOnly = NodeJson.Flag(address, "view_only")
@@ -188,6 +191,7 @@ partial class MessagingService {
                 message.SendPayload = Array.Empty[uint8]()
             }
             message.State = MessageState.InProgress
+            Interlocked.Increment(ref viewRevision)
         }
         session.Changed?.Invoke()
         await Dispatch(conversation, message, version, ct)
@@ -217,6 +221,7 @@ partial class MessagingService {
                     return
                 }
                 message.State = MessageState.Failed
+                Interlocked.Increment(ref viewRevision)
                 local = store
             }
             session.Changed?.Invoke()
@@ -378,6 +383,7 @@ partial class MessagingService {
         let local = store ?? throw WalletException("Load a wallet first")
         conversation.Unread = 0
         local.MarkRead(conversation)
+        Interlocked.Increment(ref viewRevision)
         session.Changed?.Invoke()
         await Persist(local, ct)
     }
@@ -395,6 +401,7 @@ partial class MessagingService {
                     cancelled.Add(cancellation)
                 }
             }
+            Interlocked.Increment(ref viewRevision)
         }
         for cancellation in cancelled {
             cancellation.Cancel()
@@ -444,6 +451,7 @@ partial class MessagingService {
             selected = ""
             store = nil
             Error = ""
+            Interlocked.Increment(ref viewRevision)
         }
         for cancellation in cancelled {
             cancellation.Cancel()

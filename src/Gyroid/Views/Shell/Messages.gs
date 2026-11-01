@@ -32,19 +32,25 @@ partial class App {
             messagesState.NewConversation = nil
             messagesState.Drafts.Clear()
         }
-        messagesState.Revision++
         messageOverlay?.Accept(MessageOverlayInput())
     }
 
     private func MessageOverlayInput() MessagesOverlayInput -> MessagesOverlayInput{
         Ui: ui,
         Session: wallet,
+        Network: wallet.Messages.Network,
+        Address: wallet.Messages.OwnAddress,
+        Mode: wallet.Messages.Mode,
+        Locked: wallet.Snapshot.State == WalletState.Locked,
+        ViewOnly: wallet.Snapshot.ViewOnly,
+        Working: ui.Working(),
+        Error: wallet.Messages.Error,
         State: messagesState,
         Contacts: contacts,
         Width: width,
         Page: screen,
         WalletId: wallet.Settings.ActiveWallet,
-        Revision: messagesState.Revision,
+        Revision: wallet.Messages.Revision,
         Privacy: ui.Privacy,
         Language: ui.Strings.Language,
         OnOpen: () -> Open(AppPage.Messages),
@@ -57,10 +63,19 @@ partial class App {
     private func MessagesPageInput() MessagesInput -> MessagesInput{
         Ui: ui,
         Session: wallet,
+        Wallet: wallet.Settings.ActiveWallet,
+        Network: wallet.Messages.Network,
+        Address: wallet.Messages.OwnAddress,
+        Mode: wallet.Messages.Mode,
+        Locked: wallet.Snapshot.State == WalletState.Locked,
+        ViewOnly: wallet.Snapshot.ViewOnly,
+        Working: ui.Working(),
+        Error: wallet.Messages.Error,
+        Request: messagesState.Request,
         State: messagesState,
         Contacts: contacts,
         Width: width - 122,
-        Revision: messagesState.Revision,
+        Revision: wallet.Messages.Revision,
         Privacy: ui.Privacy,
         Language: ui.Strings.Language,
         OnOpen: () -> Open(AppPage.Messages),
@@ -87,6 +102,13 @@ partial class App {
 data struct MessagesOverlayInput {
     var Ui Presentation
     var Session WalletSession
+    var Network string
+    var Address string
+    var Mode MessengerMode
+    var Locked bool
+    var ViewOnly bool
+    var Working bool
+    var Error string
     var State MessagesViewState
     var Contacts SortedDictionary[string, string]
     var Width float64
@@ -102,12 +124,9 @@ data struct MessagesOverlayInput {
 class MessageOverlay : Cell, IDisposable {
     private var input MessagesOverlayInput
     private let observed HashSet[string] = HashSet[string](StringComparer.Ordinal)
-    private var walletId string = ""
-    private var ownAddress string = ""
     private var toast Conversation?
     private var drawer bool
     private var timer WindowTimer?
-    private var revision int64 = -1
     private var disposed bool
     private let configureDrawer Action[MessagesPage]
 
@@ -118,6 +137,15 @@ class MessageOverlay : Cell, IDisposable {
             MessagesInput{
                 Ui: input.Ui,
                 Session: input.Session,
+                Wallet: input.WalletId,
+                Network: input.Network,
+                Address: input.Address,
+                Mode: input.Mode,
+                Locked: input.Locked,
+                ViewOnly: input.ViewOnly,
+                Working: input.Working,
+                Error: input.Error,
+                Request: input.State.Request,
                 State: input.State,
                 Contacts: input.Contacts,
                 Width: Math.Min(480.0, input.Width - 112),
@@ -152,25 +180,18 @@ class MessageOverlay : Cell, IDisposable {
     }
 
     func Accept(next MessagesOverlayInput) {
-        if disposed {
+        if disposed || next == input {
             return
         }
-        let changed = revision != next.Revision ||
-            input.Width != next.Width ||
-            input.Page != next.Page ||
-            input.Privacy != next.Privacy ||
-            input.Language != next.Language ||
-            input.Contacts != next.Contacts
+        let changedMessages = input.Revision != next.Revision
+        let reset = input.WalletId != next.WalletId || input.Address != next.Address || input.Network != next.Network
         input = next
         let service = next.Session.Messages
-        let reset = walletId != next.WalletId || ownAddress != service.OwnAddress
         if reset {
-            walletId = next.WalletId
-            ownAddress = service.OwnAddress
             observed.Clear()
             CloseDrawer()
         }
-        if reset || revision != next.Revision {
+        if reset || changedMessages {
             for conversation in service.Conversations {
                 for message in conversation.Messages {
                     if observed.Add(message.Key) &&
@@ -195,10 +216,7 @@ class MessageOverlay : Cell, IDisposable {
                 }
             }
         }
-        revision = next.Revision
-        if changed || reset {
-            Rebuild()
-        }
+        Rebuild()
     }
 
     override func Build() Blob {

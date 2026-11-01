@@ -286,6 +286,7 @@ partial class MessagingService {
                 sentMessages = acceptedSent
                 appliedRevision = currentRevision
                 Error = local.Error
+                Interlocked.Increment(ref viewRevision)
             }
             session.History.ApplyMessages()
         } finally {

@@ -163,6 +163,7 @@ partial class MessagingService {
                         ?.Messages ??
                         List[Message]()
                     conversations = conversations.Where(item -> item.Id != conversation.Id).ToList()
+                    Interlocked.Increment(ref viewRevision)
                 }
             }
             store?.Removed.TryRemove(target.Id, out _)
@@ -189,6 +190,7 @@ partial class MessagingService {
                 if message != nil {
                     message.Outputs = prepared.Estimate.Outputs
                     message.SendPayload = payload
+                    Interlocked.Increment(ref viewRevision)
                 }
             }
             if !IsCurrent(message, version) {
@@ -206,11 +208,13 @@ partial class MessagingService {
                     message.Txid = NodeJson.Text(sent.RootElement, "txid")
                     message.FeeAtomic = int64(NodeJson.Number(sent.RootElement, "fee"))
                     message.State = MessageState.Pending
+                    Interlocked.Increment(ref viewRevision)
                 }
             } catch (error WalletException) when error.StatusCode > 0 && !error.OutcomeUnknown {
                 if message != nil {
                     message.IdempotencyKey = ""
                     message.SendPayload = Array.Empty[uint8]()
+                    Interlocked.Increment(ref viewRevision)
                 }
                 throw error
             }
@@ -246,6 +250,7 @@ partial class MessagingService {
             list.RemoveAll(item -> item.Id == conversation.Id)
             list.Add(conversation)
             conversations = list
+            Interlocked.Increment(ref viewRevision)
         }
     }
 }
