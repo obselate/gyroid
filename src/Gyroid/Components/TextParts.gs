@@ -36,6 +36,22 @@ class TextParts {
             }
         }
 
+        func KeyValue(ui Presentation, label string, value Blob, labelWidth float64? = nil) Blob {
+            let name = Label(ui, label, AppTheme.Type12, AppTheme.Body, "")
+            if let width = labelWidth {
+                name.Width = width
+                name.FlexShrink = 0
+            }
+            return Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: AppTheme.Space8,
+                MinWidth: 0,
+                name,
+                Grow(value)
+            }
+        }
+
         func ChainState(ui Presentation, state string, confirmations uint64) string -> if state == "confirmed" {
             ui.Strings.Get("Confirmed") + " " + Count(confirmations)
         } else if state == "mempool" {
@@ -148,6 +164,29 @@ class TextParts {
             TextParts.Label(ui, value, size, color, channel)
         }
 
+        func Value(
+            ui Presentation,
+            key string,
+            name string,
+            value string,
+            size float64,
+            color Color,
+            fractionColor Color? = nil,
+            live AccessibilityLive = AccessibilityLive.Off
+        ) Blob -> Cell
+            .Mount[DecodeValueInput, DecodeValue](
+            key,
+            DecodeValueInput{
+                Value: value,
+                Name: name,
+                Size: size,
+                Color: color,
+                FractionColor: fractionColor ?? color,
+                Live: live,
+                Ui: ui
+            }
+        )
+
         func Figure(
             ui Presentation,
             label string,
@@ -171,17 +210,15 @@ class TextParts {
                 AlignItems: AlignItems.Baseline,
                 Gap: AppTheme.Space6,
                 Overflow: Overflow.Hidden,
-                Cell.Mount[DecodeValueInput, DecodeValue](
+                Value(
+                    ui,
                     key.Length > 0 ? key: label,
-                    DecodeValueInput{
-                        Value: value,
-                        Name: ui.Strings.Get(label) + " " + value,
-                        Size: size,
-                        Color: color,
-                        FractionColor: fractionColor ?? color,
-                        Live: live,
-                        Ui: ui
-                    }
+                    ui.Strings.Get(label) + " " + value,
+                    value,
+                    size,
+                    color,
+                    fractionColor,
+                    live
                 ),
                 Label(ui, unit, AppTheme.Type11, color, "")
             }
@@ -232,7 +269,9 @@ class TextParts {
             shown string,
             clearAfterMs float64 = 120000,
             labelled bool = true,
-            wrap bool = true
+            wrap bool = true,
+            valueColor Color? = nil,
+            disabled bool = false
         ) Blob {
             let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
                 System.MemoryExtensions.AsSpan(value)
@@ -246,7 +285,7 @@ class TextParts {
                     Content: shown,
                     FontFamily: AppTheme.Font,
                     FontSize: AppTheme.Type13,
-                    Color: AppTheme.Ink,
+                    Color: valueColor ?? AppTheme.Ink,
                     TextWrap: wrap ? TextWrap.Wrap: TextWrap.NoWrap
                 }
             )
@@ -261,13 +300,14 @@ class TextParts {
                     MaterialIcons.Create(
                         copied ? "check": "content_copy",
                         AppTheme.Icon16,
-                        copied ? AppTheme.Lime: AppTheme.Body
+                        disabled ? AppTheme.Dim: copied ? AppTheme.Lime: AppTheme.Body
                     ),
                     ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
                     () -> {
                         ui.Actions.Copy(value, clearAfterMs)
                         ui.Actions.rebuild()
-                    }
+                    },
+                    disabled: disabled
                 )
             }
         }

@@ -63,7 +63,10 @@ class WalletForm {
         labelled bool = true,
         hidden bool = false,
         leading Blob? = nil,
-        trailing Blob? = nil
+        trailing Blob? = nil,
+        placeholder string? = nil,
+        invalid bool = false,
+        inheritDirection bool = false
     ) Blob -> Bind(
         FieldInput(
             label,
@@ -79,7 +82,10 @@ class WalletForm {
             Label = labelled ? ui.Strings.Get(label): nil,
             Password = secret || hidden,
             Leading = leading,
-            Trailing = trailing
+            Trailing = trailing,
+            Placeholder = placeholder,
+            ContentDirection = inheritDirection ? nil: Direction.LeftToRight,
+            Invalid = invalid || issue.Length > 0
         }
     ).Build()
 

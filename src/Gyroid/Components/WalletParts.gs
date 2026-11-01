@@ -40,8 +40,8 @@ class WalletParts {
 
         func PageCard(
             ui Presentation,
-            width float64,
-            height float64,
+            width float64 = 0,
+            height float64 = 0,
             maxWidth float64 = 900,
             fill bool = false
         ) Container {

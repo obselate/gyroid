@@ -6,10 +6,10 @@ import Gyroid.Views
 
 class ListParts {
     shared {
-        func Viewport(content Blob, style Style? = nil) Container -> Container{
+        func Viewport(content Blob, style Style? = nil, grow bool = true) Container -> Container{
             BasedOn: style,
-            FlexGrow: 1,
-            FlexBasis: 0,
+            FlexGrow: grow ? 1: 0,
+            FlexBasis: grow ? 0: Length.Auto,
             MinWidth: 0,
             MinHeight: 0,
             Overflow: Overflow.Hidden,

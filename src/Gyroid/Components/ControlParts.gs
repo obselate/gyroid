@@ -215,7 +215,10 @@ class ControlParts {
             primary bool = false,
             autoFocus bool = false,
             busy bool? = nil,
-            appearance ActionButton? = nil
+            appearance ActionButton? = nil,
+            handle ElementHandle? = nil,
+            hasPopup bool? = nil,
+            expanded bool? = nil
         ) Blob {
             let style = appearance ?? (primary ? AppTheme.PrimaryButton: AppTheme.Button)
             let loading = busy ?? (primary && ui.Working())
@@ -231,6 +234,20 @@ class ControlParts {
                 }
             ).Build()
             button.AutoFocus = autoFocus
+            if let anchor = handle {
+                button.Handle = anchor
+            }
+            if hasPopup.HasValue || expanded.HasValue {
+                let semantics = button.Accessibility ?? Accessibility{}
+                button.Accessibility = Accessibility{
+                    Role: semantics.Role,
+                    Name: semantics.Name,
+                    Busy: semantics.Busy,
+                    Checked: semantics.Checked,
+                    HasPopup: hasPopup ?? semantics.HasPopup,
+                    Expanded: expanded ?? semantics.Expanded
+                }
+            }
             return button
         }
 
@@ -324,17 +341,40 @@ class ControlParts {
             color Color,
             width float64,
             height float64 = 8,
-            track Color? = nil
-        ) Blob ->
-        ProgressBar{
-            AccessibilityName: name,
-            Value: share,
-            Width: width,
-            Height: height,
-            BorderRadius: AppTheme.Radius2,
-            FillColor: color,
-            TrackColor: track ?? AppTheme.Rule
-        }.Build()
+            track Color? = nil,
+            widthLength Length? = nil,
+            heightLength Length? = nil
+        ) Blob {
+            var control = ProgressBar{
+                AccessibilityName: name,
+                Value: share,
+                Width: width,
+                Height: height,
+                BorderRadius: AppTheme.Radius2,
+                FillColor: color,
+                TrackColor: track ?? AppTheme.Rule
+            }
+            if let length = heightLength {
+                control = control with{
+                    CreateFill = bar -> Container{
+                        Width: Percent(bar.Value * 100),
+                        Height: length,
+                        BorderRadius: bar.BorderRadius ?? AppTheme.Radius2,
+                        BackgroundColor: bar.FillColor ?? color,
+                        TransitionMs: bar.TransitionMs ?? 0,
+                        TransitionEasing: bar.TransitionEasing ?? Easing.EaseOut
+                    }
+                }
+            }
+            let progress = control.Build()
+            if let length = widthLength {
+                progress.Width = length
+            }
+            if let length = heightLength {
+                progress.Height = length
+            }
+            return progress
+        }
 
         func Navigation(ui Presentation, key string, input NavigationRailInput) Blob ->
         Cell.Mount[NavigationRailInput, NavigationRail](

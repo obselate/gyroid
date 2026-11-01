@@ -4,12 +4,35 @@ import Goo
 
 class ChartParts {
     shared {
-        func Tooltip(left float64, top float64, content Blob, width float64? = nil) Blob {
+        func Tooltip(
+            left Length,
+            top Length,
+            content Blob,
+            width float64? = nil,
+            right Length? = nil,
+            bottom Length? = nil,
+            margin Edges? = nil,
+            zIndex int32 = 0
+        ) Container {
             let surface = Container{BasedOn: AppTheme.PassiveTooltipStyle, HitTestSelf: false, content}
             if let size = width {
                 surface.Width = size
             }
-            return NetworkParts.Place(left, top, surface)
+            let placed = Container{Position: PositionType.Absolute, HitTestSelf: false, ZIndex: zIndex, surface}
+            if let edge = right {
+                placed.Right = edge
+            } else {
+                placed.Left = left
+            }
+            if let edge = bottom {
+                placed.Bottom = edge
+            } else {
+                placed.Top = top
+            }
+            if let inset = margin {
+                placed.Margin = inset
+            }
+            return placed
         }
 
         func Point(left Length, top Length, color Color, size float64 = 8) Container -> Container{
