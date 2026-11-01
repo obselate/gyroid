@@ -22,7 +22,7 @@ partial class App {
 
     private func ObserveMessages() {
         let service = wallet.Messages
-        let reset = messagesWallet != service.OwnAddress
+        let reset = messagesWallet != service.OwnAddress || wallet.Settings.ActiveWallet != lastWallet
         if reset {
             messagesWallet = service.OwnAddress
             observedMessages.Clear()
