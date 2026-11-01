@@ -422,16 +422,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         let height = List[Blob]()
         if status.Running {
             let heightText = Count(status.Height)
-            height.Add(
-                Value(
-                    ui,
-                    "height",
-                    ui.Strings.Get("Height") + " " + heightText,
-                    heightText,
-                    14,
-                    AppTheme.Mint
-                )
-            )
+            height.Add(Value(ui, "height", ui.Strings.Get("Height") + " " + heightText, heightText, 14, AppTheme.Mint))
             if status.Syncing {
                 height.Add(Label(ui, "/ " + Count(status.ChainHeight), AppTheme.Type14, AppTheme.Dim, ""))
             }
@@ -1158,22 +1149,16 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     }
 
     private func Grid(input SettingsPageInput, name string, rows int32, labels[]?string, slot Func[int32, Blob]) Blob {
-        let grid = SegmentGrid(
-            rows,
-            10,
-            slot,
-            rowGap: AppTheme.GetDetailGap(input.Height),
-            label: if let names = labels {
-                row -> Container{
-                    Width: 34,
-                    AlignItems: AlignItems.FlexEnd,
-                    JustifyContent: JustifyContent.Center,
-                    Label(input.Ui, names[row], AppTheme.Type11, AppTheme.Dim, "")
-                }
-            } else {
-                nil
+        var buildLabel Func[int32, Blob]? = nil
+        if let names = labels {
+            buildLabel = row -> Container{
+                Width: 34,
+                AlignItems: AlignItems.FlexEnd,
+                JustifyContent: JustifyContent.Center,
+                Label(input.Ui, names[row], AppTheme.Type11, AppTheme.Dim, "")
             }
-        )
+        }
+        let grid = SegmentGrid(rows, 10, slot, rowGap: AppTheme.GetDetailGap(input.Height), label: buildLabel)
         grid.Accessibility = Accessibility{Role: AccessibilityRole.Image, Name: name}
         return grid
     }
@@ -1860,11 +1845,16 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         Label(ui, ui.Strings.Get(title), AppTheme.Type12, color, "")
     }
 
-    private func Item(ui Presentation, kept bool, label string, note string) Blob ->
-    WalletParts.Header(
-        Status(ui, ui.Strings.Get(label), kept ? AppTheme.Mint: AppTheme.Pink, kept ? "check": "close"),
-        trailing: note.Length > 0 ? Label(ui, ui.Strings.Get(note), AppTheme.Type12, AppTheme.Dim, ""): nil
-    )
+    private func Item(ui Presentation, kept bool, label string, note string) Blob {
+        var trailing Blob? = nil
+        if note.Length > 0 {
+            trailing = Label(ui, ui.Strings.Get(note), AppTheme.Type12, AppTheme.Dim, "")
+        }
+        return WalletParts.Header(
+            Status(ui, ui.Strings.Get(label), kept ? AppTheme.Mint: AppTheme.Pink, kept ? "check": "close"),
+            trailing: trailing
+        )
+    }
 
     private func SaveSettings(input SettingsPageInput) {
         guard let value = draft else {
