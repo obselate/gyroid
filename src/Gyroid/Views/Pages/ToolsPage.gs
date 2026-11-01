@@ -712,13 +712,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
 
     private func BuildSuggestion(word string, first string) Blob {
         let style = word == first ? AppTheme.PrimaryButton: AppTheme.Button
-        return (
-            style with{
-                Content = word,
-                OnClick = () -> Answer(current, word),
-                FontFamily = AppTheme.Font
-            }
-        ).Build()
+        return (style with{Content = word, OnClick = () -> Answer(current, word), FontFamily = AppTheme.Font}).Build()
     }
 
     private func Reveal(input ToolsRegionInput) {
