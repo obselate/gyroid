@@ -489,7 +489,7 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
                 }
             )
         )
-        let gap = compact ? 8.0: 12.0
+        let gap = compact ? AppTheme.Space8: AppTheme.Space12
         let grid = Container{Gap: gap, FlexShrink: 0}
         for row in 0 ... 2 {
             let line = Container{FlexDirection: FlexDirection.Row, Gap: gap}
@@ -991,7 +991,10 @@ class ToolsPage : Cell[ToolsInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space10,
-            Padding: Edges{Left: compact ? AppTheme.Space10: AppTheme.Space12, Right: compact ? 10.0: AppTheme.Space12},
+            Padding: Edges{
+                Left: compact ? AppTheme.Space10: AppTheme.Space12,
+                Right: compact ? AppTheme.Space10: AppTheme.Space12
+            },
             BorderWidth: AppTheme.Border1,
             BorderRadius: AppTheme.Radius8,
             BorderColor: if invalid {
