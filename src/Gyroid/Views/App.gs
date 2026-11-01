@@ -834,7 +834,7 @@ partial class App : Cell {
             screen
         } else if snapshot.State == WalletState.Unlocked {
             AppPage.Overview
-        } else if Preparing() {
+        } else if Preparing() && !ui.Working() {
             AppPage.Sync
         } else {
             AppPage.Library
