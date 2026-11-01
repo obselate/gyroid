@@ -649,7 +649,7 @@ class HistoryPage : Cell[HistoryInput] {
         let start = low + 1 + uint64(column * size)
         let end = Math.Max(start, low + uint64((column + 1) * size))
         let inside = all.Where((row HistoryRow) -> row.Height >= start && row.Height <= end).ToArray()
-        let tip = Container
+        let tip = Container()
         {
             Label(ui, start == end ? Count(start): Count(start) + " – " + Count(end), AppTheme.Type12, AppTheme.Ink, "")
         }
