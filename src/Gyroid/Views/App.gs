@@ -53,6 +53,7 @@ partial class App : Cell {
 
     private let miningHistory MiningHistory = MiningHistory()
     private let toolsState ToolsState = ToolsState()
+    private let configureSync Action[SyncPage]
 
     private let togglePrivacy Action
 
@@ -176,6 +177,9 @@ partial class App : Cell {
                 (task, done, secret, extra) -> Run(task, done, secret, extra),
                 action -> workers.Writer.TryWrite(WindowWork(action))
             )
+        )
+        configureSync = page -> page.Accept(
+            SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
         )
         navigate = target -> Navigate(target)
         togglePrivacy = () -> TogglePrivacy()
@@ -1010,10 +1014,7 @@ partial class App : Cell {
         } else if page == AppPage.Network {
             Cell.Mount[NetworkPage]("network", configureNetwork)
         } else if page == AppPage.Sync {
-            Cell.Mount[SyncInput, SyncPage](
-                "sync",
-                SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
-            )
+            Cell.Mount[SyncPage]("sync", configureSync)
         } else if seed != nil {
             Cell.Mount[SeedPage]("seed", configureSeed)
         } else if page == AppPage.Tools || page == AppPage.Privacy {

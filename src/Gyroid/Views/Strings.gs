@@ -452,6 +452,7 @@ class Strings {
             case "completed": "已完成"
             case "current": "当前"
             case "upcoming": "待开始"
+            case "skipped": "已跳过"
             case "Checkpoints": "检查点"
             case "Connecting": "连接中"
             case "Operation failed": "操作失败"
