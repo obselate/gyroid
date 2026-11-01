@@ -274,6 +274,8 @@ partial class App : Cell {
                 Ui: ui,
                 State: wallet.Snapshot.State,
                 ActiveWallet: wallet.Settings.ActiveWallet,
+                Directory: wallet.Settings.WalletDirectory,
+                Network: wallet.Settings.Network,
                 Busy: ui.Working(),
                 Language: ui.Strings.Language,
                 ChooseFile: chooseFile,

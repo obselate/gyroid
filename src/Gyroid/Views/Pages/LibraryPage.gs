@@ -24,6 +24,8 @@ data struct LibraryInput {
     var Ui Presentation
     var State WalletState
     var ActiveWallet string
+    var Directory string
+    var Network string
     var Busy bool
     var Language string
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
@@ -37,10 +39,6 @@ class LibraryPage : Cell, IDisposable {
     private var request CancellationTokenSource?
     private var generation int32
     private var input LibraryInput
-    private var directory string = ""
-    private var network string = ""
-    private var state WalletState?
-    private var activeWallet string = ""
     private var form string = ""
     private var issue string = ""
     private var wallets SortedDictionary[string, DateTime] = SortedDictionary[string, DateTime](StringComparer.Ordinal)
@@ -63,7 +61,7 @@ class LibraryPage : Cell, IDisposable {
                 Ui: input.Ui,
                 State: input.State,
                 ActiveWallet: input.ActiveWallet,
-                Directory: directory,
+                Directory: input.Directory,
                 Busy: input.Busy,
                 Language: input.Language,
                 Wallets: wallets,
@@ -77,22 +75,19 @@ class LibraryPage : Cell, IDisposable {
     }
 
     func Accept(next LibraryInput) {
-        let changed = !EqualityComparer[LibraryInput].Default.Equals(input, next)
-        input = next
-        let settings = next.Session.Settings
-        if directory == settings.WalletDirectory && network == settings.Network.ToString() &&
-            state == next.State &&
-            activeWallet == next.ActiveWallet {
-            if changed {
-                Rebuild()
-            }
+        if EqualityComparer[LibraryInput].Default.Equals(input, next) {
             return
         }
-        directory = settings.WalletDirectory
-        network = settings.Network.ToString()
-        state = next.State
-        activeWallet = next.ActiveWallet
+        let previous = input
+        input = next
         Rebuild()
+        if previous.Session == next.Session &&
+            previous.Directory == next.Directory &&
+            previous.Network == next.Network &&
+            previous.State == next.State &&
+            previous.ActiveWallet == next.ActiveWallet {
+            return
+        }
         request?.Cancel()
         request?.Dispose()
         guard let owner = next.Ui.Actions.window else {
@@ -136,7 +131,7 @@ class LibraryPage : Cell, IDisposable {
         if form.Length > 0 {
             card.Add(
                 Cell.Mount[LibraryFormInput, LibraryForm](
-                    network + directory + form,
+                    input.Network + input.Directory + form,
                     LibraryFormInput{
                         Session: input.Session,
                         Ui: input.Ui,
@@ -149,7 +144,12 @@ class LibraryPage : Cell, IDisposable {
                 )
             )
         } else {
-            card.Add(Cell.Mount[LibraryList](network + Path.Combine(directory, input.ActiveWallet), configureList))
+            card.Add(
+                Cell.Mount[LibraryList](
+                    input.Network + Path.Combine(input.Directory, input.ActiveWallet),
+                    configureList
+                )
+            )
         }
         return card
     }
@@ -524,7 +524,7 @@ class LibraryList : Cell, IDisposable {
         issue = ""
         generation++
         let id = generation
-        let token = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, owner.Closed)
+        let token = CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
         go Complete(action, source, owner, id, token, expectedWallet)
     }
 
@@ -539,8 +539,6 @@ class LibraryList : Cell, IDisposable {
         var message = ""
         try {
             await action(token.Token)
-        } catch (failure OperationCanceledException) when token.IsCancellationRequested {
-            return
         } catch (failure Exception) {
             message = failure.Message
         } finally {
@@ -811,24 +809,12 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
         let directory = session.Settings.WalletDirectory
         let network = session.Settings.Network
         let activeWallet = session.Settings.ActiveWallet
-        let token = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, owner.Closed)
+        let token = CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
         busy = true
         issue = ""
         generation++
         let id = generation
-        go Import(
-            input,
-            filename,
-            secret,
-            extra,
-            publicKey,
-            directory,
-            network.ToString(),
-            activeWallet,
-            owner,
-            id,
-            token
-        )
+        go Import(input, filename, secret, extra, publicKey, directory, network, activeWallet, owner, id, token)
     }
 
     private async func Import(
@@ -851,8 +837,6 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
             } else {
                 await source.Session.ImportViewOnlyAsync(filename, publicKey, extra, secret, token.Token)
             }
-        } catch (failure OperationCanceledException) when token.IsCancellationRequested {
-            return
         } catch (failure Exception) {
             message = failure.Message
         } finally {
@@ -872,8 +856,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                     network != source
                     .Session
                     .Settings
-                    .Network
-                    .ToString() ||
+                    .Network ||
                     (
                     source
                         .Session
