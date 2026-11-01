@@ -151,6 +151,8 @@ data struct SettingsPurgeInput {
 class SettingsPage : Cell {
     private var current SettingsPageInput
     private var dialogs SettingsDialogs?
+    private var advancedOwner SettingsAdvanced?
+    private var nodeOwner SettingsNode?
     private let openDialog Action[string]
     private let configureGeneral Action[SettingsGeneral]
     private let configureSecurity Action[SettingsSecurity]
@@ -163,9 +165,15 @@ class SettingsPage : Cell {
         openDialog = kind -> dialogs?.Open(kind)
         configureGeneral = region -> region.Accept(current)
         configureSecurity = region -> region.Accept(current, openDialog)
-        configureNode = region -> region.Accept(current)
+        configureNode = region -> {
+            nodeOwner = region
+            region.Accept(current)
+        }
         configureWallet = region -> region.Accept(current, openDialog)
-        configureAdvanced = region -> region.Accept(current, OpenPurge)
+        configureAdvanced = region -> {
+            advancedOwner = region
+            region.Accept(current, OpenPurge)
+        }
         configureDialogs = region -> {
             dialogs = region
             region.Accept(current)
@@ -178,7 +186,12 @@ class SettingsPage : Cell {
     }
 
     private func OpenPurge(size string, unit string, wallets int32) {
-        dialogs?.OpenPurge(size, unit, wallets)
+        dialogs?.OpenPurge(size, unit, wallets, RefreshNodeData)
+    }
+
+    private func RefreshNodeData() {
+        nodeOwner?.InvalidateDirectory()
+        advancedOwner?.Refresh()
     }
 
     override func Build() Blob {
@@ -393,13 +406,16 @@ class SettingsGeneral : Cell, IDisposable {
         }
         owner.TryPost(
             () -> {
-                if token.IsCancellationRequested || generations[key] != generation || context.Session != session {
+                if context.Session != session {
                     return
                 }
-                issue = error
                 if error.Length == 0 {
                     saved()
                 }
+                if token.IsCancellationRequested || generations[key] != generation {
+                    return
+                }
+                issue = error
                 Rebuild()
             }
         )
@@ -709,6 +725,16 @@ class SettingsNode : Cell, IDisposable {
                 }
             }
         )
+    }
+
+    func InvalidateDirectory() {
+        generation++
+        lifetime?.Cancel()
+        lifetime?.Dispose()
+        lifetime = nil
+        directoryRead = ""
+        directoryExists = false
+        Rebuild()
     }
 
     func Dispose() {
@@ -1343,6 +1369,7 @@ class SettingsAdvanced : Cell, IDisposable {
     private var lifetime CancellationTokenSource?
     private var chainRequest CancellationTokenSource?
     private var certificateRequest CancellationTokenSource?
+    private var checkpointRequest CancellationTokenSource?
     private var checkpointGeneration int32
     private var generation int32
     private var certifyGeneration int32
@@ -1366,6 +1393,8 @@ class SettingsAdvanced : Cell, IDisposable {
             lifetime?.Cancel()
             chainRequest?.Dispose()
             certificateRequest?.Dispose()
+            checkpointRequest?.Dispose()
+            checkpointRequest = nil
             chainRequest = nil
             certificateRequest = nil
             lifetime?.Dispose()
@@ -1424,7 +1453,13 @@ class SettingsAdvanced : Cell, IDisposable {
         lifetime?.Cancel()
         chainRequest?.Dispose()
         certificateRequest?.Dispose()
+        checkpointRequest?.Dispose()
         lifetime?.Dispose()
+    }
+
+    func Refresh() {
+        chainLoaded = false
+        Accept(context, openPurge)
     }
 
     private func Advanced(input SettingsPageInput, pane Container) {
@@ -1743,38 +1778,59 @@ class SettingsAdvanced : Cell, IDisposable {
     }
 
     private func Checkpoints(input SettingsPageInput, task Func[CancellationToken, Task]) {
-        guard let owner = lifetime else {
+        guard let lifetime = lifetime, let owner = input.Window else {
             return
         }
+        checkpointRequest?.Cancel()
+        checkpointRequest?.Dispose()
+        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token)
+        checkpointRequest = current
         checkpointGeneration++
-        let request = checkpointGeneration
-        let token = owner.Token
-        let network = state.Network
-        let directory = state.Directory
-        input
-            .Ui
-            .Actions
-            .Run(
-            ct -> SaveCheckpoints(task, token, ct),
-            () -> {
-                if request == checkpointGeneration &&
-                    !token.IsCancellationRequested &&
-                    state.Network == network &&
-                    state.Directory == directory {
-                    chainLoaded = false
-                    Accept(context, openPurge)
-                }
-            }
+        go SaveCheckpoints(
+            input.Session,
+            task,
+            owner,
+            state.Network,
+            state.Directory,
+            checkpointGeneration,
+            current.Token
         )
     }
 
     private async func SaveCheckpoints(
+        session WalletSession,
         task Func[CancellationToken, Task],
-        token CancellationToken,
-        ct CancellationToken
+        owner Window,
+        network string,
+        directory string,
+        request int32,
+        token CancellationToken
     ) {
-        using let linked = CancellationTokenSource.CreateLinkedTokenSource(token, ct)
-        await task.Invoke(linked.Token)
+        var issue = ""
+        try {
+            await task.Invoke(token)
+        } catch (cancelled OperationCanceledException) {
+            return
+        } catch (failure Exception) {
+            issue = failure.Message
+        }
+        owner.TryPost(
+            () -> {
+                if request != checkpointGeneration ||
+                    token.IsCancellationRequested ||
+                    context.Session != session ||
+                    state.Network != network ||
+                    state.Directory != directory {
+                    return
+                }
+                loadIssue = issue
+                if issue.Length == 0 {
+                    Refresh()
+                } else {
+                    Rebuild()
+                }
+            }
+        )
     }
 
     private func Certify(input SettingsPageInput) {
@@ -1958,6 +2014,7 @@ class SettingsDialogs : Cell {
     private var context SettingsPageInput
     private var kind string = ""
     private var purge SettingsPurgeInput
+    private var purged Action
     private let configureKeys Action[SettingsKeysDialog]
     private let configureViewOnly Action[SettingsViewOnlyDialog]
     private let configurePurge Action[SettingsPurgeDialog]
@@ -1965,7 +2022,7 @@ class SettingsDialogs : Cell {
     init() {
         configureKeys = region -> region.Accept(context, kind, Close)
         configureViewOnly = region -> region.Accept(context, Close)
-        configurePurge = region -> region.Accept(context, purge, Close)
+        configurePurge = region -> region.Accept(context, purge, Close, purged)
     }
 
     func Accept(input SettingsPageInput) {
@@ -1991,8 +2048,9 @@ class SettingsDialogs : Cell {
         Rebuild()
     }
 
-    func OpenPurge(size string, unit string, wallets int32) {
+    func OpenPurge(size string, unit string, wallets int32, purged Action) {
         purge = SettingsPurgeInput{Size: size, Unit: unit, Wallets: wallets}
+        this.purged = purged
         Open("purge")
     }
 
@@ -2588,6 +2646,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
     private var state SettingsPurgeInput
     private var context SettingsPageInput
     private var close Action
+    private var purged Action
     private var sizeText string = ""
     private var sizeUnit string = ""
     private var dataWallets int32
@@ -2597,9 +2656,10 @@ class SettingsPurgeDialog : Cell, IDisposable {
     private var lifetime CancellationTokenSource?
     private var generation int32
 
-    func Accept(input SettingsPageInput, data SettingsPurgeInput, close Action) {
+    func Accept(input SettingsPageInput, data SettingsPurgeInput, close Action, purged Action) {
         context = input
         this.close = close
+        this.purged = purged
         sizeText = data.Size
         sizeUnit = data.Unit
         dataWallets = data.Wallets
@@ -2797,6 +2857,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
                 purging = false
                 issue = error
                 if error.Length == 0 {
+                    purged.Invoke()
                     close.Invoke()
                 } else {
                     Rebuild()
