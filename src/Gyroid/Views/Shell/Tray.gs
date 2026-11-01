@@ -41,6 +41,7 @@ partial class App {
         icon.CommandActivated += id -> {
             if id == "show" || id == "unlock" {
                 if id == "unlock" {
+                    pageGeneration++
                     screen = AppPage.None
                 }
                 Restore()
@@ -59,6 +60,7 @@ partial class App {
                 if page != AppPage.None {
                     pendingPayment = nil
                     pendingPage = page
+                    pageGeneration++
                     screen = AppPage.None
                     ApplyNavigation()
                     Restore()
