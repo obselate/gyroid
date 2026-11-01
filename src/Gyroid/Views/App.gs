@@ -41,6 +41,7 @@ partial class App : Cell {
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
 
     private let receiveRequest ReceiveRequest = ReceiveRequest()
+    private let configureReceive Action[ReceivePage]
     private let sendRows List[SendRow] = List[SendRow]()
     private var pendingPayment PaymentLink?
     private var confirmPaymentReplacement bool
@@ -186,6 +187,24 @@ partial class App : Cell {
         }
         sendDone = () -> Refresh()
         chooseFile = (kind, title, path, chosen) -> ChooseFile(kind, title, path, chosen)
+        configureReceive = cell -> {
+            let snapshot = wallet.Snapshot
+            cell.Accept(
+                ReceivePageInput{
+                    Ui: ui,
+                    Address: snapshot.Address,
+                    History: snapshot.History,
+                    ChainHeight: snapshot.Balance?.ChainHeight ?? uint64(0),
+                    Privacy: ui.Privacy,
+                    Busy: ui.Working(),
+                    Language: ui.Strings.Language,
+                    Clipboard: ui.Actions.ClipboardText,
+                    Height: height,
+                    ChooseFile: chooseFile,
+                    Request: receiveRequest
+                }
+            )
+        }
         openReceive = () -> Navigate(AppPage.Receive)
         finishSeed = () -> FinishSeed()
         contactsChanged = next -> {
@@ -931,22 +950,7 @@ partial class App : Cell {
                 )
             }
         } else if page == AppPage.Receive {
-            Cell.Mount[ReceivePageInput, ReceivePage](
-                "receive",
-                ReceivePageInput{
-                    Ui: ui,
-                    Address: snapshot.Address,
-                    History: snapshot.History,
-                    ChainHeight: snapshot.Balance?.ChainHeight ?? uint64(0),
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Clipboard: ui.Actions.ClipboardText,
-                    Height: height,
-                    ChooseFile: chooseFile,
-                    Request: receiveRequest
-                }
-            )
+            Cell.Mount[ReceivePage]("receive", configureReceive)
         } else if page == AppPage.Mining {
             Cell.Mount[MiningPageInput, MiningPage](
                 "mining",
