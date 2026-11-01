@@ -24,6 +24,11 @@ import System.Linq
 import System.Threading
 import System.Threading.Tasks
 
+data struct PhraseSuggestion {
+    var Word string
+    var First bool
+}
+
 class ToolsState {
     var Tab string = "sign"
     var Report OutputReport? = nil
@@ -695,24 +700,28 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
     private var words int32
     private var found int32
     private var typed string = ""
-    private var suggestions List[string] = List[string]()
+    private var suggestions List[PhraseSuggestion] = List[PhraseSuggestion]()
     private var wrong bool
     private var checkedAt DateTime?
     private var busy bool
     private var issue string = ""
     private var generation int32
     private var current ToolsPhraseInput
-    private let suggestionKey Func[string, string] = (word string) -> word
-    private var suggestionRow Func[string, Blob]
+    private let suggestionKey Func[PhraseSuggestion, string] = (suggestion PhraseSuggestion) -> suggestion.Word
+    private let suggestionRow Func[PhraseSuggestion, Blob]
     private let lifetime CancellationTokenSource = CancellationTokenSource()
 
     init() {
-        suggestionRow = word -> BuildSuggestion(word, "")
-    }
-
-    private func BuildSuggestion(word string, first string) Blob {
-        let style = word == first ? AppTheme.PrimaryButton: AppTheme.Button
-        return (style with{Content = word, OnClick = () -> Answer(current, word), FontFamily = AppTheme.Font}).Build()
+        suggestionRow = suggestion -> {
+            let style = suggestion.First ? AppTheme.PrimaryButton: AppTheme.Button
+            return (
+                style with{
+                    Content = suggestion.Word,
+                    OnClick = () -> Answer(current, suggestion.Word),
+                    FontFamily = AppTheme.Font
+                }
+            ).Build()
+        }
     }
 
     private func Reveal(input ToolsRegionInput) {
@@ -810,20 +819,18 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             return
         }
         typed = value
-        let previous = suggestions.Count > 0 ? suggestions[0]: ""
-        suggestions = if value.Length == 0 {
-            List[string]()
-        } else {
-            Bip39Wordlist
-                .Words
-                .Where((word string) -> word.StartsWith(value, StringComparison.Ordinal))
-                .Take(5)
-                .ToList()
+        let next = List[PhraseSuggestion](value.Length == 0 ? 0: 5)
+        if value.Length > 0 {
+            for word in Bip39Wordlist.Words {
+                if word.StartsWith(value, StringComparison.Ordinal) {
+                    next.Add(PhraseSuggestion{Word: word, First: next.Count == 0})
+                    if next.Count == 5 {
+                        break
+                    }
+                }
+            }
         }
-        let first = suggestions.Count > 0 ? suggestions[0]: ""
-        if first != previous {
-            suggestionRow = word -> BuildSuggestion(word, first)
-        }
+        suggestions = next
     }
 
     private func Answer(input ToolsPhraseInput, word string) {
@@ -887,7 +894,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             WalletForm(
                 ui,
                 suggestions.Count > 0,
-                () -> Answer(request, suggestions[0]),
+                () -> Answer(request, suggestions[0].Word),
                 []string{typed},
                 () -> Rebuild()
             )
@@ -986,7 +993,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
                     ""
                 )
             )
-            let list = VirtualItems[string](
+            let list = VirtualItems[PhraseSuggestion](
                 suggestions,
                 AppTheme.ControlRegular * 3,
                 AppTheme.ControlRegular,
