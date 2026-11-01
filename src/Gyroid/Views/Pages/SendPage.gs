@@ -298,7 +298,6 @@ class SendPage : Cell[SendPageInput] {
             .Button{
             BasedOn: AppTheme.ButtonStyle,
             Height: AppTheme.ControlCompact,
-            Padding: Edges{Left: AppTheme.Space14, Right: AppTheme.Space14},
             BorderColor: AppTheme.FieldEdge,
             BackgroundColor: AppTheme.Black,
             Disabled: input.Busy || atoms == 0,
@@ -524,8 +523,10 @@ class SendPage : Cell[SendPageInput] {
                     Placement: PopoverPlacement.BottomStart,
                     Gap: AppTheme.Space6,
                     Width: Math.Max(240.0, row.Anchor.BorderBox.Width),
-                    Padding: AppTheme.Space6,
-                    CreatePanel: (value, bounds, content) -> Container{BasedOn: AppTheme.TooltipStyle},
+                    CreatePanel: (value, bounds, content) -> Container{
+                        BasedOn: AppTheme.TooltipStyle,
+                        Padding: AppTheme.Space6
+                    },
                     TakeFocus: false,
                     Content: list,
                     AccessibilityName: ui.Strings.Get("contacts"),
@@ -761,8 +762,6 @@ class SendPage : Cell[SendPageInput] {
                 Width: 640,
                 MaxHeight: Percent(100),
                 Padding: compact ? AppTheme.Space20: AppTheme.Space22,
-                BackgroundColor: AppTheme.Raised,
-                BorderRadius: AppTheme.Radius14,
                 Content: content,
                 ConfirmText: ui.Strings.Get("Send"),
                 CancelText: ui.Strings.Get("Cancel"),
