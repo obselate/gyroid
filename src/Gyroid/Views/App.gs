@@ -44,6 +44,7 @@ partial class App : Cell {
     private var pendingPage AppPage = AppPage.None
     private var paymentActivated bool
     private var paymentRevision int32
+    private var lastWallet string = ""
 
     private let miningHistory MiningHistory = MiningHistory()
     private let toolsState ToolsState = ToolsState()
@@ -274,6 +275,7 @@ partial class App : Cell {
         }
         wallet.Changed = () -> owner.Post(() -> Sync())
         lastState = wallet.Snapshot.State
+        lastWallet = wallet.Settings.ActiveWallet
         Tick()
     }
 
@@ -358,11 +360,13 @@ partial class App : Cell {
     private func Sync() {
         let node = wallet.Node.Status
         let snapshot = wallet.Snapshot
+        let walletChanged = wallet.Settings.ActiveWallet != lastWallet
         ObserveMessages()
-        if snapshot.State != WalletState.Unlocked {
+        if snapshot.State != WalletState.Unlocked || walletChanged {
             ClearSeed()
             toolsState.Report = nil
             sendRows.Clear()
+            confirmPendingSend = false
         }
         if !node.Running || node.Syncing || node.Peers == 0 || node.Height == 0 || snapshot.ScanBehind(node.Height) {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
@@ -370,12 +374,13 @@ partial class App : Cell {
             statusTimer?.Dispose()
             statusTimer = nil
         }
-        if snapshot.State != lastState {
+        if snapshot.State != lastState || walletChanged {
             ClearSeed()
             upgradeShown = false
             screen = AppPage.None
             ui.Actions.Decode("page")
             lastState = snapshot.State
+            lastWallet = wallet.Settings.ActiveWallet
         }
         ApplyNavigation()
         let heights = if let value = snapshot.Balance {

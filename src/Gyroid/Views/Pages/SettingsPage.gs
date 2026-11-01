@@ -735,7 +735,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 "wallet file",
                 []Blob{
                     Label(ui, Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)), 14, ui.Dim, ""),
-                    Button(ui, "Switch wallet", () -> ui.Actions.Run(ct -> input.Session.UnloadAsync(ct)), input.Busy)
+                    Button(ui, "Switch wallet", () -> input.OnNavigate(AppPage.Library), input.Busy)
                 }
             )
         )

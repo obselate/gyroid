@@ -26,6 +26,7 @@ class SendService {
 
     func Reset() {
         store.Pending = nil
+        store.Error = ""
         Outcome = SendOutcome()
     }
 

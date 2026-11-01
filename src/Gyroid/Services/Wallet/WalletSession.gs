@@ -686,8 +686,8 @@ class WalletSession : IDisposable {
     async func CreateAsync(filename string, password[]char, ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            RequireUnloaded()
             Library.RequireNewWallet(filename, password)
+            await PrepareWalletAsync(ct)
             await ConnectCoreAsync(ct)
             using let result = await Node.Api.JsonAsync(
                 "wallet/create",
@@ -714,10 +714,10 @@ class WalletSession : IDisposable {
         await BeginAsync(ct)
         var normalized[]?char = nil
         try {
-            RequireUnloaded()
             Library.RequireNewWallet(filename, password)
             let normalizedPhrase = WalletValidation.NormalizePhrase(phrase)
             normalized = normalizedPhrase
+            await PrepareWalletAsync(ct)
             await ConnectCoreAsync(ct)
             using let result = await Node.Api.JsonAsync(
                 "wallet/import",
@@ -913,8 +913,8 @@ class WalletSession : IDisposable {
     ) {
         await BeginAsync(ct)
         try {
-            RequireUnloaded()
             Library.RequireNewWallet(filename, password)
+            await PrepareWalletAsync(ct)
             await ConnectCoreAsync(ct)
             using let response = await Node.Api.JsonAsync(
                 "wallet/import",
@@ -1076,10 +1076,13 @@ class WalletSession : IDisposable {
         snapshot = WalletSnapshot{... snapshot, Sends: sends}
     }
 
-    func RequireUnloaded() {
-        if managed || state != WalletState.Unloaded {
+    async func PrepareWalletAsync(ct CancellationToken) {
+        if !managed && state != WalletState.Unloaded {
             throw WalletException("Unload the current wallet explicitly before choosing or creating another")
         }
+        await UnloadCoreAsync(ct)
+        PublishEmpty()
+        Changed?.Invoke()
     }
 
     func RequireManaged() {

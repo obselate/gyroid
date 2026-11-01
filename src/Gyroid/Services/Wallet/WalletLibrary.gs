@@ -49,11 +49,11 @@ class WalletLibrary {
     async func ChooseWalletAsync(filename string, ct CancellationToken = default(CancellationToken)) {
         await session.BeginAsync(ct)
         try {
-            session.RequireUnloaded()
             let path = WalletPath(filename)
             if !File.Exists(path) {
                 throw WalletException("Selected wallet file does not exist")
             }
+            await session.PrepareWalletAsync(ct)
             session.settings.ActiveWallet = filename
             await SettingsStore.SaveAsync(session.settings, ct)
             session.PublishEmpty()
@@ -66,7 +66,6 @@ class WalletLibrary {
         await session.BeginAsync(ct)
         try {
             try {
-                session.RequireUnloaded()
                 if !Path.IsPathFullyQualified(absolutePath) || !File.Exists(absolutePath) {
                     throw WalletException("Choose an existing wallet file with an absolute path")
                 }
@@ -91,6 +90,7 @@ class WalletLibrary {
                         }
                     }
                 }
+                await session.PrepareWalletAsync(ct)
                 session.settings.ActiveWallet = filename
                 await SettingsStore.SaveAsync(session.settings, ct)
                 session.PublishEmpty()
