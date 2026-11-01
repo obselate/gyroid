@@ -2,7 +2,6 @@ package Gyroid.Views
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
 import Goo.Widgets.Data
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
@@ -1277,7 +1276,7 @@ class HistoryPage : Cell[HistoryInput] {
             .Button{
             BasedOn: AppTheme.ButtonStyle,
             Handle: exportAnchor,
-            Height: AppTheme.CompactButton.Height,
+            Height: AppTheme.CompactButton.Height!!,
             Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space12},
             BorderColor: exporting ? AppTheme.ExportEdge: AppTheme.Edge,
             BackgroundColor: exporting ? AppTheme.FaintRule: AppTheme.Raised,
