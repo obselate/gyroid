@@ -68,6 +68,161 @@ partial class MessagingService {
         return nil
     }
 
+    func Project(
+        id string,
+        fallback Conversation?,
+        first bool,
+        previous MessagesProjection,
+        privacy bool,
+        language string,
+        contacts SortedDictionary[string, string],
+        ct CancellationToken
+    ) MessagesProjection {
+        lock sending {
+            let rows = List[ConversationView](conversations.Count)
+            var current Conversation? = nil
+            for source in conversations {
+                ct.ThrowIfCancellationRequested()
+                let latest = source.Messages.LastOrDefault()
+                rows.Add(
+                    ConversationView{
+                        Source: source,
+                        Id: source.Id,
+                        Title: source.Title,
+                        Handle: source.Handle,
+                        IsGroup: source.IsGroup,
+                        Unread: source.Unread,
+                        Text: (latest?.Text ?? source.Handle).Replace("\r", " ").Replace("\n", " "),
+                        InvitationName: latest?.InvitationName ?? "",
+                        Time: latest?.SentAt.ToLocalTime().ToString("HH:mm") ?? "",
+                        Selected: source.Id == id || id.Length == 0 && first && rows.Count == 0,
+                        Privacy: privacy,
+                        Language: language
+                    }
+                )
+                if source.Id == id {
+                    current = source
+                }
+            }
+            current ??= fallback ?? (first ? conversations.FirstOrDefault(): nil)
+            let thread = List[MessageThreadRow]()
+            if let source = current {
+                let messages = source.Messages
+                let keys = Dictionary[string, string](StringComparer.Ordinal)
+                if previous.Conversation?.Id == source.Id {
+                    for row in previous.Thread {
+                        if row.Message.Source.Txid.Length > 0 {
+                            keys[row.Message.Source.Txid] = row.Key
+                        }
+                    }
+                }
+                for index in 0 ... messages.Count {
+                    ct.ThrowIfCancellationRequested()
+                    let message = messages[index]
+                    let before = index > 0 ? messages[index - 1]: nil
+                    let after = index + 1 < messages.Count ? messages[index + 1]: nil
+                    thread.Add(
+                        MessageThreadRow{
+                            Key: keys.GetValueOrDefault(message.Txid, message.Key),
+                            Message: MessageView{
+                                Source: message,
+                                Key: message.Key,
+                                Txid: message.Txid,
+                                Outgoing: message.Outgoing,
+                                SenderName: message.SenderName,
+                                SenderAddress: message.SenderAddress,
+                                Text: message.Text,
+                                InvitationName: message.InvitationName,
+                                SentAt: message.SentAt,
+                                State: message.State,
+                                Confirmations: message.Confirmations,
+                                Height: message.Height,
+                                Verification: message.Verification,
+                                FeeAtomic: message.FeeAtomic,
+                                Outputs: message.Outputs,
+                                Time: (
+                                    message.Outgoing ? message.SentAt:
+                                    message.ArrivedAt ?? message.SentAt
+                                )
+                                    .ToLocalTime().ToString("HH:mm"),
+                                ArrivedTime: (message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm")
+                            },
+                            Header: before == nil || (message.SentAt - before.SentAt).TotalMinutes > 15 ?
+                            message.SentAt.ToLocalTime().ToString("HH:mm"): "",
+                            First: before == nil ||
+                                before.SenderAddress != message.SenderAddress ||
+                                (message.SentAt - before.SentAt).TotalMinutes > 5,
+                            Last: after == nil ||
+                                after.SenderAddress != message.SenderAddress ||
+                                (after.SentAt - message.SentAt).TotalMinutes > 5
+                        }
+                    )
+                }
+            }
+            let values = rows.ToArray()
+            let messages = thread.ToArray()
+            let oldConversations = previous.Conversations.ToDictionary(row -> row.Id, StringComparer.Ordinal)
+            for index in 0 ... values.Length {
+                let row = values[index]
+                if oldConversations.TryGetValue(row.Id, out let old) && (row with{Source = old.Source}) == old {
+                    values[index] = old
+                }
+            }
+            let oldMessages = previous.Thread.ToDictionary(row -> row.Key, StringComparer.Ordinal)
+            for index in 0 ... messages.Length {
+                let row = messages[index]
+                if oldMessages.TryGetValue(row.Key, out let old) {
+                    let stable = row with{Message = row.Message with{Source = old.Message.Source}}
+                    if stable == old {
+                        messages[index] = old
+                    }
+                }
+            }
+            return MessagesProjection{
+                Conversations: values.SequenceEqual(previous.Conversations) ? previous.Conversations: values,
+                Conversation: current,
+                Thread: messages.SequenceEqual(previous.Thread) ? previous.Thread: messages,
+                Recipients: current?.Members.Count(member -> member != ownAddress) ?? 0,
+                Contacts: contacts
+                    .Values
+                    .Select(destination -> PaymentLink.Parse(destination)?.Address ?? destination)
+                    .ToHashSet(StringComparer.Ordinal)
+            }
+        }
+    }
+
+    func PrepareContacts(
+        contacts SortedDictionary[string, string],
+        members[]string,
+        cap int32,
+        group bool,
+        busy bool,
+        privacy bool,
+        language string,
+        ct CancellationToken
+    )[]MessageContactView {
+        let rows = List[MessageContactView](contacts.Count)
+        for (name, destination) in contacts {
+            ct.ThrowIfCancellationRequested()
+            let address = PaymentLink.Parse(destination)?.Address ?? destination
+            if address == OwnAddress {
+                continue
+            }
+            let chosen = members.Contains(address)
+            rows.Add(
+                MessageContactView{
+                    Name: name,
+                    Destination: address,
+                    Chosen: chosen,
+                    Disabled: busy || group && !chosen && members.Length >= cap,
+                    Privacy: privacy,
+                    Language: language
+                }
+            )
+        }
+        return rows.ToArray()
+    }
+
     func Measure(conversation Conversation, text string) MessageEstimate -> Prepare(
         conversation,
         text,
@@ -233,7 +388,7 @@ partial class MessagingService {
     }
 
     private async func ResolveConversation(name string, recipient string, ct CancellationToken) Conversation {
-        var address = recipient.Trim()
+        var address = PaymentLink.Parse(recipient.Trim())?.Address ?? recipient.Trim()
         var handle = ""
         if address.StartsWith("$", StringComparison.Ordinal) || address.StartsWith("@", StringComparison.Ordinal) {
             let client = RequireSend()
@@ -264,6 +419,9 @@ partial class MessagingService {
             }
         }
         Address.Decode(address, Network)
+        if address == OwnAddress {
+            throw WalletException("Cannot message your own address")
+        }
         let conversation = Conversation{
             Id: address,
             Title: name.Trim().Length > 0 ? name.Trim(): handle.Length > 0 ? handle: WalletText.Short(address),
@@ -353,7 +511,7 @@ partial class MessagingService {
             IsGroup: true
         }
         for member in members {
-            var recipient = member
+            var recipient = PaymentLink.Parse(member)?.Address ?? member
             if member.StartsWith("$", StringComparison.Ordinal) || member.StartsWith("@", StringComparison.Ordinal) {
                 let resolved = await ResolveConversation("", member, ct)
                 recipient = resolved.Id

@@ -33,6 +33,7 @@ class Message {
     var SenderName string = ""
     var SenderAddress string = ""
     var Text string = ""
+    var InvitationName string = ""
     var SentAt DateTimeOffset
     var State MessageState
     var Confirmations int32
@@ -66,4 +67,64 @@ class MessageEstimate {
     var AmountAtomic int64
     var BodyBytes int32
     var Fits bool = true
+}
+
+data struct MessageView {
+    var Source Message
+    var Key string
+    var Txid string
+    var Outgoing bool
+    var SenderName string
+    var SenderAddress string
+    var Text string
+    var InvitationName string
+    var SentAt DateTimeOffset
+    var State MessageState
+    var Confirmations int32
+    var Height int64
+    var Verification Verification
+    var FeeAtomic int64
+    var Outputs int32
+    var Time string
+    var ArrivedTime string
+}
+
+data struct ConversationView {
+    var Source Conversation
+    var Id string
+    var Title string
+    var Handle string
+    var IsGroup bool
+    var Unread int32
+    var Text string
+    var InvitationName string
+    var Time string
+    var Selected bool
+    var Privacy bool
+    var Language string
+}
+
+data struct MessageThreadRow {
+    var Key string
+    var Message MessageView
+    var Header string
+    var First bool
+    var Last bool
+}
+
+data struct MessagesProjection {
+    var Conversations[]ConversationView
+    var Conversation Conversation?
+    var Thread[]MessageThreadRow
+    var Recipients int32
+    var Contacts HashSet[string]
+}
+
+data struct MessageContactView {
+    var Name string
+    var Destination string
+    var Chosen bool
+    var Disabled bool
+    var Privacy bool
+    var Language string
 }

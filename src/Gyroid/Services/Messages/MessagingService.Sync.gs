@@ -40,7 +40,7 @@ partial class MessagingService {
         let known = Dictionary[string, Conversation](local.Conversations, StringComparer.Ordinal)
         try {
             for entry in AddressBook.ReadContacts(_ -> { }) {
-                var address = entry.Value
+                var address = PaymentLink.Parse(entry.Value)?.Address ?? entry.Value
                 var handle = ""
                 if address.StartsWith("$", StringComparison.Ordinal) {
                     handle = address
@@ -55,6 +55,12 @@ partial class MessagingService {
                     } catch (error ArgumentException) {
                         continue
                     }
+                }
+                if known.ContainsKey(address) {
+                    if !local.Conversations.ContainsKey(address) {
+                        known[address].Title = WalletText.Short(address)
+                    }
+                    continue
                 }
                 let conversation = Conversation{Id: address, Title: entry.Key, Handle: handle}
                 conversation.Members.Add(address)
@@ -418,15 +424,15 @@ partial class MessagingService {
             conversations[id] = group
         }
         if !conversations.ContainsKey(id) {
+            let saved = known.GetValueOrDefault(id)
             let conversation = Conversation{
                 Id: id,
-                Title: if outgoing {
-                    WalletText.Short(recipient)
-                } else if sender.Length > 0 {
-                    WalletText.Short(sender)
-                } else {
-                    "Unknown sender"
-                },
+                Title: saved?.Title ??
+                    (
+                    outgoing ? WalletText.Short(recipient):
+                    sender.Length > 0 ? WalletText.Short(sender): "Unknown sender"
+                ),
+                Handle: saved?.Handle ?? "",
                 IsGroup: envelope.Kind >= 2
             }
             if sender.Length > 0 {
@@ -461,7 +467,8 @@ partial class MessagingService {
             Outgoing: outgoing,
             SenderAddress: sender,
             SenderName: senderName,
-            Text: envelope.DisplayText,
+            Text: envelope.Text,
+            InvitationName: envelope.InvitationName,
             SentAt: DateTimeOffset.FromUnixTimeSeconds(sentAt),
             State: if chainState == "mempool" {
                 MessageState.Pending

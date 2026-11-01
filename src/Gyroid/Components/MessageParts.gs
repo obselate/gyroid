@@ -17,6 +17,9 @@ import System.Linq
 
 class MessageParts {
     shared {
+        func Content(ui Presentation, text string, invitation string) string ->
+        invitation.Length > 0 ? ui.Strings.Get("Group invitation: {name}").Replace("{name}", invitation): text
+
         func Problem(ui Presentation, issue string) Blob -> Banner{
             Content: ui.Strings.Explain(issue),
             AccessibilityName: ui.Strings.Explain(issue),
@@ -59,7 +62,7 @@ class MessageSlide(From float64, Delay float64) : Simulation {
 
 data struct MessageBubbleInput {
     var Ui Presentation
-    var Message Message
+    var Message MessageView
     var Group bool
     var First bool
     var Last bool
@@ -104,9 +107,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
         let invalid = message.Verification == Verification.Invalid
         let verification = message.Verification.ToString()
         let color = invalid ? AppTheme.Pink: message.Verification == Verification.Unverified ? AppTheme.Orange: AppTheme.Dim
-        let time = (message.Outgoing ? message.SentAt: message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString(
-            "HH:mm"
-        )
+        let time = message.Time
         let delivered = message.State == MessageState.Confirmed && message.Confirmations > 0
         let statusColor = message.Outgoing ? AppTheme.Black.WithAlpha(0.9): AppTheme.Body
         let metadata = Container{
@@ -126,7 +127,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             let tip = delivered ? ui
                 .Strings
                 .Get("Delivered {time}, block {height}")
-                .Replace("{time}", (message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm"))
+                .Replace("{time}", message.ArrivedTime)
                 .Replace("{height}", message.Height.ToString()): ui
                 .Strings
                 .Get("Waiting for the next block. Usually about 5 min, sometimes longer")
@@ -184,11 +185,17 @@ class MessageBubble : Cell[MessageBubbleInput] {
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
-                Name: Hidden(ui.Privacy, message.Text) + " " + time + " " + ui.Strings.Get(verification)
+                Name: Hidden(ui.Privacy, MessageParts.Content(ui, message.Text, message.InvitationName)) +
+                    " " +
+                    time +
+                    " " +
+                    ui
+                    .Strings
+                    .Get(verification)
             },
-            OnClick: () -> input.OnOpen(message),
+            OnClick: () -> input.OnOpen(message.Source),
             Text{
-                Content: Hidden(ui.Privacy, message.Text),
+                Content: Hidden(ui.Privacy, MessageParts.Content(ui, message.Text, message.InvitationName)),
                 FontFamily: AppTheme.Font,
                 FontSize: AppTheme.Type13,
                 Color: message.Outgoing ? AppTheme.Black: AppTheme.Ink,
@@ -209,7 +216,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
                     AlignItems: AlignItems.Center,
                     Gap: AppTheme.Space8,
                     Label(ui, ui.Strings.Get("Not sent"), AppTheme.Type11, AppTheme.Pink, ""),
-                    Button(ui, "Retry", () -> input.OnRetry(message), !input.CanRetry)
+                    Button(ui, "Retry", () -> input.OnRetry(message.Source), !input.CanRetry)
                 }
             )
         }
@@ -231,7 +238,7 @@ data struct MessageComposerInput {
     var OnSend Action[string]
 }
 
-class MessageComposer : Cell[MessageComposerInput], IDisposable {
+class MessageComposer : Cell, IDisposable {
     private let arrow Anim[Point]
     private let fill Anim[float64]
     private var ready bool
@@ -239,6 +246,26 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
     private var initialized bool
     private var timer WindowTimer?
     private var draft string = ""
+    private var input MessageComposerInput
+    private var estimate MessageEstimate = MessageEstimate()
+
+    func Accept(next MessageComposerInput) {
+        if next == input {
+            return
+        }
+        let measure = !initialized ||
+            next.Recipients != input.Recipients ||
+            next.Revision != input.Revision ||
+            next.CanSend != input.CanSend
+        input = next
+        if !initialized {
+            draft = next.Draft
+        }
+        if measure && next.CanSend && next.Recipients > 0 {
+            estimate = next.Measure(draft)
+        }
+        Rebuild()
+    }
 
     init() {
         arrow = AnimateValue(Point{X: 0, Y: 36})
@@ -256,6 +283,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         let text = draft
         sending = true
         draft = ""
+        estimate = input.Measure(draft)
         input.OnDraft("")
         let animate = input.Ui.Actions.playbackActive()
         if animate {
@@ -285,10 +313,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         Rebuild()
     }
 
-    protected override func Build(input MessageComposerInput) Blob {
-        if !initialized {
-            draft = input.Draft
-        }
+    override func Build() Blob {
         let ui = input.Ui
         let recipient = input.Recipients > 0
         if !input.CanSend || !recipient {
@@ -304,7 +329,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 )
             }
         }
-        let estimate = input.Measure(draft)
+        let estimate = this.estimate
         let hasText = !String.IsNullOrWhiteSpace(draft)
         let enabled = hasText && estimate.Fits
         let animate = ui.Actions.playbackActive()
@@ -344,6 +369,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                         Value: draft,
                         OnChange: value -> {
                             draft = value
+                            this.estimate = input.Measure(value)
                             input.OnDraft(value)
                             Rebuild()
                         },
