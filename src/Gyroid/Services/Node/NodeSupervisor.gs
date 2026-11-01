@@ -212,8 +212,7 @@ class NodeSupervisor : IDisposable {
             }
             let stdout = owned.StandardOutput
             let stderr = owned.StandardError
-            let lifetime = shutdown.Token
-            go DrainOutput(stdout, stderr, owned, drained, lifetime)
+            go DrainOutput(stdout, stderr, owned, drained)
             draining = true
             owned.Exited += (_, _) -> {
                 if Object.ReferenceEquals(process, owned) && !disposed {
@@ -260,32 +259,20 @@ class NodeSupervisor : IDisposable {
         }
     }
 
-    private func DrainOutput(
-        stdout StreamReader,
-        stderr StreamReader,
-        owned Process,
-        drained TaskCompletionSource,
-        cancellation CancellationToken
-    ) {
+    private func DrainOutput(stdout StreamReader, stderr StreamReader, owned Process, drained TaskCompletionSource) {
         try {
             scope {
-                go ReadOutputAsync(stdout, owned, cancellation)
-                go ReadOutputAsync(stderr, owned, cancellation)
+                go ReadOutputAsync(stdout, owned)
+                go ReadOutputAsync(stderr, owned)
             }
-        } catch (error Exception) {
-            lock ownership {
-                if Object.ReferenceEquals(process, owned) {
-                    output = "Core output could not be read: " + error.Message
-                }
-            }
-        } finally {
+        } catch (error Exception) { } finally {
             drained.TrySetResult()
         }
     }
 
-    private async func ReadOutputAsync(reader StreamReader, owned Process, cancellation CancellationToken) {
+    private async func ReadOutputAsync(reader StreamReader, owned Process) {
         try {
-            while let line = await reader.ReadLineAsync(cancellation) {
+            while let line = await reader.ReadLineAsync() {
                 if !string.IsNullOrWhiteSpace(line) {
                     lock ownership {
                         if Object.ReferenceEquals(process, owned) {
@@ -294,9 +281,7 @@ class NodeSupervisor : IDisposable {
                     }
                 }
             }
-        } catch (error IOException) { } catch (error ObjectDisposedException) { } catch (
-            error OperationCanceledException
-        ) when cancellation.IsCancellationRequested { }
+        } catch (error IOException) { } catch (error ObjectDisposedException) { }
     }
 
     private func UseInstallation(settings WalletSettings) {
