@@ -752,6 +752,7 @@ class MessageThread : Cell, IDisposable {
         rowBuilder = row -> Row(row)
         scroll.MetricsChanged += metrics -> {
             following = metrics.ScrollRange.Y - metrics.ScrollOffset.Y < AppTheme.Space16
+            arrivals.Clear()
         }
     }
 
