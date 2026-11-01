@@ -216,6 +216,12 @@ partial class App : Cell {
         configureSync = page -> page.Accept(
             SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
         )
+        openMessages = () -> Open(AppPage.Messages)
+        closeMessageDrawer = () -> messageOverlay?.CloseDrawer()
+        reloadMessageContacts = () -> {
+            LoadContacts()
+            Rebuild()
+        }
         configureMessages = child -> child.Accept(MessagesPageInput())
         configureMessageOverlay = child -> {
             messageOverlay = child

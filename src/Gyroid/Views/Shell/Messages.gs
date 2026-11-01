@@ -20,6 +20,9 @@ partial class App {
     private var messagesAddress string = ""
     private let configureMessages Action[MessagesPage]
     private let configureMessageOverlay Action[MessageOverlay]
+    private let openMessages Action
+    private let closeMessageDrawer Action
+    private let reloadMessageContacts Action
 
     private func ObserveMessages() {
         let identity = wallet.Settings.ActiveWallet
@@ -53,11 +56,8 @@ partial class App {
         Revision: wallet.Messages.Revision,
         Privacy: ui.Privacy,
         Language: ui.Strings.Language,
-        OnOpen: () -> Open(AppPage.Messages),
-        OnContacts: () -> {
-            LoadContacts()
-            Rebuild()
-        }
+        OnOpen: openMessages,
+        OnContacts: reloadMessageContacts
     }
 
     private func MessagesPageInput() MessagesInput -> MessagesInput{
@@ -78,12 +78,9 @@ partial class App {
         Revision: wallet.Messages.Revision,
         Privacy: ui.Privacy,
         Language: ui.Strings.Language,
-        OnOpen: () -> Open(AppPage.Messages),
-        OnClose: () -> messageOverlay?.CloseDrawer(),
-        OnContacts: () -> {
-            LoadContacts()
-            Rebuild()
-        }
+        OnOpen: openMessages,
+        OnClose: closeMessageDrawer,
+        OnContacts: reloadMessageContacts
     }
 
     private func OpenMessage(txid string) {
