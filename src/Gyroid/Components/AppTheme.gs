@@ -148,17 +148,6 @@ class AppTheme {
         let ErrorOutline Color = Color.Parse("#24090f")
         let MaskedText Color = Color.Parse("#6a6a6a")
 
-        let ButtonStyle Style = Style{
-            Height: ControlRegular,
-            BorderRadius: Radius8,
-            BorderWidth: Border1,
-            BorderColor: Edge,
-            BackgroundColor: Control,
-            Color: Ink,
-            FontFamily: Font,
-            FontSize: Type14,
-            Gap: Space8
-        }
         let Button ActionButton = ActionButton{
             Height: ControlRegular,
             BorderRadius: Radius8,
@@ -182,8 +171,12 @@ class AppTheme {
             HoverBackgroundColor = LimeHover
         }
         let IconButtonStyle Style = Style{
-            BasedOn: ButtonStyle,
             Width: ControlRegular,
+            Height: ControlRegular,
+            BorderRadius: Radius8,
+            BorderWidth: Border1,
+            BorderColor: Edge,
+            BackgroundColor: Control,
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center
         }
@@ -194,15 +187,7 @@ class AppTheme {
             BackgroundColor: Color.Transparent,
             BorderWidth: Border0
         }
-        let IconButton IconButton = IconButton{
-            Width: ControlRegular,
-            Height: ControlRegular,
-            BorderRadius: Radius8,
-            BackgroundColor: Control,
-            HoverBackgroundColor: Rule,
-            ActiveBackgroundColor: Selected,
-            RootStyle: IconButtonStyle
-        }
+        let IconButton IconButton = IconButton{RootStyle: IconButtonStyle, HoverBackgroundColor: Rule}
         let TabStyle Style = Style{
             Height: ControlCompact,
             BorderRadius: Radius4,
@@ -222,23 +207,6 @@ class AppTheme {
             BorderRadius: Radius10,
             Padding: Space4
         }
-        let SwitchStyle Style = Style{Width: SwitchWidth, Height: SwitchHeight, BackgroundColor: Edge}
-        let CheckboxStyle Style = Style{
-            Width: CheckboxSize,
-            Height: CheckboxSize,
-            BorderRadius: Radius2,
-            BorderWidth: Border1,
-            BackgroundColor: Field,
-            BorderColor: FieldEdge
-        }
-        let FieldStyle Style = Style{
-            BorderRadius: Radius8,
-            BorderWidth: Border1,
-            BackgroundColor: Field,
-            BorderColor: FieldEdge,
-            FontFamily: Font,
-            FontSize: Type14
-        }
         let FieldInput TextField = TextField{
             EntryHeight: ControlRegular,
             BorderRadius: Radius8,
@@ -257,12 +225,13 @@ class AppTheme {
             Gap: Space6,
             PaddingHorizontal: Space12
         }
-        let DialogStyle Style = Style{
-            BackgroundColor: Raised,
-            BorderRadius: Radius14,
-            Padding: Space22,
-            Gap: Space14,
-            FontSize: Type17
+        let FieldStyle Style = Style{
+            BorderRadius: FieldInput.BorderRadius!!,
+            BorderWidth: FieldInput.BorderWidth!!,
+            BackgroundColor: FieldInput.BackgroundColor!!,
+            BorderColor: FieldInput.BorderColor!!,
+            FontFamily: FieldInput.FontFamily!!,
+            FontSize: FieldInput.FontSize
         }
         let Dialog ModalDialog = ModalDialog{
             BackgroundColor: Raised,
@@ -283,8 +252,6 @@ class AppTheme {
             MinWidth: 0,
             MinHeight: 0
         }
-        let PageCardStyle Style = Style{BasedOn: CardStyle, BorderRadius: Radius14}
-        let TileStyle Style = Style{BasedOn: CardStyle, BorderRadius: Radius10, Gap: Space8}
         let TooltipStyle Style = Style{
             BackgroundColor: Raised,
             BorderColor: Edge,
@@ -297,13 +264,6 @@ class AppTheme {
         let MarkerStyle Style = Style{Width: MarkerSize, Height: MarkerSize, BorderRadius: Radius2, Gap: Space8}
         let PresenceStyle Style = Style{BasedOn: MarkerStyle, Width: Space6, Height: Space6, BorderRadius: Radius3}
         let TrackStyle Style = Style{Height: Track8, BorderRadius: Radius2, BackgroundColor: FaintRule}
-        let RowStyle Style = Style{
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: Space10,
-            BorderWidth: Edges{Bottom: Border1},
-            BorderColor: Rule
-        }
         let BadgeStyle Style = Style{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
