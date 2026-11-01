@@ -523,6 +523,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
     private let anchor ElementHandle = ElementHandle()
     private let suggestionKey Func[SendSuggestion, string]
     private let suggestionBuilder Func[SendSuggestion, Blob]
+    private let changed Action[SendRow]
     private let memoLines[]string = []string{
         "Use this optional note for a payment reference, invoice number or message (up to 124 UTF-8 bytes).",
         "It is encrypted on chain for the recipient.",
@@ -530,12 +531,17 @@ class SendRecipientEditor : Cell[SendEditorInput] {
     }
 
     init() {
+        changed = row -> {
+            current.Changed(row)
+            Rebuild()
+        }
         suggestionKey = row -> row.Name
         suggestionBuilder = row -> Suggestion(row)
     }
 
-    protected override func Build(input SendEditorInput) Blob {
-        current = input
+    protected override func Build(value SendEditorInput) Blob {
+        current = value
+        let input = value with{Changed = changed}
         let display = input.Display
         form = WalletForm(display.Ui, true, input.Submit, []string{})
         if input.Count > 1 {
@@ -861,7 +867,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
             OnClick: () -> {
                 row.Address = suggestion.Name
                 row.Suggest = false
-                input.Changed(row)
+                changed(row)
             },
             MaterialIcons.Create("person", AppTheme.Icon14, AppTheme.Dim),
             Grow(
