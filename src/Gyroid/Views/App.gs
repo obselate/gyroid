@@ -58,6 +58,9 @@ data struct AppSource {
 partial class App : Cell, IDisposable {
     private let sendDone Action
     private let configureHistory Action[HistoryPage]
+    private var historySelection string = ""
+    private var historySelectionRevision int32
+    private let selectHistory Action[string]
 
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
     private let configureLibrary Action[LibraryPage]
@@ -212,6 +215,11 @@ partial class App : Cell, IDisposable {
                 Height: height
             }
         )
+        selectHistory = tx -> {
+            historySelection = tx
+            historySelectionRevision++
+            navigate(AppPage.Transactions)
+        }
         configureHistory = cell -> {
             let snapshot = wallet.Snapshot
             cell.Accept(
@@ -238,7 +246,9 @@ partial class App : Cell, IDisposable {
                     Width: width,
                     OnReceive: openReceive,
                     OnMessage: OpenMessage,
-                    ChooseFile: chooseFile
+                    ChooseFile: chooseFile,
+                    SelectionTx: historySelection,
+                    SelectionRevision: historySelectionRevision
                 }
             )
         }
@@ -1370,7 +1380,8 @@ partial class App : Cell, IDisposable {
                     Height: height,
                     Width: width,
                     OnNavigate: navigate,
-                    OnUpgrade: showUpgrade
+                    OnUpgrade: showUpgrade,
+                    OnHistory: selectHistory
                 }
             )
         } else if page == AppPage.Send {

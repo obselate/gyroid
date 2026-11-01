@@ -3,6 +3,7 @@ package Gyroid.Views
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Actions
+import Goo.Widgets.Data
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.Components
@@ -18,6 +19,7 @@ import System.Collections.Generic
 import System.Globalization
 import System.Linq
 import System.Threading
+import System.Threading.Tasks
 
 data struct OverviewInput {
     var Ui Presentation
@@ -31,29 +33,7 @@ data struct OverviewInput {
     var Width float64
     var OnNavigate Action[AppPage]
     var OnUpgrade Action
-}
-
-data struct Arrival {
-    var Kind string
-    var Amount uint64
-    var Source string
-    var Confirmations uint64
-    var Required uint64
-    var Blocks uint64
-    var TxId string
-    var OutputIndex int32
-    var Height uint64
-    var Self bool
-}
-
-data struct Activity {
-    var Kind string
-    var Amount uint64
-    var Label string
-    var Status string
-    var Ready bool
-    var Order uint64
-    var Timestamp int64
+    var OnHistory Action[string]
 }
 
 data struct OverviewBalanceInput {
@@ -69,7 +49,8 @@ data struct OverviewBalanceInput {
     var Height float64
     var Width float64
     var Language string
-    var Arrivals List[Arrival]
+    var ConfirmingOutputs int32
+    var ConfirmingBlocks uint64
     var Hovering bool
     var OnHover Action[bool]
 }
@@ -99,15 +80,11 @@ data struct OverviewNetworkInput {
 
 data struct OverviewRecentInput {
     var Ui Presentation
-    var Outputs[]WalletOutput
-    var Sends[]WalletSend
-    var Address string
-    var History HistoryService
-    var Messages MessagingService
-    var Api NodeApi
-    var Contacts SortedDictionary[string, string]
+    var Rows[]OverviewRow
+    var IncomingOutputs int32
+    var IncomingBlocks uint64
     var Window Window?
-    var Chain uint64
+    var Issue string
     var Privacy bool
     var Width float64
     var Language string
@@ -115,9 +92,21 @@ data struct OverviewRecentInput {
     var Wallet string
     var Endpoint string
     var ProcessId int32
-    var Arrivals List[Arrival]
+    var OnHistory Action[string]
     var OnNavigate Action[AppPage]
     var Hovering bool
+}
+
+data struct OverviewRow {
+    var Key string
+    var Arrival HistoryArrival
+    var Activity HistoryActivity
+    var IsArrival bool
+    var Privacy bool
+    var Wide bool
+    var Language string
+    var Hovering bool
+    var Expanded bool
 }
 
 data struct OverviewUpgradeInput {
@@ -132,15 +121,114 @@ data struct OverviewUpgradeInput {
 }
 
 class OverviewPage : Cell[OverviewInput] {
+    private var current OverviewInput
+    private let configure Action[OverviewContent]
+
+    init() {
+        configure = cell -> cell.Accept(current)
+    }
+
+    protected override func Build(input OverviewInput) Blob {
+        current = input
+        return Cell.Mount[OverviewContent]("content", configure)
+    }
+}
+
+class OverviewContent : Cell, IDisposable {
+    private var current OverviewInput
+    private var arrivalSource IReadOnlyList[WalletOutput]? = nil
+    private var changeSource IReadOnlyList[WalletOutput]? = nil
+    private var tip uint64
+    private var language string = ""
+    private var identity HistoryIdentity
+    private var readSource HistoryReadSource
+    private var arrivals[]HistoryArrival = []HistoryArrival{}
+    private var activity[]HistoryActivity = []HistoryActivity{}
+    private var confirmingOutputs int32
+    private var rows[]OverviewRow = []OverviewRow{}
+    private var incomingOutputs int32
+    private var incomingBlocks uint64
+    private var confirmingBlocks uint64
+    private var issue string = ""
+    private var generation int32
+    private var request CancellationTokenSource? = nil
+    private var disposed bool
     private var networkInput OverviewNetworkInput
     private var recentInput OverviewRecentInput
     private let configureNetwork Action[OverviewNetwork]
     private let configureRecent Action[OverviewRecent]
     private var hovering bool
     private let hover Action[bool]
-    private var arrivals List[Arrival] = List[Arrival]()
-    private var outputs[]WalletOutput = []WalletOutput{}
-    private var sends[]WalletSend = []WalletSend{}
+    public func Accept(input OverviewInput) {
+        let nextArrivals = input.Session.History.Outputs
+        let nextChanges = input.Session.History.ChangeOutputs
+        let chain = input.Snapshot.Balance?.ChainHeight ?? input.Node.Height
+        let nextIdentity = HistoryPage.SourceIdentity(input.Session)
+        let nextSource = HistoryPage.ReadSource(input.Session)
+        if disposed ||
+            (
+            current.Equals(input) &&
+                arrivalSource == nextArrivals &&
+                changeSource == nextChanges &&
+                language == input
+                .Ui
+                .Strings
+                .Language &&
+                identity.Equals(nextIdentity) && readSource.Equals(nextSource)
+        ) {
+            return
+        }
+        let prepare = current.Session != input.Session ||
+            current.Snapshot != input.Snapshot ||
+            current.Contacts != input.Contacts ||
+            language != input
+            .Ui
+            .Strings
+            .Language ||
+            !identity.Equals(nextIdentity) || !readSource.Equals(nextSource) ||
+            arrivalSource != nextArrivals ||
+            changeSource != nextChanges ||
+            tip != chain
+        current = input
+        arrivalSource = nextArrivals
+        changeSource = nextChanges
+        tip = chain
+        language = input.Ui.Strings.Language
+        identity = nextIdentity
+        readSource = nextSource
+        Rebuild()
+        if !prepare {
+            return
+        }
+        generation++
+        request?.Cancel()
+        request?.Dispose()
+        request = nil
+        guard let window = input.Window else {
+            return
+        }
+        let pending = CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
+        request = pending
+        let token = pending.Token
+        let id = generation
+        let outputs = input.Snapshot.History
+        let previousArrivals = arrivals
+        let previousActivity = activity
+        let previousRows = rows
+        go Prepare(
+            input,
+            nextArrivals,
+            nextChanges,
+            outputs,
+            chain,
+            previousArrivals,
+            previousActivity,
+            previousRows,
+            window,
+            id,
+            token
+        )
+    }
 
     init() {
         configureNetwork = cell -> cell.Accept(networkInput)
@@ -151,19 +239,9 @@ class OverviewPage : Cell[OverviewInput] {
         }
     }
 
-    protected override func Build(input OverviewInput) Blob {
-        let chain = input.Snapshot.Balance?.ChainHeight ?? input.Node.Height
+    override func Build() Blob {
+        let input = current
         let language = input.Ui.Strings.Language
-        let next = Arrivals(input, chain)
-        if !next.SequenceEqual(arrivals) {
-            arrivals = next
-        }
-        if !outputs.SequenceEqual(input.Snapshot.History) {
-            outputs = input.Snapshot.History
-        }
-        if !sends.SequenceEqual(input.Snapshot.Sends) {
-            sends = input.Snapshot.Sends
-        }
         networkInput = OverviewNetworkInput{
             Ui: input.Ui,
             Session: input.Session.Node,
@@ -188,15 +266,11 @@ class OverviewPage : Cell[OverviewInput] {
         }
         recentInput = OverviewRecentInput{
             Ui: input.Ui,
-            Outputs: outputs,
-            Sends: sends,
-            Address: input.Snapshot.Address,
-            History: input.Session.History,
-            Messages: input.Session.Messages,
-            Api: input.Session.Node.Api,
-            Contacts: input.Contacts,
+            Rows: rows,
+            IncomingOutputs: incomingOutputs,
+            IncomingBlocks: incomingBlocks,
             Window: input.Window,
-            Chain: chain,
+            Issue: issue,
             Privacy: input.Privacy,
             Width: input.Width,
             Language: language,
@@ -204,7 +278,7 @@ class OverviewPage : Cell[OverviewInput] {
             Wallet: input.Session.Node.Settings.ActiveWallet,
             Endpoint: input.Session.Node.Settings.Endpoint,
             ProcessId: input.Session.Node.Settings.OwnedProcessId,
-            Arrivals: arrivals,
+            OnHistory: input.OnHistory,
             Hovering: hovering,
             OnNavigate: input.OnNavigate
         }
@@ -249,7 +323,8 @@ class OverviewPage : Cell[OverviewInput] {
                         Language: language,
                         Hovering: hovering,
                         OnHover: hover,
-                        Arrivals: arrivals
+                        ConfirmingOutputs: confirmingOutputs,
+                        ConfirmingBlocks: confirmingBlocks
                     }
                 ),
                 Cell.Mount[OverviewNetwork]("network", configureNetwork)
@@ -259,66 +334,171 @@ class OverviewPage : Cell[OverviewInput] {
         return page
     }
 
-    private func Arrivals(input OverviewInput, chain uint64) List[Arrival] {
-        let ui = input.Ui
-        let arrivals = List[Arrival]()
-        guard let balance = input.Snapshot.Balance else {
-            return arrivals
-        }
-        for output in input.Session.History.Outputs.Concat(input.Session.History.ChangeOutputs) {
-            let maturity = output.Maturity(chain)
-            if output.Spent || output.BlockHeight == 0 || maturity.Ready {
-                continue
+    private async func Prepare(
+        input OverviewInput,
+        arrivalOutputs IReadOnlyList[WalletOutput],
+        changes IReadOnlyList[WalletOutput],
+        outputs[]WalletOutput,
+        chain uint64,
+        previousArrivals[]HistoryArrival,
+        previousActivity[]HistoryActivity,
+        previousRows[]OverviewRow,
+        window Window,
+        id int32,
+        token CancellationToken
+    ) {
+        try {
+            let history = input.Session.History
+            let heights = outputs
+                .Take(50)
+                .Select(output -> output.BlockHeight)
+                .Where(height -> height > 0)
+                .Distinct()
+                .ToArray()
+            var times = Dictionary[uint64, int64]()
+            var failure = ""
+            try {
+                times = await history.BlockTimesAsync(heights, token)
+            } catch (error OperationCanceledException) {
+                return
+            } catch (error Exception) {
+                failure = input.Ui.Strings.Explain(error.Message)
             }
-            let send = input.Snapshot.Sends.FirstOrDefault(item -> item.TxId == output.TxId)
-            arrivals.Add(
-                Arrival{
-                    Kind: output.IsChange ? "change": output.Coinbase ? "mined": "in",
-                    Self: send?.IsSelf(input.Snapshot.Address) ?? false,
-                    Amount: output.Amount,
-                    Source: if output.IsChange {
-                        Change(input, send)
-                    } else if output.Coinbase {
-                        ui.Strings.Get("mined") + " · " + ui.Strings.Get("block") + " " + Count(output.BlockHeight)
-                    } else if output.Memo.Length > 0 {
-                        output.Memo
-                    } else {
-                        OverviewParts.Short(output.TxId)
-                    },
-                    Confirmations: maturity.Count,
-                    Required: maturity.Required,
-                    Blocks: maturity.Remaining,
-                    TxId: output.TxId,
-                    OutputIndex: output.OutputIndex,
-                    Height: output.BlockHeight
+            let result = history.PrepareOverview(input.Snapshot, arrivalOutputs, changes, outputs, chain, times, token)
+            let sends = input.Snapshot.Sends.ToDictionary(send -> send.TxId)
+            let preparedArrivals = result.Arrivals
+            var count = 0
+            var blocks = uint64(0)
+            for index in 0 ... preparedArrivals.Length {
+                token.ThrowIfCancellationRequested()
+                let item = preparedArrivals[index]
+                let send = item.Kind == "pool" ? input
+                    .Snapshot
+                    .Sends
+                    .FirstOrDefault(value -> value.Status == "mempool"):
+                sends.GetValueOrDefault(item.TxId)
+                let name = Contact(input.Contacts, input.Session.Messages, send)
+                let label = if item.Kind == "change" || item.Kind == "pool" {
+                    input.Ui.Strings.Get("change") + (name.Length > 0 ? " · " + name: "")
+                } else if item.Kind == "mined" {
+                    input.Ui.Strings.Get("mined") + " · " + input.Ui.Strings.Get("block") + " " + Count(item.Height)
+                } else {
+                    item.Source.Length > 0 ? item.Source: OverviewParts.Short(item.TxId)
+                }
+                preparedArrivals[index] = item with{Source = label}
+                if item.Kind != "pool" {
+                    count++
+                    blocks = Math.Max(blocks, item.Blocks)
+                }
+            }
+            let preparedActivity = result.Activity
+            for index in 0 ... preparedActivity.Length {
+                token.ThrowIfCancellationRequested()
+                let item = preparedActivity[index]
+                let name = item.OutputIndex < 0 ? Contact(
+                    input.Contacts,
+                    input.Session.Messages,
+                    sends.GetValueOrDefault(item.TxId)
+                ): item.Label
+                let label = if item.Kind == "self" {
+                    input.Ui.Strings.Get("To self") + (name.Length > 0 ? " · " + name: "")
+                } else if name.Length > 0 {
+                    name
+                } else if item.Kind == "mined" {
+                    input.Ui.Strings.Get("block") + " " + Count(item.Height)
+                } else {
+                    OverviewParts.Short(item.TxId)
+                }
+                let status = item.Status == "not_found" ? input.Ui.Strings.Get("not found"):
+                item.Status == "mempool" ? "mempool":
+                Math.Min(item.Confirmations, item.Required).ToString() + "/" + item.Required.ToString()
+                preparedActivity[index] = item with{
+                    Label = label,
+                    Status = status,
+                    Order = 0,
+                    Confirmations = 0,
+                    Required = 0,
+                    Height = 0
+                }
+            }
+            let preparedRows = List[OverviewRow]()
+            var incomingCount = 0
+            var incomingWait = uint64(0)
+            for item in preparedArrivals {
+                token.ThrowIfCancellationRequested()
+                if !item.Self {
+                    incomingCount++
+                    incomingWait = Math.Max(incomingWait, item.Blocks)
+                    preparedRows.Add(
+                        OverviewRow{
+                            Key: item.Kind == "pool" ? "overview-pending": "overview-output-" +
+                                item.TxId +
+                                ":" +
+                                item
+                                .OutputIndex
+                                .ToString(),
+                            Arrival: item,
+                            IsArrival: true
+                        }
+                    )
+                }
+            }
+            for item in preparedActivity {
+                token.ThrowIfCancellationRequested()
+                preparedRows.Add(
+                    OverviewRow{
+                        Key: item.OutputIndex < 0 ? "overview-send-" +
+                            item.TxId: "overview-output-" +
+                            item.TxId +
+                            ":" +
+                            item
+                            .OutputIndex
+                            .ToString(),
+                        Activity: item
+                    }
+                )
+            }
+            let nextRows = preparedRows.SequenceEqual(previousRows) ? previousRows: preparedRows.ToArray()
+            let nextArrivals = preparedArrivals.SequenceEqual(previousArrivals) ? previousArrivals: preparedArrivals
+            let nextActivity = preparedActivity.SequenceEqual(previousActivity) ? previousActivity: preparedActivity
+            window.TryPost(
+                () -> {
+                    if id != generation {
+                        return
+                    }
+                    if !Object.ReferenceEquals(arrivals, nextArrivals) || !Object.ReferenceEquals(
+                        activity,
+                        nextActivity
+                    ) ||
+                        !Object.ReferenceEquals(rows, nextRows) || issue != failure {
+                        arrivals = nextArrivals
+                        activity = nextActivity
+                        rows = nextRows
+                        incomingOutputs = incomingCount
+                        incomingBlocks = incomingWait
+                        confirmingOutputs = count
+                        confirmingBlocks = blocks
+                        issue = failure
+                        Rebuild()
+                    }
+                }
+            )
+        } catch (error OperationCanceledException) { } catch (error Exception) {
+            let message = input.Ui.Strings.Explain(error.Message)
+            window.TryPost(
+                () -> if id == generation {
+                    issue = message
+                    Rebuild()
                 }
             )
         }
-        let pending = input.Snapshot.Sends.FirstOrDefault((item WalletSend) -> item.Status == "mempool")
-        if balance.Unconfirmed > 0 {
-            arrivals.Add(
-                Arrival{
-                    Kind: "pool",
-                    Self: pending?.IsSelf(input.Snapshot.Address) ?? false,
-                    Amount: balance.Unconfirmed,
-                    Source: Change(input, pending),
-                    Required: 10,
-                    Blocks: 11,
-                    TxId: ""
-                }
-            )
-        }
-        arrivals.Sort((a Arrival, b Arrival) -> a.Blocks.CompareTo(b.Blocks))
-        return arrivals
     }
 
-    private func Change(input OverviewInput, send WalletSend?) string {
-        let name = Contact(input.Contacts, input.Session.Messages, send)
-        return input.Ui.Strings.Get("change") + if name.Length > 0 {
-            " · " + name
-        } else {
-            ""
-        }
+    public func Dispose() {
+        disposed = true
+        generation++
+        request?.Cancel()
+        request?.Dispose()
     }
 }
 
@@ -457,7 +637,8 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
     }
 
     protected override func Build(input OverviewBalanceInput) Blob {
-        let arrivals = input.Arrivals
+        let outputs = input.ConfirmingOutputs
+        let last = input.ConfirmingBlocks
         let ui = input.Ui
         let masked = input.Privacy && !peeking
         let total = input.Total ?? uint64(0)
@@ -656,8 +837,6 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
         }
         let wrap = Container{FlexShrink: 0, Position: PositionType.Relative, bar}
         if input.Hovering && !masked && confirming > 0 {
-            let outputs = arrivals.Count((item Arrival) -> item.Kind != "pool")
-            let last = arrivals.Where((item Arrival) -> item.Kind != "pool").Max((item Arrival) -> item.Blocks)
             let content = Container{
                 Gap: AppTheme.Space4,
                 KeyValue(ui, ui.Strings.Get("confirming"), Fixed(confirming)),
@@ -830,7 +1009,10 @@ class OverviewNetwork : Cell, IDisposable {
         request = current
         loadedHeight = source.Height
         loadedHash = source.BestHash
-        go Load(source.Session, window, generation, current.Token)
+        let session = source.Session
+        let id = generation
+        let token = current.Token
+        go Load(session, window, id, token)
     }
 
     private async func Load(session NodeSession, window Window, id int32, token CancellationToken) {
@@ -938,109 +1120,46 @@ class OverviewNetwork : Cell, IDisposable {
     }
 }
 
-class OverviewRecent : Cell, IDisposable {
+class OverviewRecent : Cell {
     private var source OverviewRecentInput
     private var expanded string = ""
-    private let times Dictionary[uint64, int64] = Dictionary[uint64, int64]()
-    private let requested HashSet[uint64] = HashSet[uint64]()
-    private let lifetime CancellationTokenSource = CancellationTokenSource()
-    private var request CancellationTokenSource? = nil
-    private var generation int32
+    private var rows[]OverviewRow = []OverviewRow{}
+    private let rowKey Func[OverviewRow, string]
+    private let rowBuilder Func[OverviewRow, Blob]
 
-    private var loadedOutputs[]WalletOutput = []WalletOutput{}
+    init() {
+        rowKey = row -> row.Key
+        rowBuilder = row -> row.IsArrival ? Arrive(source, row.Arrival): Activity(source, row.Activity)
+    }
+
     func Accept(next OverviewRecentInput) {
-        if source == next {
+        if source.Equals(next) {
             return
         }
-        let replaced = source.History != next.History ||
-            source.Api != next.Api ||
-            source.Wallet != next.Wallet ||
-            source.Network != next.Network ||
-            source.Endpoint != next.Endpoint ||
-            source.ProcessId != next.ProcessId ||
-            source.Window != next.Window
-        let changed = replaced || !source.Outputs.SequenceEqual(next.Outputs)
-        if replaced {
-            generation++
-            request?.Cancel()
-            request?.Dispose()
-            request = nil
-            times.Clear()
-            requested.Clear()
-            loadedOutputs = []WalletOutput{}
+        if source.Wallet != next.Wallet || source.Network != next.Network {
             expanded = ""
         }
         source = next
+        PrepareRows()
         Rebuild()
-        if changed {
-            RequestTimes()
-        }
     }
 
-    private func RequestTimes() {
-        if request != nil {
-            return
-        }
-        guard let window = source.Window else {
-            return
-        }
-        if !loadedOutputs.SequenceEqual(source.Outputs) {
-            requested.IntersectWith(times.Keys)
-        }
-        loadedOutputs = source.Outputs
-        let missing = source
-            .Outputs
-            .Take(50)
-            .Select((output WalletOutput) -> output.BlockHeight)
-            .Where((height uint64) -> height > 0 && !requested.Contains(height))
-            .Distinct()
-            .ToArray()
-        if missing.Length == 0 {
-            return
-        }
-        for height in missing {
-            requested.Add(height)
-        }
-        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
-        request = current
-        go FetchTimes(window, source.History, missing, generation, current.Token)
-    }
-
-    private async func FetchTimes(
-        window Window,
-        history HistoryService,
-        heights[]uint64,
-        id int32,
-        token CancellationToken
-    ) {
-        var fetched Dictionary[uint64, int64]? = nil
-        try {
-            fetched = await history.BlockTimesAsync(heights, token)
-        } catch (error Exception) { }
-        window.TryPost(
-            () -> if id == generation {
-                request?.Dispose()
-                request = nil
-                if let values = fetched {
-                    for entry in values {
-                        times[entry.Key] = entry.Value
-                    }
-                    if values.Count > 0 {
-                        Rebuild()
-                    }
-                }
-                if !source.Outputs.SequenceEqual(loadedOutputs) {
-                    RequestTimes()
-                }
+    private func PrepareRows() {
+        let next = source
+            .Rows
+            .Select(
+            row -> row with{
+                Privacy = source.Privacy,
+                Wide = source.Width >= 1200,
+                Language = source.Language,
+                Hovering = row.IsArrival && row.Arrival.Kind == "pool" && source.Hovering,
+                Expanded = row.Key == expanded
             }
         )
-    }
-
-    public func Dispose() {
-        generation++
-        lifetime.Cancel()
-        request?.Dispose()
-        lifetime.Dispose()
+            .ToArray()
+        if !next.SequenceEqual(rows) {
+            rows = next
+        }
     }
 
     private func Number(ui Presentation, masked bool, text string, color Color, fraction Color) Blob {
@@ -1066,10 +1185,15 @@ class OverviewRecent : Cell, IDisposable {
         color
     }
 
-    private func Arrive(input OverviewRecentInput, item Arrival) Blob {
+    private func Arrive(input OverviewRecentInput, item HistoryArrival) Blob {
         let ui = input.Ui
         let faded = input.Hovering && item.Kind == "pool"
-        let key = item.TxId + ":" + item.OutputIndex.ToString()
+        let key = item.Kind == "pool" ? "overview-pending": "overview-output-" +
+            item.TxId +
+            ":" +
+            item
+            .OutputIndex
+            .ToString()
         let unfolded = item.TxId.Length > 0 && expanded == key
         let glyph Blob = switch item.Kind {
             case "mined": Label(ui, "◆", AppTheme.Type14, Fade(AppTheme.Lime, faded), "")
@@ -1096,6 +1220,7 @@ class OverviewRecent : Cell, IDisposable {
             OnClick: () -> {
                 if item.TxId.Length > 0 {
                     expanded = unfolded ? "": key
+                    PrepareRows()
                 }
             },
             Container{
@@ -1167,83 +1292,16 @@ class OverviewRecent : Cell, IDisposable {
                     KeyValue(ui, "tx", OverviewParts.Short(item.TxId).Substring(3), AppTheme.Space6, AppTheme.Dim),
                     KeyValue(ui, ui.Strings.Get("ready at"), ready, AppTheme.Space6, AppTheme.Dim),
                     Container{FlexGrow: 1},
-                    Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions))
+                    Link(ui, "history", () -> input.OnHistory(item.TxId))
                 }
             )
         }
         return row
     }
 
-    private func Activities(input OverviewRecentInput, chain uint64) List[Activity] {
-        let ui = input.Ui
-        let items = List[Activity]()
-        let selfSends = input.Sends.Where(send -> send.IsSelf(input.Address)).Select(send -> send.TxId).ToHashSet()
-        for output in input.Outputs {
-            let maturity = output.Maturity(chain)
-            if selfSends.Contains(output.TxId) || (!output.Spent && output.BlockHeight > 0 && !maturity.Ready) {
-                continue
-            }
-            items.Add(
-                Activity{
-                    Kind: output.Coinbase ? "mined": "in",
-                    Amount: output.Amount,
-                    Label: if output.Memo.Length > 0 {
-                        output.Memo
-                    } else if output.Coinbase {
-                        ui.Strings.Get("block") + " " + Count(output.BlockHeight)
-                    } else {
-                        OverviewParts.Short(output.TxId)
-                    },
-                    Status: if output.BlockHeight == 0 {
-                        "mempool"
-                    } else {
-                        maturity.Count.ToString() + "/" + maturity.Required.ToString()
-                    },
-                    Ready: output.BlockHeight > 0 && maturity.Ready,
-                    Order: output.BlockHeight == 0 ? uint64.MaxValue: output.BlockHeight,
-                    Timestamp: times.GetValueOrDefault(output.BlockHeight)
-                }
-            )
-            if items.Count == 50 {
-                break
-            }
-        }
-        for send in input.Sends.Take(50) {
-            let label = Contact(input.Contacts, input.Messages, send)
-            let self = selfSends.Contains(send.TxId)
-            let maturity = WalletMaturity(send.Confirmations, 10)
-            items.Add(
-                Activity{
-                    Kind: self ? "self": "out",
-                    Amount: self ? send.Fee: send.Amount,
-                    Label: self ? ui.Strings.Get("To self") +
-                        (label.Length > 0 ? " · " + label: ""): label.Length > 0 ? label: OverviewParts.Short(
-                        send.TxId
-                    ),
-                    Status: send.Status == "not_found" ? ui.Strings.Get(
-                        "not found"
-                    ): send.Status == "mempool" ? "mempool": maturity
-                        .Count
-                        .ToString() + "/10",
-                    Ready: send.Status == "confirmed" && maturity.Ready,
-                    Order: if send.Status == "mempool" {
-                        uint64.MaxValue
-                    } else {
-                        chain + 1 - Math.Min(chain, send.Confirmations)
-                    },
-                    Timestamp: send.Timestamp
-                }
-            )
-        }
-        return items.OrderByDescending((item Activity) -> item.Order).Take(50).ToList()
-    }
-
     override func Build() Blob {
         let input = source
-        let chain = input.Chain
-        let arrivals = input.Arrivals
         let ui = input.Ui
-        let incoming = arrivals.Where(item -> !item.Self).ToArray()
         let card = WalletParts.Card(
             ui,
             Edges{Top: AppTheme.Space12, Bottom: AppTheme.Space12, Left: AppTheme.Space16, Right: AppTheme.Space16},
@@ -1256,11 +1314,11 @@ class OverviewRecent : Cell, IDisposable {
         let header = WalletParts.Header(Label(ui, ui.Strings.Get("recent"), AppTheme.Type12, AppTheme.Body, ""))
         header.Height = 24
         header.Margin = Edges{Bottom: AppTheme.Space4}
-        if incoming.Length > 0 {
+        if input.IncomingOutputs > 0 {
             header.Add(
                 Label(
                     ui,
-                    ui.Strings.Get("incoming") + " " + incoming.Length.ToString(),
+                    ui.Strings.Get("incoming") + " " + input.IncomingOutputs.ToString(),
                     AppTheme.Type11,
                     AppTheme.Body,
                     ""
@@ -1269,7 +1327,7 @@ class OverviewRecent : Cell, IDisposable {
             header.Add(
                 Label(
                     ui,
-                    ui.Strings.Get("all ready") + " " + Wait(input.Ui, incoming.Max((item Arrival) -> item.Blocks)),
+                    ui.Strings.Get("all ready") + " " + Wait(input.Ui, input.IncomingBlocks),
                     AppTheme.Type11,
                     AppTheme.Dim,
                     ""
@@ -1279,86 +1337,87 @@ class OverviewRecent : Cell, IDisposable {
         header.Add(Container{FlexGrow: 1})
         header.Add(Link(ui, "history", () -> input.OnNavigate(AppPage.Transactions)))
         card.Add(header)
-        let activities = Activities(input, chain)
-        if activities.Count == 0 && incoming.Length == 0 {
+        if input.Issue.Length > 0 {
+            card.Add(Label(ui, input.Issue, AppTheme.Type12, AppTheme.Pink, ""))
+        }
+        if rows.Length == 0 {
             card.Add(ListParts.Empty(ui, "no transactions yet"))
             return card
         }
-        let height = 48.0
-        let rows = Container{
-            FlexGrow: 1,
-            FlexBasis: 0,
-            MinHeight: 0,
-            Overflow: Overflow.Scroll,
-            ScrollbarY: Theme.Read().Scrollbar
-        }
-        for item in incoming {
-            rows.Add(Arrive(input, item))
-        }
-        for item in activities {
-            let outgoing = item.Kind == "out" || item.Kind == "self"
-            let shown = input.Privacy ? ui.Strings.Get("Amounts hidden"): WalletAmount.Format(item.Amount)
-            let glyph Blob = if item.Kind == "self" {
-                MaterialIcons.Create("sync", AppTheme.Icon14, AppTheme.Pink)
-            } else {
-                Label(
-                    ui,
-                    outgoing ? "↑": item.Kind == "mined" ? "◆": "↓",
-                    AppTheme.Type14,
-                    outgoing ? AppTheme.Pink: item.Kind == "mined" ? AppTheme.Lime: AppTheme.Mint,
-                    ""
-                )
-            }
-            rows.Add(
-                Container{
-                    BasedOn: AppTheme.ListRowStyle,
-                    Gap: AppTheme.Space12,
-                    Height: height,
-                    FlexShrink: 0,
-                    MinWidth: 0,
-                    Overflow: Overflow.Hidden,
-                    Accessibility: Accessibility{
-                        Name: ui.Strings.Get(item.Kind == "self" ? "To self": outgoing ? "sent": "received") +
-                            " " +
-                            shown +
-                            " " +
-                            Hidden(input.Privacy, SafeText(item.Label, 512))
-                    },
-                    Container{Width: 16, AlignItems: AlignItems.Center, glyph},
-                    Container{
-                        Width: 120,
-                        Number(
-                            ui,
-                            input.Privacy,
-                            (outgoing ? "-": "+") +
-                                (item.Kind == "self" ? WalletAmount.Format(item.Amount): Fixed(item.Amount)),
-                            outgoing ? AppTheme.Pink: AppTheme.Mint,
-                            AppTheme.Dim
-                        )
-                    },
-                    Grow(
-                        Label(ui, Hidden(input.Privacy, SafeText(item.Label, 512)), AppTheme.Type13, AppTheme.Dim, "")
-                    ),
-                    Container{
-                        Width: input.Width < 1200 ? 110.0: 160.0,
-                        AlignItems: AlignItems.FlexEnd,
-                        Label(
-                            ui,
-                            item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,
-                            AppTheme.Type11,
-                            item.Status == "mempool" ? AppTheme.Blue: item.Ready ? AppTheme.Lime: AppTheme.Orange,
-                            ""
-                        )
-                    },
-                    Container{
-                        Width: 60,
-                        AlignItems: AlignItems.FlexEnd,
-                        Label(ui, item.Timestamp > 0 ? Clock(item.Timestamp): "-", AppTheme.Type12, AppTheme.Dim, "")
-                    }
-                }
+        let list = VirtualRows(rows, 48.0, rowKey, rowBuilder)
+        list.FlexGrow = 1
+        list.FlexBasis = 0
+        list.MinHeight = 0
+        card.Add(ListParts.Viewport(list))
+        return card
+    }
+
+    private func Activity(input OverviewRecentInput, item HistoryActivity) Blob {
+        let ui = input.Ui
+        let outgoing = item.Kind == "out" || item.Kind == "self"
+        let shown = input.Privacy ? ui.Strings.Get("Amounts hidden"): WalletAmount.Format(item.Amount)
+        let glyph Blob = if item.Kind == "self" {
+            MaterialIcons.Create("sync", AppTheme.Icon14, AppTheme.Pink)
+        } else {
+            Label(
+                ui,
+                outgoing ? "↑": item.Kind == "mined" ? "◆": "↓",
+                AppTheme.Type14,
+                outgoing ? AppTheme.Pink: item.Kind == "mined" ? AppTheme.Lime: AppTheme.Mint,
+                ""
             )
         }
-        card.Add(ListParts.Viewport(rows))
-        return card
+        return Container{
+            BasedOn: AppTheme.ListRowStyle,
+            Gap: AppTheme.Space12,
+            Height: 48,
+            FlexShrink: 0,
+            MinWidth: 0,
+            Overflow: Overflow.Hidden,
+            Accessibility: Accessibility{
+                Name: ui.Strings.Get(item.Kind == "self" ? "To self": outgoing ? "sent": "received") +
+                    " " +
+                    shown +
+                    " " +
+                    Hidden(input.Privacy, SafeText(item.Label, 512))
+            },
+            Container{Width: 16, AlignItems: AlignItems.Center, glyph},
+            Container{
+                Width: 120,
+                Number(
+                    ui,
+                    input.Privacy,
+                    (outgoing ? "-": "+") +
+                        (item.Kind == "self" ? WalletAmount.Format(item.Amount): Fixed(item.Amount)),
+                    outgoing ? AppTheme.Pink: AppTheme.Mint,
+                    AppTheme.Dim
+                )
+            },
+            Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Label, 512)), AppTheme.Type13, AppTheme.Dim, "")),
+            Container{
+                Width: input.Width < 1200 ? 110.0: 160.0,
+                AlignItems: AlignItems.FlexEnd,
+                Label(
+                    ui,
+                    item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,
+                    AppTheme.Type11,
+                    item.Status == "mempool" ? AppTheme.Blue: item.Ready ? AppTheme.Lime: AppTheme.Orange,
+                    ""
+                )
+            },
+            Container{
+                Width: 132,
+                AlignItems: AlignItems.FlexEnd,
+                Label(ui, Timestamp(item.Timestamp), AppTheme.Type12, AppTheme.Dim, "")
+            }
+        }
+    }
+
+    private func Timestamp(timestamp int64) string {
+        if timestamp <= 0 {
+            return "-"
+        }
+        let local = DateTimeOffset.FromUnixTimeSeconds(timestamp).LocalDateTime
+        return local.ToString(local.Date == DateTime.Today ? "HH:mm": "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
     }
 }
