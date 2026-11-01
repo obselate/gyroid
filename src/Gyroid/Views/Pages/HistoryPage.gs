@@ -1953,14 +1953,7 @@ class HistoryObserver : Cell, IDisposable {
         if disposed || (accepted && current.Equals(input)) {
             return
         }
-        let changed = !accepted || !current.Identity.Equals(input.Identity) ||
-            current
-            .Lens
-            .Send
-            .TxId != input
-            .Lens
-            .Send
-            .TxId
+        let changed = !accepted || !current.Identity.Equals(input.Identity) || current.Transaction != input.Transaction
         accepted = true
         current = input
         if changed {
