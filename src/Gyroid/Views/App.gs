@@ -384,7 +384,6 @@ partial class App : Cell, IDisposable {
                 FromWallet: seedFromWallet,
                 Busy: ui.Working(),
                 Language: ui.Strings.Language,
-                ChooseFile: chooseFile,
                 OnDone: finishSeed,
                 Issue: seedIssue,
                 OnRetry: retrySeed

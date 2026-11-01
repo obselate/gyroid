@@ -8,6 +8,8 @@ import Gyroid.Components.TextParts
 import Gyroid.Services
 import System
 import System.IO
+import System.Threading
+import System.Threading.Tasks
 
 data struct SeedPageInput {
     var Session WalletSession
@@ -17,7 +19,6 @@ data struct SeedPageInput {
     var FromWallet bool
     var Busy bool
     var Language string
-    var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnDone Action
     var Issue string
     var OnRetry Action
@@ -32,6 +33,9 @@ class SeedPage : Cell, IDisposable {
     private var generation int32
     private var actions UiService?
     private let clipboardChanged Action
+    private var phrase SeedPhraseData?
+    private var exporting bool
+    private var exportResult string = ""
 
     init() {
         clipboardChanged = () -> Rebuild()
@@ -51,6 +55,10 @@ class SeedPage : Cell, IDisposable {
         if next.Wallet != input.Wallet || !Object.ReferenceEquals(input.Words, next.Words) {
             ReleaseCopy()
             generation++
+            phrase?.Dispose()
+            phrase = SeedPhraseData(next.Words)
+            exporting = false
+            exportResult = ""
             visible = false
             saved = false
             hold = Random.Shared.Next()
@@ -74,7 +82,7 @@ class SeedPage : Cell, IDisposable {
         card.Add(
             Cell.Mount[SeedPhraseInput, SeedPhrase](
                 "seed-phrase",
-                SeedPhraseInput{Ui: ui, Words: input.Words, Visible: visible, Hold: hold, Language: input.Language}
+                SeedPhraseInput{Ui: ui, Phrase: phrase, Visible: visible, Hold: hold, Language: input.Language}
             )
         )
         let actions = Container{
@@ -105,7 +113,7 @@ class SeedPage : Cell, IDisposable {
                 }
             )
         )
-        actions.Add(Button(ui, "Export", () -> Export(input), input.Busy))
+        actions.Add(Button(ui, "Export", () -> Export(input), input.Busy || exporting))
         actions.Add(Container{FlexGrow: 1})
         if !input.FromWallet {
             actions.Add(
@@ -130,18 +138,72 @@ class SeedPage : Cell, IDisposable {
             )
         )
         card.Add(actions)
+        if exportResult.Length > 0 {
+            card.Add(Label(ui, exportResult, AppTheme.Type12, AppTheme.Body, ""))
+        }
         return card
     }
 
     private func Export(input SeedPageInput) {
+        guard let owner = input.Ui.Actions.window else {
+            return
+        }
+        guard let data = phrase else {
+            return
+        }
+        let request = [data.Words.Length]char
+        Array.Copy(data.Words, request, request.Length)
         let current = generation
-        input.ChooseFile.Invoke(
-            FileDialogKind.SaveFile,
-            "Export",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt"),
-            (path string) -> {
+        try {
+            let pending = owner.ShowFileDialogAsync(
+                FileDialogKind.SaveFile,
+                FileDialogOptions{
+                    Title: input.Ui.Strings.Get("Export"),
+                    InitialPath: Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt")
+                }
+            )
+            exporting = true
+            exportResult = ""
+            let keys = input.Session.Keys
+            input.Ui.Actions.Run(
+                ct -> CompleteExport(owner, pending, keys, request, current, ct),
+                secret: request
+            )
+        } catch (failure Exception) {
+            Array.Clear(request)
+            exportResult = input.Ui.Strings.Explain(failure.Message)
+        }
+    }
+
+    private async func CompleteExport(
+        owner Window,
+        pending Task[FileDialogResult],
+        keys WalletKeys,
+        request[]char,
+        current int32,
+        ct CancellationToken
+    ) {
+        var result = ""
+        try {
+            let chosen = await pending
+            if chosen.Status == FileDialogStatus.Success && chosen.Paths.Count > 0 {
+                await keys.ExportSeedAsync(chosen.Paths[0], request, ct)
+                result = "Export complete"
+            } else if chosen.Status != FileDialogStatus.Cancelled {
+                result = "File dialog unavailable"
+            }
+        } catch (failure Exception) {
+            result = failure.Message
+        } finally {
+            Array.Clear(request)
+        }
+        let message = result
+        owner.TryPost(
+            () -> {
                 if current == generation {
-                    input.Ui.Actions.Run(ct -> input.Session.Keys.ExportSeedAsync(path, input.Words, ct))
+                    exporting = false
+                    exportResult = input.Ui.Strings.Explain(message)
+                    Rebuild()
                 }
             }
         )
@@ -158,6 +220,8 @@ class SeedPage : Cell, IDisposable {
 
     func Dispose() {
         generation++
+        phrase?.Dispose()
+        phrase = nil
         if let source = actions {
             source.ClipboardChanged -= clipboardChanged
         }
@@ -168,7 +232,7 @@ class SeedPage : Cell, IDisposable {
 
 data struct SeedPhraseInput {
     var Ui Presentation
-    var Words[]char
+    var Phrase SeedPhraseData?
     var Visible bool
     var Hold int32
     var Language string
@@ -178,22 +242,15 @@ class SeedPhrase : Cell[SeedPhraseInput] {
     protected override func Build(input SeedPhraseInput) Blob {
         let grid = Container{Gap: AppTheme.Space6, FlexShrink: 0}
         var line = Container{}
-        var start = 0
-        var index = 1
-        var position = 0
-        while position <= input.Words.Length {
-            if position == input.Words.Length || input.Words[position] == ' ' {
-                if position > start {
-                    if index % 4 == 1 {
-                        line = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space6}
-                        grid.Add(line)
-                    }
-                    line.Add(Word(input, index, start, position - start))
-                    index++
-                }
-                start = position + 1
+        guard let phrase = input.Phrase else {
+            return grid
+        }
+        for offset in 0 ... phrase.Offsets.Length {
+            if offset % 4 == 0 {
+                line = Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space6}
+                grid.Add(line)
             }
-            position++
+            line.Add(Word(input, offset + 1, phrase.Indices[offset]))
         }
         if input.Visible {
             grid.Add(
@@ -203,30 +260,9 @@ class SeedPhrase : Cell[SeedPhraseInput] {
         return grid
     }
 
-    private func Word(input SeedPhraseInput, index int32, start int32, length int32) Blob {
+    private func Word(input SeedPhraseInput, index int32, wordIndex int32) Blob {
         let ui = input.Ui
-        var word = ""
-        if input.Visible {
-            var low = 0
-            var high = Bip39Wordlist.Words.Length - 1
-            while low <= high {
-                let middle = low + (high - low) / 2
-                let candidate = Bip39Wordlist.Words[middle]
-                let order = ReadOnlySpan[char](input.Words, start, length).CompareTo(
-                    System.MemoryExtensions.AsSpan(candidate),
-                    StringComparison.Ordinal
-                )
-                if order == 0 {
-                    word = candidate
-                    break
-                }
-                if order < 0 {
-                    high = middle - 1
-                } else {
-                    low = middle + 1
-                }
-            }
-        }
+        let word = input.Visible && wordIndex >= 0 ? Bip39Wordlist.Words[wordIndex]: ""
         return Container{
             BasedOn: AppTheme.FieldStyle,
             FlexGrow: 1,

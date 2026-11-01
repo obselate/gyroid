@@ -2,6 +2,7 @@ package Gyroid.Services
 
 import Gyroid.Models
 import System
+import System.Collections.Generic
 import System.IO
 import System.Text
 import System.Threading
@@ -144,5 +145,56 @@ class WalletKeys {
         } finally {
             session.End()
         }
+    }
+}
+
+class SeedPhraseData : IDisposable {
+    let Words[]char
+    let Offsets[]int32
+    let Indices[]int32
+
+    init(source[]char) {
+        Words = [source.Length]char
+        Array.Copy(source, Words, source.Length)
+        let offsets = List[int32]()
+        let indices = List[int32]()
+        var start = 0
+        for position in 0 ... Words.Length + 1 {
+            if position == Words.Length || Words[position] == ' ' {
+                if position > start {
+                    let length = position - start
+                    var low = 0
+                    var high = Bip39Wordlist.Words.Length - 1
+                    var found = -1
+                    while low <= high {
+                        let middle = low + (high - low) / 2
+                        let order = ReadOnlySpan[char](Words, start, length).CompareTo(
+                            System.MemoryExtensions.AsSpan(Bip39Wordlist.Words[middle]),
+                            StringComparison.Ordinal
+                        )
+                        if order == 0 {
+                            found = middle
+                            break
+                        }
+                        if order < 0 {
+                            high = middle - 1
+                        } else {
+                            low = middle + 1
+                        }
+                    }
+                    offsets.Add(start)
+                    indices.Add(found)
+                }
+                start = position + 1
+            }
+        }
+        Offsets = offsets.ToArray()
+        Indices = indices.ToArray()
+    }
+
+    func Dispose() {
+        Array.Clear(Words)
+        Array.Clear(Offsets)
+        Array.Clear(Indices)
     }
 }
