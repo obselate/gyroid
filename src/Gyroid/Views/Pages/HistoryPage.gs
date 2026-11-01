@@ -56,8 +56,7 @@ data struct HistoryRow {
     var Memo string
     var Outputs string
     var Height uint64
-    var Depth uint64
-    var Need uint64
+    var Maturity WalletMaturity
     var Time int64
     var State string
     var Recipients[]WalletRecipient
@@ -289,8 +288,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Amount = output.Amount,
                     Memo = output.Memo,
                     Height = output.BlockHeight,
-                    Depth = output.BlockHeight > 0 && tip >= output.BlockHeight ? tip + 1 - output.BlockHeight: 0,
-                    Need = output.Coinbase ? 60UL: 10UL,
+                    Maturity = output.Maturity(tip),
                     Time = times.GetValueOrDefault(output.BlockHeight)
                 }
             )
@@ -322,8 +320,7 @@ class HistoryPage : Cell[HistoryInput] {
                             .Distinct(StringComparer.Ordinal)
                     ),
                     Height = height,
-                    Depth = confirmed ? send.Confirmations: 0,
-                    Need = 10,
+                    Maturity = WalletMaturity(confirmed ? send.Confirmations: uint64(0), 10),
                     Time = confirmed ? times.GetValueOrDefault(height): send.Timestamp,
                     State = send.Status,
                     Recipients = send.Recipients
@@ -730,8 +727,8 @@ class HistoryPage : Cell[HistoryInput] {
         let ui = current.Ui
         let compact = row.Width < 1000
         let pending = row.Height == 0
-        let mature = !pending && row.Depth > row.Need
-        let lit = pending ? 0: int32(Math.Min(10UL, (row.Depth - 1) * 10 / row.Need))
+        let mature = !pending && row.Maturity.Ready
+        let lit = pending ? 0: int32(row.Maturity.Count * 10 / row.Maturity.Required)
         let segments = Container{FlexDirection: FlexDirection.Row, Gap: compact ? 2.0: 3.0}
         for index in 0 ... 10 {
             segments.Add(
@@ -745,10 +742,8 @@ class HistoryPage : Cell[HistoryInput] {
         }
         let depth = if pending {
             ui.Strings.Get(row.State == "not_found" ? "not found": "pending")
-        } else if mature {
-            row.Depth >= 10000 ? (row.Depth / 1000).ToString() + "k": Count(row.Depth)
         } else {
-            row.Depth.ToString() + "/" + row.Need.ToString()
+            row.Maturity.Count.ToString() + "/" + row.Maturity.Required.ToString()
         }
         let recipient = row.Recipients.FirstOrDefault()
         let note = row

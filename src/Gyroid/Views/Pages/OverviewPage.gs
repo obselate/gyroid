@@ -40,6 +40,7 @@ data struct Arrival {
     var Required uint64
     var Blocks uint64
     var TxId string
+    var OutputIndex int32
     var Height uint64
     var Self bool
 }
@@ -336,53 +337,32 @@ class OverviewPage : Cell[OverviewInput] {
         guard let balance = input.Snapshot.Balance else {
             return arrivals
         }
-        var listed uint64 = 0
-        for output in input.Session.History.Outputs {
-            let required = output.Coinbase ? uint64(60): uint64(10)
-            let confirmations = chain > output.BlockHeight ? chain - output.BlockHeight: uint64(0)
-            if output.Spent || output.BlockHeight == 0 || confirmations >= required {
+        for output in input.Session.History.Outputs.Concat(input.Session.History.ChangeOutputs) {
+            let maturity = output.Maturity(chain)
+            if output.Spent || output.BlockHeight == 0 || maturity.Ready {
                 continue
             }
-            listed += output.Amount
+            let send = input.Snapshot.Sends.FirstOrDefault(item -> item.TxId == output.TxId)
             arrivals.Add(
                 Arrival{
-                    Kind: output.Coinbase ? "mined": "in",
-                    Self: input
-                        .Snapshot
-                        .Sends
-                        .Any(send -> send.TxId == output.TxId && send.IsSelf(input.Snapshot.Address)),
+                    Kind: output.IsChange ? "change": output.Coinbase ? "mined": "in",
+                    Self: send?.IsSelf(input.Snapshot.Address) ?? false,
                     Amount: output.Amount,
-                    Source: if output.Coinbase {
+                    Source: if output.IsChange {
+                        Change(input, send)
+                    } else if output.Coinbase {
                         ui.Strings.Get("mined") + " · " + ui.Strings.Get("block") + " " + Count(output.BlockHeight)
                     } else if output.Memo.Length > 0 {
                         output.Memo
                     } else {
                         Short(output.TxId)
                     },
-                    Confirmations: confirmations + 1,
-                    Required: required,
-                    Blocks: required - confirmations,
+                    Confirmations: maturity.Count,
+                    Required: maturity.Required,
+                    Blocks: maturity.Remaining,
                     TxId: output.TxId,
+                    OutputIndex: output.OutputIndex,
                     Height: output.BlockHeight
-                }
-            )
-        }
-        let confirming = (balance.Pending ?? uint64(0)) - balance.Unconfirmed
-        let recent WalletSend? = input
-            .Snapshot
-            .Sends
-            .FirstOrDefault((item WalletSend) -> item.Status == "confirmed" && item.Confirmations < 10)
-        if let send = recent && confirming > listed {
-            arrivals.Add(
-                Arrival{
-                    Kind: "change",
-                    Self: send.IsSelf(input.Snapshot.Address),
-                    Amount: confirming - listed,
-                    Source: Change(input, send),
-                    Confirmations: send.Confirmations,
-                    Required: 10,
-                    Blocks: 10 - send.Confirmations,
-                    TxId: ""
                 }
             )
         }
@@ -817,7 +797,7 @@ class OverviewPage : Cell[OverviewInput] {
     private func Arrive(input OverviewInput, item Arrival) Blob {
         let ui = input.Ui
         let faded = hovering && item.Kind == "pool"
-        let key = item.TxId + ":" + item.Height.ToString()
+        let key = item.TxId + ":" + item.OutputIndex.ToString()
         let unfolded = item.TxId.Length > 0 && expanded == key
         let glyph Blob = switch item.Kind {
             case "mined": Label(ui, "◆", 14, Fade(ui.Violet, faded), "")
@@ -924,12 +904,11 @@ class OverviewPage : Cell[OverviewInput] {
             .Where(send -> send.IsSelf(snapshot.Address))
             .Select(send -> send.TxId)
             .ToHashSet()
-        for output in snapshot.History.Take(50) {
-            if selfSends.Contains(output.TxId) {
+        for output in input.Session.History.Outputs {
+            let maturity = output.Maturity(chain)
+            if selfSends.Contains(output.TxId) || (!output.Spent && output.BlockHeight > 0 && !maturity.Ready) {
                 continue
             }
-            let required = output.Coinbase ? uint64(60): uint64(10)
-            let confirmations = chain > output.BlockHeight ? chain - output.BlockHeight: uint64(0)
             items.Add(
                 Activity{
                     Kind: output.Coinbase ? "mined": "in",
@@ -944,17 +923,21 @@ class OverviewPage : Cell[OverviewInput] {
                     Status: if output.BlockHeight == 0 {
                         "mempool"
                     } else {
-                        Math.Min(confirmations + 1, required).ToString() + "/" + required.ToString()
+                        maturity.Count.ToString() + "/" + maturity.Required.ToString()
                     },
-                    Ready: output.BlockHeight > 0 && confirmations >= required,
+                    Ready: output.BlockHeight > 0 && maturity.Ready,
                     Order: output.BlockHeight == 0 ? uint64.MaxValue: output.BlockHeight,
                     Timestamp: times.GetValueOrDefault(output.BlockHeight)
                 }
             )
+            if items.Count == 50 {
+                break
+            }
         }
         for send in snapshot.Sends.Take(50) {
             let label = Contact(input, send)
             let self = selfSends.Contains(send.TxId)
+            let maturity = WalletMaturity(send.Confirmations, 10)
             items.Add(
                 Activity{
                     Kind: self ? "self": "out",
@@ -963,9 +946,10 @@ class OverviewPage : Cell[OverviewInput] {
                         (label.Length > 0 ? " · " + label: ""): label.Length > 0 ? label: Short(send.TxId),
                     Status: send.Status == "not_found" ? ui.Strings.Get(
                         "not found"
-                    ): send.Status == "mempool" ? "mempool": Math
-                        .Min(send.Confirmations, uint64(10)).ToString() + "/10",
-                    Ready: send.Status == "confirmed" && send.Confirmations >= 10,
+                    ): send.Status == "mempool" ? "mempool": maturity
+                        .Count
+                        .ToString() + "/10",
+                    Ready: send.Status == "confirmed" && maturity.Ready,
                     Order: if send.Status == "mempool" {
                         uint64.MaxValue
                     } else {

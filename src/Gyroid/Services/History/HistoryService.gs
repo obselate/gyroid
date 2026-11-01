@@ -16,6 +16,7 @@ class HistoryService {
     var DecodedSends Dictionary[string, Dictionary[string, DecodedMemo]] =
     Dictionary[string, Dictionary[string, DecodedMemo]](StringComparer.Ordinal)
     private var baseOutputs[]WalletOutput = Array.Empty[WalletOutput]()
+    private var changeOutputs[]WalletOutput = Array.Empty[WalletOutput]()
     private var baseSends[]WalletSend = Array.Empty[WalletSend]()
     private var received List[WalletOutput] = List[WalletOutput]()
     private var loaded int32
@@ -26,6 +27,7 @@ class HistoryService {
     prop Total uint64 -> uint64(received.Count)
     prop More bool -> loaded < received.Count
     prop Outputs IReadOnlyList[WalletOutput] -> received
+    prop ChangeOutputs IReadOnlyList[WalletOutput] -> changeOutputs
 
     init(session WalletSession) {
         this.session = session
@@ -37,6 +39,7 @@ class HistoryService {
         DecodedReceived = Dictionary[string, DecodedMemo](StringComparer.Ordinal)
         DecodedSends = Dictionary[string, Dictionary[string, DecodedMemo]](StringComparer.Ordinal)
         baseOutputs = Array.Empty[WalletOutput]()
+        changeOutputs = Array.Empty[WalletOutput]()
         baseSends = Array.Empty[WalletSend]()
         received = List[WalletOutput]()
         loaded = 0
@@ -74,30 +77,33 @@ class HistoryService {
             sentTransactions[NodeJson.Text(sent, "txid")] = sent.GetProperty("recipients").GetArrayLength()
         }
         let outputs = List[WalletOutput]()
+        let changes = List[WalletOutput]()
         for row in RawReceived {
             let txid = NodeJson.Text(row, "txid")
             let index = int32(NodeJson.Number(row, "output_index"))
-            if sentTransactions.TryGetValue(txid, out let recipientCount) && index >= recipientCount {
-                continue
-            }
             let hex = NodeJson.Text(row, "memo_hex")
-            outputs.Add(
-                WalletOutput{
-                    TxId: txid,
-                    OutputIndex: index,
-                    Amount: NodeJson.Number(row, "amount"),
-                    BlockHeight: NodeJson.Number(row, "block_height"),
-                    Spent: NodeJson.Flag(row, "spent"),
-                    Coinbase: NodeJson.Flag(row, "is_coinbase"),
-                    OutputIndices: DecodedReceived.TryGetValue(txid, out let decoded) && decoded.OutputIndices.Contains(
-                        index
-                    ) ?
-                    decoded.OutputIndices: Array.Empty[int32](),
-                    Memo: hex.Length > 0 && binaryMemos.Contains(txid) ? "[non-text memo]": NodeJson.Memo(hex)
-                }
-            )
+            let output = WalletOutput{
+                TxId: txid,
+                OutputIndex: index,
+                Amount: NodeJson.Number(row, "amount"),
+                BlockHeight: NodeJson.Number(row, "block_height"),
+                Spent: NodeJson.Flag(row, "spent"),
+                Coinbase: NodeJson.Flag(row, "is_coinbase"),
+                IsChange: sentTransactions.TryGetValue(txid, out let recipientCount) && index >= recipientCount,
+                OutputIndices: DecodedReceived.TryGetValue(txid, out let decoded) && decoded.OutputIndices.Contains(
+                    index
+                ) ?
+                decoded.OutputIndices: Array.Empty[int32](),
+                Memo: hex.Length > 0 && binaryMemos.Contains(txid) ? "[non-text memo]": NodeJson.Memo(hex)
+            }
+            if output.IsChange {
+                changes.Add(output)
+            } else {
+                outputs.Add(output)
+            }
         }
         baseOutputs = outputs.ToArray()
+        changeOutputs = changes.ToArray()
         RebuildOutputs()
         return received.Take(loaded).ToArray()
     }
