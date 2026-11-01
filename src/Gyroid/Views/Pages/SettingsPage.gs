@@ -665,7 +665,8 @@ class SettingsNode : Cell, IDisposable {
             generation++
             directoryRead = next.Directory
             directoryExists = false
-            go ReadDirectory(next.Directory, input.Window, generation)
+            let request = generation
+            go ReadDirectory(next.Directory, input.Window, request)
         }
         if next.Equals(state) {
             return
@@ -1370,7 +1371,9 @@ class SettingsAdvanced : Cell, IDisposable {
         if input.Section == "advanced" && !chainLoaded {
             generation++
             chainLoaded = true
-            go LoadChain(input.Session, settings, input.Window, generation, lifetime?.Token ?? CancellationToken.None)
+            let request = generation
+            let token = lifetime?.Token ?? CancellationToken.None
+            go LoadChain(input.Session, settings, input.Window, request, token)
         }
         let next = SettingsAdvancedInput{
             Language: input.Language,
@@ -1771,7 +1774,9 @@ class SettingsAdvanced : Cell, IDisposable {
             return
         }
         certifyGeneration++
-        go ReadCertificate(input.Session, owner, certifyGeneration, lifetime.Token)
+        let request = certifyGeneration
+        let token = lifetime.Token
+        go ReadCertificate(input.Session, owner, request, token)
     }
 
     private async func ReadCertificate(session WalletSession, owner Window, request int32, token CancellationToken) {
@@ -2082,7 +2087,10 @@ class SettingsDialogs : Cell, IDisposable {
         loading = true
         generation++
         Rebuild()
-        go LoadKeys(input.Session, state.Wallet, owner, buffer, generation, lifetime.Token)
+        let request = generation
+        let token = lifetime.Token
+        let wallet = state.Wallet
+        go LoadKeys(input.Session, wallet, owner, buffer, request, token)
     }
 
     private async func LoadKeys(
