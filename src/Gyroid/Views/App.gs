@@ -1151,12 +1151,21 @@ partial class App : Cell, IDisposable {
                 } else if current {
                     error = connectionFailure || message == observedConnectionError ? "": message
                 }
-                let opened = state != WalletState.Unlocked &&
+                let walletTransition = screen == AppPage.None &&
+                    (
                     wallet
-                    .Snapshot
-                    .State == WalletState.Unlocked &&
-                    screen == AppPage.None
-                if request == operationGeneration && (page == pageGeneration || opened) && message == "" {
+                        .Snapshot
+                        .State == WalletState.Unlocked &&
+                        (state != WalletState.Unlocked || identity != wallet.Settings.ActiveWallet) ||
+                        wallet
+                        .Snapshot
+                        .State == WalletState.Unloaded &&
+                        state != WalletState.Unloaded &&
+                        identity == wallet
+                        .Settings
+                        .ActiveWallet
+                )
+                if request == operationGeneration && (page == pageGeneration || walletTransition) && message == "" {
                     done?.Invoke()
                 }
                 Sync()
@@ -1554,9 +1563,9 @@ partial class App : Cell, IDisposable {
             main.Add(stage)
         }
         let frame = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, FlexDirection: FlexDirection.Row}
+        main.Width = Percent(100)
         if WalletAvailable() {
             main.Padding = AppTheme.Space0
-            main.Width = Percent(100)
             if page != AppPage.Transactions &&
                 page != AppPage.Messages &&
                 page != AppPage.Overview &&
@@ -1566,10 +1575,10 @@ partial class App : Cell, IDisposable {
             frame.Padding = Edges{Left: AppTheme.Space14, Right: AppTheme.Space20, Bottom: AppTheme.Space20}
             frame.Gap = AppTheme.Space16
             frame.Add(Sidebar(page))
-            frame.Add(Container{FlexGrow: 1, FlexBasis: 0, MinWidth: 0, AlignItems: AlignItems.Center, main})
-        } else {
-            frame.Add(main)
         }
+        frame.Add(
+            Container{Key: "page-content", FlexGrow: 1, FlexBasis: 0, MinWidth: 0, AlignItems: AlignItems.Center, main}
+        )
         root.Add(frame)
         if WalletAvailable() {
             root.Add(Cell.Mount[MessageOverlay]("message-overlay", configureMessageOverlay))
