@@ -23,7 +23,6 @@ import System.Globalization
 import System.IO
 import System.Linq
 import System.Threading
-import System.Threading.Channels
 import System.Threading.Tasks
 
 data struct SettingsPageInput {
@@ -125,6 +124,9 @@ data struct SettingsWalletInput {
     var ViewOnly bool
     var Wallet string
     var Directory string
+    var Network string
+    var Endpoint string
+    var ProcessId int32
     var Busy bool
     var Height float64
 }
@@ -133,6 +135,8 @@ data struct SettingsAdvancedInput {
     var Language string
     var Network string
     var Directory string
+    var Endpoint string
+    var ProcessId int32
     var NodeHeight uint64
     var Owned bool
     var Busy bool
@@ -144,6 +148,9 @@ data struct SettingsDialogInput {
     var Language string
     var Wallet string = ""
     var Directory string
+    var Network string
+    var Endpoint string
+    var ProcessId int32
     var Privacy bool
     var Busy bool
     var Width float64
@@ -378,21 +385,12 @@ class SettingsPage : Cell {
     }
 }
 
-data struct SettingsPreferenceChange {
-    var Change Action[WalletSettings]
-    var Generation int32
-}
-
 class SettingsGeneral : Cell, IDisposable {
     private var state SettingsGeneralInput
     private var context SettingsPageInput
     private var rowHeight float64
-    private let saves Dictionary[string, Channel[SettingsPreferenceChange]] = Dictionary[
-        string,
-        Channel[SettingsPreferenceChange]
-    ]()
+    private var generation int32
     private var disposed bool
-    private let generations Dictionary[string, int32] = Dictionary[string, int32]()
     private var issue string = ""
 
     func Accept(input SettingsPageInput) {
@@ -422,76 +420,52 @@ class SettingsGeneral : Cell, IDisposable {
         return content
     }
 
-    private func Prefer(input SettingsPageInput, key string, change Action[WalletSettings]) {
+    private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
         guard let owner = input.Window else {
             return
         }
-        if disposed {
-            return
-        }
-        var queue Channel[SettingsPreferenceChange]
-        if saves.TryGetValue(key, out let existing) {
-            queue = existing
-        } else {
-            queue = Channel.CreateBounded[SettingsPreferenceChange](
-                BoundedChannelOptions(1){
-                    SingleReader: true,
-                    SingleWriter: true,
-                    FullMode: BoundedChannelFullMode.DropOldest
-                }
-            )
-            saves[key] = queue
-            let reader = queue.Reader
-            input.Ui.Actions.Background(_ -> SavePreferences(input.Session, owner, input.OnPreference, key, reader))
-        }
-        generations.TryGetValue(key, out let previousGeneration)
-        let generation = previousGeneration + 1
-        generations[key] = generation
-        issue = ""
-        queue.Writer.TryWrite(SettingsPreferenceChange{Change: change, Generation: generation})
+        generation++
+        let request = generation
+        let session = input.Session
+        input.Ui.Actions.Background(_ -> SavePreference(session, owner, input.OnPreference, change, request))
     }
 
-    private async func SavePreferences(
+    private async func SavePreference(
         session WalletSession,
         owner Window,
         saved Action,
-        key string,
-        reader ChannelReader[SettingsPreferenceChange]
+        change Action[WalletSettings],
+        request int32
     ) {
-        while await reader.WaitToReadAsync() {
-            while reader.TryRead(out let change) {
-                var error = ""
-                try {
-                    await session.SavePreferenceAsync(change.Change, CancellationToken.None)
-                } catch (failure Exception) {
-                    error = failure.Message
-                }
-                let message = error
-                owner.TryPost(
-                    () -> {
-                        if context.Session != session {
-                            return
-                        }
-                        if message.Length == 0 {
-                            saved.Invoke()
-                        }
-                        if disposed || generations[key] != change.Generation {
-                            return
-                        }
-                        issue = message
-                        Rebuild()
-                    }
-                )
+        var error = ""
+        try {
+            await session.SavePreferenceAsync(change, CancellationToken.None)
+        } catch (failure Exception) {
+            if failure is OperationCanceledException {
+                throw failure
             }
+            error = failure.Message
         }
+        owner.TryPost(
+            () -> {
+                if context.Session != session {
+                    return
+                }
+                if error.Length == 0 {
+                    saved.Invoke()
+                }
+                if disposed || generation != request {
+                    return
+                }
+                issue = error
+                Rebuild()
+            }
+        )
     }
 
     func Dispose() {
         disposed = true
-        for key in saves.Keys {
-            generations[key]++
-            saves[key].Writer.TryComplete()
-        }
+        generation++
     }
 
     private func General(input SettingsPageInput, settings WalletSettings) Blob {
@@ -529,7 +503,6 @@ class SettingsGeneral : Cell, IDisposable {
                             false,
                             id -> Prefer(
                                 input,
-                                "background",
                                 value -> {
                                     value.Background = id
                                 }
@@ -551,7 +524,6 @@ class SettingsGeneral : Cell, IDisposable {
                             false,
                             id -> Prefer(
                                 input,
-                                "scale",
                                 value -> {
                                     value.UiScalePercent = Int32.Parse(id, CultureInfo.InvariantCulture)
                                 }
@@ -571,7 +543,7 @@ class SettingsGeneral : Cell, IDisposable {
                             settings.ReduceMotion,
                             () -> {
                                 let enabled = !state.Motion
-                                Prefer(input, "motion", value -> value.ReduceMotion = enabled)
+                                Prefer(input, value -> value.ReduceMotion = enabled)
                             }
                         )
                     }
@@ -587,7 +559,7 @@ class SettingsGeneral : Cell, IDisposable {
                             settings.StartInTray,
                             () -> {
                                 let enabled = !state.Tray
-                                Prefer(input, "tray", value -> value.StartInTray = enabled)
+                                Prefer(input, value -> value.StartInTray = enabled)
                             }
                         )
                     }
@@ -1208,17 +1180,27 @@ class SettingsWallet : Cell, IDisposable {
     private var rowHeight float64
     private var syncing bool
     private var issue string = ""
-    private var lifetime CancellationTokenSource?
+    private var initialized bool
     private var generation int32
     private var showDialog Action[string]
 
     func Accept(input SettingsPageInput, showDialog Action[string]) {
         context = input
         this.showDialog = showDialog
-        if lifetime == nil || state.Wallet != input.Settings.ActiveWallet {
-            lifetime?.Cancel()
-            lifetime?.Dispose()
-            lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
+        if !initialized ||
+            state.Wallet != input
+            .Settings
+            .ActiveWallet ||
+            state.Network != input
+            .Settings
+            .Network ||
+            state.Endpoint != input
+            .Settings
+            .Endpoint ||
+            state.ProcessId != input
+            .Settings
+            .OwnedProcessId {
+            initialized = true
             generation++
             syncing = false
         }
@@ -1231,6 +1213,9 @@ class SettingsWallet : Cell, IDisposable {
             ViewOnly: input.Snapshot.ViewOnly,
             Wallet: settings.ActiveWallet,
             Directory: settings.WalletDirectory,
+            Network: settings.Network,
+            Endpoint: settings.Endpoint,
+            ProcessId: settings.OwnedProcessId,
             Busy: input.Busy,
             Height: input.Height
         }
@@ -1252,7 +1237,7 @@ class SettingsWallet : Cell, IDisposable {
     private func Open(kind string) -> showDialog(kind)
 
     private func StartSync(input SettingsPageInput) {
-        guard let owner = input.Window, let lifetime = lifetime else {
+        guard let owner = input.Window else {
             return
         }
         if syncing {
@@ -1261,7 +1246,10 @@ class SettingsWallet : Cell, IDisposable {
         syncing = true
         generation++
         Rebuild()
-        go Sync(input.Session, state.Wallet, owner, generation, lifetime.Token)
+        let request = generation
+        let session = input.Session
+        let wallet = state.Wallet
+        input.Ui.Actions.Run(ct -> Sync(session, wallet, owner, request, ct))
     }
 
     private async func Sync(
@@ -1274,9 +1262,10 @@ class SettingsWallet : Cell, IDisposable {
         var error = ""
         try {
             await session.SyncAsync(token)
-        } catch (cancelled OperationCanceledException) {
-            return
         } catch (failure Exception) {
+            if failure is OperationCanceledException {
+                throw failure
+            }
             error = failure.Message
         }
         owner.TryPost(
@@ -1296,8 +1285,6 @@ class SettingsWallet : Cell, IDisposable {
 
     func Dispose() {
         generation++
-        lifetime?.Cancel()
-        lifetime?.Dispose()
     }
 
     private func WalletSection(input SettingsPageInput, settings WalletSettings, pane Container) {
@@ -1452,7 +1439,12 @@ class SettingsAdvanced : Cell, IDisposable {
         context = input
         this.openPurge = openPurge
         let settings = input.Settings
-        if lifetime == nil || state.Network != settings.Network || state.Directory != settings.DataDirectory {
+        if lifetime == nil ||
+            state.Network != settings.Network ||
+            state.Directory != settings.DataDirectory ||
+            state.Endpoint != settings.Endpoint ||
+            state.ProcessId != settings
+            .OwnedProcessId {
             lifetime?.Cancel()
             chainRequest?.Dispose()
             certificateRequest?.Dispose()
@@ -1487,6 +1479,8 @@ class SettingsAdvanced : Cell, IDisposable {
             Language: input.Language,
             Network: settings.Network,
             Directory: settings.DataDirectory,
+            Endpoint: settings.Endpoint,
+            ProcessId: settings.OwnedProcessId,
             NodeHeight: input.Node.Height,
             Owned: input.Node.Owned,
             Busy: input.Busy,
@@ -2080,7 +2074,25 @@ class SettingsDialogs : Cell {
 
     func Accept(input SettingsPageInput) {
         context = input
-        if (state.Wallet.Length > 0 && state.Wallet != input.Settings.ActiveWallet) ||
+        if (
+            state
+                .Wallet
+                .Length > 0 &&
+                (
+                state.Wallet != input
+                    .Settings
+                    .ActiveWallet ||
+                    state.Network != input
+                    .Settings
+                    .Network ||
+                    state.Endpoint != input
+                    .Settings
+                    .Endpoint ||
+                    state.ProcessId != input
+                    .Settings
+                    .OwnedProcessId
+            )
+        ) ||
             (
             input
                 .Snapshot
@@ -2951,6 +2963,9 @@ class SettingsParts {
             Language: input.Language,
             Wallet: input.Settings.ActiveWallet,
             Directory: input.Settings.WalletDirectory,
+            Network: input.Settings.Network,
+            Endpoint: input.Settings.Endpoint,
+            ProcessId: input.Settings.OwnedProcessId,
             Privacy: input.Privacy,
             Busy: input.Busy,
             Width: input.Width,
