@@ -36,6 +36,7 @@ data struct ReceivePageInput {
 data struct ReceiveFormInput {
     var Ui Presentation
     var Draft ReceiveDraft
+    var Request ReceiveRequest
     var Privacy bool
     var Disabled bool
     var Language string
@@ -56,6 +57,7 @@ data struct ReceiveStatusInput {
 data struct ReceivePresentationInput {
     var Ui Presentation
     var Draft ReceiveDraft
+    var Request ReceiveRequest
     var Prepared ReceivePrepared?
     var Error string
     var Address string
@@ -218,6 +220,7 @@ class ReceivePage : Cell, IDisposable {
         presentation = ReceivePresentationInput{
             Ui: input.Ui,
             Draft: result.Draft,
+            Request: input.Request,
             Prepared: result,
             Error: "",
             Address: input.Address,
@@ -297,16 +300,10 @@ class ReceiveStatus : Cell[ReceiveStatusInput] {
 }
 
 class ReceiveForm : Cell[ReceiveFormInput] {
-    private var accepted ReceiveDraft
-    private var draft ReceiveDraft
-
     protected override func Build(input ReceiveFormInput) Blob {
         let ui = input.Ui
-        if accepted != input.Draft {
-            accepted = input.Draft
-            this.draft = input.Draft
-        }
-        let draft = this.draft
+        let draft = input.Draft
+        let request = input.Request
         let form = WalletForm(ui, false, nil, []string{})
         return Container{
             FlexDirection: FlexDirection.Row,
@@ -321,7 +318,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                     TextField{
                         AccessibilityName: ui.Strings.Get("Amount"),
                         Placeholder: ui.Strings.Get("amount"),
-                        Value: draft.Amount,
+                        Value: request.Amount,
                         Controlled: true,
                         Password: input.Privacy,
                         Disabled: input.Disabled,
@@ -331,10 +328,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                         } else {
                             nil
                         },
-                        OnChange: value -> {
-                            this.draft.Amount = value
-                            input.Change.Invoke("amount", value)
-                        }
+                        OnChange: value -> input.Change.Invoke("amount", value)
                     }
                 )
             },
@@ -343,11 +337,8 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                     MinWidth: 0,
                     form.Field(
                         "Memo",
-                        draft.Memo,
-                        value -> {
-                            this.draft.Memo = value
-                            input.Change.Invoke("memo", value)
-                        },
+                        request.Memo,
+                        value -> input.Change.Invoke("memo", value),
                         issue: draft.MemoIssue,
                         disabled: input.Disabled,
                         labelled: false,
@@ -526,6 +517,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                         ReceiveFormInput{
                             Ui: ui,
                             Draft: draft,
+                            Request: input.Request,
                             Privacy: input.Privacy,
                             Disabled: input.Busy || input.Paid,
                             Language: input.Language,
