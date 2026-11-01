@@ -154,15 +154,5 @@ class Wire {
         }
 
         func MaxMembers(name string) int32 -> (424 - Encoding.UTF8.GetByteCount(name)) / 68
-
-        func Eta(chainState string, average float64) float64 -> if chainState == "mempool" {
-            if average > 0 {
-                average
-            } else {
-                300.0
-            }
-        } else {
-            0.0
-        }
     }
 }

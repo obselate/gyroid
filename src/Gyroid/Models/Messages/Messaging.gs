@@ -37,7 +37,7 @@ class Message {
     var State MessageState
     var Confirmations int32
     var ArrivedAt DateTimeOffset?
-    var EtaSeconds float64
+    var Height int64
     var Verification Verification
     var FeeAtomic int64
     var Outputs int32

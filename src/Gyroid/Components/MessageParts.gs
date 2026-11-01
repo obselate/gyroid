@@ -4,6 +4,7 @@ import Goo
 import Goo.Widgets
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
+import Goo.Widgets.Layout
 import Gyroid.Components.ControlParts
 import Gyroid.Components.TextParts
 import Gyroid.Models
@@ -43,7 +44,6 @@ data struct MessageBubbleInput {
     var Group bool
     var First bool
     var Last bool
-    var ShowState bool
     var Animate bool
     var Highlight bool
     var CanRetry bool
@@ -56,7 +56,8 @@ data struct MessageBubbleInput {
 class MessageBubble : Cell[MessageBubbleInput] {
     private let shift Anim[Point]
     private var started bool
-    private var hovered bool
+    private let statusAnchor ElementHandle = ElementHandle()
+    private var statusVisible bool
 
     init() {
         shift = AnimateValue(Point{X: 0, Y: 0})
@@ -83,6 +84,58 @@ class MessageBubble : Cell[MessageBubbleInput] {
         let invalid = message.Verification == Verification.Invalid
         let verification = message.Verification.ToString()
         let color = invalid ? ui.Pink: message.Verification == Verification.Unverified ? ui.Orange: ui.Dim
+        let time = (message.Outgoing ? message.SentAt: message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm")
+        let delivered = message.State == MessageState.Confirmed && message.Confirmations > 0
+        let statusColor = message.Outgoing ? (delivered ? ui.SuccessFill: ui.Black.WithAlpha(0.6)): ui.Dim
+        let metadata = Container{
+            FlexDirection: FlexDirection.Row,
+            JustifyContent: JustifyContent.FlexEnd,
+            AlignItems: AlignItems.Center,
+            Gap: 4,
+            Label(ui, time, 10, statusColor, "")
+        }
+        if message.Outgoing && message.State != MessageState.Failed {
+            let tip = delivered ? ui.Strings.Get("Delivered {time}, block {height}")
+                .Replace("{time}", (message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm"))
+                .Replace("{height}", message.Height.ToString()): ui.Strings.Get("Waiting for the next block. Usually about 5 min, sometimes longer")
+            metadata.Add(
+                Container{
+                    Handle: statusAnchor,
+                    OnPointerEnter: (event PointerEvent) -> {
+                        statusVisible = true
+                        Rebuild()
+                    },
+                    OnPointerLeave: (event PointerEvent) -> {
+                        statusVisible = false
+                        Rebuild()
+                    },
+                    Accessibility: Accessibility{Role: AccessibilityRole.Text, Name: tip},
+                    MaterialIcons.Create(delivered ? "done_all": message.State == MessageState.InProgress ? "schedule": "done", 13, statusColor),
+                    Cell.Mount[PopoverInput, Popover](
+                        "status-tip",
+                        PopoverInput{
+                            Open: statusVisible,
+                            Anchor: statusAnchor,
+                            Placement: PopoverPlacement.BottomEnd,
+                            Width: 270,
+                            Padding: 12,
+                            Content: Text{
+                                Content: tip,
+                                FontFamily: ui.Font,
+                                FontSize: 12,
+                                Color: ui.Body,
+                                TextWrap: TextWrap.Wrap
+                            },
+                            AccessibilityName: tip,
+                            OnDismiss: reason -> {
+                                statusVisible = false
+                                Rebuild()
+                            }
+                        }
+                    )
+                }
+            )
+        }
         let column = Container{
             Handle: input.Handle,
             FlexShrink: 0,
@@ -106,14 +159,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             BorderWidth: invalid || input.Highlight ? 2.0: 0.0,
             BorderColor: invalid ? ui.Pink: ui.Blue,
             BackgroundColor: message.Outgoing ? ui.Lime: ui.Rule,
-            OnPointerEnter: (event PointerEvent) -> {
-                hovered = true
-                Rebuild()
-            },
-            OnPointerLeave: (event PointerEvent) -> {
-                hovered = false
-                Rebuild()
-            },
+            Gap: 4,
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -136,23 +182,11 @@ class MessageBubble : Cell[MessageBubbleInput] {
                 Color: message.Outgoing ? ui.Black: ui.Ink,
                 TextWrap: TextWrap.Wrap,
                 MinWidth: 0
-            }
+            },
+            metadata
         }
         WidgetKeyBindings.BindActivation(bubble)
         column.Add(bubble)
-        if hovered {
-            column.Add(
-                Container{
-                    Position: PositionType.Absolute,
-                    Left: 0,
-                    Right: 0,
-                    Top: -12,
-                    AlignItems: message.Outgoing ? AlignItems.FlexEnd: AlignItems.FlexStart,
-                    HitTestSelf: false,
-                    Label(ui, message.SentAt.ToLocalTime().ToString("HH:mm"), 10, ui.Dim, "")
-                }
-            )
-        }
         if !message.Outgoing && message.Verification != Verification.Verified && (!input.Group || input.First) {
             column.Add(Label(ui, ui.Strings.Get(verification), 10, color, ""))
         }
@@ -165,27 +199,6 @@ class MessageBubble : Cell[MessageBubbleInput] {
                     Label(ui, ui.Strings.Get("Not sent"), 11, ui.Pink, ""),
                     Button(ui, "Retry", input.OnRetry, !input.CanRetry)
                 }
-            )
-        } else if message.Outgoing && input.ShowState {
-            let state = switch message.State {
-                case MessageState.InProgress: ui.Strings.Get("In progress")
-                case MessageState.Pending: ui.Strings.Get("Pending") + " ~" + Math.Max(
-                    1.0,
-                    Math.Ceiling(message.EtaSeconds / 60)
-                )
-                    .ToString("0") + " " + ui.Strings.Get("min")
-                case MessageState.Confirmed: ui.Strings.Get("Confirmed") + " " + Math.Min(10, message.Confirmations)
-                    .ToString() + "/10"
-                case MessageState.Failed: ui.Strings.Get("Not sent")
-            }
-            column.Add(
-                Label(
-                    ui,
-                    state,
-                    11,
-                    message.State == MessageState.Confirmed ? ui.Dim: message.State == MessageState.Pending ? ui.Orange: ui.Blue,
-                    ""
-                )
             )
         }
         return column

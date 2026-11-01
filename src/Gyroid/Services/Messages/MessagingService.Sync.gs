@@ -170,7 +170,6 @@ partial class MessagingService {
                 mined,
                 0,
                 decoded.OutputIndices.Length,
-                average,
                 own,
                 ct
             )
@@ -211,7 +210,6 @@ partial class MessagingService {
                     mined,
                     int64(NodeJson.Number(entry, "fee")),
                     entry.GetProperty("recipients").GetArrayLength(),
-                    average,
                     own,
                     ct
                 )
@@ -334,7 +332,6 @@ partial class MessagingService {
         height int64,
         fee int64,
         outputs int32,
-        average float64,
         own string,
         ct CancellationToken
     ) Message? {
@@ -485,7 +482,7 @@ partial class MessagingService {
                 MessageState.Failed
             },
             Confirmations: int32(confirmations),
-            EtaSeconds: Wire.Eta(chainState, average),
+            Height: height,
             Verification: verification,
             FeeAtomic: fee,
             Outputs: outputs

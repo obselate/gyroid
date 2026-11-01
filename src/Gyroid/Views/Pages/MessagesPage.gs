@@ -162,7 +162,6 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                 ScrollbarY: Theme.Read().Scrollbar
             }
             let messages = current.Messages
-            let lastOwn = messages.LastOrDefault(item -> item.Outgoing)
             if !changed {
                 for message in previousMessages {
                     if message.Txid.Length > 0 {
@@ -205,7 +204,6 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                             Group: current.IsGroup,
                             First: first,
                             Last: last,
-                            ShowState: last && Object.ReferenceEquals(message, lastOwn),
                             Animate: added && newTransaction && !changed && ui.Actions.playbackActive(),
                             Highlight: highlight == message.Key,
                             CanRetry: service.Mode == MessengerMode.Send && !busy,

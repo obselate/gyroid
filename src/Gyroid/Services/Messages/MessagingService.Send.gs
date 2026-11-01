@@ -205,7 +205,6 @@ partial class MessagingService {
                 message.Txid = NodeJson.Text(sent.RootElement, "txid")
                 message.FeeAtomic = int64(NodeJson.Number(sent.RootElement, "fee"))
                 message.State = MessageState.Pending
-                message.EtaSeconds = AverageBlockSeconds
             }
             if invite {
                 SaveConversation(target)
