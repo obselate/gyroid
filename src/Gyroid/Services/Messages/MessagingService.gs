@@ -183,8 +183,10 @@ partial class MessagingService {
                 throw WalletException("Message is not available for retry")
             }
             version = generation
-            message.IdempotencyKey = Guid.NewGuid().ToString("N")
-            message.SendPayload = Array.Empty[uint8]()
+            if message.IdempotencyKey.Length == 0 {
+                message.IdempotencyKey = Guid.NewGuid().ToString("N")
+                message.SendPayload = Array.Empty[uint8]()
+            }
             message.State = MessageState.InProgress
         }
         session.Changed?.Invoke()

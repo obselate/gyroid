@@ -194,17 +194,25 @@ partial class MessagingService {
             if !IsCurrent(message, version) {
                 return
             }
-            using let sent = await client.JsonAsync(
-                "wallet/send",
-                writer -> writer.WriteRawValue(ReadOnlySpan[uint8](payload), true),
-                ct,
-                message?.IdempotencyKey ?? Guid.NewGuid().ToString("N"),
-                true
-            )
-            if message != nil {
-                message.Txid = NodeJson.Text(sent.RootElement, "txid")
-                message.FeeAtomic = int64(NodeJson.Number(sent.RootElement, "fee"))
-                message.State = MessageState.Pending
+            try {
+                using let sent = await client.JsonAsync(
+                    "wallet/send",
+                    writer -> writer.WriteRawValue(ReadOnlySpan[uint8](payload), true),
+                    ct,
+                    message?.IdempotencyKey ?? Guid.NewGuid().ToString("N"),
+                    true
+                )
+                if message != nil {
+                    message.Txid = NodeJson.Text(sent.RootElement, "txid")
+                    message.FeeAtomic = int64(NodeJson.Number(sent.RootElement, "fee"))
+                    message.State = MessageState.Pending
+                }
+            } catch (error WalletException) when error.StatusCode > 0 && !error.OutcomeUnknown {
+                if message != nil {
+                    message.IdempotencyKey = ""
+                    message.SendPayload = Array.Empty[uint8]()
+                }
+                throw error
             }
             if invite {
                 SaveConversation(target)

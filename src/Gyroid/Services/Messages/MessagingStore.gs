@@ -62,6 +62,8 @@ class MessagingStore {
                             Message{
                                 Key: NodeJson.Text(message, "key"),
                                 ConversationId: conversation.Id,
+                                IdempotencyKey: NodeJson.Text(message, "idempotency_key"),
+                                SendPayload: Convert.FromBase64String(NodeJson.Text(message, "payload")),
                                 Outgoing: true,
                                 SenderAddress: address,
                                 SenderName: "You",
@@ -175,13 +177,11 @@ class MessagingStore {
                     writer.WriteEndArray()
                     writer.WriteStartArray("failed")
                     for message in conversation.Messages {
-                        if message.Outgoing &&
-                            message
-                            .Txid
-                            .Length == 0 &&
-                            (message.State == MessageState.Failed || message.State == MessageState.InProgress) {
+                        if message.Outgoing && message.Txid.Length == 0 && message.State == MessageState.Failed {
                             writer.WriteStartObject()
                             writer.WriteString("key", message.Key)
+                            writer.WriteString("idempotency_key", message.IdempotencyKey)
+                            writer.WriteBase64String("payload", ReadOnlySpan[uint8](message.SendPayload))
                             writer.WriteString("text", message.Text)
                             writer.WriteNumber("sent_at", message.SentAt.ToUnixTimeSeconds())
                             writer.WriteEndObject()
