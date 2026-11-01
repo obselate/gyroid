@@ -13,21 +13,17 @@ import System.Linq
 partial class App {
     private func Phase() NodePhase {
         let status = wallet.Node.Status
-        return if status.Phase == NodePhase.None && status.Running && status.Peers == 0 {
+        return if status.Phase == NodePhase.None && status.Running && (status.Peers == 0 || status.Height == 0) {
             NodePhase.Connecting
         } else {
             status.Phase
         }
     }
 
-    private func Preparing() bool -> wallet
-        .Node
-        .Status
-        .Phase != NodePhase.None &&
-        wallet
-        .Node
-        .Status
-        .Phase != NodePhase.ChainSync
+    private func Preparing() bool {
+        let status = wallet.Node.Status
+        return Phase() != NodePhase.None || status.Running && status.Syncing
+    }
 
     private func PhaseName() string -> ui.Strings.Get(
         switch Phase() {

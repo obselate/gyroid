@@ -27,7 +27,7 @@ class ListParts {
             TitleFontWeight: AppTheme.WeightNormal,
             TitleColor: AppTheme.Dim,
             FontFamily: AppTheme.Font,
-            CreateTitle: value -> TextParts.Label(ui, value.Title ?? "", AppTheme.Type13, AppTheme.Dim, ""),
+            CreateTitle: value -> (TextParts.Label(ui, value.Title ?? "", AppTheme.Type13, AppTheme.Dim, "") as Text)!!,
             Action: action
         }.Build()
     }

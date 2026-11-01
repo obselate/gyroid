@@ -19,26 +19,23 @@ class DecodeValue : Cell[DecodeValueInput] {
     private var from string = ""
     private var target string = ""
     private let progress Anim[float64]
-    private var ui Presentation?
 
     init() {
         progress = Animate(1.0)
-        progress.Completed += reason -> ui?.Actions.SettleMotion()
     }
 
     protected override func Build(input DecodeValueInput) Blob {
-        ui = input.Ui
         if input.Value != target {
             from = target
             target = input.Value
-            if Motion.TimeScale > 0 && from.Length > 0 && !from.Contains('•') && !target.Contains('•') {
+            if input.Ui.Actions.playbackActive() && from.Length > 0 && !from.Contains('•') && !target.Contains('•') {
                 progress.Snap(0)
                 progress.To(1, Motion.Tween(250))
             } else {
                 progress.Snap(1)
             }
         }
-        if Motion.TimeScale <= 0 {
+        if !input.Ui.Actions.playbackActive() {
             progress.Snap(1)
         }
         let chars = target.ToCharArray()

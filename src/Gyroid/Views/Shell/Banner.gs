@@ -22,6 +22,9 @@ import System.Text
 import System.Threading.Tasks
 
 partial class App {
+    private let retryConnection Action
+    private let dismissProblem Action
+
     private func Problem() Blob? {
         let snapshot = wallet.Snapshot
         let message = if error.Length > 0 {
@@ -42,37 +45,67 @@ partial class App {
             if problem.Length == 0 {
                 return nil
             }
-            return Banner{
-                Tone: Tone.Warning,
-                Content: ui.Strings.Get("Settings file not loaded") + ": " + ui.Strings.Explain(problem),
-                FontFamily: AppTheme.Font,
-            }.Build()
+            return Cell.Mount[ShellBannerInput, ShellBannerRegion](
+                "problem-banner",
+                ShellBannerInput{
+                    Ui: ui,
+                    Message: ui.Strings.Get("Settings file not loaded") + ": " + ui.Strings.Explain(problem),
+                    Warning: true,
+                    Language: ui.Strings.Language
+                }
+            )
+        }
+        return Cell.Mount[ShellBannerInput, ShellBannerRegion](
+            "problem-banner",
+            ShellBannerInput{
+                Ui: ui,
+                Message: ui.Strings.Explain(message),
+                NodeError: wallet.NodeError.Length > 0,
+                RestartStopped: wallet.NodeRestartStopped,
+                Busy: ui.Working() || wallet.Busy || Preparing(),
+                Language: ui.Strings.Language,
+                Retry: retryConnection,
+                Dismiss: dismissProblem
+            }
+        )
+    }
+}
+
+data struct ShellBannerInput {
+    var Ui Presentation
+    var Message string
+    var Warning bool
+    var NodeError bool
+    var RestartStopped bool
+    var Busy bool
+    var Language string
+    var Retry Action?
+    var Dismiss Action?
+}
+
+class ShellBannerRegion : Cell[ShellBannerInput] {
+    private var message string = ""
+    private var dismissed bool
+
+    protected override func Build(input ShellBannerInput) Blob {
+        if message != input.Message {
+            message = input.Message
+            dismissed = false
+        }
+        if dismissed {
+            return Container{Display: Display.None}
         }
         return Banner{
-            Tone: Tone.Danger,
-            Content: ui.Strings.Explain(message),
+            Tone: input.Warning ? Tone.Warning: Tone.Danger,
+            Content: input.Message,
             FontFamily: AppTheme.Font,
-            Title: wallet.NodeRestartStopped ? ui.Strings.Get("Automatic node restart stopped"): nil,
-            Actions: wallet
-                .NodeError
-                .Length > 0 ? ActionRow(
-                []Blob{
-                    Button(
-                        ui,
-                        "Retry",
-                        () -> {
-                            refreshError = ""
-                            Run(ct -> wallet.ConnectAsync(ct))
-                        },
-                        ui.Working() || wallet.Busy || Preparing()
-                    )
-                }
+            Title: input.RestartStopped ? input.Ui.Strings.Get("Automatic node restart stopped"): nil,
+            Actions: input.NodeError ? ActionRow(
+                []Blob{Button(input.Ui, "Retry", () -> input.Retry?.Invoke(), input.Busy)}
             ): nil,
-            OnDismiss: wallet.NodeError.Length > 0 ? nil: () -> {
-                error = ""
-                refreshError = ""
-                wallet.BackgroundError = ""
-                Rebuild()
+            OnDismiss: input.Warning || input.NodeError ? nil: () -> {
+                dismissed = true
+                input.Dismiss?.Invoke()
             }
         }.Build()
     }

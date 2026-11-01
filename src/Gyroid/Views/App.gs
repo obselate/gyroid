@@ -35,7 +35,7 @@ enum AppPage {
 
 data class WindowWork(Run Func[CancellationToken, Task])
 
-partial class App : Cell {
+partial class App : Cell, IDisposable {
     private let sendDone Action
     private let configureHistory Action[HistoryPage]
 
@@ -70,7 +70,7 @@ partial class App : Cell {
 
     private var window Window?
     private let workers chan[WindowWork] = Chan.Unbounded[WindowWork]()
-    private var workerTask Task? = nil
+    private var lifetime CancellationTokenSource?
     private var closed bool
 
     private var width float64 = 1280
@@ -86,8 +86,7 @@ partial class App : Cell {
     private var lastState WalletState
 
     private var error string = ""
-
-    private var bannerHeight float64
+    private var connectionError string = ""
 
     private var refreshing bool
 
@@ -412,12 +411,23 @@ partial class App : Cell {
                 OnBackup: backupSeed
             }
         )
-        ApplyPreferences()
-        nodeAnchor.MetricsChanged += _ -> {
-            if nodeOpen {
-                Rebuild()
+        confirmSend = resume -> {
+            if resume {
+                Run(ct -> wallet.Send.ResumeAsync(ct), () -> Refresh())
+            } else {
+                Run(ct -> wallet.Send.DismissAsync(ct))
             }
         }
+        retryConnection = () -> {
+            refreshError = ""
+            Run(ct -> wallet.ConnectAsync(ct))
+        }
+        dismissProblem = () -> {
+            error = ""
+            refreshError = ""
+            wallet.BackgroundError = ""
+        }
+        ApplyPreferences()
         background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
         appIcon = ImageSource.Decode(Resources.Resource("Gyroid.Icon.png"))
         LoadContacts()
@@ -512,7 +522,10 @@ partial class App : Cell {
     func Attach(owner Window) {
         window = owner
         ui.Attach(owner)
-        workerTask = RunWorkersAsync()
+        let source = CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
+        lifetime = source
+        let token = source.Token
+        go RunWorkersAsync(token)
         Resize(owner)
         owner.MetricsChanged += metrics -> {
             pixelScale = metrics.DisplayScaleX * metrics.UiScale
@@ -547,30 +560,43 @@ partial class App : Cell {
             Touch()
             return false
         }
-        wallet.Changed = () -> owner.Post(() -> Sync())
+        wallet.Changed = () -> owner.TryPost(
+            () -> {
+                if !closed {
+                    Sync()
+                }
+            }
+        )
         lastState = wallet.Snapshot.State
         lastWallet = wallet.Settings.ActiveWallet
         Tick()
     }
 
     private func Close() {
+        if closed {
+            return
+        }
         closed = true
         workers.Writer.TryComplete()
-        workerTask?.GetAwaiter().GetResult()
+        lifetime?.Cancel()
+        lifetime?.Dispose()
+        lifetime = nil
         ui.Operations = 0
         tray?.Dispose()
         tray = nil
         refreshTimer?.Dispose()
         statusTimer?.Dispose()
         backgroundLockTimer?.Dispose()
-        ui.Actions.DecodeTimer?.Dispose()
-        ui.Actions.DecodeTimer = nil
         frameTimer?.Dispose()
         frameTimer = nil
-        ui.Actions.ReleaseClipboard()
+        ui.Actions.Dispose()
         ClearSeed()
         sendRows.Clear()
         wallet.Changed = nil
+    }
+
+    public func Dispose() {
+        Close()
     }
 
     private func Touch() {
@@ -633,13 +659,18 @@ partial class App : Cell {
     private func Sync() {
         let node = wallet.Node.Status
         let snapshot = wallet.Snapshot
+        if connectionError.Length > 0 && wallet.NodeError.Length == 0 && node.Running {
+            if error == connectionError {
+                error = ""
+            }
+            connectionError = ""
+        }
         let walletChanged = wallet.Settings.ActiveWallet != lastWallet
         ObserveMessages()
         if snapshot.State != WalletState.Unlocked || walletChanged {
             ClearSeed()
             toolsState.Report = nil
             sendRows.Clear()
-            confirmPendingSend = false
         }
         if !node.Running || node.Syncing || node.Peers == 0 || node.Height == 0 || snapshot.ScanBehind(node.Height) {
             statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
@@ -799,11 +830,11 @@ partial class App : Cell {
         Rebuild()
     }
 
-    private async func RunWorkersAsync() {
+    private async func RunWorkersAsync(ct CancellationToken) {
         try {
             scope {
                 for work in workers {
-                    go RunWork(work, ctx.Token)
+                    go RunWork(work, ct)
                 }
                 ctx.TryCancel()
             }
@@ -866,6 +897,9 @@ partial class App : Cell {
         }
         window?.TryPost(
             () -> {
+                if closed || ct.IsCancellationRequested {
+                    return
+                }
                 ui.Operations--
                 if unknown {
                     screen = if wallet.Snapshot.State == WalletState.Unlocked {
@@ -876,12 +910,14 @@ partial class App : Cell {
                     Refresh()
                 } else {
                     error = message
+                    if message.Length > 0 && message == wallet.NodeError {
+                        connectionError = message
+                    }
                 }
                 if message == "" {
                     done?.Invoke()
                 }
                 Sync()
-                Rebuild()
             }
         )
     }
@@ -1037,11 +1073,6 @@ partial class App : Cell {
             AppPage.Library
         }
         let banner = Problem()
-        bannerHeight = if banner != nil {
-            52.0
-        } else {
-            0.0
-        }
         let content = if page == AppPage.Overview {
             Cell.Mount[OverviewInput, OverviewPage](
                 "overview",
@@ -1195,7 +1226,9 @@ partial class App : Cell {
             Padding: AppTheme.Space24
         }
         if let shown = banner {
-            main.Add(Container{Key: "error-banner", FlexShrink: 0, shown})
+            shown.Key = "error-banner"
+            shown.FlexShrink = 0
+            main.Add(shown)
         }
         if page == AppPage.Overview &&
             (
@@ -1272,9 +1305,6 @@ partial class App : Cell {
             root.Add(Cell.Mount[MessageOverlay]("message-overlay", configureMessageOverlay))
             if confirmPaymentReplacement {
                 root.Add(ConfirmPaymentReplacement())
-            }
-            if confirmPendingSend {
-                root.Add(ConfirmPendingSend())
             }
             if upgradeShown {
                 root.Add(UpgradeDialog())

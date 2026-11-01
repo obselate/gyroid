@@ -21,26 +21,39 @@ enum NodeConnectionState {
     Synced
 }
 
-partial class App {
+data struct NodeBadgeInput {
+    var Ui Presentation
+    var Node NodeStatus
+    var Percent int32?
+    var Language string
+    var Width float64
+    var Height float64
+    var OnNavigate Action[AppPage]
+    var OnSettings Action
+    var OnUpgrade Action
+}
+
+class NodeBadgeRegion : Cell[NodeBadgeInput] {
     private var nodeOpen bool
 
     private let nodeAnchor ElementHandle = ElementHandle()
 
-    private var upgradeShown bool
-
-    private let showUpgrade Action
-
-    private func NodeState() NodeConnectionState {
-        let status = wallet.Node.Status
-        return if !status.Running {
-            NodeConnectionState.Offline
-        } else if status.Syncing {
-            NodeConnectionState.Syncing
-        } else if status.Peers == 0 {
-            NodeConnectionState.NoPeers
-        } else {
-            NodeConnectionState.Synced
+    init() {
+        nodeAnchor.MetricsChanged += _ -> {
+            if nodeOpen {
+                Rebuild()
+            }
         }
+    }
+
+    private func NodeState(status NodeStatus) NodeConnectionState -> if !status.Running {
+        NodeConnectionState.Offline
+    } else if status.Syncing {
+        NodeConnectionState.Syncing
+    } else if status.Peers == 0 {
+        NodeConnectionState.NoPeers
+    } else {
+        NodeConnectionState.Synced
     }
 
     private func NodeColor(state NodeConnectionState) Color -> switch state {
@@ -50,10 +63,11 @@ partial class App {
         case NodeConnectionState.Synced: AppTheme.Mint
     }
 
-    private func NodeBadge() Blob {
-        let status = wallet.Node.Status
-        let state = NodeState()
-        let percent = PhasePercent()
+    protected override func Build(input NodeBadgeInput) Blob {
+        let ui = input.Ui
+        let status = input.Node
+        let state = NodeState(status)
+        let percent = input.Percent
         let height = status.Height > 0 ? Count(status.Height): "-"
         let detail = if state == NodeConnectionState.Offline {
             ui.Strings.Get("offline")
@@ -86,7 +100,6 @@ partial class App {
             },
             OnClick: () -> {
                 nodeOpen = !nodeOpen
-                Rebuild()
             },
             Label(ui, height, AppTheme.Type11, state == NodeConnectionState.Offline ? AppTheme.Dim: AppTheme.Ink, ""),
             Label(ui, detail, AppTheme.Type11, state == NodeConnectionState.Synced ? AppTheme.Dim: NodeColor(state), "")
@@ -109,10 +122,14 @@ partial class App {
                 }
             )
         }
-        return Container{FlexShrink: 0, badge, NodePopover(status, state)}
+        return Container{FlexShrink: 0, badge, NodePopover(input, state)}
     }
 
-    private func NodePopover(status NodeStatus, state NodeConnectionState) Blob {
+    private func NodePopover(input NodeBadgeInput, state NodeConnectionState) Blob {
+        let ui = input.Ui
+        let status = input.Node
+        let width = input.Width
+        let height = input.Height
         let box = nodeAnchor.BorderBox
         let center = box.Y + box.Height / 2
         let version = status.Version.Length > 0 ? " · v" + status.Version: ""
@@ -147,29 +164,32 @@ partial class App {
         if status.Running {
             let readings = Container{Gap: AppTheme.Space10}
             let syncing = state == NodeConnectionState.Syncing
-            readings.Add(NodeReading("Height", Count(status.Height), syncing ? " / " + Count(status.ChainHeight): ""))
+            readings.Add(
+                NodeReading(ui, "Height", Count(status.Height), syncing ? " / " + Count(status.ChainHeight): "")
+            )
             if syncing && status.SyncRate > 0 {
                 let minutes = Math.Max(
                     1.0,
                     Math.Ceiling(float64(status.ChainHeight - status.Height) / status.SyncRate / 60)
                 )
                 readings.Add(
-                    NodeReading("Speed", String.Format(ui.Strings.Get("{0} blk/s"), Math.Round(status.SyncRate)))
+                    NodeReading(ui, "Speed", String.Format(ui.Strings.Get("{0} blk/s"), Math.Round(status.SyncRate)))
                 )
-                readings.Add(NodeReading("Remaining", String.Format(ui.Strings.Get("~{0} min"), minutes)))
+                readings.Add(NodeReading(ui, "Remaining", String.Format(ui.Strings.Get("~{0} min"), minutes)))
             }
             if !syncing && status.LastBlockTime > 0 {
                 let time = DateTimeOffset.FromUnixTimeSeconds(status.LastBlockTime).ToLocalTime()
                 readings.Add(
                     NodeReading(
+                        ui,
                         "Last block",
                         Count(status.Height) + " · " + time.ToString("HH:mm", CultureInfo.InvariantCulture)
                     )
                 )
             }
-            readings.Add(NodeReading("Peers", status.Peers.ToString()))
+            readings.Add(NodeReading(ui, "Peers", status.Peers.ToString()))
             if !syncing {
-                readings.Add(NodeReading("Mempool", status.Mempool.ToString() + " " + ui.Strings.Get("tx")))
+                readings.Add(NodeReading(ui, "Mempool", status.Mempool.ToString() + " " + ui.Strings.Get("tx")))
             }
             card.Add(readings)
         }
@@ -205,8 +225,8 @@ partial class App {
                                 AccessibilityName = ui.Strings.Get("Network upgrade"),
                                 OnClick = () -> {
                                     nodeOpen = false
-                                    upgradeShown = true
                                     Rebuild()
+                                    input.OnUpgrade()
                                 }
                             }
                         ).Build()
@@ -228,7 +248,8 @@ partial class App {
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Network")},
             OnClick: () -> {
                 nodeOpen = false
-                Navigate(AppPage.Network)
+                Rebuild()
+                input.OnNavigate(AppPage.Network)
             },
             Label(ui, ui.Strings.Get("Network"), AppTheme.Type14, AppTheme.Lime, ""),
             MaterialIcons.Create("chevron_right", AppTheme.Icon16, AppTheme.Lime)
@@ -243,8 +264,8 @@ partial class App {
                     "Node settings",
                     () -> {
                         nodeOpen = false
-                        settingsSection = "node"
-                        Navigate(AppPage.Settings)
+                        Rebuild()
+                        input.OnSettings()
                     }
                 ),
                 networkButton
@@ -298,7 +319,7 @@ partial class App {
         )
     }
 
-    private func NodeReading(label string, value string, total string = "") Blob ->
+    private func NodeReading(ui Presentation, label string, value string, total string = "") Blob ->
     KeyValue(
         ui,
         ui.Strings.Get(label),
@@ -306,6 +327,26 @@ partial class App {
             FlexDirection: FlexDirection.Row,
             Label(ui, value, AppTheme.Type12, AppTheme.Ink, ""),
             Label(ui, total, AppTheme.Type12, AppTheme.Dim, "")
+        }
+    )
+}
+
+partial class App {
+    private var upgradeShown bool
+    private let showUpgrade Action
+
+    private func NodeBadge() Blob -> Cell.Mount[NodeBadgeInput, NodeBadgeRegion](
+        "node-badge",
+        NodeBadgeInput{
+            Ui: ui,
+            Node: wallet.Node.Status,
+            Percent: PhasePercent(),
+            Language: ui.Strings.Language,
+            Width: width,
+            Height: height,
+            OnNavigate: navigate,
+            OnSettings: openNodeSettings,
+            OnUpgrade: showUpgrade
         }
     )
 

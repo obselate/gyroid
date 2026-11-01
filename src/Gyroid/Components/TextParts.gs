@@ -111,21 +111,20 @@ class TextParts {
             size float64 = 14,
             color Color? = nil,
             channel string = "page"
-        ) Text {
-            let t = if channel.Length == 0 {
-                1.0
-            } else {
-                Math.Min(ui.Actions.Progress("page"), ui.Actions.Progress(channel))
-            }
-            if size >= 13 && t < 1 {
-                return TextParts.Frame(
-                    ui,
-                    content,
-                    t,
-                    ui.Actions.DecodeSeed ^ content.GetHashCode(),
-                    Random.Shared,
-                    size,
-                    color ?? AppTheme.Ink
+        ) Blob {
+            if channel.Length > 0 && size >= 13 {
+                return Cell.Mount[DecodeLabelInput, DecodeLabel](
+                    nil,
+                    DecodeLabelInput{
+                        Ui: ui,
+                        Content: content,
+                        Size: size,
+                        Color: color ?? AppTheme.Ink,
+                        Revision: Math.Max(
+                            ui.Actions.Decoding.GetValueOrDefault("page"),
+                            ui.Actions.Decoding.GetValueOrDefault(channel)
+                        )
+                    }
                 )
             }
             return Text{
@@ -249,44 +248,139 @@ class TextParts {
             shown string,
             valueColor Color? = nil,
             disabled bool = false
-        ) Blob {
-            let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
-                System.MemoryExtensions.AsSpan(value)
-            )
-            let content = Container{
-                Gap: AppTheme.Space6,
-                TextParts.Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body)
+        ) Blob -> Cell
+            .Mount[CopyableTextInput, CopyableText](
+            "copy-" + label,
+            CopyableTextInput{
+                Ui: ui,
+                Label: label,
+                Value: value,
+                Shown: shown,
+                Color: valueColor ?? AppTheme.Ink,
+                Disabled: disabled,
+                Language: ui.Strings.Language
             }
-            content.Add(
-                Text{
-                    Content: shown,
-                    FontFamily: AppTheme.Font,
-                    FontSize: AppTheme.Type13,
-                    Color: valueColor ?? AppTheme.Ink,
-                    TextWrap: TextWrap.Wrap
-                }
-            )
-            return Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.FlexStart,
-                Gap: AppTheme.Space8,
-                FlexShrink: 0,
-                Grow(content),
-                ControlParts.Icon(
-                    ui,
-                    MaterialIcons.Create(
-                        copied ? "check": "content_copy",
-                        AppTheme.Icon16,
-                        disabled ? AppTheme.Dim: copied ? AppTheme.Lime: AppTheme.Body
-                    ),
-                    ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
-                    () -> {
-                        ui.Actions.Copy(value, 120000)
-                        ui.Actions.rebuild()
-                    },
-                    disabled: disabled
-                )
+        )
+    }
+}
+
+data struct CopyableTextInput {
+    var Ui Presentation
+    var Label string
+    var Value string
+    var Shown string
+    var Color Color
+    var Disabled bool
+    var Language string
+}
+
+class CopyableText : Cell[CopyableTextInput], IDisposable {
+    private var actions UiService?
+    private let changed Action
+
+    init() {
+        changed = () -> Rebuild()
+    }
+
+    public func Dispose() {
+        if let source = actions {
+            source.ClipboardChanged -= changed
+        }
+        actions = nil
+    }
+
+    protected override func Build(input CopyableTextInput) Blob {
+        if actions != input.Ui.Actions {
+            Dispose()
+            actions = input.Ui.Actions
+            input.Ui.Actions.ClipboardChanged += changed
+        }
+        let ui = input.Ui
+        let label = input.Label
+        let value = input.Value
+        let disabled = input.Disabled
+        let copied = ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(System.MemoryExtensions.AsSpan(value))
+        let content = Container{
+            Gap: AppTheme.Space6,
+            TextParts.Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body)
+        }
+        content.Add(
+            Text{
+                Content: input.Shown,
+                FontFamily: AppTheme.Font,
+                FontSize: AppTheme.Type13,
+                Color: input.Color,
+                TextWrap: TextWrap.Wrap
             }
+        )
+        return Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.FlexStart,
+            Gap: AppTheme.Space8,
+            FlexShrink: 0,
+            Grow(content),
+            ControlParts.Icon(
+                ui,
+                MaterialIcons.Create(
+                    copied ? "check": "content_copy",
+                    AppTheme.Icon16,
+                    disabled ? AppTheme.Dim: copied ? AppTheme.Lime: AppTheme.Body
+                ),
+                ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
+                () -> {
+                    ui.Actions.Copy(value, 120000)
+                },
+                disabled: disabled
+            )
+        }
+    }
+}
+
+data struct DecodeLabelInput {
+    var Ui Presentation
+    var Content string
+    var Size float64
+    var Color Color
+    var Revision int64
+}
+
+class DecodeLabel : Cell[DecodeLabelInput] {
+    private let progress Anim[float64]
+    private var revision int64
+
+    init() {
+        progress = Animate(1.0)
+    }
+
+    protected override func Build(input DecodeLabelInput) Blob {
+        if revision != input.Revision {
+            revision = input.Revision
+            if input.Revision > 0 && input.Ui.Actions.playbackActive() {
+                progress.Snap(0)
+                progress.To(1, Motion.Tween(250))
+            } else {
+                progress.Snap(1)
+            }
+        }
+        if progress.Value < 1 && input.Ui.Actions.playbackActive() {
+            return TextParts.Frame(
+                input.Ui,
+                input.Content,
+                progress.Value,
+                int32(revision) ^ input.Content.GetHashCode(),
+                Random.Shared,
+                input.Size,
+                input.Color
+            )
+        }
+        return Text{
+            Content: input.Content,
+            FontFamily: AppTheme.Font,
+            FontSize: input.Size,
+            Color: input.Color,
+            TextWrap: TextWrap.NoWrap,
+            TextTrimming: TextTrimming.Ellipsis,
+            MinWidth: 0
         }
     }
 }

@@ -6,13 +6,30 @@ import Gyroid.Components
 import Gyroid.Components.ControlParts
 import Gyroid.Components.LayoutParts
 import Gyroid.Components.TextParts
+import Gyroid.Models
 import System
 import System.Collections.Generic
 import System.Linq
 
+data struct PendingSendInput {
+    var Ui Presentation
+    var Wallet string
+    var Network string
+    var Key string
+    var State string
+    var Pending bool
+    var Retryable bool
+    var Error string
+    var TxId string
+    var OutcomeError string
+    var Busy bool
+    var Width float64
+    var Language string
+    var OnConfirm Action[bool]
+}
+
 partial class App {
-    private var confirmPendingSend bool
-    private var resumePendingSend bool
+    private let confirmSend Action[bool]
 
     private func PendingSendCard() Blob {
         let card = WalletParts.PageContent(ui, ui.Strings.Get("send"), 640)
@@ -20,22 +37,63 @@ partial class App {
         return card
     }
 
-    private func PendingSendBanner() Blob {
-        let pending = wallet.Send.Pending
+    private func PendingSendBanner() Blob -> Cell.Mount[PendingSendInput, PendingSendRegion](
+        "pending-send-region",
+        PendingSendInput{
+            Ui: ui,
+            Wallet: wallet.Settings.ActiveWallet,
+            Network: wallet.Settings.Network,
+            Key: wallet.Send.Pending?.Key ?? wallet.Send.Outcome.TxId,
+            State: wallet.Send.Pending?.State ?? "",
+            Pending: wallet.Send.Pending != nil,
+            Retryable: wallet.Send.Pending?.Retryable == true,
+            Error: wallet.Send.Error,
+            TxId: wallet.Send.Outcome.TxId,
+            OutcomeError: wallet.Send.Outcome.Error ?? "",
+            Busy: ui.Working(),
+            Width: width,
+            Language: ui.Strings.Language,
+            OnConfirm: confirmSend
+        }
+    )
+}
+
+class PendingSendRegion : Cell[PendingSendInput] {
+    private var confirmPendingSend bool
+    private var resumePendingSend bool
+    private var wallet string = ""
+    private var network string = ""
+    private var key string = ""
+
+    protected override func Build(input PendingSendInput) Blob {
+        if wallet != input.Wallet || network != input.Network || key != input.Key {
+            wallet = input.Wallet
+            network = input.Network
+            key = input.Key
+            confirmPendingSend = false
+        }
+        let content = Container{FlexShrink: 0, PendingSendBanner(input)}
+        if confirmPendingSend {
+            content.Add(ConfirmPendingSend(input))
+        }
+        return content
+    }
+
+    private func PendingSendBanner(input PendingSendInput) Blob {
+        let ui = input.Ui
         let content = WalletParts.Card(ui, gap: AppTheme.Space10)
         content.FlexShrink = 0
         content.Add(WalletParts.Header(Label(ui, ui.Strings.Get("Pending send"), AppTheme.Type14, AppTheme.Orange)))
-        let outcome = wallet.Send.Outcome
-        let message = if wallet.Send.Error.Length > 0 {
-            ui.Strings.Explain(wallet.Send.Error)
-        } else if let value = pending {
-            ui.Strings.Get(value.State)
-        } else if outcome.TxId.Length > 0 {
-            ui.Strings.Get("Submitted") + ": " + outcome.TxId
+        let message = if input.Error.Length > 0 {
+            ui.Strings.Explain(input.Error)
+        } else if input.Pending {
+            ui.Strings.Get(input.State)
+        } else if input.TxId.Length > 0 {
+            ui.Strings.Get("Submitted") + ": " + input.TxId
         } else {
-            ui.Strings.Get("Send failed") + ": " + (outcome.Error ?? "")
+            ui.Strings.Get("Send failed") + ": " + input.OutcomeError
         }
-        if wallet.Send.Error.Length > 0 || pending == nil && outcome.TxId.Length == 0 {
+        if input.Error.Length > 0 || !input.Pending && input.TxId.Length == 0 {
             content.Add(MessageParts.Problem(ui, message))
         } else {
             content.Add(
@@ -55,12 +113,11 @@ partial class App {
                 () -> {
                     resumePendingSend = false
                     confirmPendingSend = true
-                    Rebuild()
                 },
-                ui.Working()
+                input.Busy
             )
         }
-        if wallet.Send.Error.Length == 0 && pending?.Retryable == true {
+        if input.Error.Length == 0 && input.Retryable {
             actions.Add(
                 Button(
                     ui,
@@ -68,9 +125,8 @@ partial class App {
                     () -> {
                         resumePendingSend = true
                         confirmPendingSend = true
-                        Rebuild()
                     },
-                    ui.Working()
+                    input.Busy
                 )
             )
         }
@@ -78,8 +134,9 @@ partial class App {
         return content
     }
 
-    private func ConfirmPendingSend() Blob {
-        let resume = resumePendingSend && wallet.Send.Error.Length == 0 && wallet.Send.Pending?.Retryable == true
+    private func ConfirmPendingSend(input PendingSendInput) Blob {
+        let ui = input.Ui
+        let resume = resumePendingSend && input.Error.Length == 0 && input.Retryable
         let close Action = () -> {
             confirmPendingSend = false
             Rebuild()
@@ -91,7 +148,7 @@ partial class App {
                 Open = true,
                 Preset = ModalDialogPreset.Confirm,
                 AccessibilityName = ui.Strings.Get("Pending send"),
-                Width = Math.Min(width - 48, 600),
+                Width = Math.Min(input.Width - 48, 600),
                 Content = Text{
                     Content: ui.Strings.Get(
                         if resume {
@@ -113,14 +170,11 @@ partial class App {
                     }
                 ),
                 CancelText = ui.Strings.Get("Cancel"),
-                ConfirmDisabled = ui.Working(),
+                ConfirmDisabled = input.Busy,
                 OnConfirm = () -> {
                     confirmPendingSend = false
-                    if resume {
-                        Run(ct -> wallet.Send.ResumeAsync(ct), () -> Refresh())
-                    } else {
-                        Run(ct -> wallet.Send.DismissAsync(ct))
-                    }
+                    Rebuild()
+                    input.OnConfirm(resume)
                 },
                 OnCancel = close,
                 OnClose = close

@@ -10,7 +10,7 @@ import System.Text
 import System.Threading
 import System.Threading.Tasks
 
-class UiService {
+class UiService : IDisposable {
     var window Window?
     let rebuild Action
     let playbackActive Func[bool]
@@ -59,45 +59,15 @@ class UiService {
     private var clipboardOwner[]uint8 = []uint8{}
 
     prop ClipboardOwner ReadOnlyMemory[uint8] -> ReadOnlyMemory[uint8](clipboardOwner)
+    event ClipboardChanged Action
 
     let Decoding Dictionary[string, int64] = Dictionary[string, int64]()
-
-    var DecodeSeed int32
-
-    var DecodeTimer WindowTimer?
-
-    func SettleMotion() {
-        Motion.TimeScale = playbackActive() ? 1.0: 0.0
-    }
 
     func Decode(channel string) {
         if !playbackActive() {
             return
         }
         Decoding[channel] = Stopwatch.GetTimestamp()
-        DecodeSeed = Random.Shared.Next()
-        DecodeTimer ??= window?.SetInterval(
-            () -> {
-                for channel in Decoding.Keys.ToArray() {
-                    if Progress(channel) >= 1 {
-                        Decoding.Remove(channel)
-                    }
-                }
-                if Decoding.Count == 0 {
-                    DecodeTimer?.Dispose()
-                    DecodeTimer = nil
-                }
-                rebuild()
-            },
-            30
-        )
-    }
-
-    func Progress(channel string) float64 {
-        if !Decoding.ContainsKey(channel) {
-            return 1
-        }
-        return Stopwatch.GetElapsedTime(Decoding[channel]).TotalMilliseconds / 250
     }
 
     func Copy(content string, clearAfterMs float64) {
@@ -107,8 +77,7 @@ class UiService {
         try {
             host.SetClipboardText(content)
         } catch (failure Exception) {
-            report("Copy failed")
-            rebuild()
+            Report("Copy failed")
             return
         }
         ReleaseClipboard(clear: false)
@@ -116,11 +85,10 @@ class UiService {
         ClipboardTimer = host.SetTimeout(
             () -> {
                 ReleaseClipboard()
-                rebuild()
             },
             clearAfterMs
         )
-        rebuild()
+        ClipboardChanged?.Invoke()
     }
 
     func Copy(content[]char, clearAfterMs float64) {
@@ -159,14 +127,12 @@ class UiService {
             ClipboardTimer = host.SetTimeout(
                 () -> {
                     ReleaseClipboard()
-                    rebuild()
                 },
                 clearAfterMs
             )
-            rebuild()
+            ClipboardChanged?.Invoke()
         } catch (failure Exception) {
-            report("Copy failed")
-            rebuild()
+            Report("Copy failed")
         } finally {
             Array.Clear(bytes)
             Array.Clear(nextClipboardBytes)
@@ -208,8 +174,7 @@ class UiService {
                 }
             }
         } catch (failure Exception) {
-            report("Clipboard could not be cleared")
-            rebuild()
+            Report("Clipboard could not be cleared")
         } finally {
             Array.Clear(ClipboardText)
             ClipboardText = []char{}
@@ -217,6 +182,13 @@ class UiService {
             clipboardBytes = []uint8{}
             Array.Clear(clipboardOwner)
             clipboardOwner = []uint8{}
+            ClipboardChanged?.Invoke()
         }
+    }
+
+    public func Dispose() {
+        ReleaseClipboard()
+        Decoding.Clear()
+        window = nil
     }
 }
