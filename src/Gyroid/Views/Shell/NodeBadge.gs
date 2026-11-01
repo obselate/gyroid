@@ -188,7 +188,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                         "Speed",
                         String.Format(
                             ui.Strings.Get("{0} blk/s"),
-                            status.SyncRate.ToString(status.SyncRate < 1 ? "G2": "0", CultureInfo.InvariantCulture)
+                            NodeText.FixedPoint(status.SyncRate, 0)
                         )
                     )
                 )
