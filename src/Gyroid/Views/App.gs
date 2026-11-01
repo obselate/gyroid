@@ -1151,19 +1151,15 @@ partial class App : Cell, IDisposable {
                 } else if current {
                     error = connectionFailure || message == observedConnectionError ? "": message
                 }
+                let now = wallet.Snapshot.State
+                let same = identity == wallet.Settings.ActiveWallet
                 let walletTransition = screen == AppPage.None &&
                     (
-                    wallet
-                        .Snapshot
-                        .State == WalletState.Unlocked &&
-                        (state != WalletState.Unlocked || identity != wallet.Settings.ActiveWallet) ||
-                        wallet
-                        .Snapshot
-                        .State == WalletState.Unloaded &&
+                    now == WalletState.Unlocked &&
+                        (state != WalletState.Unlocked || !same) ||
+                        now == WalletState.Unloaded &&
                         state != WalletState.Unloaded &&
-                        identity == wallet
-                        .Settings
-                        .ActiveWallet
+                        same
                 )
                 if request == operationGeneration && (page == pageGeneration || walletTransition) && message == "" {
                     done?.Invoke()
