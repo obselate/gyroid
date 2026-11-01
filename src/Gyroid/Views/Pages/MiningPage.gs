@@ -104,7 +104,6 @@ class MiningPage : Cell, IDisposable {
             request?.Cancel()
             request?.Dispose()
             if opened {
-                refreshRequested.Writer.TryComplete()
                 refreshRequested = Chan.Unbounded[MiningPollRequest]()
             }
             opened = true
@@ -211,7 +210,6 @@ class MiningPage : Cell, IDisposable {
         lifetime.Cancel()
         request?.Dispose()
         lifetime.Dispose()
-        refreshRequested.Writer.TryComplete()
     }
 
     private func Toggle() {

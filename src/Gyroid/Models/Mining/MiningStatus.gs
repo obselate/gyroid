@@ -33,7 +33,11 @@ data struct MiningPollResult {
 }
 
 class MiningHistory {
-    var Report MiningReport = MiningReport{}
+    var Report MiningReport
+
+    init() {
+        Report = MiningReport{}
+    }
 }
 
 data struct MiningReport {
