@@ -81,13 +81,12 @@ class MiningPage : Cell, IDisposable {
     private let setThreads Action[int32]
     private var source MiningPageInput
     private var request CancellationTokenSource?
-    private var timer WindowTimer?
+    private var refreshRequested chan[bool] = chan[bool](1)
+    private var worker Task?
     private var generation int32
     private var opened bool
     private var disposed bool
     private var unavailable bool
-    private var loading bool
-    private var refreshPending bool
     private var samples[]MiningSample = []MiningSample{}
 
     init() {
@@ -106,20 +105,21 @@ class MiningPage : Cell, IDisposable {
         let changed = !opened || source != input
         source = input
         if replaced {
-            opened = true
             generation++
             request?.Cancel()
             request?.Dispose()
-            timer?.Dispose()
-            timer = nil
-            loading = false
-            refreshPending = false
+            if opened {
+                refreshRequested.Writer.TryComplete()
+                refreshRequested = chan[bool](1)
+            }
+            opened = true
             if input.Visible && input.NodeRunning {
                 guard let window = input.Window else {
                     return
                 }
-                request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
-                Refresh()
+                let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, window.Closed)
+                request = current
+                worker = RunWorkerAsync(input, generation, refreshRequested, Context.FromToken(current.Token))
             }
         }
         if changed {
@@ -209,11 +209,12 @@ class MiningPage : Cell, IDisposable {
     func Dispose() {
         disposed = true
         generation++
-        timer?.Dispose()
         lifetime.Cancel()
         request?.Cancel()
         request?.Dispose()
         lifetime.Dispose()
+        refreshRequested.Writer.TryComplete()
+        worker = nil
     }
 
     private func Toggle() {
@@ -252,38 +253,53 @@ class MiningPage : Cell, IDisposable {
     }
 
     private func Refresh() {
-        if disposed || !source.Visible || !source.NodeRunning {
-            return
-        }
-        if loading {
-            refreshPending = true
-            return
-        }
-        guard let current = request else {
-            return
-        }
-        timer?.Dispose()
-        timer = nil
-        loading = true
-        let input = source
-        let id = generation
-        let token = current.Token
-        go Load(input, id, token)
+        refreshRequested.Writer.TryWrite(true)
     }
 
-    private func Load(input MiningPageInput, id int32, token CancellationToken) {
+    private async func RunWorkerAsync(input MiningPageInput, id int32, requests chan[bool], parentContext Context) {
+        try {
+            scope {
+                go Poll(input, id, requests, ctx)
+            }
+        } catch (failure OperationCanceledException) when parentContext.IsCancelled { } catch (failure Exception) {
+            input.Window?.TryPost(
+                () -> {
+                    if !disposed && id == generation {
+                        input.Ui.Actions.Report("Mining background task failed")
+                    }
+                }
+            )
+        }
+    }
+
+    private func Poll(input MiningPageInput, id int32, requests chan[bool], pageContext Context) {
+        while !pageContext.IsCancelled {
+            let running = await Load(input, id, pageContext.Token)
+            if running {
+                select {
+                    case <- requests { }
+                    case <- after(TimeSpan.FromSeconds(5)) { }
+                }
+            } else {
+                select {
+                    case <- requests { }
+                }
+            }
+        }
+    }
+
+    private async func Load(input MiningPageInput, id int32, token CancellationToken) bool {
         var status MiningStatus? = nil
         try {
             status = await input.Session.Mining.StatusAsync(token)
         } catch (failure OperationCanceledException) when token.IsCancellationRequested {
-            return
+            return false
         } catch (failure Exception) { }
         input.Window?.TryPost(
             () -> {
                 if disposed || id != generation {
                     return
                 }
-                loading = false
                 let previous = input.History.Status
                 let recovered = unavailable
                 unavailable = status == nil
@@ -292,7 +308,7 @@ class MiningPage : Cell, IDisposable {
                     if value.Running {
                         samples = input.History.Samples.ToArray()
                     }
-                    if value != previous || recovered {
+                    if value.Running || value != previous || recovered {
                         Rebuild()
                     }
                 } else if !recovered {
@@ -300,14 +316,9 @@ class MiningPage : Cell, IDisposable {
                     samples = []MiningSample{}
                     Rebuild()
                 }
-                if refreshPending {
-                    refreshPending = false
-                    Refresh()
-                } else if input.History.Status.Running {
-                    timer = input.Window?.SetTimeout(() -> Refresh(), 5000)
-                }
             }
         )
+        return status?.Running == true
     }
 
     private func Record(history MiningHistory, status MiningStatus) {
