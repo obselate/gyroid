@@ -350,7 +350,7 @@ class WalletSession : IDisposable {
             if state == WalletState.Unloaded {
                 managed = false
             } else {
-                let filename = Path.GetFileName(walletFile)
+                let filename = managed ? settings.ActiveWallet: Path.GetFileName(walletFile)
                 Library.WalletPath(filename)
                 if settings.ActiveWallet != filename {
                     settings.ActiveWallet = filename
