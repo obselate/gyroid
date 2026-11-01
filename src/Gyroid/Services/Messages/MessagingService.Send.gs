@@ -213,6 +213,11 @@ partial class MessagingService {
             session.End()
         }
         try {
+            if message != nil {
+                if let local = store {
+                    await Persist(local, CancellationToken.None)
+                }
+            }
             await session.RefreshAsync(ct)
         } catch (error Exception) {
             Error = error.Message

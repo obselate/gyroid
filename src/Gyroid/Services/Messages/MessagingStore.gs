@@ -56,6 +56,24 @@ class MessagingStore {
                     }
                     conversation.Members.Add(value)
                 }
+                if entry.TryGetProperty("failed", out _) {
+                    for message in ReadField(entry, "failed", JsonValueKind.Array).EnumerateArray() {
+                        conversation.Messages.Add(
+                            Message{
+                                Key: NodeJson.Text(message, "key"),
+                                ConversationId: conversation.Id,
+                                Outgoing: true,
+                                SenderAddress: address,
+                                SenderName: "You",
+                                Text: NodeJson.Text(message, "text"),
+                                SentAt: DateTimeOffset.FromUnixTimeSeconds(
+                                    ReadNumber(ReadField(message, "sent_at", JsonValueKind.Number))
+                                ),
+                                State: MessageState.Failed
+                            }
+                        )
+                    }
+                }
                 Conversations[conversation.Id] = conversation
             }
             for entry in ReadField(data, "verified", JsonValueKind.Object).EnumerateObject() {
@@ -153,6 +171,21 @@ class MessagingStore {
                     writer.WriteStartArray("members")
                     for member in conversation.Members {
                         writer.WriteStringValue(member)
+                    }
+                    writer.WriteEndArray()
+                    writer.WriteStartArray("failed")
+                    for message in conversation.Messages {
+                        if message.Outgoing &&
+                            message
+                            .Txid
+                            .Length == 0 &&
+                            (message.State == MessageState.Failed || message.State == MessageState.InProgress) {
+                            writer.WriteStartObject()
+                            writer.WriteString("key", message.Key)
+                            writer.WriteString("text", message.Text)
+                            writer.WriteNumber("sent_at", message.SentAt.ToUnixTimeSeconds())
+                            writer.WriteEndObject()
+                        }
                     }
                     writer.WriteEndArray()
                     writer.WriteEndObject()

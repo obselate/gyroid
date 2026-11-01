@@ -83,6 +83,13 @@ partial class MessagingService {
                 store = local
                 ownAddress = own
                 Error = local.Error
+                conversations = List[Conversation](local.Conversations.Values)
+                for conversation in conversations {
+                    for message in conversation.Messages {
+                        sending[message] = conversation.Id
+                        sendCancellations[message] = CancellationTokenSource()
+                    }
+                }
             }
         }
         viewOnly = NodeJson.Flag(address, "view_only")
@@ -161,6 +168,7 @@ partial class MessagingService {
                 updated.Add(current)
                 conversations = updated
             }
+            SaveConversation(current)
         }
         session.Changed?.Invoke()
         await Dispatch(conversation, message, version, ct)
@@ -175,6 +183,8 @@ partial class MessagingService {
                 throw WalletException("Message is not available for retry")
             }
             version = generation
+            message.IdempotencyKey = Guid.NewGuid().ToString("N")
+            message.SendPayload = Array.Empty[uint8]()
             message.State = MessageState.InProgress
         }
         session.Changed?.Invoke()
@@ -196,6 +206,7 @@ partial class MessagingService {
             using let linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token)
             await Transmit(conversation, message.Text, false, message, version, linked.Token)
         } catch (error Exception) {
+            var local MessagingStore?
             lock sending {
                 if version != generation {
                     throw OperationCanceledException("The wallet session changed", error)
@@ -203,9 +214,13 @@ partial class MessagingService {
                 if !sending.ContainsKey(message) {
                     return
                 }
+                message.State = MessageState.Failed
+                local = store
             }
-            message.State = MessageState.Failed
             session.Changed?.Invoke()
+            if local != nil {
+                await Persist(local, CancellationToken.None)
+            }
             throw error
         }
     }
