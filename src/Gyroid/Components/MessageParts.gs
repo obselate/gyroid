@@ -84,7 +84,9 @@ class MessageBubble : Cell[MessageBubbleInput] {
         let invalid = message.Verification == Verification.Invalid
         let verification = message.Verification.ToString()
         let color = invalid ? ui.Pink: message.Verification == Verification.Unverified ? ui.Orange: ui.Dim
-        let time = (message.Outgoing ? message.SentAt: message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm")
+        let time = (message.Outgoing ? message.SentAt: message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString(
+            "HH:mm"
+        )
         let delivered = message.State == MessageState.Confirmed && message.Confirmations > 0
         let statusColor = message.Outgoing ? (delivered ? ui.SuccessStroke: ui.Black.WithAlpha(0.6)): ui.Dim
         let metadata = Container{
@@ -95,9 +97,13 @@ class MessageBubble : Cell[MessageBubbleInput] {
             Label(ui, time, 10, statusColor, "")
         }
         if message.Outgoing && message.State != MessageState.Failed {
-            let tip = delivered ? ui.Strings.Get("Delivered {time}, block {height}")
+            let tip = delivered ? ui
+                .Strings
+                .Get("Delivered {time}, block {height}")
                 .Replace("{time}", (message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm"))
-                .Replace("{height}", message.Height.ToString()): ui.Strings.Get("Waiting for the next block. Usually about 5 min, sometimes longer")
+                .Replace("{height}", message.Height.ToString()): ui
+                .Strings
+                .Get("Waiting for the next block. Usually about 5 min, sometimes longer")
             metadata.Add(
                 Container{
                     Handle: statusAnchor,
@@ -110,7 +116,11 @@ class MessageBubble : Cell[MessageBubbleInput] {
                         Rebuild()
                     },
                     Accessibility: Accessibility{Role: AccessibilityRole.Text, Name: tip},
-                    MaterialIcons.Create(delivered ? "done_all": message.State == MessageState.InProgress ? "schedule": "done", 13, statusColor),
+                    MaterialIcons.Create(
+                        delivered ? "done_all": message.State == MessageState.InProgress ? "schedule": "done",
+                        13,
+                        statusColor
+                    ),
                     Cell.Mount[PopoverInput, Popover](
                         "status-tip",
                         PopoverInput{
@@ -152,6 +162,8 @@ class MessageBubble : Cell[MessageBubbleInput] {
             .Button{
             MaxWidth: Percent(70),
             MinWidth: 0,
+            FlexDirection: FlexDirection.Column,
+            AlignItems: AlignItems.Stretch,
             Padding: Edges{Left: 13, Right: 13, Top: 9, Bottom: 9},
             BorderRadius: 18,
             BorderBottomLeftRadius: input.Last && !message.Outgoing ? 4.0: 18.0,
