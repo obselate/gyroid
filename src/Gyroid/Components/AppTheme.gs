@@ -170,6 +170,21 @@ class AppTheme {
             TextColor = Black,
             HoverBackgroundColor = LimeHover
         }
+        let ButtonStyle Style = Style{
+            Height: Button.Height!!,
+            MinWidth: Button.MinWidth!!,
+            Padding: Edges{Left: Button.PaddingHorizontal!!, Right: Button.PaddingHorizontal!!},
+            BorderRadius: Button.BorderRadius!!,
+            BorderWidth: Button.BorderWidth!!,
+            BorderColor: Button.BorderColor!!,
+            BackgroundColor: Button.BackgroundColor!!,
+            Color: Button.TextColor!!,
+            FontFamily: Button.FontFamily!!,
+            FontSize: Button.FontSize,
+            Gap: Space8,
+            AlignItems: AlignItems.Center,
+            JustifyContent: JustifyContent.Center
+        }
         let IconButtonStyle Style = Style{
             Width: ControlRegular,
             Height: ControlRegular,
@@ -206,6 +221,15 @@ class AppTheme {
             BorderWidth: Border1,
             BorderRadius: Radius10,
             Padding: Space4
+        }
+        let Switch ToggleSwitch = ToggleSwitch{
+            Width: SwitchWidth,
+            Height: SwitchHeight,
+            ThumbSize: SwitchThumb,
+            OffTrackColor: Edge,
+            OnTrackColor: Lime,
+            ThumbColor: SwitchThumbColor,
+            OnThumbColor: Surface
         }
         let FieldInput TextField = TextField{
             EntryHeight: ControlRegular,
@@ -252,6 +276,7 @@ class AppTheme {
             MinWidth: 0,
             MinHeight: 0
         }
+        let TileStyle Style = Style{BasedOn: CardStyle, BorderRadius: Radius10, Gap: Space8}
         let TooltipStyle Style = Style{
             BackgroundColor: Raised,
             BorderColor: Edge,
