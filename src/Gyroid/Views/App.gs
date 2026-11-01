@@ -135,6 +135,8 @@ partial class App : Cell {
     private let closeSettings Action
     private let configureNetwork Action[NetworkPage]
 
+    private let configureSettings Action[SettingsPage]
+
     init(wallet WalletSession, scaleOverride bool = false) {
         this.wallet = wallet
         this.scaleOverride = scaleOverride
@@ -309,6 +311,32 @@ partial class App : Cell {
             UpdatePlayback()
             Rebuild()
         }
+        configureSettings = page -> page.Accept(
+            SettingsPageInput{
+                Session: wallet,
+                Ui: ui,
+                Tools: toolsState,
+                Window: window,
+                Snapshot: wallet.Snapshot,
+                Node: wallet.Node.Status,
+                Section: settingsSection,
+                Available: WalletAvailable(),
+                Privacy: ui.Privacy,
+                Busy: ui.Working(),
+                Language: ui.Strings.Language,
+                Clipboard: ui.Actions.ClipboardText,
+                Width: width,
+                Height: height,
+                MaximumScalePercent: maximumScalePercent,
+                ChooseFile: chooseFile,
+                OnSection: selectSection,
+                OnLanguage: setLanguage,
+                OnPreference: preferenceChanged,
+                OnRevealSeed: revealSeed,
+                OnNavigate: navigate,
+                OnClose: closeSettings
+            }
+        )
         revealSeed = buffer -> {
             Run(ct -> ShowSeed(wallet.Keys.RevealSeedAsync(buffer, ct), true), nil, buffer)
         }
@@ -1068,33 +1096,7 @@ partial class App : Cell {
                 }
             )
         } else if page == AppPage.Settings {
-            Cell.Mount[SettingsPageInput, SettingsPage](
-                "settings",
-                SettingsPageInput{
-                    Session: wallet,
-                    Ui: ui,
-                    Tools: toolsState,
-                    Window: window,
-                    Snapshot: snapshot,
-                    Node: wallet.Node.Status,
-                    Section: settingsSection,
-                    Available: WalletAvailable(),
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Clipboard: ui.Actions.ClipboardText,
-                    Width: width,
-                    Height: height,
-                    MaximumScalePercent: maximumScalePercent,
-                    ChooseFile: chooseFile,
-                    OnSection: selectSection,
-                    OnLanguage: setLanguage,
-                    OnPreference: preferenceChanged,
-                    OnRevealSeed: revealSeed,
-                    OnNavigate: navigate,
-                    OnClose: closeSettings
-                }
-            )
+            Cell.Mount[SettingsPage]("settings", configureSettings)
         } else {
             Cell.Mount[LibraryPage]("library", configureLibrary)
         }
