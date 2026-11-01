@@ -85,7 +85,6 @@ data struct HistoryRow {
     var Time int64
     var State string
     var Recipients[]HistoryRecipient
-    var ProofRecipients[]HistoryRecipient
     var Open bool
     var Revision int32
     var Privacy bool
@@ -100,13 +99,16 @@ data struct HistoryPreparation {
     var Previous[]HistoryRow
     var PreviousShown[]HistoryRow
     var PreviousExport[]HistoryRow
+    var PreviousRibbon HistoryRibbonData
+    var PlotWidth float64
+    var Cutoff uint64
+    var From uint64
+    var To uint64
     var Tip uint64
     var Times System.Collections.Generic.Dictionary[uint64, int64]
-    var Privacy bool
-    var Language string
-    var Width float64
     var Complete bool
     var ReuseRows bool
+    var ReuseExport bool
     var SelectionTx string
 }
 
@@ -136,6 +138,7 @@ data struct HistoryPrepared {
     var ExportCount int32
     var SelectionKey string
     var Span uint64
+    var Ribbon HistoryRibbonData
 }
 
 data struct HistoryRibbonData {
