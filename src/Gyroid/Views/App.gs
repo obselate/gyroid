@@ -196,7 +196,7 @@ partial class App : Cell {
                 State: toolsState,
                 Snapshot: wallet.Snapshot,
                 Node: wallet.Node.Status,
-                Section: page,
+                Section: screen,
                 AutoLock: wallet.Settings.AutoLockMinutes,
                 Privacy: ui.Privacy,
                 Busy: ui.Working(),
