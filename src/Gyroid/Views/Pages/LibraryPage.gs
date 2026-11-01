@@ -149,7 +149,7 @@ class LibraryPage : Cell, IDisposable {
                 )
             )
         } else {
-            card.Add(Cell.Mount[LibraryList](network + directory + input.ActiveWallet, configureList))
+            card.Add(Cell.Mount[LibraryList](network + Path.Combine(directory, input.ActiveWallet), configureList))
         }
         return card
     }
@@ -810,12 +810,25 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
         let publicKey = spendKey.ToCharArray()
         let directory = session.Settings.WalletDirectory
         let network = session.Settings.Network
+        let activeWallet = session.Settings.ActiveWallet
         let token = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, owner.Closed)
         busy = true
         issue = ""
         generation++
         let id = generation
-        go Import(input, filename, secret, extra, publicKey, directory, network.ToString(), owner, id, token)
+        go Import(
+            input,
+            filename,
+            secret,
+            extra,
+            publicKey,
+            directory,
+            network.ToString(),
+            activeWallet,
+            owner,
+            id,
+            token
+        )
     }
 
     private async func Import(
@@ -826,6 +839,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
         publicKey[]char,
         directory string,
         network string,
+        activeWallet string,
         owner Window,
         id int32,
         token CancellationTokenSource
@@ -859,7 +873,17 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                     .Session
                     .Settings
                     .Network
-                    .ToString() {
+                    .ToString() ||
+                    (
+                    source
+                        .Session
+                        .Settings
+                        .ActiveWallet != activeWallet &&
+                        source
+                        .Session
+                        .Settings
+                        .ActiveWallet != filename
+                ) {
                     return
                 }
                 busy = false
