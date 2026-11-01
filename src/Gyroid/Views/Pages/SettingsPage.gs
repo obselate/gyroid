@@ -57,6 +57,9 @@ data struct SettingsCompositionInput {
     var State WalletState
     var ViewOnly bool
     var Language string
+    var AutoLock int32
+    var BackgroundLock int32
+    var Privacy bool
     var Busy bool
     var Width float64
     var Height float64
@@ -69,17 +72,6 @@ data struct SettingsGeneralInput {
     var MaximumScale int32
     var Motion bool
     var Tray bool
-    var Height float64
-}
-
-data struct SettingsSecurityInput {
-    var Language string
-    var AutoLock int32
-    var BackgroundLock int32
-    var Privacy bool
-    var State WalletState
-    var ViewOnly bool
-    var Busy bool
     var Height float64
 }
 
@@ -124,9 +116,6 @@ data struct SettingsWalletInput {
     var ViewOnly bool
     var Wallet string
     var Directory string
-    var Network string
-    var Endpoint string
-    var ProcessId int32
     var Busy bool
     var Height float64
 }
@@ -144,13 +133,10 @@ data struct SettingsAdvancedInput {
 }
 
 data struct SettingsDialogInput {
-    var Kind string
     var Language string
     var Wallet string = ""
     var Directory string
-    var Network string
-    var Endpoint string
-    var ProcessId int32
+    var DefaultWallets string
     var Privacy bool
     var Busy bool
     var Width float64
@@ -158,28 +144,23 @@ data struct SettingsDialogInput {
 }
 
 data struct SettingsPurgeInput {
-    var Language string
-    var Network string
-    var Directory string
     var Size string
     var Unit string
     var Wallets int32
-    var Busy bool
-    var Width float64
 }
 
 class SettingsPage : Cell {
     private var state SettingsCompositionInput
     private var generalOwner SettingsGeneral?
-    private var securityOwner SettingsSecurity?
     private var walletOwner SettingsWallet?
     private var current SettingsPageInput
     private var dialogs SettingsDialogs?
     private var advancedOwner SettingsAdvanced?
     private var nodeOwner SettingsNode?
     private let openDialog Action[string]
+    private let openPurge Action[string, string, int32]
+    private let refreshNodeData Action
     private let configureGeneral Action[SettingsGeneral]
-    private let configureSecurity Action[SettingsSecurity]
     private let configureNode Action[SettingsNode]
     private let configureWallet Action[SettingsWallet]
     private let configureAdvanced Action[SettingsAdvanced]
@@ -187,13 +168,11 @@ class SettingsPage : Cell {
 
     init() {
         openDialog = kind -> dialogs?.Open(kind)
+        refreshNodeData = RefreshNodeData
+        openPurge = (size, unit, wallets) -> dialogs?.OpenPurge(size, unit, wallets, refreshNodeData)
         configureGeneral = region -> {
             generalOwner = region
             region.Accept(current)
-        }
-        configureSecurity = region -> {
-            securityOwner = region
-            region.Accept(current, openDialog)
         }
         configureNode = region -> {
             nodeOwner = region
@@ -205,7 +184,7 @@ class SettingsPage : Cell {
         }
         configureAdvanced = region -> {
             advancedOwner = region
-            region.Accept(current, OpenPurge)
+            region.Accept(current, openPurge)
         }
         configureDialogs = region -> {
             dialogs = region
@@ -216,10 +195,9 @@ class SettingsPage : Cell {
     func Accept(input SettingsPageInput) {
         current = input with{Settings = input.Session.Settings}
         generalOwner?.Accept(current)
-        securityOwner?.Accept(current, openDialog)
         nodeOwner?.Accept(current)
         walletOwner?.Accept(current, openDialog)
-        advancedOwner?.Accept(current, OpenPurge)
+        advancedOwner?.Accept(current, openPurge)
         dialogs?.Accept(current)
         let next = SettingsCompositionInput{
             Section: input.Section,
@@ -227,18 +205,18 @@ class SettingsPage : Cell {
             State: input.Snapshot.State,
             ViewOnly: input.Snapshot.ViewOnly,
             Language: input.Language,
-            Busy: !input.Available && input.Busy,
+            AutoLock: current.Settings.AutoLockMinutes,
+            BackgroundLock: current.Settings.BackgroundLockMinutes,
+            Privacy: current.Settings.Privacy,
+            Busy: input.Busy,
             Width: input.Width,
             Height: input.Height
         }
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
+        if next.Equals(state) {
+            return
         }
-    }
-
-    private func OpenPurge(size string, unit string, wallets int32) {
-        dialogs?.OpenPurge(size, unit, wallets, RefreshNodeData)
+        state = next
+        Rebuild()
     }
 
     private func RefreshNodeData() {
@@ -250,12 +228,12 @@ class SettingsPage : Cell {
         let input = current
         let ui = input.Ui
         let sections = List[string]{"general", "security", "node"}
-        if input.Snapshot.State == WalletState.Unlocked {
+        if state.State == WalletState.Unlocked {
             sections.Add("wallet")
         }
         sections.Add("advanced")
-        let section = sections.Contains(input.Section) ? input.Section: "general"
-        let navWidth = input.Width < 1100 ? 132.0: 168.0
+        let section = sections.Contains(state.Section) ? state.Section: "general"
+        let navWidth = state.Width < 1100 ? 132.0: 168.0
         let nav = WalletParts.Card(ui, AppTheme.Space8, AppTheme.Space2, AppTheme.Radius14)
         nav.Width = navWidth
         nav.FlexShrink = 0
@@ -295,17 +273,17 @@ class SettingsPage : Cell {
                 }
             )
         )
-        if !input.Available {
+        if !state.Available {
             nav.Add(Container{FlexGrow: 1})
-            nav.Add(Button(ui, "Back", input.OnClose, input.Busy))
+            nav.Add(Button(ui, "Back", input.OnClose, state.Busy))
         }
         let header = WalletParts.Header(
             Label(
                 ui,
                 ui.Strings.Get(section) +
-                    (section == "wallet" && input.Snapshot.ViewOnly ? " " + ui.Strings.Get("view-only"): ""),
+                    (section == "wallet" && state.ViewOnly ? " " + ui.Strings.Get("view-only"): ""),
                 AppTheme.Type17,
-                section == "wallet" && input.Snapshot.ViewOnly ? AppTheme.Blue: AppTheme.Ink,
+                section == "wallet" && state.ViewOnly ? AppTheme.Blue: AppTheme.Ink,
                 ""
             ),
             AppTheme.Space10
@@ -338,7 +316,7 @@ class SettingsPage : Cell {
                 Key: "security",
                 Display: section == "security" ? Display.Flex: Display.None,
                 MinHeight: 0,
-                Cell.Mount[SettingsSecurity]("security", configureSecurity)
+                Security(current)
             }
         )
         pane.Add(
@@ -377,11 +355,95 @@ class SettingsPage : Cell {
             nav,
             pane
         }
-        if input.Height > 640 {
-            root.Height = Math.Clamp(input.Height * 0.65, 480.0, 740.0)
+        if state.Height > 640 {
+            root.Height = Math.Clamp(state.Height * 0.65, 480.0, 740.0)
         }
         root.Add(Cell.Mount[SettingsDialogs]("settings-dialogs", configureDialogs))
         return root
+    }
+
+    private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
+        input.Session.ApplyPreference(change)
+        input.Ui.Actions.Run(ct -> input.Session.SavePreferencesAsync(ct), input.OnPreference)
+    }
+
+    private func Security(input SettingsPageInput) Blob {
+        let ui = input.Ui
+        let rowHeight = RowHeight(state.Height)
+        let rows = List[Container]{
+            WalletParts.Line(
+                ui,
+                rowHeight,
+                "auto-lock",
+                []Blob{
+                    Segment(
+                        ui,
+                        "auto-lock",
+                        []string{"5", "15", "60", "0"},
+                        []string{"5m", "15m", "1h", "never"},
+                        state.AutoLock.ToString(),
+                        false,
+                        id -> ui.Actions.Run(ct -> input.Session.SaveAutoLockAsync(int32.Parse(id), ct))
+                    )
+                }
+            ),
+            WalletParts.Line(
+                ui,
+                rowHeight,
+                "lock in background after",
+                []Blob{
+                    Segment(
+                        ui,
+                        "lock in background after",
+                        []string{"5", "15", "60", "0"},
+                        []string{"5m", "15m", "1h", "never"},
+                        state.BackgroundLock.ToString(),
+                        false,
+                        id -> Prefer(
+                            input,
+                            value -> {
+                                value.BackgroundLockMinutes = int32.Parse(id)
+                            }
+                        )
+                    )
+                }
+            ),
+            WalletParts.Line(
+                ui,
+                rowHeight,
+                "hide values on start",
+                []Blob{
+                    MaterialIcons.Create("visibility_off", AppTheme.Icon16, AppTheme.Dim),
+                    Toggle(
+                        input,
+                        "hide values on start",
+                        state.Privacy,
+                        () -> ui.Actions.Run(ct -> input.Session.SavePrivacyAsync(!state.Privacy, ct))
+                    )
+                }
+            )
+        }
+        if state.State == WalletState.Unlocked && !state.ViewOnly {
+            rows.Add(
+                WalletParts.Line(
+                    ui,
+                    rowHeight,
+                    "recovery phrase",
+                    []Blob{
+                        Label(ui, ui.Strings.Get("12 words"), AppTheme.Type14, AppTheme.Dim, ""),
+                        Button(ui, "Show", () -> openDialog("phrase"), state.Busy),
+                        Info(
+                            input.Ui,
+                            state.Language,
+                            "phrase",
+                            "About recovery phrase",
+                            "The 12 words restore this wallet and can spend it"
+                        )
+                    }
+                )
+            )
+        }
+        return WalletParts.Rows(ui, rows.ToArray())
     }
 }
 
@@ -390,7 +452,6 @@ class SettingsGeneral : Cell, IDisposable {
     private var context SettingsPageInput
     private var rowHeight float64
     private var generation int32
-    private var disposed bool
     private var issue string = ""
 
     func Accept(input SettingsPageInput) {
@@ -406,14 +467,15 @@ class SettingsGeneral : Cell, IDisposable {
             Tray: settings.StartInTray,
             Height: input.Height
         }
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
+        if next.Equals(state) {
+            return
         }
+        state = next
+        Rebuild()
     }
 
     override func Build() Blob {
-        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, General(context, context.Settings)}
+        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, General(context)}
         if issue.Length > 0 {
             content.Add(Label(context.Ui, context.Ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
         }
@@ -427,34 +489,23 @@ class SettingsGeneral : Cell, IDisposable {
         generation++
         let request = generation
         let session = input.Session
-        input.Ui.Actions.Background(_ -> SavePreference(session, owner, input.OnPreference, change, request))
+        session.ApplyPreference(change)
+        input.Ui.Actions.Background(_ -> SavePreference(session, owner, input.OnPreference, request))
     }
 
-    private async func SavePreference(
-        session WalletSession,
-        owner Window,
-        saved Action,
-        change Action[WalletSettings],
-        request int32
-    ) {
+    private async func SavePreference(session WalletSession, owner Window, saved Action, request int32) {
         var error = ""
         try {
-            await session.SavePreferenceAsync(change, CancellationToken.None)
+            await session.SavePreferencesAsync(CancellationToken.None)
         } catch (failure Exception) {
-            if failure is OperationCanceledException {
-                throw failure
-            }
             error = failure.Message
         }
         owner.TryPost(
             () -> {
-                if context.Session != session {
-                    return
-                }
                 if error.Length == 0 {
                     saved.Invoke()
                 }
-                if disposed || generation != request {
+                if generation != request {
                     return
                 }
                 issue = error
@@ -464,11 +515,10 @@ class SettingsGeneral : Cell, IDisposable {
     }
 
     func Dispose() {
-        disposed = true
         generation++
     }
 
-    private func General(input SettingsPageInput, settings WalletSettings) Blob {
+    private func General(input SettingsPageInput) Blob {
         let ui = input.Ui
         return WalletParts.Rows(
             ui,
@@ -483,7 +533,7 @@ class SettingsGeneral : Cell, IDisposable {
                             "language",
                             []string{"en", "zh-Hans"},
                             []string{"English", "简体中文"},
-                            input.Language,
+                            state.Language,
                             false,
                             input.OnLanguage
                         )
@@ -499,7 +549,7 @@ class SettingsGeneral : Cell, IDisposable {
                             "background",
                             []string{"gyroid", "glyphs", "off"},
                             []string{"gyroid", "glyphs", "off"},
-                            settings.Background,
+                            state.Background,
                             false,
                             id -> Prefer(
                                 input,
@@ -520,7 +570,7 @@ class SettingsGeneral : Cell, IDisposable {
                             "UI scale",
                             []string{"100", "125", "150", "175", "200"},
                             []string{"100% (system)", "125%", "150%", "175%", "200%"},
-                            settings.UiScalePercent.ToString(CultureInfo.InvariantCulture),
+                            state.Scale.ToString(CultureInfo.InvariantCulture),
                             false,
                             id -> Prefer(
                                 input,
@@ -528,7 +578,7 @@ class SettingsGeneral : Cell, IDisposable {
                                     value.UiScalePercent = Int32.Parse(id, CultureInfo.InvariantCulture)
                                 }
                             ),
-                            (input.MaximumScalePercent - 100) / 25 + 1
+                            (state.MaximumScale - 100) / 25 + 1
                         )
                     }
                 ),
@@ -540,7 +590,7 @@ class SettingsGeneral : Cell, IDisposable {
                         Toggle(
                             input,
                             "reduce motion",
-                            settings.ReduceMotion,
+                            state.Motion,
                             () -> {
                                 let enabled = !state.Motion
                                 Prefer(input, value -> value.ReduceMotion = enabled)
@@ -556,7 +606,7 @@ class SettingsGeneral : Cell, IDisposable {
                         Toggle(
                             input,
                             "start in tray",
-                            settings.StartInTray,
+                            state.Tray,
                             () -> {
                                 let enabled = !state.Tray
                                 Prefer(input, value -> value.StartInTray = enabled)
@@ -569,119 +619,6 @@ class SettingsGeneral : Cell, IDisposable {
     }
 }
 
-class SettingsSecurity : Cell {
-    private var state SettingsSecurityInput
-    private var context SettingsPageInput
-    private var rowHeight float64
-    private var showDialog Action[string]
-
-    func Accept(input SettingsPageInput, showDialog Action[string]) {
-        context = input
-        this.showDialog = showDialog
-        rowHeight = RowHeight(input.Height)
-        let settings = input.Settings
-        let next = SettingsSecurityInput{
-            Language: input.Language,
-            AutoLock: settings.AutoLockMinutes,
-            BackgroundLock: settings.BackgroundLockMinutes,
-            Privacy: settings.Privacy,
-            State: input.Snapshot.State,
-            ViewOnly: input.Snapshot.ViewOnly,
-            Busy: input.Busy,
-            Height: input.Height
-        }
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
-        }
-    }
-
-    override func Build() Blob -> Security(context, context.Settings)
-
-    private func Open(kind string) -> showDialog(kind)
-
-    private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
-        input.Ui.Actions.Run(ct -> input.Session.SavePreferenceAsync(change, ct), input.OnPreference)
-    }
-
-    private func Security(input SettingsPageInput, settings WalletSettings) Blob {
-        let ui = input.Ui
-        let rows = List[Container]{
-            WalletParts.Line(
-                ui,
-                rowHeight,
-                "auto-lock",
-                []Blob{
-                    Segment(
-                        ui,
-                        "auto-lock",
-                        []string{"5", "15", "60", "0"},
-                        []string{"5m", "15m", "1h", "never"},
-                        settings.AutoLockMinutes.ToString(),
-                        false,
-                        id -> ui.Actions.Run(ct -> input.Session.SaveAutoLockAsync(int32.Parse(id), ct))
-                    )
-                }
-            ),
-            WalletParts.Line(
-                ui,
-                rowHeight,
-                "lock in background after",
-                []Blob{
-                    Segment(
-                        ui,
-                        "lock in background after",
-                        []string{"5", "15", "60", "0"},
-                        []string{"5m", "15m", "1h", "never"},
-                        settings.BackgroundLockMinutes.ToString(),
-                        false,
-                        id -> Prefer(
-                            input,
-                            value -> {
-                                value.BackgroundLockMinutes = int32.Parse(id)
-                            }
-                        )
-                    )
-                }
-            ),
-            WalletParts.Line(
-                ui,
-                rowHeight,
-                "hide values on start",
-                []Blob{
-                    MaterialIcons.Create("visibility_off", AppTheme.Icon16, AppTheme.Dim),
-                    Toggle(
-                        input,
-                        "hide values on start",
-                        settings.Privacy,
-                        () -> ui.Actions.Run(ct -> input.Session.SavePrivacyAsync(!settings.Privacy, ct))
-                    )
-                }
-            )
-        }
-        if input.Snapshot.State == WalletState.Unlocked && !input.Snapshot.ViewOnly {
-            rows.Add(
-                WalletParts.Line(
-                    ui,
-                    rowHeight,
-                    "recovery phrase",
-                    []Blob{
-                        Label(ui, ui.Strings.Get("12 words"), AppTheme.Type14, AppTheme.Dim, ""),
-                        Button(ui, "Show", () -> Open("phrase"), input.Busy),
-                        Info(
-                            input,
-                            "phrase",
-                            "About recovery phrase",
-                            "The 12 words restore this wallet and can spend it"
-                        )
-                    }
-                )
-            )
-        }
-        return WalletParts.Rows(ui, rows.ToArray())
-    }
-}
-
 class SettingsNode : Cell, IDisposable {
     private var state SettingsNodeInput
     private var context SettingsPageInput
@@ -690,7 +627,6 @@ class SettingsNode : Cell, IDisposable {
     private var startupOwner SettingsStartup?
     private var directoryRead string = ""
     private var directoryExists bool
-    private var lifetime CancellationTokenSource?
     private var generation int32
     private let configureStartup Action[SettingsStartup]
 
@@ -726,36 +662,28 @@ class SettingsNode : Cell, IDisposable {
             ViewHeight: input.Height
         }
         if input.Section == "node" && next.Directory != directoryRead {
-            lifetime?.Cancel()
-            lifetime?.Dispose()
-            let current = CancellationTokenSource.CreateLinkedTokenSource(
-                input.Window?.Closed ?? CancellationToken.None
-            )
-            lifetime = current
             generation++
             directoryRead = next.Directory
             directoryExists = false
-            go ReadDirectory(next.Directory, input.Window, generation, current.Token)
+            go ReadDirectory(next.Directory, input.Window, generation)
         }
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
+        if next.Equals(state) {
+            return
         }
+        state = next
+        Rebuild()
     }
 
-    override func Build() Blob -> NodeSection(context, context.Settings)
+    override func Build() Blob -> NodeSection(context)
 
-    private func ReadDirectory(path string, owner Window?, request int32, token CancellationToken) {
+    private func ReadDirectory(path string, owner Window?, request int32) {
         var exists = false
         try {
             exists = Directory.Exists(path)
         } catch (failure Exception) { }
         owner?.TryPost(
             () -> {
-                if request == generation &&
-                    !token.IsCancellationRequested &&
-                    state.Directory == path &&
-                    directoryExists != exists {
+                if request == generation && directoryExists != exists {
                     directoryExists = exists
                     Rebuild()
                 }
@@ -765,9 +693,6 @@ class SettingsNode : Cell, IDisposable {
 
     func InvalidateDirectory() {
         generation++
-        lifetime?.Cancel()
-        lifetime?.Dispose()
-        lifetime = nil
         directoryRead = ""
         directoryExists = false
         Rebuild()
@@ -775,25 +700,22 @@ class SettingsNode : Cell, IDisposable {
 
     func Dispose() {
         generation++
-        lifetime?.Cancel()
-        lifetime?.Dispose()
     }
 
-    private func NodeSection(input SettingsPageInput, settings WalletSettings) Blob {
+    private func NodeSection(input SettingsPageInput) Blob {
         let ui = input.Ui
-        let status = input.Node
-        let automatic = settings.NodeMode == "automatic"
+        let automatic = state.Mode == "automatic"
         let height = List[Blob]()
-        if status.Running {
-            let heightText = Count(status.Height)
+        if state.Running {
+            let heightText = Count(state.Height)
             height.Add(Value(ui, "height", ui.Strings.Get("Height") + " " + heightText, heightText, 14, AppTheme.Mint))
-            if status.Syncing {
-                height.Add(Label(ui, "/ " + Count(status.ChainHeight), AppTheme.Type14, AppTheme.Dim, ""))
+            if state.Syncing {
+                height.Add(Label(ui, "/ " + Count(state.ChainHeight), AppTheme.Type14, AppTheme.Dim, ""))
             }
             height.Add(
                 Label(
                     ui,
-                    Count(status.Peers) + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers"),
+                    Count(state.Peers) + " " + ui.Strings.Get(state.Peers == 1 ? "peer": "peers"),
                     AppTheme.Type14,
                     AppTheme.Dim,
                     ""
@@ -801,42 +723,39 @@ class SettingsNode : Cell, IDisposable {
             )
         } else {
             height.Add(Label(ui, ui.Strings.Get("Stopped"), AppTheme.Type14, AppTheme.Dim, ""))
-            if automatic && status.Phase == NodePhase.None {
+            if automatic && state.Phase == NodePhase.None {
                 height.Add(
-                    Button(ui, "Start", () -> ui.Actions.Run(ct -> input.Session.StartNodeAsync(ct)), input.Busy)
+                    Button(ui, "Start", () -> ui.Actions.Run(ct -> input.Session.StartNodeAsync(ct)), state.Busy)
                 )
             }
         }
         let core = List[Blob]{Label(ui, "blocknet-core", AppTheme.Type14, AppTheme.Ink, "")}
-        if status.Owned && automatic {
+        if state.Owned && automatic {
             core.Add(
                 Button(
                     ui,
                     "Restart",
                     () -> ui.Actions.Run(ct -> input.Session.RestartNodeAsync(ct)),
-                    input.Busy || input.Snapshot.State != WalletState.Unloaded
+                    state.Busy || state.State != WalletState.Unloaded
                 )
             )
         }
         let upgrade = List[Blob]{Label(ui, Count(CoreRelease.UpgradeHeight), AppTheme.Type14, AppTheme.Orange, "")}
-        if status.UpgradeDate.Length > 0 {
-            upgrade.Add(Label(ui, status.UpgradeDate, AppTheme.Type14, AppTheme.Dim, ""))
+        if state.UpgradeDate.Length > 0 {
+            upgrade.Add(Label(ui, state.UpgradeDate, AppTheme.Type14, AppTheme.Dim, ""))
         }
-        if status.UpgradeNotice.Length > 0 {
+        if state.UpgradeNotice.Length > 0 {
             upgrade.Add(
                 Info(
-                    input,
+                    input.Ui,
+                    state.Language,
                     "upgrade",
                     "Network upgrade",
-                    ui.Strings.UpgradeInstructions(status.UpgradeDate, status.UpgradeDeadline)
+                    ui.Strings.UpgradeInstructions(state.UpgradeDate, state.UpgradeDeadline)
                 )
             )
         }
-        let folder = if status.DataDirectory.Length > 0 {
-            status.DataDirectory
-        } else {
-            settings.DataDirectory
-        }
+        let folder = state.Directory
         let list = WalletParts.Rows(
             ui,
             []Container{
@@ -850,12 +769,13 @@ class SettingsNode : Cell, IDisposable {
                             "mode",
                             []string{"automatic", "manual"},
                             []string{"automatic", "existing node"},
-                            settings.NodeMode,
-                            Pinned("NODE_MODE") || input.Busy,
+                            state.Mode,
+                            Pinned("NODE_MODE") || state.Busy,
                             id -> ui.Actions.Run(ct -> input.Session.SaveNodeModeAsync(id, ct))
                         ),
                         Info(
-                            input,
+                            input.Ui,
+                            state.Language,
                             "mode",
                             "About node mode",
                             "Automatic runs the installed core. Existing node uses a node you run"
@@ -890,7 +810,7 @@ class SettingsNode : Cell, IDisposable {
                                     return Task.CompletedTask
                                 }
                             ),
-                            input.Busy || !directoryExists
+                            state.Busy || !directoryExists
                         )
                     }
                 )
@@ -927,6 +847,13 @@ class SettingsNode : Cell, IDisposable {
         content.Add(startup)
         content.Add(startupPane)
         return content
+    }
+
+    private func Shorten(path string) string -> if path.StartsWith(Home(), StringComparison.Ordinal) &&
+        Home().Length > 1 {
+        "~" + path.Substring(Home().Length)
+    } else {
+        path
     }
 }
 
@@ -966,28 +893,40 @@ class SettingsStartup : Cell {
             Busy: input.Busy,
             Width: input.Width
         }
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
+        if next.Equals(state) {
+            return
         }
+        state = next
+        Rebuild()
     }
 
     override func Build() Blob {
         guard let value = draft else {
             return Container{}
         }
-        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, Startup(context, context.Settings, value)}
+        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, Startup(context, value)}
         if applyPending {
             content.Add(ConfirmApply(context))
         }
         return content
     }
 
-    private func Startup(input SettingsPageInput, settings WalletSettings, value WalletSettings) Blob {
+    private func Startup(input SettingsPageInput, value WalletSettings) Blob {
         let ui = input.Ui
         let form = WalletForm(
             ui,
-            !input.Busy && (value.StartupDiffers(settings) || settings.LoadError.Length > 0),
+            !state.Busy &&
+                (
+                value.Network != state.Network ||
+                    value.Endpoint != state.Endpoint ||
+                    value.DataDirectory != state.Data ||
+                    value.WalletDirectory != state.Wallets ||
+                    value.BinaryPath != state.Binary ||
+                    value.ListenAddress != state.Listen ||
+                    state
+                    .LoadError
+                    .Length > 0
+            ),
             () -> SaveSettings(input),
             []string{}
         )
@@ -1000,7 +939,7 @@ class SettingsStartup : Cell {
                 []string{"mainnet", "testnet"},
                 []string{"Mainnet", "Testnet"},
                 value.Network,
-                Pinned("NETWORK") || input.Busy,
+                Pinned("NETWORK") || state.Busy,
                 id -> {
                     value.Network = id
                     Rebuild()
@@ -1103,7 +1042,7 @@ class SettingsStartup : Cell {
                     Rebuild()
                 }
             ),
-            input.Busy || Pinned(variable)
+            state.Busy || Pinned(variable)
         )
     }
 
@@ -1122,7 +1061,7 @@ class SettingsStartup : Cell {
             Rebuild()
             return
         }
-        if input.Snapshot.State != WalletState.Unloaded && !applyPending {
+        if state.State != WalletState.Unloaded && !applyPending {
             applyPending = true
             Rebuild()
             return
@@ -1145,7 +1084,7 @@ class SettingsStartup : Cell {
                 Open = true,
                 Preset = ModalDialogPreset.Confirm,
                 AccessibilityName = ui.Strings.Get("Apply settings"),
-                Width = Math.Min(input.Width - 48, 440),
+                Width = Math.Min(state.Width - 48, 440),
                 Content = Container{
                     Gap: AppTheme.Space10,
                     Label(ui, ui.Strings.Get("Apply settings"), AppTheme.Type17, AppTheme.Ink, ""),
@@ -1158,14 +1097,14 @@ class SettingsStartup : Cell {
                     )
                 },
                 ConfirmText = ui.Strings.Get(
-                    if input.Snapshot.State == WalletState.Unlocked {
+                    if state.State == WalletState.Unlocked {
                         "Lock and apply"
                     } else {
                         "Apply"
                     }
                 ),
                 CancelText = ui.Strings.Get("Cancel"),
-                ConfirmDisabled = input.Busy,
+                ConfirmDisabled = state.Busy,
                 OnConfirm = () -> SaveSettings(input),
                 OnCancel = close,
                 OnClose = close
@@ -1180,27 +1119,13 @@ class SettingsWallet : Cell, IDisposable {
     private var rowHeight float64
     private var syncing bool
     private var issue string = ""
-    private var initialized bool
     private var generation int32
     private var showDialog Action[string]
 
     func Accept(input SettingsPageInput, showDialog Action[string]) {
         context = input
         this.showDialog = showDialog
-        if !initialized ||
-            state.Wallet != input
-            .Settings
-            .ActiveWallet ||
-            state.Network != input
-            .Settings
-            .Network ||
-            state.Endpoint != input
-            .Settings
-            .Endpoint ||
-            state.ProcessId != input
-            .Settings
-            .OwnedProcessId {
-            initialized = true
+        if state.Wallet != input.Settings.ActiveWallet {
             generation++
             syncing = false
         }
@@ -1213,28 +1138,24 @@ class SettingsWallet : Cell, IDisposable {
             ViewOnly: input.Snapshot.ViewOnly,
             Wallet: settings.ActiveWallet,
             Directory: settings.WalletDirectory,
-            Network: settings.Network,
-            Endpoint: settings.Endpoint,
-            ProcessId: settings.OwnedProcessId,
             Busy: input.Busy,
             Height: input.Height
         }
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
+        if next.Equals(state) {
+            return
         }
+        state = next
+        Rebuild()
     }
 
     override func Build() Blob {
         let pane = Container{MinHeight: 0, Gap: AppTheme.Space12}
-        WalletSection(context, context.Settings, pane)
+        WalletSection(context, pane)
         if issue.Length > 0 {
             pane.Add(Label(context.Ui, context.Ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
         }
         return pane
     }
-
-    private func Open(kind string) -> showDialog(kind)
 
     private func StartSync(input SettingsPageInput) {
         guard let owner = input.Window else {
@@ -1248,17 +1169,10 @@ class SettingsWallet : Cell, IDisposable {
         Rebuild()
         let request = generation
         let session = input.Session
-        let wallet = state.Wallet
-        input.Ui.Actions.Run(ct -> Sync(session, wallet, owner, request, ct))
+        input.Ui.Actions.Run(ct -> Sync(session, owner, request, ct))
     }
 
-    private async func Sync(
-        session WalletSession,
-        wallet string,
-        owner Window,
-        request int32,
-        token CancellationToken
-    ) {
+    private async func Sync(session WalletSession, owner Window, request int32, token CancellationToken) {
         var error = ""
         try {
             await session.SyncAsync(token)
@@ -1270,10 +1184,7 @@ class SettingsWallet : Cell, IDisposable {
         }
         owner.TryPost(
             () -> {
-                if request != generation ||
-                    token.IsCancellationRequested ||
-                    context.Session != session ||
-                    state.Wallet != wallet {
+                if request != generation {
                     return
                 }
                 syncing = false
@@ -1287,11 +1198,11 @@ class SettingsWallet : Cell, IDisposable {
         generation++
     }
 
-    private func WalletSection(input SettingsPageInput, settings WalletSettings, pane Container) {
+    private func WalletSection(input SettingsPageInput, pane Container) {
         let ui = input.Ui
         let scan = List[Blob]()
-        if let balance = input.Snapshot.Balance {
-            let scanText = Count(balance.ScanHeight)
+        if state.HasBalance {
+            let scanText = Count(state.ScanHeight)
             scan.Add(
                 Value(
                     ui,
@@ -1311,8 +1222,8 @@ class SettingsWallet : Cell, IDisposable {
                 )
             )
         }
-        scan.Add(Button(ui, "Sync", () -> StartSync(input), input.Busy || syncing))
-        scan.Add(Info(input, "rescan", "About sync", "Scan blocks the wallet has not checked yet"))
+        scan.Add(Button(ui, "Sync", () -> StartSync(input), state.Busy || syncing))
+        scan.Add(Info(input.Ui, state.Language, "rescan", "About sync", "Scan blocks the wallet has not checked yet"))
         let rows = List[Container]{
             WalletParts.Line(ui, rowHeight, "scan height", scan.ToArray()),
             WalletParts.Line(
@@ -1327,10 +1238,11 @@ class SettingsWallet : Cell, IDisposable {
                             input.Tools.Tab = "health"
                             input.OnNavigate.Invoke(AppPage.Tools)
                         },
-                        input.Busy
+                        state.Busy
                     ),
                     Info(
-                        input,
+                        input.Ui,
+                        state.Language,
                         "health",
                         "About output health",
                         "Checks every wallet output against the main chain. Repair removes outputs whose block or transaction is no longer on it"
@@ -1338,7 +1250,7 @@ class SettingsWallet : Cell, IDisposable {
                 }
             )
         }
-        if !input.Snapshot.ViewOnly {
+        if !state.ViewOnly {
             rows.Add(
                 WalletParts.Line(
                     ui,
@@ -1346,7 +1258,7 @@ class SettingsWallet : Cell, IDisposable {
                     "view key",
                     []Blob{
                         Label(ui, "••••••••", AppTheme.Type14, AppTheme.Dim, ""),
-                        Button(ui, "Show", () -> Open("view-key"), input.Busy)
+                        Button(ui, "Show", () -> showDialog("view-key"), state.Busy)
                     }
                 )
             )
@@ -1355,7 +1267,7 @@ class SettingsWallet : Cell, IDisposable {
                     ui,
                     rowHeight,
                     "keys file",
-                    []Blob{Button(ui, "Export…", () -> Open("view-key"), input.Busy)}
+                    []Blob{Button(ui, "Export…", () -> showDialog("view-key"), state.Busy)}
                 )
             )
             rows.Add(
@@ -1364,9 +1276,10 @@ class SettingsWallet : Cell, IDisposable {
                     rowHeight,
                     "view-only wallet",
                     []Blob{
-                        Button(ui, "Create…", () -> Open("view-only"), input.Busy),
+                        Button(ui, "Create…", () -> showDialog("view-only"), state.Busy),
                         Info(
-                            input,
+                            input.Ui,
+                            state.Language,
                             "view-only-info",
                             "About view-only wallets",
                             "A view-only wallet sees incoming payments but cannot send"
@@ -1381,19 +1294,13 @@ class SettingsWallet : Cell, IDisposable {
                 rowHeight,
                 "wallet file",
                 []Blob{
-                    Label(
-                        ui,
-                        Tail(Path.Combine(settings.WalletDirectory, settings.ActiveWallet)),
-                        AppTheme.Type14,
-                        AppTheme.Dim,
-                        ""
-                    ),
-                    Button(ui, "Switch wallet", () -> input.OnNavigate(AppPage.Library), input.Busy)
+                    Label(ui, Tail(Path.Combine(state.Directory, state.Wallet)), AppTheme.Type14, AppTheme.Dim, ""),
+                    Button(ui, "Switch wallet", () -> input.OnNavigate(AppPage.Library), state.Busy)
                 }
             )
         )
         pane.Add(WalletParts.Rows(ui, rows.ToArray()))
-        if input.Snapshot.ViewOnly {
+        if state.ViewOnly {
             let note = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space10, AppTheme.Radius14)
             note.FlexDirection = FlexDirection.Row
             note.AlignItems = AlignItems.Center
@@ -1418,8 +1325,6 @@ class SettingsAdvanced : Cell, IDisposable {
     private var context SettingsPageInput
     private var openPurge Action[string, string, int32]
     private var lifetime CancellationTokenSource?
-    private var chainRequest CancellationTokenSource?
-    private var certificateRequest CancellationTokenSource?
     private var checkpointGeneration int32
     private var generation int32
     private var certifyGeneration int32
@@ -1446,10 +1351,6 @@ class SettingsAdvanced : Cell, IDisposable {
             state.ProcessId != settings
             .OwnedProcessId {
             lifetime?.Cancel()
-            chainRequest?.Dispose()
-            certificateRequest?.Dispose()
-            chainRequest = nil
-            certificateRequest = nil
             lifetime?.Dispose()
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
             generation++
@@ -1467,13 +1368,9 @@ class SettingsAdvanced : Cell, IDisposable {
             loadIssue = ""
         }
         if input.Section == "advanced" && !chainLoaded {
-            chainRequest?.Cancel()
-            chainRequest?.Dispose()
-            let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime?.Token ?? CancellationToken.None)
-            chainRequest = current
             generation++
             chainLoaded = true
-            go LoadChain(input.Session, settings, input.Window, generation, current.Token)
+            go LoadChain(input.Session, settings, input.Window, generation, lifetime?.Token ?? CancellationToken.None)
         }
         let next = SettingsAdvancedInput{
             Language: input.Language,
@@ -1486,10 +1383,11 @@ class SettingsAdvanced : Cell, IDisposable {
             Busy: input.Busy,
             Height: input.Height
         }
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
+        if next.Equals(state) {
+            return
         }
+        state = next
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -1506,8 +1404,6 @@ class SettingsAdvanced : Cell, IDisposable {
         certifyGeneration++
         checkpointGeneration++
         lifetime?.Cancel()
-        chainRequest?.Dispose()
-        certificateRequest?.Dispose()
         lifetime?.Dispose()
     }
 
@@ -1518,8 +1414,7 @@ class SettingsAdvanced : Cell, IDisposable {
 
     private func Advanced(input SettingsPageInput, pane Container) {
         let ui = input.Ui
-        let status = input.Node
-        let figure = AppTheme.GetInstrumentSize(input.Height)
+        let figure = AppTheme.GetInstrumentSize(state.Height)
         let used = if dataSize > 0 {
             Math.Max(1, int32(Math.Round(40.0 * float64(dataSize) / float64(dataSize + freeSpace))))
         } else {
@@ -1585,12 +1480,12 @@ class SettingsAdvanced : Cell, IDisposable {
                 AppTheme.DangerButton with{
                     Content = ui.Strings.Get("Purge…"),
                     OnClick = () -> openPurge(sizeText, sizeUnit, dataWallets),
-                    Disabled = input.Busy || !status.Owned || dataSize < 0
+                    Disabled = state.Busy || !state.Owned || dataSize < 0
                 }
             ).Build()
         )
         data.Add(purgeRow)
-        let tip = Math.Max(status.Height, certificate?.Height ?? uint64(0))
+        let tip = Math.Max(state.NodeHeight, certificate?.Height ?? uint64(0))
         var step uint64 = 100
         for candidate in[]uint64{250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000} {
             if step * 30 < tip {
@@ -1610,7 +1505,7 @@ class SettingsAdvanced : Cell, IDisposable {
             Gap: AppTheme.Space12,
             FlexShrink: 0
         }
-        let wide = AppTheme.GetVerdictSize(input.Height)
+        let wide = AppTheme.GetVerdictSize(state.Height)
         var note = ""
         if let result = certificate {
             let clean = result.Violations.Length == 0
@@ -1668,7 +1563,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 FlexShrink: 0,
                 Label(ui, note, AppTheme.Type13, AppTheme.Dim, ""),
                 Container{FlexGrow: 1},
-                Button(ui, "Certify", () -> Certify(input), input.Busy)
+                Button(ui, "Certify", () -> Certify(input), state.Busy)
             }
         )
         pane.Add(
@@ -1687,7 +1582,7 @@ class SettingsAdvanced : Cell, IDisposable {
 
     private func Checkpoint(input SettingsPageInput, figure float64) Blob {
         let ui = input.Ui
-        let tip = input.Node.Height
+        let tip = state.NodeHeight
         let start = localCheckpoint - localCheckpoint % 1000
         let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space12, AppTheme.Radius14)
         card.FlexShrink = 0
@@ -1700,7 +1595,8 @@ class SettingsAdvanced : Cell, IDisposable {
                 Label(ui, ui.Strings.Get("checkpoint"), AppTheme.Type12, AppTheme.Body, ""),
                 Container{FlexGrow: 1},
                 Info(
-                    input,
+                    input.Ui,
+                    state.Language,
                     "checkpoint-info",
                     "About checkpoints",
                     "Save writes a checkpoint every 100 blocks. Load lets sync skip proof-of-work checks up to the last checkpoint"
@@ -1743,13 +1639,13 @@ class SettingsAdvanced : Cell, IDisposable {
                         ui,
                         "Save",
                         () -> Checkpoints(input, ct -> input.Session.CheckpointsAsync("save", ct)),
-                        input.Busy
+                        state.Busy
                     ),
                     Button(
                         ui,
                         "Load",
                         () -> Checkpoints(input, ct -> input.Session.CheckpointsAsync("load", ct)),
-                        input.Busy
+                        state.Busy
                     )
                 }
             }
@@ -1837,18 +1733,12 @@ class SettingsAdvanced : Cell, IDisposable {
         }
         checkpointGeneration++
         let request = checkpointGeneration
-        let session = input.Session
-        let network = state.Network
-        let directory = state.Directory
-        input.Ui.Actions.Run(ct -> SaveCheckpoints(session, task, owner, network, directory, request, ct))
+        input.Ui.Actions.Run(ct -> SaveCheckpoints(task, owner, request, ct))
     }
 
     private async func SaveCheckpoints(
-        session WalletSession,
         task Func[CancellationToken, Task],
         owner Window,
-        network string,
-        directory string,
         request int32,
         token CancellationToken
     ) {
@@ -1863,11 +1753,7 @@ class SettingsAdvanced : Cell, IDisposable {
         }
         owner.TryPost(
             () -> {
-                if request != checkpointGeneration ||
-                    token.IsCancellationRequested ||
-                    context.Session != session ||
-                    state.Network != network ||
-                    state.Directory != directory {
+                if request != checkpointGeneration {
                     return
                 }
                 loadIssue = issue
@@ -1884,21 +1770,11 @@ class SettingsAdvanced : Cell, IDisposable {
         guard let lifetime = lifetime, let owner = input.Window else {
             return
         }
-        certificateRequest?.Cancel()
-        certificateRequest?.Dispose()
-        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token)
-        certificateRequest = current
         certifyGeneration++
-        go ReadCertificate(input.Session, state.Network, owner, certifyGeneration, current.Token)
+        go ReadCertificate(input.Session, owner, certifyGeneration, lifetime.Token)
     }
 
-    private async func ReadCertificate(
-        session WalletSession,
-        network string,
-        owner Window,
-        request int32,
-        token CancellationToken
-    ) {
+    private async func ReadCertificate(session WalletSession, owner Window, request int32, token CancellationToken) {
         var result ChainCertificate?
         var issue = ""
         try {
@@ -1910,10 +1786,7 @@ class SettingsAdvanced : Cell, IDisposable {
         }
         owner.TryPost(
             () -> {
-                if request == certifyGeneration &&
-                    !token.IsCancellationRequested &&
-                    context.Session == session &&
-                    state.Network == network {
+                if request == certifyGeneration {
                     certificate = result
                     loadIssue = issue
                     Rebuild()
@@ -1930,7 +1803,7 @@ class SettingsAdvanced : Cell, IDisposable {
         card.Add(
             WalletParts.Header(
                 Label(ui, ui.Strings.Get(title), AppTheme.Type12, AppTheme.Body, ""),
-                trailing: Info(input, key, topic, line)
+                trailing: Info(input.Ui, state.Language, key, topic, line)
             )
         )
         return card
@@ -1946,7 +1819,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 Label(input.Ui, names[row], AppTheme.Type11, AppTheme.Dim, "")
             }
         }
-        let grid = SegmentGrid(rows, 10, slot, rowGap: AppTheme.GetDetailGap(input.Height), label: buildLabel)
+        let grid = SegmentGrid(rows, 10, slot, rowGap: AppTheme.GetDetailGap(state.Height), label: buildLabel)
         grid.Accessibility = Accessibility{Role: AccessibilityRole.Image, Name: name}
         return grid
     }
@@ -2019,11 +1892,7 @@ class SettingsAdvanced : Cell, IDisposable {
             } catch (failure Exception) { }
             owner?.TryPost(
                 () -> {
-                    if request != generation ||
-                        ct.IsCancellationRequested ||
-                        context.Session != session ||
-                        state.Network != settings.Network ||
-                        state.Directory != settings.DataDirectory {
+                    if request != generation {
                         return
                     }
                     freeSpace = free
@@ -2042,11 +1911,7 @@ class SettingsAdvanced : Cell, IDisposable {
             let issue = failure.Message
             owner?.TryPost(
                 () -> {
-                    if request == generation &&
-                        !ct.IsCancellationRequested &&
-                        context.Session == session &&
-                        state.Network == settings.Network &&
-                        state.Directory == settings.DataDirectory {
+                    if request == generation {
                         loadIssue = issue
                         Rebuild()
                     }
@@ -2054,118 +1919,87 @@ class SettingsAdvanced : Cell, IDisposable {
             )
         }
     }
+
+    private func Violations(ui Presentation, count int) string ->
+    ui.Strings.Get(count == 1 ? "{0} violation": "{0} violations").Replace("{0}", count.ToString())
 }
 
-class SettingsDialogs : Cell {
-    private var state SettingsDialogInput = SettingsDialogInput{}
+class SettingsDialogs : Cell, IDisposable {
+    private var state SettingsDialogInput
     private var context SettingsPageInput
     private var kind string = ""
     private var purge SettingsPurgeInput
-    private var purged Action
-    private let configureKeys Action[SettingsKeysDialog]
-    private let configureViewOnly Action[SettingsViewOnlyDialog]
-    private let configurePurge Action[SettingsPurgeDialog]
-
-    init() {
-        configureKeys = region -> region.Accept(context, kind, Close)
-        configureViewOnly = region -> region.Accept(context, Close)
-        configurePurge = region -> region.Accept(context, purge, Close, purged)
-    }
-
-    func Accept(input SettingsPageInput) {
-        context = input
-        if (
-            state
-                .Wallet
-                .Length > 0 &&
-                (
-                state.Wallet != input
-                    .Settings
-                    .ActiveWallet ||
-                    state.Network != input
-                    .Settings
-                    .Network ||
-                    state.Endpoint != input
-                    .Settings
-                    .Endpoint ||
-                    state.ProcessId != input
-                    .Settings
-                    .OwnedProcessId
-            )
-        ) ||
-            (
-            input
-                .Snapshot
-                .State != WalletState.Unlocked &&
-                (kind == "view-key" || kind == "phrase" || kind == "view-only")
-        ) {
-            kind = ""
-        }
-        let next = DialogInput(input, kind)
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
-        }
-    }
-
-    func Open(kind string) {
-        this.kind = kind
-        Rebuild()
-    }
-
-    func OpenPurge(size string, unit string, wallets int32, purged Action) {
-        purge = SettingsPurgeInput{Size: size, Unit: unit, Wallets: wallets}
-        this.purged = purged
-        Open("purge")
-    }
-
-    private func Close() {
-        kind = ""
-        Rebuild()
-    }
-
-    override func Build() Blob -> switch kind {
-        case "phrase", "view-key": Cell.Mount[SettingsKeysDialog](kind, configureKeys)
-        case "view-only": Cell.Mount[SettingsViewOnlyDialog]("view-only", configureViewOnly)
-        case "purge": Cell.Mount[SettingsPurgeDialog]("purge", configurePurge)
-        default: Container{Display: Display.None}
-    }
-}
-
-class SettingsKeysDialog : Cell, IDisposable {
-    private var state SettingsDialogInput
-    private var context SettingsPageInput
-    private var close Action
-    private var dialog string = ""
+    private var purged Action?
+    private let close Action
     private var password string = ""
     private var passwordIssue string = ""
     private var viewKeys WalletViewKeys?
-    private var pendingKeys WalletViewKeys?
     private var viewPrivateShown bool
     private var lifetime CancellationTokenSource?
     private var generation int32
     private var loading bool
+    private var viewOnlyName string = ""
+    private var viewOnlyPassword string = ""
+    private var viewOnlyCreated string = ""
+    private var creating bool
+    private var purgeText string = ""
+    private var purging bool
+    private var issue string = ""
 
-    func Accept(input SettingsPageInput, kind string, close Action) {
-        context = input
-        this.close = close
-        dialog = kind
-        lifetime ??= CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
-        let next = DialogInput(input, kind)
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
-        }
+    init() {
+        close = Close
     }
 
-    override func Build() Blob -> Dialog(context, context.Settings)
+    func Accept(input SettingsPageInput) {
+        context = input
+        if state.Wallet != input
+            .Settings
+            .ActiveWallet ||
+            input
+            .Snapshot
+            .State != WalletState.Unlocked &&
+            (kind == "view-key" || kind == "phrase" || kind == "view-only") {
+            Close()
+        }
+        let next = SettingsDialogInput{
+            Language: input.Language,
+            Wallet: input.Settings.ActiveWallet,
+            Directory: input.Settings.WalletDirectory,
+            DefaultWallets: SettingsStore.DefaultWallets(input.Settings.Network),
+            Privacy: input.Privacy,
+            Busy: input.Busy,
+            Width: input.Width,
+            Clipboard: input.Clipboard
+        }
+        if next.Equals(state) {
+            return
+        }
+        state = next
+        Rebuild()
+    }
 
-    private func Close(ui Presentation) -> close.Invoke()
+    func Open(kind string) {
+        ResetDialog()
+        this.kind = kind
+        if kind == "view-key" {
+            lifetime = CancellationTokenSource.CreateLinkedTokenSource(context.Window?.Closed ?? CancellationToken.None)
+        } else if kind == "view-only" {
+            viewOnlyName = state.Wallet.Replace(".wallet.dat", "").Replace(".dat", "") + ".view.wallet.dat"
+        }
+        Rebuild()
+    }
 
-    func Dispose() {
+    func OpenPurge(size string, unit string, wallets int32, purged Action) {
+        Open("purge")
+        purge = SettingsPurgeInput{Size: size, Unit: unit, Wallets: wallets}
+        this.purged = purged
+    }
+
+    private func ResetDialog() {
         generation++
         lifetime?.Cancel()
-        Interlocked.Exchange[WalletViewKeys](ref pendingKeys, nil)?.Dispose()
+        lifetime?.Dispose()
+        lifetime = nil
         if viewKeys != nil {
             context.Ui.Actions.ReleaseClipboard()
         }
@@ -2173,21 +2007,45 @@ class SettingsKeysDialog : Cell, IDisposable {
         viewKeys = nil
         viewPrivateShown = false
         password = ""
-        lifetime?.Dispose()
+        passwordIssue = ""
+        viewOnlyName = ""
+        viewOnlyPassword = ""
+        viewOnlyCreated = ""
+        purgeText = ""
+        issue = ""
+        loading = false
+        creating = false
+        purging = false
+        purge = SettingsPurgeInput{}
+        purged = nil
+        kind = ""
     }
 
-    private func Dialog(input SettingsPageInput, settings WalletSettings) Blob {
+    private func Close() {
+        ResetDialog()
+        Rebuild()
+    }
+
+    func Dispose() -> ResetDialog()
+
+    override func Build() Blob -> switch kind {
+        case "phrase", "view-key": Dialog(context)
+        case "view-only": ViewOnly(context)
+        case "purge": Purge(context)
+        default: Container{Display: Display.None}
+    }
+
+    private func Dialog(input SettingsPageInput) Blob {
         let ui = input.Ui
-        let close Action = () -> Close(ui)
         if let keys = viewKeys {
             return Keys(input, keys)
         }
-        let form = WalletForm(ui, !input.Busy && !loading, () -> Reveal(input), []string{password}, () -> Rebuild())
-        let title = dialog == "phrase" ? "recovery phrase": "view keys"
+        let form = WalletForm(ui, !state.Busy && !loading, () -> Reveal(input), []string{password}, () -> Rebuild())
+        let title = kind == "phrase" ? "recovery phrase": "view keys"
         return WalletParts.Modal(
             ui,
             input.Window,
-            input.Width,
+            state.Width,
             "password",
             title,
             420,
@@ -2213,7 +2071,7 @@ class SettingsKeysDialog : Cell, IDisposable {
         }
         let buffer = password.ToCharArray()
         password = ""
-        if dialog == "phrase" {
+        if kind == "phrase" {
             input.OnRevealSeed.Invoke(buffer)
             return
         }
@@ -2224,7 +2082,7 @@ class SettingsKeysDialog : Cell, IDisposable {
         loading = true
         generation++
         Rebuild()
-        go LoadKeys(input.Session, input.Session.Settings.ActiveWallet, owner, buffer, generation, lifetime.Token)
+        go LoadKeys(input.Session, state.Wallet, owner, buffer, generation, lifetime.Token)
     }
 
     private async func LoadKeys(
@@ -2238,21 +2096,22 @@ class SettingsKeysDialog : Cell, IDisposable {
         var result WalletViewKeys?
         var issue = ""
         try {
-            result = await session.Keys.ExportViewKeysAsync(buffer, token)
-        } catch (cancelled OperationCanceledException) {
-            return
-        } catch (failure Exception) {
-            issue = failure.Message
+            try {
+                result = await session.Keys.ExportViewKeysAsync(buffer, token)
+            } catch (cancelled OperationCanceledException) {
+                return
+            } catch (failure Exception) {
+                issue = failure.Message
+            }
         } finally {
             Array.Clear(buffer)
         }
-        Interlocked.Exchange[WalletViewKeys?](ref pendingKeys, result)?.Dispose()
-        if token.IsCancellationRequested || !owner.TryPost(
+        let keys = result
+        let cancellation = token.Register(() -> keys?.Dispose())
+        if !owner.TryPost(
             () -> {
-                let keys = Interlocked.Exchange[WalletViewKeys](ref pendingKeys, nil)
+                cancellation.Dispose()
                 if request != generation ||
-                    token.IsCancellationRequested ||
-                    context.Session != session ||
                     context
                     .Session
                     .Settings
@@ -2269,7 +2128,8 @@ class SettingsKeysDialog : Cell, IDisposable {
                 Rebuild()
             }
         ) {
-            Interlocked.Exchange[WalletViewKeys](ref pendingKeys, nil)?.Dispose()
+            cancellation.Dispose()
+            keys?.Dispose()
         }
     }
 
@@ -2303,7 +2163,7 @@ class SettingsKeysDialog : Cell, IDisposable {
         return WalletParts.Modal(
             ui,
             input.Window,
-            input.Width,
+            state.Width,
             "keys",
             "view keys",
             640,
@@ -2330,10 +2190,7 @@ class SettingsKeysDialog : Cell, IDisposable {
                         () -> input.ChooseFile.Invoke(
                             FileDialogKind.SaveFile,
                             "keys file",
-                            Path.Combine(
-                                Home(),
-                                input.Session.Settings.ActiveWallet.Replace(".wallet.dat", "") + ".keys.txt"
-                            ),
+                            Path.Combine(Home(), state.Wallet.Replace(".wallet.dat", "") + ".keys.txt"),
                             path -> {
                                 if Object.ReferenceEquals(viewKeys, keys) &&
                                     input
@@ -2343,18 +2200,18 @@ class SettingsKeysDialog : Cell, IDisposable {
                                 }
                             }
                         ),
-                        input.Busy
+                        state.Busy
                     ),
-                    Button(ui, "Done", () -> Close(ui), false, true)
+                    Button(ui, "Done", close, false, true)
                 }
             ),
-            () -> Close(ui)
+            close
         )
     }
 
     private func Key(input SettingsPageInput, label string, note string, key[]char, secret bool) Blob {
         let ui = input.Ui
-        let masked = !viewPrivateShown && (secret || input.Privacy)
+        let masked = !viewPrivateShown && (secret || state.Privacy)
         let text = String(key)
         let name = Container{
             Width: AppTheme.LabelColumn,
@@ -2411,7 +2268,7 @@ class SettingsKeysDialog : Cell, IDisposable {
                 )
             )
         }
-        let copied = ReadOnlySpan[char](input.Clipboard).SequenceEqual(ReadOnlySpan[char](key))
+        let copied = ReadOnlySpan[char](state.Clipboard).SequenceEqual(ReadOnlySpan[char](key))
         row.Add(
             Icon(
                 ui,
@@ -2428,56 +2285,12 @@ class SettingsKeysDialog : Cell, IDisposable {
         )
         return row
     }
-}
 
-class SettingsViewOnlyDialog : Cell, IDisposable {
-    private var state SettingsDialogInput
-    private var context SettingsPageInput
-    private var close Action
-    private var password string = ""
-    private var passwordIssue string = ""
-    private var viewOnlyName string = ""
-    private var viewOnlyPassword string = ""
-    private var viewOnlyCreated string = ""
-    private var initialized bool
-    private var generation int32
-    private var creating bool
-
-    func Accept(input SettingsPageInput, close Action) {
-        context = input
-        this.close = close
-        if !initialized {
-            initialized = true
-            viewOnlyName = input
-                .Settings
-                .ActiveWallet
-                .Replace(".wallet.dat", "")
-                .Replace(".dat", "") +
-                ".view.wallet.dat"
-        }
-        let next = DialogInput(input, "view-only")
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
-        }
-    }
-
-    override func Build() Blob -> ViewOnly(context, context.Settings)
-
-    private func Close(ui Presentation) -> close.Invoke()
-
-    func Dispose() {
-        generation++
-        password = ""
-        viewOnlyPassword = ""
-    }
-
-    private func ViewOnly(input SettingsPageInput, settings WalletSettings) Blob {
+    private func ViewOnly(input SettingsPageInput) Blob {
         let ui = input.Ui
-        let close Action = () -> Close(ui)
         let form = WalletForm(
             ui,
-            !input.Busy && !creating,
+            !state.Busy && !creating,
             () -> CreateViewOnly(input),
             []string{viewOnlyName.Trim(), password, viewOnlyPassword},
             () -> Rebuild()
@@ -2574,7 +2387,7 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
                     FlexGrow: 1,
                     MinWidth: 0,
                     MaterialIcons.Create("folder", AppTheme.Icon14, AppTheme.Dim),
-                    Label(ui, Tail(settings.WalletDirectory), AppTheme.Type12, AppTheme.Dim, "")
+                    Label(ui, Tail(state.Directory), AppTheme.Type12, AppTheme.Dim, "")
                 }
             )
             actions.Add(Button(ui, "Cancel", close))
@@ -2583,7 +2396,7 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         return WalletParts.Modal(
             ui,
             input.Window,
-            input.Width,
+            state.Width,
             "view-only",
             "create view-only wallet",
             620,
@@ -2646,7 +2459,7 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         Rebuild()
         let request = generation
         let session = input.Session
-        let wallet = input.Settings.ActiveWallet
+        let wallet = state.Wallet
         input.Ui.Actions.Run(ct -> CreateFile(session, wallet, owner, filename, current, secret, request, ct))
     }
 
@@ -2662,12 +2475,14 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
     ) {
         var issue = ""
         try {
-            await session.Keys.CreateViewOnlyAsync(filename, current, secret, token)
-        } catch (failure Exception) {
-            if failure is OperationCanceledException {
-                throw failure
+            try {
+                await session.Keys.CreateViewOnlyAsync(filename, current, secret, token)
+            } catch (failure Exception) {
+                if failure is OperationCanceledException {
+                    throw failure
+                }
+                issue = failure.Message
             }
-            issue = failure.Message
         } finally {
             Array.Clear(current)
             Array.Clear(secret)
@@ -2675,8 +2490,6 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         owner.TryPost(
             () -> {
                 if request != generation ||
-                    token.IsCancellationRequested ||
-                    context.Session != session ||
                     context
                     .Session
                     .Settings
@@ -2697,57 +2510,14 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
             }
         )
     }
-}
 
-class SettingsPurgeDialog : Cell, IDisposable {
-    private var state SettingsPurgeInput
-    private var context SettingsPageInput
-    private var close Action
-    private var purged Action
-    private var sizeText string = ""
-    private var sizeUnit string = ""
-    private var dataWallets int32
-    private var purgeText string = ""
-    private var purging bool
-    private var issue string = ""
-    private var generation int32
-
-    func Accept(input SettingsPageInput, data SettingsPurgeInput, close Action, purged Action) {
-        context = input
-        this.close = close
-        this.purged = purged
-        sizeText = data.Size
-        sizeUnit = data.Unit
-        dataWallets = data.Wallets
-        let next = data with{
-            Language = input.Language,
-            Network = input.Settings.Network,
-            Directory = input.Settings.DataDirectory,
-            Busy = input.Busy,
-            Width = input.Width
-        }
-        if !next.Equals(state) {
-            state = next
-            Rebuild()
-        }
-    }
-
-    override func Build() Blob -> Purge(context, context.Settings)
-
-    private func Close(ui Presentation) -> close.Invoke()
-
-    func Dispose() {
-        generation++
-    }
-
-    private func Purge(input SettingsPageInput, settings WalletSettings) Blob {
+    private func Purge(input SettingsPageInput) Blob {
         let ui = input.Ui
-        let close Action = () -> Close(ui)
         if purging {
             return WalletParts.Modal(
                 ui,
                 input.Window,
-                input.Width,
+                state.Width,
                 "purging",
                 "purging",
                 620,
@@ -2766,7 +2536,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
                 () -> { }
             )
         }
-        let size = sizeText + " " + sizeUnit
+        let size = purge.Size + " " + purge.Unit
         let deleted = Column(ui, "deleted", AppTheme.Pink)
         deleted.Add(Item(ui, false, "chain database", size))
         deleted.Add(Item(ui, false, "checkpoints.dat", "restored on start"))
@@ -2774,15 +2544,15 @@ class SettingsPurgeDialog : Cell, IDisposable {
         deleted.Add(Item(ui, false, "api.cookie", "new on start"))
         deleted.Add(Item(ui, false, "identity.key", "new peer key"))
         let kept = Column(ui, "kept", AppTheme.Mint)
-        if dataWallets > 0 {
+        if purge.Wallets > 0 {
             kept.Add(
                 Item(
                     ui,
                     true,
                     ui
                         .Strings
-                        .Get(dataWallets == 1 ? "{0} wallet": "{0} wallets")
-                        .Replace("{0}", dataWallets.ToString()),
+                        .Get(purge.Wallets == 1 ? "{0} wallet": "{0} wallets")
+                        .Replace("{0}", purge.Wallets.ToString()),
                     "moved out first"
                 )
             )
@@ -2792,7 +2562,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
             Gap: AppTheme.Space14,
             Container{FlexDirection: FlexDirection.Row, Gap: AppTheme.Space12, FlexShrink: 0, deleted, kept}
         }
-        if dataWallets > 0 {
+        if purge.Wallets > 0 {
             content.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
@@ -2801,7 +2571,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
                     MaterialIcons.Create("folder", AppTheme.Icon14, AppTheme.Dim),
                     Label(
                         ui,
-                        ui.Strings.Get("wallets move to") + " " + Tail(SettingsStore.DefaultWallets(settings.Network)),
+                        ui.Strings.Get("wallets move to") + " " + Tail(state.DefaultWallets),
                         AppTheme.Type12,
                         AppTheme.Dim,
                         ""
@@ -2811,11 +2581,11 @@ class SettingsPurgeDialog : Cell, IDisposable {
         }
         let typed = purgeText == "purge"
         let confirm Action = () -> {
-            if typed && !input.Busy {
+            if typed && !state.Busy {
                 StartPurge(input)
             }
         }
-        let form = WalletForm(ui, typed && !input.Busy, confirm, []string{}, () -> Rebuild())
+        let form = WalletForm(ui, typed && !state.Busy, confirm, []string{}, () -> Rebuild())
         if issue.Length > 0 {
             content.Add(Label(ui, ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
         }
@@ -2855,7 +2625,7 @@ class SettingsPurgeDialog : Cell, IDisposable {
         return WalletParts.Modal(
             ui,
             input.Window,
-            input.Width,
+            state.Width,
             "purge",
             "purge chain data",
             640,
@@ -2881,8 +2651,8 @@ class SettingsPurgeDialog : Cell, IDisposable {
         Rebuild()
         let request = generation
         let session = input.Session
-        let network = state.Network
-        let directory = state.Directory
+        let network = input.Settings.Network
+        let directory = input.Settings.DataDirectory
         input.Ui.Actions.Run(ct -> PurgeData(session, network, directory, owner, request, ct))
     }
 
@@ -2906,16 +2676,20 @@ class SettingsPurgeDialog : Cell, IDisposable {
         owner.TryPost(
             () -> {
                 if request != generation ||
-                    token.IsCancellationRequested ||
-                    context.Session != session ||
-                    state.Network != network ||
-                    state.Directory != directory {
+                    context
+                    .Session
+                    .Settings
+                    .Network != network ||
+                    context
+                    .Session
+                    .Settings
+                    .DataDirectory != directory {
                     return
                 }
                 purging = false
                 issue = error
                 if error.Length == 0 {
-                    purged.Invoke()
+                    purged?.Invoke()
                     close.Invoke()
                 } else {
                     Rebuild()
@@ -2958,23 +2732,6 @@ class SettingsParts {
     shared {
         func RowHeight(height float64) float64 -> Math.Clamp(52 + Math.Max(0, height - 640) * 0.025, 52.0, 72.0)
 
-        func DialogInput(input SettingsPageInput, kind string) SettingsDialogInput -> SettingsDialogInput{
-            Kind: kind,
-            Language: input.Language,
-            Wallet: input.Settings.ActiveWallet,
-            Directory: input.Settings.WalletDirectory,
-            Network: input.Settings.Network,
-            Endpoint: input.Settings.Endpoint,
-            ProcessId: input.Settings.OwnedProcessId,
-            Privacy: input.Privacy,
-            Busy: input.Busy,
-            Width: input.Width,
-            Clipboard: input.Clipboard
-        }
-
-        func Violations(ui Presentation, count int) string ->
-        ui.Strings.Get(count == 1 ? "{0} violation": "{0} violations").Replace("{0}", count.ToString())
-
         func Toggle(input SettingsPageInput, label string, on bool, changed Action, disabled bool = false) Blob ->
         (
             AppTheme.Switch with{
@@ -2985,21 +2742,15 @@ class SettingsParts {
             }
         ).Build()
 
-        func Info(input SettingsPageInput, key string, topic string, line string) Blob ->
+        func Info(ui Presentation, language string, key string, topic string, line string) Blob ->
         Cell.Mount[InfoTipInput, InfoTip](
             key,
-            InfoTipInput{Ui: input.Ui, Topic: topic, Lines: []string{line}, Language: input.Language, Width: 300}
+            InfoTipInput{Ui: ui, Topic: topic, Lines: []string{line}, Language: language, Width: 300}
         )
 
         func Pinned(variable string) bool -> Environment.GetEnvironmentVariable("GYROID_" + variable) != nil
 
         func Home() string -> Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-
-        func Shorten(path string) string -> if path.StartsWith(Home(), StringComparison.Ordinal) && Home().Length > 1 {
-            "~" + path.Substring(Home().Length)
-        } else {
-            path
-        }
 
         func Tail(path string) string {
             let file = Path.GetFileName(path)

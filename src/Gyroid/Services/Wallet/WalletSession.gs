@@ -586,13 +586,12 @@ class WalletSession : IDisposable {
         }
     }
 
-    async func SavePreferenceAsync(change Action[WalletSettings], ct CancellationToken = default(CancellationToken)) {
+    func ApplyPreference(change Action[WalletSettings]) -> change(settings)
+
+    async func SavePreferencesAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
-            let next = settings.Copy()
-            change(next)
-            await SettingsStore.SaveAsync(next, ct, settings)
-            change(settings)
+            await SettingsStore.SaveAsync(settings.Copy(), ct, settings)
         } finally {
             End()
         }

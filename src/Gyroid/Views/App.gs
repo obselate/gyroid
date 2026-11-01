@@ -134,7 +134,6 @@ partial class App : Cell {
 
     private let closeSettings Action
     private let configureNetwork Action[NetworkPage]
-
     private let configureSettings Action[SettingsPage]
 
     init(wallet WalletSession, scaleOverride bool = false) {
