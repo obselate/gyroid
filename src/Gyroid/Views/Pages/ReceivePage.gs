@@ -4,7 +4,6 @@ import Goo
 import Goo.Widgets
 import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
-import Goo.Widgets.Layout
 import Goo.Widgets.Navigation
 import Gyroid.Components
 import Gyroid.Components.ControlParts
@@ -192,17 +191,18 @@ class ReceivePage : Cell[ReceivePageInput] {
         let copied = shown != "qr" && ReadOnlySpan[char](input.Clipboard).SequenceEqual(
             System.MemoryExtensions.AsSpan(payload)
         )
-        let options = List[NavigationItem]()
+        let options = [empty ? 2: 3]NavigationItem
         if !empty {
-            options.Add(NavigationItem{Id: "link", Label: ui.Strings.Get("Link")})
+            options[0] = NavigationItem{Id: "link", Label: ui.Strings.Get("Link")}
         }
-        options.Add(NavigationItem{Id: "address", Label: ui.Strings.Get("Address")})
-        options.Add(NavigationItem{Id: "qr", Label: ui.Strings.Get("QR")})
+        let offset = empty ? 0: 1
+        options[offset] = NavigationItem{Id: "address", Label: ui.Strings.Get("Address")}
+        options[offset + 1] = NavigationItem{Id: "qr", Label: ui.Strings.Get("QR")}
         let tabs = Tabs(
             ui,
             "share-as",
             "Share as",
-            options.ToArray(),
+            options,
             shown,
             id -> {
                 request.Format = id
