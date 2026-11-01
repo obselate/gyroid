@@ -23,6 +23,7 @@ import System.Globalization
 import System.IO
 import System.Linq
 import System.Threading
+import System.Threading.Channels
 import System.Threading.Tasks
 
 data struct SettingsPageInput {
@@ -49,6 +50,17 @@ data struct SettingsPageInput {
     var OnRevealSeed Action[[]char]
     var OnNavigate Action[AppPage]
     var OnClose Action
+}
+
+data struct SettingsCompositionInput {
+    var Section string
+    var Available bool
+    var State WalletState
+    var ViewOnly bool
+    var Language string
+    var Busy bool
+    var Width float64
+    var Height float64
 }
 
 data struct SettingsGeneralInput {
@@ -150,6 +162,10 @@ data struct SettingsPurgeInput {
 }
 
 class SettingsPage : Cell {
+    private var state SettingsCompositionInput
+    private var generalOwner SettingsGeneral?
+    private var securityOwner SettingsSecurity?
+    private var walletOwner SettingsWallet?
     private var current SettingsPageInput
     private var dialogs SettingsDialogs?
     private var advancedOwner SettingsAdvanced?
@@ -164,13 +180,22 @@ class SettingsPage : Cell {
 
     init() {
         openDialog = kind -> dialogs?.Open(kind)
-        configureGeneral = region -> region.Accept(current)
-        configureSecurity = region -> region.Accept(current, openDialog)
+        configureGeneral = region -> {
+            generalOwner = region
+            region.Accept(current)
+        }
+        configureSecurity = region -> {
+            securityOwner = region
+            region.Accept(current, openDialog)
+        }
         configureNode = region -> {
             nodeOwner = region
             region.Accept(current)
         }
-        configureWallet = region -> region.Accept(current, openDialog)
+        configureWallet = region -> {
+            walletOwner = region
+            region.Accept(current, openDialog)
+        }
         configureAdvanced = region -> {
             advancedOwner = region
             region.Accept(current, OpenPurge)
@@ -183,7 +208,26 @@ class SettingsPage : Cell {
 
     func Accept(input SettingsPageInput) {
         current = input with{Settings = input.Session.Settings}
-        Rebuild()
+        generalOwner?.Accept(current)
+        securityOwner?.Accept(current, openDialog)
+        nodeOwner?.Accept(current)
+        walletOwner?.Accept(current, openDialog)
+        advancedOwner?.Accept(current, OpenPurge)
+        dialogs?.Accept(current)
+        let next = SettingsCompositionInput{
+            Section: input.Section,
+            Available: input.Available,
+            State: input.Snapshot.State,
+            ViewOnly: input.Snapshot.ViewOnly,
+            Language: input.Language,
+            Busy: !input.Available && input.Busy,
+            Width: input.Width,
+            Height: input.Height
+        }
+        if !next.Equals(state) {
+            state = next
+            Rebuild()
+        }
     }
 
     private func OpenPurge(size string, unit string, wallets int32) {
@@ -334,18 +378,25 @@ class SettingsPage : Cell {
     }
 }
 
+data struct SettingsPreferenceChange {
+    var Change Action[WalletSettings]
+    var Generation int32
+}
+
 class SettingsGeneral : Cell, IDisposable {
     private var state SettingsGeneralInput
     private var context SettingsPageInput
     private var rowHeight float64
-    private var lifetime CancellationTokenSource?
-    private let requests Dictionary[string, CancellationTokenSource] = Dictionary[string, CancellationTokenSource]()
+    private let saves Dictionary[string, Channel[SettingsPreferenceChange]] = Dictionary[
+        string,
+        Channel[SettingsPreferenceChange]
+    ]()
+    private var disposed bool
     private let generations Dictionary[string, int32] = Dictionary[string, int32]()
     private var issue string = ""
 
     func Accept(input SettingsPageInput) {
         context = input
-        lifetime ??= CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
         let settings = input.Settings
         rowHeight = RowHeight(input.Height)
         let next = SettingsGeneralInput{
@@ -372,63 +423,75 @@ class SettingsGeneral : Cell, IDisposable {
     }
 
     private func Prefer(input SettingsPageInput, key string, change Action[WalletSettings]) {
-        guard let owner = input.Window, let lifetime = lifetime else {
+        guard let owner = input.Window else {
             return
         }
-        if requests.TryGetValue(key, out let previous) {
-            previous.Cancel()
-            previous.Dispose()
+        if disposed {
+            return
         }
-        let request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token)
-        requests[key] = request
+        var queue Channel[SettingsPreferenceChange]
+        if saves.TryGetValue(key, out let existing) {
+            queue = existing
+        } else {
+            queue = Channel.CreateBounded[SettingsPreferenceChange](
+                BoundedChannelOptions(1){
+                    SingleReader: true,
+                    SingleWriter: true,
+                    FullMode: BoundedChannelFullMode.DropOldest
+                }
+            )
+            saves[key] = queue
+            let reader = queue.Reader
+            input.Ui.Actions.Background(_ -> SavePreferences(input.Session, owner, input.OnPreference, key, reader))
+        }
         generations.TryGetValue(key, out let previousGeneration)
         let generation = previousGeneration + 1
         generations[key] = generation
         issue = ""
-        go SavePreference(input.Session, owner, input.OnPreference, key, change, generation, request.Token)
+        queue.Writer.TryWrite(SettingsPreferenceChange{Change: change, Generation: generation})
     }
 
-    private async func SavePreference(
+    private async func SavePreferences(
         session WalletSession,
         owner Window,
         saved Action,
         key string,
-        change Action[WalletSettings],
-        generation int32,
-        token CancellationToken
+        reader ChannelReader[SettingsPreferenceChange]
     ) {
-        var error = ""
-        try {
-            await session.SavePreferenceAsync(change, token)
-        } catch (cancelled OperationCanceledException) {
-            return
-        } catch (failure Exception) {
-            error = failure.Message
-        }
-        owner.TryPost(
-            () -> {
-                if context.Session != session {
-                    return
+        while await reader.WaitToReadAsync() {
+            while reader.TryRead(out let change) {
+                var error = ""
+                try {
+                    await session.SavePreferenceAsync(change.Change, CancellationToken.None)
+                } catch (failure Exception) {
+                    error = failure.Message
                 }
-                if error.Length == 0 {
-                    saved()
-                }
-                if token.IsCancellationRequested || generations[key] != generation {
-                    return
-                }
-                issue = error
-                Rebuild()
+                let message = error
+                owner.TryPost(
+                    () -> {
+                        if context.Session != session {
+                            return
+                        }
+                        if message.Length == 0 {
+                            saved.Invoke()
+                        }
+                        if disposed || generations[key] != change.Generation {
+                            return
+                        }
+                        issue = message
+                        Rebuild()
+                    }
+                )
             }
-        )
+        }
     }
 
     func Dispose() {
-        lifetime?.Cancel()
-        for key in requests.Keys {
+        disposed = true
+        for key in saves.Keys {
             generations[key]++
-            requests[key].Dispose()
+            saves[key].Writer.TryComplete()
         }
-        lifetime?.Dispose()
     }
 
     private func General(input SettingsPageInput, settings WalletSettings) Blob {
@@ -1370,7 +1433,6 @@ class SettingsAdvanced : Cell, IDisposable {
     private var lifetime CancellationTokenSource?
     private var chainRequest CancellationTokenSource?
     private var certificateRequest CancellationTokenSource?
-    private var checkpointRequest CancellationTokenSource?
     private var checkpointGeneration int32
     private var generation int32
     private var certifyGeneration int32
@@ -1394,8 +1456,6 @@ class SettingsAdvanced : Cell, IDisposable {
             lifetime?.Cancel()
             chainRequest?.Dispose()
             certificateRequest?.Dispose()
-            checkpointRequest?.Dispose()
-            checkpointRequest = nil
             chainRequest = nil
             certificateRequest = nil
             lifetime?.Dispose()
@@ -1454,7 +1514,6 @@ class SettingsAdvanced : Cell, IDisposable {
         lifetime?.Cancel()
         chainRequest?.Dispose()
         certificateRequest?.Dispose()
-        checkpointRequest?.Dispose()
         lifetime?.Dispose()
     }
 
@@ -1779,23 +1838,15 @@ class SettingsAdvanced : Cell, IDisposable {
     }
 
     private func Checkpoints(input SettingsPageInput, task Func[CancellationToken, Task]) {
-        guard let lifetime = lifetime, let owner = input.Window else {
+        guard let owner = input.Window else {
             return
         }
-        checkpointRequest?.Cancel()
-        checkpointRequest?.Dispose()
-        let current = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token)
-        checkpointRequest = current
         checkpointGeneration++
-        go SaveCheckpoints(
-            input.Session,
-            task,
-            owner,
-            state.Network,
-            state.Directory,
-            checkpointGeneration,
-            current.Token
-        )
+        let request = checkpointGeneration
+        let session = input.Session
+        let network = state.Network
+        let directory = state.Directory
+        input.Ui.Actions.Run(ct -> SaveCheckpoints(session, task, owner, network, directory, request, ct))
     }
 
     private async func SaveCheckpoints(
@@ -1810,9 +1861,10 @@ class SettingsAdvanced : Cell, IDisposable {
         var issue = ""
         try {
             await task.Invoke(token)
-        } catch (cancelled OperationCanceledException) {
-            return
         } catch (failure Exception) {
+            if failure is OperationCanceledException {
+                throw failure
+            }
             issue = failure.Message
         }
         owner.TryPost(
@@ -2375,15 +2427,15 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
     private var viewOnlyName string = ""
     private var viewOnlyPassword string = ""
     private var viewOnlyCreated string = ""
-    private var lifetime CancellationTokenSource?
+    private var initialized bool
     private var generation int32
     private var creating bool
 
     func Accept(input SettingsPageInput, close Action) {
         context = input
         this.close = close
-        if lifetime == nil {
-            lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
+        if !initialized {
+            initialized = true
             viewOnlyName = input
                 .Settings
                 .ActiveWallet
@@ -2404,8 +2456,6 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
 
     func Dispose() {
         generation++
-        lifetime?.Cancel()
-        lifetime?.Dispose()
         password = ""
         viewOnlyPassword = ""
     }
@@ -2574,7 +2624,7 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
             Rebuild()
             return
         }
-        guard let owner = input.Window, let lifetime = lifetime else {
+        guard let owner = input.Window else {
             return
         }
         let current = password.ToCharArray()
@@ -2582,16 +2632,10 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         creating = true
         generation++
         Rebuild()
-        go CreateFile(
-            input.Session,
-            input.Session.Settings.ActiveWallet,
-            owner,
-            filename,
-            current,
-            secret,
-            generation,
-            lifetime.Token
-        )
+        let request = generation
+        let session = input.Session
+        let wallet = input.Settings.ActiveWallet
+        input.Ui.Actions.Run(ct -> CreateFile(session, wallet, owner, filename, current, secret, request, ct))
     }
 
     private async func CreateFile(
@@ -2607,9 +2651,10 @@ class SettingsViewOnlyDialog : Cell, IDisposable {
         var issue = ""
         try {
             await session.Keys.CreateViewOnlyAsync(filename, current, secret, token)
-        } catch (cancelled OperationCanceledException) {
-            return
         } catch (failure Exception) {
+            if failure is OperationCanceledException {
+                throw failure
+            }
             issue = failure.Message
         } finally {
             Array.Clear(current)
@@ -2653,7 +2698,6 @@ class SettingsPurgeDialog : Cell, IDisposable {
     private var purgeText string = ""
     private var purging bool
     private var issue string = ""
-    private var lifetime CancellationTokenSource?
     private var generation int32
 
     func Accept(input SettingsPageInput, data SettingsPurgeInput, close Action, purged Action) {
@@ -2663,7 +2707,6 @@ class SettingsPurgeDialog : Cell, IDisposable {
         sizeText = data.Size
         sizeUnit = data.Unit
         dataWallets = data.Wallets
-        lifetime ??= CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
         let next = data with{
             Language = input.Language,
             Network = input.Settings.Network,
@@ -2683,8 +2726,6 @@ class SettingsPurgeDialog : Cell, IDisposable {
 
     func Dispose() {
         generation++
-        lifetime?.Cancel()
-        lifetime?.Dispose()
     }
 
     private func Purge(input SettingsPageInput, settings WalletSettings) Blob {
@@ -2820,13 +2861,17 @@ class SettingsPurgeDialog : Cell, IDisposable {
     }
 
     private func StartPurge(input SettingsPageInput) {
-        guard let owner = input.Window, let lifetime = lifetime else {
+        guard let owner = input.Window else {
             return
         }
         purging = true
         generation++
         Rebuild()
-        go PurgeData(input.Session, state.Network, state.Directory, owner, generation, lifetime.Token)
+        let request = generation
+        let session = input.Session
+        let network = state.Network
+        let directory = state.Directory
+        input.Ui.Actions.Run(ct -> PurgeData(session, network, directory, owner, request, ct))
     }
 
     private async func PurgeData(
@@ -2840,9 +2885,10 @@ class SettingsPurgeDialog : Cell, IDisposable {
         var error = ""
         try {
             await session.PurgeDataAsync(token)
-        } catch (cancelled OperationCanceledException) {
-            return
         } catch (failure Exception) {
+            if failure is OperationCanceledException {
+                throw failure
+            }
             error = failure.Message
         }
         owner.TryPost(
