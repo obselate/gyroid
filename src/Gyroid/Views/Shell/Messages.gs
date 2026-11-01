@@ -113,6 +113,7 @@ partial class App {
                 BasedOn: AppTheme.InformationCardStyle,
                 Gap: AppTheme.Space6,
                 MinWidth: 0,
+                AlignItems: AlignItems.Stretch,
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Button,
