@@ -123,8 +123,7 @@ class NetworkPage : Cell, IDisposable {
                 loadedPeers != next
                 .Node
                 .Peers ||
-                loadedHistory != next.History ||
-                loadedSends != next.Sends
+                !Object.ReferenceEquals(loadedHistory, next.History) || !Object.ReferenceEquals(loadedSends, next.Sends)
         ) {
             generation++
             request?.Dispose()
@@ -224,7 +223,7 @@ class NetworkPage : Cell, IDisposable {
             while !token.IsCancellationRequested {
                 var result NetworkReport? = nil
                 try {
-                    let prepared = NodeText.Prepare(await node.ReadNetworkAsync(token), history, sends, age)
+                    let prepared = NodeText.Prepare(await node.ReadNetworkAsync(token), history, sends, age, token)
                     if Enumerable.SequenceEqual[NetworkBlock](previous.Blocks, prepared.Blocks) {
                         prepared.Blocks = previous.Blocks
                     }
@@ -722,7 +721,7 @@ class NetworkPeers : Cell, IDisposable {
     private var rows[]NetworkRow = []NetworkRow{}
     private var generation int32
     private var lifetime CancellationTokenSource? = nil
-    private let rowKey Func[NetworkRow, string] = row -> row.Key
+    private let rowKey Func[NetworkRow, string] = (row NetworkRow) -> row.Key
     private let rowBuilder Func[NetworkRow, Blob]
 
     init() {

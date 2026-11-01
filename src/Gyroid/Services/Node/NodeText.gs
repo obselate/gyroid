@@ -38,26 +38,35 @@ class NodeText {
         func Positive(value float64) string -> value > 0 && value < 0.01 ?
         value.ToString("0.##E+0", CultureInfo.InvariantCulture): value.ToString("0.00", CultureInfo.InvariantCulture)
 
-        func Prepare(report NetworkReport, history[]WalletOutput, sends[]WalletSend, age string) NetworkReport {
+        func Prepare(
+            report NetworkReport,
+            history[]WalletOutput,
+            sends[]WalletSend,
+            age string,
+            token CancellationToken
+        ) NetworkReport {
             let own = Dictionary[uint64, int32]()
             let blocks = report.Blocks
             let tip = blocks.Length > 0 ? blocks[blocks.Length - 1].Height: 0
             for send in sends {
+                token.ThrowIfCancellationRequested()
                 if send.Confirmations > 0 && send.Confirmations <= tip + 1 {
                     own[tip + 1 - send.Confirmations] = 2
                 }
             }
             for output in history {
+                token.ThrowIfCancellationRequested()
                 own[output.BlockHeight] = 1
             }
             let prepared = [blocks.Length]NetworkBlock
             var maximum = 6.0
             for index in 0 ... blocks.Length {
+                token.ThrowIfCancellationRequested()
                 let block = blocks[index]
                 let elapsed = blocks[blocks.Length - 1].Timestamp - block.Timestamp
                 prepared[index] = NetworkBlock{
                     ... block,
-                    Seconds: index > 0 ? Math.Max(0L, block.Timestamp - blocks[index - 1].Timestamp): 0,
+                    Seconds: index > 0 ? block.Timestamp - blocks[index - 1].Timestamp: 0,
                     Age: elapsed,
                     Own: own.TryGetValue(block.Height, out let kind) ? kind: 0
                 }
