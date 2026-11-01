@@ -157,7 +157,6 @@ class LibraryPage : Cell, IDisposable {
                         Busy: input.Busy,
                         Language: input.Language,
                         Path: importPath,
-                        OnBackup: input.OnBackup,
                         OnBack: back,
                         OnCreate: input.OnCreate
                     }
@@ -291,7 +290,8 @@ class LibraryList : Cell, IDisposable {
             let list = VirtualRows(input.Wallets, 48 + AppTheme.Space8, rowKey, rowBuilder, false)
             let expandedHeight = (opened ?? input.ActiveWallet).Length > 0 ? AppTheme.ControlRegular +
                 AppTheme.Space12: 0
-            let issueHeight = issue.Length > 0 ? AppTheme.ControlRegular + AppTheme.Space16 + AppTheme.Space10: 0
+            let issueHeight = issue.Length > 0 && expandedHeight > 0 ?
+            AppTheme.ControlRegular + AppTheme.Space16 + AppTheme.Space10: 0
             list.Height = input.Wallets.Count * (48 + AppTheme.Space8) + expandedHeight + issueHeight
             list.MinHeight = 0
             list.MaxHeight = Percent(100)
@@ -350,7 +350,8 @@ class LibraryList : Cell, IDisposable {
         return button
     }
 
-    func Row(wallet LibraryWallet) Blob {
+    func Row(cell LibraryWalletRow) Blob {
+        let wallet = cell.Wallet
         let input = this.input
         let filename = wallet.Filename
         let used = wallet.Used
@@ -471,9 +472,14 @@ class LibraryList : Cell, IDisposable {
                             "Password",
                             password,
                             value -> {
+                                let hadIssue = issue.Length > 0
                                 password = value
                                 issue = ""
-                                RefreshRows()
+                                if hadIssue {
+                                    RefreshRows()
+                                } else {
+                                    cell.Rebuild()
+                                }
                             },
                             secret: true,
                             disabled: input.Busy,
@@ -606,7 +612,7 @@ class LibraryWalletRow : Cell, IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob -> Owner.Row(Wallet)
+    override func Build() Blob -> Owner.Row(this)
 
     func Dispose() {
         Owner.Release(this)
@@ -707,7 +713,6 @@ data struct LibraryFormInput {
     var Ui Presentation
     var Kind string
     var Path string
-    var OnBackup Action[[]char]
     var Busy bool
     var Language string
     var OnBack Action
@@ -858,8 +863,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
 
     private func Submit(input LibraryFormInput) {
         let filename = WalletFile(name)
-        let text = password
-        let secret = text.ToCharArray()
+        let secret = password.ToCharArray()
         password = ""
         confirmation = ""
         if input.Kind == "Create" {
@@ -880,17 +884,6 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                 message = await Import(input, filename, secret, extra, publicKey, ct)
             },
             () -> {
-                if message.Length == 0 &&
-                    input
-                    .Session
-                    .Snapshot
-                    .State == WalletState.Unlocked &&
-                    input
-                    .Session
-                    .Keys
-                    .BackupPending {
-                    input.OnBackup(text.ToCharArray())
-                }
                 if id != generation {
                     return
                 }

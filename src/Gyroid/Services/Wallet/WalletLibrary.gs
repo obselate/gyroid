@@ -1,6 +1,5 @@
 package Gyroid.Services
 
-import Gyroid.Models
 import System
 import System.Collections.Generic
 import System.IO
@@ -31,36 +30,33 @@ class WalletLibrary {
         let magic = Encoding.ASCII.GetBytes("BLKNTWLT")
         let header = [magic.Length]byte
         try {
-            if !Directory.Exists(directory) {
-                return LibraryListing{Rows: rows.AsReadOnly(), Error: ""}
-            }
-            for path in Directory.EnumerateFiles(directory, "*.dat").Order(StringComparer.Ordinal) {
-                ct.ThrowIfCancellationRequested()
-                if FileInfo(path).LinkTarget != nil {
-                    continue
-                }
-                let filename = Path.GetFileName(path)
-                try {
-                    WalletValidation.ValidateFilename(filename)
-                    using let input = PrivateFiles.OpenRead(path)
-                    if input.Read(header, 0, header.Length) != header.Length || !header.SequenceEqual(magic) {
+            if Directory.Exists(directory) {
+                for path in Directory.EnumerateFiles(directory, "*.dat").Order(StringComparer.Ordinal) {
+                    ct.ThrowIfCancellationRequested()
+                    if FileInfo(path).LinkTarget != nil {
                         continue
                     }
-                } catch (error WalletException) {
-                    continue
-                } catch (error IOException) {
-                    continue
-                } catch (error UnauthorizedAccessException) {
-                    continue
+                    let filename = Path.GetFileName(path)
+                    try {
+                        WalletValidation.ValidateFilename(filename)
+                        using let input = PrivateFiles.OpenRead(path)
+                        if input.Read(header, 0, header.Length) != header.Length || !header.SequenceEqual(magic) {
+                            continue
+                        }
+                    } catch (error WalletException) {
+                        continue
+                    } catch (error IOException) {
+                        continue
+                    } catch (error UnauthorizedAccessException) {
+                        continue
+                    }
+                    rows.Add(LibraryWallet{Filename: filename, Used: File.GetLastWriteTime(path)})
                 }
-                rows.Add(LibraryWallet{Filename: filename, Used: File.GetLastWriteTime(path)})
             }
-            return LibraryListing{Rows: rows.AsReadOnly(), Error: ""}
-        } catch (error OperationCanceledException) {
-            throw error
-        } catch (error Exception) {
+        } catch (error Exception) when !(error is OperationCanceledException) {
             return LibraryListing{Rows: rows.AsReadOnly(), Error: error.Message}
         }
+        return LibraryListing{Rows: rows.AsReadOnly(), Error: ""}
     }
 
     async func ChooseWalletAsync(filename string, ct CancellationToken = default(CancellationToken)) {
@@ -90,51 +86,34 @@ class WalletLibrary {
             let filename = Path.GetFileName(absolutePath)
             await session.PrepareWalletAsync(ct)
             await session.Node.ConnectAsync(session.settings, ct)
-            try {
-                using let current = await session.Node.Api.JsonAsync("wallet/address", ct: ct)
-                throw WalletException("Unload the current wallet explicitly before choosing or creating another")
-            } catch (error WalletException) {
-                if error.StatusCode == 403 {
-                    throw WalletException("Unload the current wallet explicitly before choosing or creating another")
-                }
-                if error.StatusCode != 503 {
-                    throw error
-                }
-            }
             let destination = WalletPath(filename)
-            if File.Exists(destination) || Directory.Exists(destination) {
-                throw WalletException("Wallet file could not be imported. Existing files are never replaced")
-            }
-            Directory.CreateDirectory(session.settings.WalletDirectory)
-            temporary = Path.Combine(session.settings.WalletDirectory, ".import-" + Guid.NewGuid().ToString("N"))
-            using let source = PrivateFiles.OpenRead(absolutePath)
-            using let output = PrivateFiles.CreatePrivate(temporary)
-            await source.CopyToAsync(output, ct)
-            await output.FlushAsync(ct)
-            output.Dispose()
-            candidateLoaded = true
-            try {
-                await session.LoadWalletCoreAsync(temporary, password, ct)
-            } catch (error WalletException) {
-                if error.Message == "Wrong wallet password" {
-                    throw error
+            if Path.GetFullPath(absolutePath) != Path.GetFullPath(destination) {
+                if File.Exists(destination) || Directory.Exists(destination) {
+                    throw WalletException("Wallet file could not be imported. Existing files are never replaced")
                 }
-                throw WalletException("Wallet file could not be imported. Existing files are never replaced")
+                Directory.CreateDirectory(session.settings.WalletDirectory)
+                temporary = Path.Combine(session.settings.WalletDirectory, ".import-" + Guid.NewGuid().ToString("N"))
+                using let source = PrivateFiles.OpenRead(absolutePath)
+                using let output = PrivateFiles.CreatePrivate(temporary)
+                await source.CopyToAsync(output, ct)
+                await output.FlushAsync(ct)
+                output.Dispose()
+                try {
+                    await session.LoadWalletCoreAsync(temporary, password, CancellationToken.None)
+                } catch (error WalletException) {
+                    if error.Message == "Wrong wallet password" || error.StatusCode == 409 {
+                        throw error
+                    }
+                    throw WalletException("Wallet file could not be imported. Existing files are never replaced")
+                }
+                candidateLoaded = true
+                using let closed = await session.Node.Api.JsonAsync("wallet/unload", WalletSession.WriteEmpty, ct)
+                candidateLoaded = false
+                ct.ThrowIfCancellationRequested()
+                File.Move(temporary, destination, false)
             }
-            using let closed = await session.Node.Api.JsonAsync("wallet/unload", WalletSession.WriteEmpty, ct)
-            candidateLoaded = false
-            ct.ThrowIfCancellationRequested()
-            File.Move(temporary, destination, false)
             await session.LoadWalletCoreAsync(destination, password, CancellationToken.None)
-            session.managed = true
-            session.connected = true
-            session.state = WalletState.Unlocked
-            session.settings.ActiveWallet = filename
-            session.Keys.BackupPending = File.Exists(destination + ".backup-pending")
-            session.Touch()
-            await SettingsStore.SaveAsync(session.settings, CancellationToken.None)
-            session.PublishEmpty()
-            await session.RefreshCoreAsync(CancellationToken.None)
+            await session.ActivateCoreAsync(filename, CancellationToken.None)
         } catch (error IOException) {
             throw WalletException("Wallet file could not be imported. Existing files are never replaced")
         } catch (error UnauthorizedAccessException) {
@@ -142,26 +121,16 @@ class WalletLibrary {
         } finally {
             try {
                 if candidateLoaded {
-                    try {
-                        using let closed = await session
-                            .Node
-                            .Api
-                            .JsonAsync("wallet/unload", WalletSession.WriteEmpty, CancellationToken.None)
-                    } catch (error WalletException) {
-                        if error.StatusCode != 503 {
-                            throw error
-                        }
-                    }
-                    candidateLoaded = false
+                    using let closed = await session
+                        .Node
+                        .Api
+                        .JsonAsync("wallet/unload", WalletSession.WriteEmpty, CancellationToken.None)
+                }
+                if temporary.Length > 0 {
+                    File.Delete(temporary)
                 }
             } finally {
-                try {
-                    if !candidateLoaded && temporary.Length > 0 && File.Exists(temporary) {
-                        File.Delete(temporary)
-                    }
-                } finally {
-                    session.End()
-                }
+                session.End()
             }
         }
     }

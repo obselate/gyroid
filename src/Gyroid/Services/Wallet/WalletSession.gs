@@ -774,13 +774,7 @@ class WalletSession : IDisposable {
                 },
                 ct
             )
-            managed = true
-            state = WalletState.Unlocked
-            Touch()
-            settings.ActiveWallet = filename
-            PublishEmpty()
-            await SettingsStore.SaveAsync(settings, ct)
-            await RefreshCoreAsync(ct)
+            await ActivateCoreAsync(filename, ct)
         } finally {
             if let buffer = normalized {
                 Array.Clear(buffer)
@@ -834,9 +828,6 @@ class WalletSession : IDisposable {
     }
 
     async func LoadWalletCoreAsync(path string, password[]char, ct CancellationToken) {
-        if Encoding.UTF8.GetByteCount(password) < 3 {
-            throw WalletException("Password must contain at least 3 UTF-8 bytes")
-        }
         using let result = await Node.Api.JsonAsync(
             "wallet/load",
             writer -> WriteCredentials(writer, password, "filepath", path),
@@ -955,6 +946,18 @@ class WalletSession : IDisposable {
             disposed { }
     }
 
+    async func ActivateCoreAsync(filename string, ct CancellationToken) {
+        managed = true
+        connected = true
+        state = WalletState.Unlocked
+        settings.ActiveWallet = filename
+        Keys.BackupPending = File.Exists(Library.WalletPath(filename) + ".backup-pending")
+        Touch()
+        PublishEmpty()
+        await SettingsStore.SaveAsync(settings, ct)
+        await RefreshCoreAsync(ct)
+    }
+
     async func ImportViewOnlyAsync(
         filename string,
         spendPublic[]char,
@@ -967,25 +970,23 @@ class WalletSession : IDisposable {
             Library.RequireNewWallet(filename, password)
             await PrepareWalletAsync(ct)
             await ConnectCoreAsync(ct)
-            using let response = await Node.Api.JsonAsync(
-                "wallet/import",
-                writer -> {
-                    writer.WriteStartObject()
-                    writer.WriteString("filename", filename)
-                    writer.WriteString("spend_pub", ReadOnlySpan[char](spendPublic))
-                    writer.WriteString("view_priv", ReadOnlySpan[char](viewPrivate))
-                    writer.WriteString("password", ReadOnlySpan[char](password))
-                    writer.WriteEndObject()
-                },
-                ct
-            )
-            managed = true
-            state = WalletState.Unlocked
-            Touch()
-            settings.ActiveWallet = filename
-            PublishEmpty()
-            await SettingsStore.SaveAsync(settings, ct)
-            await RefreshCoreAsync(ct)
+            try {
+                using let response = await Node.Api.JsonAsync(
+                    "wallet/import",
+                    writer -> {
+                        writer.WriteStartObject()
+                        writer.WriteString("filename", filename)
+                        writer.WriteString("spend_pub", ReadOnlySpan[char](spendPublic))
+                        writer.WriteString("view_priv", ReadOnlySpan[char](viewPrivate))
+                        writer.WriteString("password", ReadOnlySpan[char](password))
+                        writer.WriteEndObject()
+                    },
+                    ct
+                )
+            } catch (error WalletException) when error.StatusCode == 400 {
+                throw WalletException("Check the spend public key and view private key")
+            }
+            await ActivateCoreAsync(filename, ct)
         } finally {
             End()
         }
@@ -1021,7 +1022,7 @@ class WalletSession : IDisposable {
         }
     }
 
-    async func RefreshCoreAsync(ct CancellationToken) {
+    private async func RefreshCoreAsync(ct CancellationToken) {
         RequireUnlocked()
         let previousHeight = snapshot.Balance?.ScanHeight
         await Send.RecoverAsync(ct, false)
