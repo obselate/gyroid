@@ -549,7 +549,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                     disabled: busy,
                     labelled: false,
                     placeholder: ui.Strings.Get("Name"),
-                    contentDirection: nil
+                    inheritDirection: true
                 )
             )
             if !group {
@@ -562,7 +562,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                         labelled: false,
                         hidden: ui.Privacy,
                         placeholder: ui.Strings.Get("Address"),
-                        contentDirection: nil
+                        inheritDirection: true
                     )
                 )
             }
