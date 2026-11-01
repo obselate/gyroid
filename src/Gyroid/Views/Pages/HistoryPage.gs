@@ -1035,7 +1035,7 @@ class HistoryPage : Cell[HistoryInput] {
                 )
             }
         }
-        if row.Kind == HistoryRowKind.Mined && row.Depth <= 60 {
+        if row.Kind == HistoryRowKind.Mined && !row.Maturity.Ready {
             values.Add(Figure(ui, "spendable at", Count(row.Height + 60), ui.Orange, 13, compact: true))
         }
         if row.Kind == HistoryRowKind.Received {
