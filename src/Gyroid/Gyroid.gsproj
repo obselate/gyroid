@@ -9,6 +9,9 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <Deterministic>true</Deterministic>
     <PublishAot>true</PublishAot>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <MetricsSupport>false</MetricsSupport>
+    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="**/*.gs" Exclude="bin/**;obj/**" />
