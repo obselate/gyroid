@@ -41,6 +41,7 @@ partial class App : Cell {
     private let receiveRequest ReceiveRequest = ReceiveRequest()
     private let sendRows List[SendRow] = List[SendRow]()
     private var pendingPayment PaymentLink?
+    private var confirmPaymentReplacement bool
     private var pendingPage AppPage = AppPage.None
     private var paymentActivated bool
     private var paymentRevision int32
@@ -211,11 +212,20 @@ partial class App : Cell {
         }
     }
 
-    private func ApplyNavigation() {
+    private func ApplyNavigation(replaceDraft bool = false) {
         if wallet.Snapshot.State != WalletState.Unlocked {
             return
         }
         if let payment = pendingPayment {
+            if !replaceDraft {
+                for row in sendRows {
+                    if row.Address.Length > 0 || row.Amount.Length > 0 || row.Memo.Length > 0 {
+                        confirmPaymentReplacement = true
+                        Rebuild()
+                        return
+                    }
+                }
+            }
             sendRows.Clear()
             sendRows.Add(
                 SendRow{
@@ -233,6 +243,39 @@ partial class App : Cell {
             pendingPage = AppPage.None
             Open(target)
         }
+    }
+
+    private func ConfirmPaymentReplacement() Blob {
+        let close Action = () -> {
+            confirmPaymentReplacement = false
+            pendingPayment = nil
+            pendingPage = AppPage.None
+            Rebuild()
+        }
+        return WalletParts.Modal(
+            ui,
+            "replace-payment-draft",
+            ModalDialog{
+                Open: true,
+                Preset: ModalDialogPreset.Confirm,
+                AccessibilityName: ui.Strings.Get("Replace send draft?"),
+                Content: Text{
+                    Content: ui.Strings.Get("Replace your unsent draft with this payment link?"),
+                    FontFamily: ui.Font,
+                    Color: ui.Ink,
+                    TextWrap: TextWrap.Wrap
+                },
+                ConfirmText: ui.Strings.Get("Replace"),
+                CancelText: ui.Strings.Get("Cancel"),
+                OnConfirm: () -> {
+                    confirmPaymentReplacement = false
+                    ApplyNavigation(true)
+                    Rebuild()
+                },
+                OnCancel: close,
+                OnClose: close
+            }
+        )
     }
 
     func Attach(owner Window) {
@@ -1149,6 +1192,9 @@ partial class App : Cell {
         if WalletAvailable() {
             if page != AppPage.Messages {
                 root.Add(MessageOverlay())
+            }
+            if confirmPaymentReplacement {
+                root.Add(ConfirmPaymentReplacement())
             }
             if confirmPendingSend {
                 root.Add(ConfirmPendingSend())
