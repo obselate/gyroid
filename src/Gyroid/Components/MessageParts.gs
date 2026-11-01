@@ -18,6 +18,16 @@ import System.Linq
 
 class MessageParts {
     shared {
+        func Preview(ui Presentation, text string, size float64, color Color) Blob -> Text{
+            Content: Hidden(ui.Privacy, text.Replace("\r", " ").Replace("\n", " ")),
+            FontFamily: AppTheme.Font,
+            FontSize: size,
+            Color: color,
+            TextWrap: TextWrap.NoWrap,
+            TextTrimming: TextTrimming.Ellipsis,
+            MinWidth: 0
+        }
+
         func Problem(ui Presentation, issue string) Blob -> Banner{
             Content: ui.Strings.Explain(issue),
             AccessibilityName: ui.Strings.Explain(issue),
@@ -68,8 +78,8 @@ data struct MessageBubbleInput {
     var Highlight bool
     var CanRetry bool
     var Width float64
-    var OnOpen Action
-    var OnRetry Action
+    var OnOpen Action[Message]
+    var OnRetry Action[Message]
     var Handle ElementHandle
 }
 
@@ -171,7 +181,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
         let bubble = Goo
             .Button{
             BasedOn: AppTheme.BubbleStyle,
-            MaxWidth: Percent(70),
+            MaxWidth: Math.Max(0, (input.Width - 2 * AppTheme.Space16) * 0.7),
             MinWidth: 0,
             BorderBottomLeftRadius: input.Last && !message.Outgoing ? 4.0: 18.0,
             BorderBottomRightRadius: input.Last && message.Outgoing ? 4.0: 18.0,
@@ -184,7 +194,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
                 Role: AccessibilityRole.Button,
                 Name: Hidden(ui.Privacy, message.Text) + " " + time + " " + ui.Strings.Get(verification)
             },
-            OnClick: input.OnOpen,
+            OnClick: () -> input.OnOpen(message),
             Text{
                 Content: Hidden(ui.Privacy, message.Text),
                 FontFamily: AppTheme.Font,
@@ -207,7 +217,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
                     AlignItems: AlignItems.Center,
                     Gap: AppTheme.Space8,
                     Label(ui, ui.Strings.Get("Not sent"), AppTheme.Type11, AppTheme.Pink, ""),
-                    Button(ui, "Retry", input.OnRetry, !input.CanRetry)
+                    Button(ui, "Retry", () -> input.OnRetry(message), !input.CanRetry)
                 }
             )
         }
@@ -217,8 +227,13 @@ class MessageBubble : Cell[MessageBubbleInput] {
 
 data struct MessageComposerInput {
     var Ui Presentation
-    var Session WalletSession
-    var Conversation Conversation
+    var ConversationId string
+    var Recipients int32
+    var CanSend bool
+    var Unavailable string
+    var Measure Func[string, MessageEstimate]
+    var Privacy bool
+    var Language string
     var Draft string
     var Width float64
     var OnDraft Action[string]
@@ -232,6 +247,8 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
     private var sending bool
     private var initialized bool
     private var timer WindowTimer?
+    private var draft string = ""
+    private var conversationId string = ""
 
     init() {
         arrow = AnimateValue(Point{X: 0, Y: 36})
@@ -246,8 +263,9 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         if !enabled || sending {
             return
         }
-        let text = input.Draft
+        let text = draft
         sending = true
+        draft = ""
         input.OnDraft("")
         let animate = input.Ui.Actions.playbackActive()
         if animate {
@@ -274,36 +292,30 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 Rebuild()
             }
         )
-        Rebuild()
     }
 
     protected override func Build(input MessageComposerInput) Blob {
+        if conversationId != input.ConversationId {
+            conversationId = input.ConversationId
+            draft = input.Draft
+        }
         let ui = input.Ui
-        let mode = input.Session.Messages.Mode
-        let recipient = input.Conversation.Members.Any(member -> member != input.Session.Messages.OwnAddress)
-        if mode != MessengerMode.Send || !recipient {
+        let recipient = input.Recipients > 0
+        if !input.CanSend || !recipient {
             return Container{
                 Padding: AppTheme.Space14,
                 FlexShrink: 0,
                 Label(
                     ui,
-                    ui.Strings.Get(
-                        input
-                            .Session
-                            .Snapshot
-                            .State == WalletState.Locked ? "Wallet is locked": input
-                            .Session
-                            .Snapshot
-                            .ViewOnly ? "View-only wallet": !recipient ? "No recipient": "Node not connected"
-                    ),
+                    ui.Strings.Get(!recipient ? "No recipient": input.Unavailable),
                     AppTheme.Type12,
                     AppTheme.Dim,
                     ""
                 )
             }
         }
-        let estimate = input.Session.Messages.Measure(input.Conversation, input.Draft)
-        let hasText = !String.IsNullOrWhiteSpace(input.Draft)
+        let estimate = input.Measure(draft)
+        let hasText = !String.IsNullOrWhiteSpace(draft)
         let enabled = hasText && estimate.Fits
         let animate = ui.Actions.playbackActive()
         if !initialized || !animate {
@@ -323,8 +335,8 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         }
         let send Action = () -> Send(input, enabled)
         let rows = Math.Clamp(
-            1 + input.Draft.Count(character -> character == '\n') +
-                int32(input.Draft.Length / Math.Max(18.0, (input.Width - 100) / 8)),
+            1 + draft.Count(character -> character == '\n') +
+                int32(draft.Length / Math.Max(18.0, (input.Width - 100) / 8)),
             1,
             5
         )
@@ -339,8 +351,11 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 Cell.Mount[TextAreaInput, TextArea](
                     "draft",
                     TextAreaInput{
-                        Value: input.Draft,
-                        OnChange: input.OnDraft,
+                        Value: draft,
+                        OnChange: value -> {
+                            draft = value
+                            input.OnDraft(value)
+                        },
                         Placeholder: ui.Strings.Get("Message"),
                         AccessibilityName: ui.Strings.Get("Message"),
                         Wrap: TextWrap.Wrap,
@@ -400,10 +415,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         }
         WidgetKeyBindings.BindActivation(button)
         field.Add(button)
-        let recipients = Math.Max(
-            1,
-            input.Conversation.Members.Count(member -> member != input.Session.Messages.OwnAddress)
-        )
+        let recipients = Math.Max(1, input.Recipients)
         let bytes = estimate.BytesUsed / recipients
         let lap = Math.Clamp((Math.Max(1, bytes) - 1) / 124, 0, 4)
         let color = switch lap {

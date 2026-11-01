@@ -216,6 +216,11 @@ partial class App : Cell {
         configureSync = page -> page.Accept(
             SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
         )
+        configureMessages = child -> child.Accept(MessagesPageInput())
+        configureMessageOverlay = child -> {
+            messageOverlay = child
+            child.Accept(MessageOverlayInput())
+        }
         navigate = target -> Navigate(target)
         togglePrivacy = () -> TogglePrivacy()
         openNodeSettings = () -> {
@@ -560,7 +565,6 @@ partial class App : Cell {
         ClearSeed()
         sendRows.Clear()
         wallet.Changed = nil
-        messageToastTimer?.Dispose()
     }
 
     private func Touch() {
@@ -763,9 +767,9 @@ partial class App : Cell {
     private func Open(target AppPage) {
         upgradeShown = false
         if target == AppPage.Messages {
-            messageDrawer = false
+            messageOverlay?.CloseDrawer()
             LoadContacts()
-        } else if !messageDrawer {
+        } else if !(messageOverlay?.IsDrawerOpen ?? false) {
             wallet.Messages.ClearSelection()
         }
         if target != AppPage.Seed {
@@ -1077,7 +1081,7 @@ partial class App : Cell {
         } else if page == AppPage.Transactions {
             Cell.Mount[HistoryPage]("history", configureHistory)
         } else if page == AppPage.Messages {
-            MessagesView(false)
+            MessagesView()
         } else if page == AppPage.Network {
             Cell.Mount[NetworkPage]("network", configureNetwork)
         } else if page == AppPage.Sync {
@@ -1259,9 +1263,7 @@ partial class App : Cell {
         }
         root.Add(frame)
         if WalletAvailable() {
-            if page != AppPage.Messages {
-                root.Add(MessageOverlay())
-            }
+            root.Add(Cell.Mount[MessageOverlay]("message-overlay", configureMessageOverlay))
             if confirmPaymentReplacement {
                 root.Add(ConfirmPaymentReplacement())
             }
