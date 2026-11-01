@@ -66,11 +66,11 @@ class ObserverLens : Cell[ObserverLensInput] {
                 input,
                 side,
                 Container{},
-                Heading(ui, "person", "you", AppTheme.Lime),
+                Legend(ui, ui.Strings.Get("you"), AppTheme.Lime),
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Heading(ui, "public", "chain", AppTheme.Mint),
+                    Legend(ui, ui.Strings.Get("chain"), AppTheme.Mint),
                     Container{FlexGrow: 1},
                     Public(ui, ui.Strings.Get("public"), AppTheme.Type12)
                 }
@@ -244,14 +244,6 @@ class ObserverLens : Cell[ObserverLensInput] {
         value.Substring(0, 4) + "…" + value.Substring(value.Length - 4)
     } else {
         value
-    }
-
-    private func Heading(ui Presentation, icon string, label string, color Color) Blob -> Container{
-        FlexDirection: FlexDirection.Row,
-        AlignItems: AlignItems.Center,
-        Gap: AppTheme.Space8,
-        MaterialIcons.Create(icon, AppTheme.Icon16, color),
-        Label(ui, ui.Strings.Get(label), AppTheme.Type13, color, "")
     }
 
     private func Hidden(ui Presentation, icon string, value string) Blob -> Container{
