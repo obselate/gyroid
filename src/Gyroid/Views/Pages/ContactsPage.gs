@@ -39,7 +39,7 @@ class ContactsPage : Cell[ContactsInput] {
 
     protected override func Build(input ContactsInput) Blob {
         let ui = input.Ui
-        let card = WalletParts.Card(ui, gap: 14, radius: 14)
+        let card = WalletParts.Card(ui, gap: AppTheme.Space14, radius: AppTheme.Radius14)
         card.Width = Percent(100)
         card.MaxWidth = Math.Clamp(640 + Math.Max(0, input.Height - 640) * 0.6, 640.0, 900.0)
         card.MaxHeight = Percent(100)
@@ -47,9 +47,9 @@ class ContactsPage : Cell[ContactsInput] {
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 FlexShrink: 0,
-                Grow(Label(ui, ui.Strings.Get("contacts"), 17, ui.Ink, "")),
+                Grow(Label(ui, ui.Strings.Get("contacts"), AppTheme.Type17, AppTheme.Ink, "")),
                 WalletParts.Square(
                     ui,
                     "person_add",
@@ -57,13 +57,13 @@ class ContactsPage : Cell[ContactsInput] {
                     editing == "",
                     input.Busy,
                     () -> Edit("", ""),
-                    34,
-                    ui.Body
+                    AppTheme.ControlRegular,
+                    AppTheme.Body
                 )
             }
         )
         let list = Container{
-            Gap: 8,
+            Gap: AppTheme.Space8,
             MinHeight: 0,
             FlexShrink: 1,
             OverflowY: Overflow.Scroll,
@@ -107,20 +107,18 @@ class ContactsPage : Cell[ContactsInput] {
     private func Row(input ContactsInput, label string, destination string) Blob {
         let ui = input.Ui
         return Container{
+            BasedOn: AppTheme.ListRowStyle,
             Key: label,
             Height: 48,
             FlexShrink: 0,
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 10,
-            Padding: Edges{Left: 12, Right: 7},
-            BorderWidth: 1,
-            BorderRadius: 10,
-            BorderColor: ui.Rule,
-            BackgroundColor: ui.Surface,
+            Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space8},
+            BorderWidth: AppTheme.Border1,
+            BorderRadius: AppTheme.Radius10,
+            BorderColor: AppTheme.Rule,
+            BackgroundColor: AppTheme.Surface,
             Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: label},
-            MaterialIcons.Create("person", 16, ui.Dim),
-            Grow(Label(ui, label, 14, ui.Ink, "")),
+            MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
+            Grow(Label(ui, label, AppTheme.Type14, AppTheme.Ink, "")),
             Container{
                 FlexShrink: 1,
                 MinWidth: 0,
@@ -129,8 +127,8 @@ class ContactsPage : Cell[ContactsInput] {
                     AddressBook.IsDestination(destination) ? Hidden(ui.Privacy, Short(destination)): ui.Strings.Get(
                         "Invalid"
                     ),
-                    13,
-                    ui.Dim,
+                    AppTheme.Type13,
+                    AppTheme.Dim,
                     ""
                 )
             },
@@ -141,8 +139,8 @@ class ContactsPage : Cell[ContactsInput] {
                 false,
                 input.Busy,
                 () -> Edit(label, destination),
-                34,
-                ui.Body
+                AppTheme.ControlRegular,
+                AppTheme.Body
             ),
             WalletParts.Square(
                 ui,
@@ -154,8 +152,8 @@ class ContactsPage : Cell[ContactsInput] {
                     deleting = label
                     Rebuild()
                 },
-                34,
-                ui.Body
+                AppTheme.ControlRegular,
+                AppTheme.Body
             )
         }
     }
@@ -173,7 +171,7 @@ class ContactsPage : Cell[ContactsInput] {
         )
         let fields = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             FlexShrink: 0,
             Container{
                 Width: 180,
@@ -193,7 +191,7 @@ class ContactsPage : Cell[ContactsInput] {
                         } else {
                             nil
                         },
-                        Leading: MaterialIcons.Create("person", 16, ui.Dim),
+                        Leading: MaterialIcons.Create("person", AppTheme.Icon16, AppTheme.Dim),
                         OnChange: value -> {
                             contactName = value
                             Rebuild()
@@ -230,14 +228,13 @@ class ContactsPage : Cell[ContactsInput] {
             )
         }
         return Container{
+            BasedOn: AppTheme.TileStyle,
             Key: "edit",
-            Gap: 12,
-            Padding: 12,
+            Gap: AppTheme.Space12,
+            Padding: AppTheme.Space12,
             FlexShrink: 0,
-            BorderWidth: 1,
-            BorderRadius: 10,
-            BorderColor: ui.Edge,
-            BackgroundColor: ui.Raised,
+            BorderColor: AppTheme.Edge,
+            BackgroundColor: AppTheme.Raised,
             fields,
             ActionRow(
                 []Blob{
@@ -294,16 +291,16 @@ class ContactsPage : Cell[ContactsInput] {
         return WalletParts.Modal(
             ui,
             "delete-contact",
-            ModalDialog{
-                Open: true,
-                Preset: ModalDialogPreset.Confirm,
-                AccessibilityName: ui.Strings.Get("Delete"),
-                Width: 420,
-                Content: Label(ui, deleting, 16, ui.Ink, ""),
-                ConfirmText: ui.Strings.Get("Delete"),
-                CancelText: ui.Strings.Get("Cancel"),
-                ConfirmDisabled: input.Busy,
-                OnConfirm: () -> {
+            AppTheme.Dialog with{
+                Open = true,
+                Preset = ModalDialogPreset.Confirm,
+                AccessibilityName = ui.Strings.Get("Delete"),
+                Width = 420,
+                Content = Label(ui, deleting, AppTheme.Type16, AppTheme.Ink, ""),
+                ConfirmText = ui.Strings.Get("Delete"),
+                CancelText = ui.Strings.Get("Cancel"),
+                ConfirmDisabled = input.Busy,
+                OnConfirm = () -> {
                     let removed = deleting
                     let next = SortedDictionary[string, string](input.Contacts, StringComparer.Ordinal)
                     next.Remove(removed)
@@ -318,8 +315,8 @@ class ContactsPage : Cell[ContactsInput] {
                         }
                     )
                 },
-                OnCancel: close,
-                OnClose: close
+                OnCancel = close,
+                OnClose = close
             }
         )
     }

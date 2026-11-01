@@ -149,13 +149,17 @@ class HistoryPage : Cell[HistoryInput] {
         shown = all.Where((row HistoryRow) -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last)
             .ToArray()
         RequestTimes(shown.Take(50).Select((row HistoryRow) -> row.Height))
-        let panel = WalletParts.Card(ui, Edges{Top: 12, Bottom: 12, Left: 20, Right: 20}, compact ? 8.0: 10.0)
+        let panel = WalletParts.Card(
+            ui,
+            Edges{Top: AppTheme.Space12, Bottom: AppTheme.Space12, Left: AppTheme.Space20, Right: AppTheme.Space20},
+            compact ? AppTheme.Space8: AppTheme.Space10
+        )
         panel.FlexGrow = 1
         panel.AlignSelf = AlignSelf.Stretch
         let bar = Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
-            Gap: 10,
+            Gap: AppTheme.Space10,
             Height: 30,
             FlexShrink: 0,
             Segments(
@@ -175,21 +179,24 @@ class HistoryPage : Cell[HistoryInput] {
                 Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 8,
-                    Height: 28,
-                    Padding: Edges{Left: 10, Right: 4},
-                    BorderWidth: 1,
-                    BorderColor: ui.Edge,
-                    BorderRadius: 4,
-                    Label(ui, Count(from) + " – " + Count(to), 12, ui.Ink, ""),
-                    IconButton{
-                        Icon: MaterialIcons.Create("close", 12, ui.Dim),
-                        AccessibilityName: ui.Strings.Get("clear range"),
-                        OnClick: () -> {
-                            to = 0
-                            Rebuild()
+                    Gap: AppTheme.Space8,
+                    Height: AppTheme.ControlCompact,
+                    Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space4},
+                    BorderWidth: AppTheme.Border1,
+                    BorderColor: AppTheme.Edge,
+                    BorderRadius: AppTheme.Radius4,
+                    Label(ui, Count(from) + " – " + Count(to), AppTheme.Type12, AppTheme.Ink, ""),
+                    (
+                        AppTheme.IconButton with{
+                            RootStyle = AppTheme.DisclosureStyle,
+                            Icon = MaterialIcons.Create("close", AppTheme.Icon12, AppTheme.Dim),
+                            AccessibilityName = ui.Strings.Get("clear range"),
+                            OnClick = () -> {
+                                to = 0
+                                Rebuild()
+                            }
                         }
-                    }.Build()
+                    ).Build()
                 }
             )
         }
@@ -210,8 +217,8 @@ class HistoryPage : Cell[HistoryInput] {
                     FlexGrow: 1,
                     AlignItems: AlignItems.Center,
                     JustifyContent: JustifyContent.Center,
-                    Gap: 14,
-                    Label(ui, ui.Strings.Get("No transactions yet"), 15, ui.Ink),
+                    Gap: AppTheme.Space14,
+                    Label(ui, ui.Strings.Get("No transactions yet"), AppTheme.Type14, AppTheme.Ink),
                     Button(ui, "receive", input.OnReceive, false, true)
                 }
             )
@@ -223,8 +230,8 @@ class HistoryPage : Cell[HistoryInput] {
         rows.FlexGrow = 1
         rows.FlexBasis = 0
         rows.MinHeight = 0
-        rows.BorderWidth = Edges{Top: 1}
-        rows.BorderColor = ui.Rule
+        rows.BorderWidth = Edges{Top: AppTheme.Border1}
+        rows.BorderColor = AppTheme.Rule
         panel.Add(rows)
         let lensRow = Array.FindIndex(
             shown,
@@ -462,7 +469,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Right: 0,
                 Top: 0.57 * height,
                 Height: 1,
-                BackgroundColor: ui.Edge
+                BackgroundColor: AppTheme.Edge
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -470,7 +477,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Height: height,
                 Path: up.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: ui.Mint
+                BackgroundColor: AppTheme.Mint
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -478,7 +485,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Height: height,
                 Path: coin.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: ui.Lime
+                BackgroundColor: AppTheme.Lime
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -486,7 +493,7 @@ class HistoryPage : Cell[HistoryInput] {
                 Height: height,
                 Path: down.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: ui.Pink
+                BackgroundColor: AppTheme.Pink
             }
         }
         if to > 0 {
@@ -512,7 +519,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Width: 1,
                     Top: 0,
                     Bottom: 0,
-                    BackgroundColor: Color.Parse("#858585"),
+                    BackgroundColor: AppTheme.ChartMarkerMuted,
                     HitTestSelf: false
                 }
             )
@@ -528,7 +535,12 @@ class HistoryPage : Cell[HistoryInput] {
         } else {
             288UL * uint64(Math.Ceiling(days / 6))
         }
-        let axis = Container{Height: 18, FlexShrink: 0, BorderWidth: Edges{Top: 1}, BorderColor: ui.Edge}
+        let axis = Container{
+            Height: 18,
+            FlexShrink: 0,
+            BorderWidth: Edges{Top: AppTheme.Border1},
+            BorderColor: AppTheme.Edge
+        }
         let marks = List[uint64]()
         var at = tip - Math.Min(tip, mark)
         while at > low + mark * 3 / 10 {
@@ -550,22 +562,29 @@ class HistoryPage : Cell[HistoryInput] {
                         Label(
                             ui,
                             time.ToString(days <= 1 ? "HH:mm": "MM-dd", CultureInfo.InvariantCulture),
-                            11,
-                            ui.Dim,
+                            AppTheme.Type11,
+                            AppTheme.Dim,
                             ""
                         )
                     }
                 )
             }
         }
-        axis.Add(Container{Position: PositionType.Absolute, Right: 0, Top: 3, Label(ui, Count(tip), 11, ui.Body, "")})
+        axis.Add(
+            Container{
+                Position: PositionType.Absolute,
+                Right: 0,
+                Top: 3,
+                Label(ui, Count(tip), AppTheme.Type11, AppTheme.Body, "")
+            }
+        )
         return Container{
             FlexShrink: 0,
-            Padding: Edges{Top: 8, Left: 12, Right: 12},
-            BorderWidth: 1,
-            BorderColor: ui.Rule,
-            BorderRadius: 4,
-            BackgroundColor: ui.Field,
+            Padding: Edges{Top: AppTheme.Space8, Left: AppTheme.Space12, Right: AppTheme.Space12},
+            BorderWidth: AppTheme.Border1,
+            BorderColor: AppTheme.Rule,
+            BorderRadius: AppTheme.Radius4,
+            BackgroundColor: AppTheme.Field,
             area,
             axis
         }
@@ -599,7 +618,7 @@ class HistoryPage : Cell[HistoryInput] {
         Width: Math.Max(0.0, right - left),
         Top: 0,
         Bottom: 0,
-        BackgroundColor: current.Ui.Black.WithAlpha(0.88),
+        BackgroundColor: AppTheme.Black.WithAlpha(0.88),
         HitTestSelf: false
     }
 
@@ -611,14 +630,14 @@ class HistoryPage : Cell[HistoryInput] {
         Bottom: 0,
         AlignItems: AlignItems.Center,
         HitTestSelf: false,
-        Container{Width: 2, Height: height, BackgroundColor: current.Ui.Lime},
+        Container{Width: 2, Height: height, BackgroundColor: AppTheme.Lime},
         Container{
             Position: PositionType.Absolute,
             Top: height / 2 - 11,
             Width: 8,
             Height: 22,
-            BorderRadius: 2,
-            BackgroundColor: current.Ui.Lime
+            BorderRadius: AppTheme.Radius2,
+            BackgroundColor: AppTheme.Lime
         }
     }
 
@@ -635,20 +654,15 @@ class HistoryPage : Cell[HistoryInput] {
         let end = Math.Max(start, low + uint64((column + 1) * size))
         let inside = all.Where((row HistoryRow) -> row.Height >= start && row.Height <= end).ToArray()
         let tip = Container{
+            BasedOn: AppTheme.PassiveTooltipStyle,
             Position: PositionType.Absolute,
             Top: 4,
-            Gap: 3,
-            Padding: Edges{Top: 8, Bottom: 8, Left: 10, Right: 10},
-            BackgroundColor: ui.Raised,
-            BorderWidth: 1,
-            BorderColor: ui.Edge,
-            BorderRadius: 4,
             ZIndex: 3,
             HitTestSelf: false,
-            Label(ui, start == end ? Count(start): Count(start) + " – " + Count(end), 12, ui.Ink, "")
+            Label(ui, start == end ? Count(start): Count(start) + " – " + Count(end), AppTheme.Type12, AppTheme.Ink, "")
         }
         if inside.Length > 0 && inside[0].Time > 0 {
-            tip.Add(Label(ui, Moment(inside[0].Time), 12, ui.Dim, ""))
+            tip.Add(Label(ui, Moment(inside[0].Time), AppTheme.Type12, AppTheme.Dim, ""))
         }
         for category in[]HistoryRowKind{HistoryRowKind.Received, HistoryRowKind.Mined, HistoryRowKind.Sent} {
             let rows = inside.Where((row HistoryRow) -> row.Kind == category).ToArray()
@@ -658,7 +672,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Label(
                         ui,
                         (category == HistoryRowKind.Sent ? "−": "+") + Amount(ui.Privacy, total),
-                        12,
+                        AppTheme.Type12,
                         Tint(category),
                         ""
                     )
@@ -696,22 +710,43 @@ class HistoryPage : Cell[HistoryInput] {
         return Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
-            Gap: input.Width < 1000 ? 14.0: 22.0,
+            Gap: input.Width < 1000 ? AppTheme.Space14: AppTheme.Space22,
             FlexShrink: 0,
-            Padding: Edges{Top: 2, Left: 2, Right: 2},
-            Figure(ui, "in", received > 0 ? "+" + Amount(ui.Privacy, received): "0", ui.Mint, 14, compact: true),
-            Figure(ui, "out", sent > 0 ? "−" + Amount(ui.Privacy, sent): "0", ui.Pink, 14, compact: true),
-            Figure(ui, "fees", fees > 0 ? Amount(ui.Privacy, fees): "0", ui.Body, 14, compact: true),
-            Figure(ui, "mined", mined > 0 ? "+" + Amount(ui.Privacy, mined): "0", ui.Lime, 14, compact: true),
-            Figure(ui, "net", net, ui.Ink, input.Width < 1000 ? 16.0: 18.0, compact: true)
+            Padding: Edges{Top: AppTheme.Space2, Left: AppTheme.Space2, Right: AppTheme.Space2},
+            Figure(
+                ui,
+                "in",
+                received > 0 ? "+" + Amount(ui.Privacy, received): "0",
+                AppTheme.Mint,
+                AppTheme.Type14,
+                compact: true
+            ),
+            Figure(
+                ui,
+                "out",
+                sent > 0 ? "−" + Amount(ui.Privacy, sent): "0",
+                AppTheme.Pink,
+                AppTheme.Type14,
+                compact: true
+            ),
+            Figure(ui, "fees", fees > 0 ? Amount(ui.Privacy, fees): "0", AppTheme.Body, AppTheme.Type14, compact: true),
+            Figure(
+                ui,
+                "mined",
+                mined > 0 ? "+" + Amount(ui.Privacy, mined): "0",
+                AppTheme.Lime,
+                AppTheme.Type14,
+                compact: true
+            ),
+            Figure(ui, "net", net, AppTheme.Ink, input.Width < 1000 ? AppTheme.Type16: AppTheme.Type18, compact: true)
         }
     }
 
     private func Tint(category HistoryRowKind) Color -> switch category {
-        case HistoryRowKind.Received: current.Ui.Mint
-        case HistoryRowKind.Mined: current.Ui.Lime
-        case HistoryRowKind.Pending: current.Ui.Orange
-        case HistoryRowKind.Sent: current.Ui.Pink
+        case HistoryRowKind.Received: AppTheme.Mint
+        case HistoryRowKind.Mined: AppTheme.Lime
+        case HistoryRowKind.Pending: AppTheme.Orange
+        case HistoryRowKind.Sent: AppTheme.Pink
     }
 
     private func Moment(seconds int64) string -> DateTimeOffset
@@ -729,14 +764,14 @@ class HistoryPage : Cell[HistoryInput] {
         let pending = row.Height == 0
         let mature = !pending && row.Maturity.Ready
         let lit = pending ? 0: int32(row.Maturity.Count * 10 / row.Maturity.Required)
-        let segments = Container{FlexDirection: FlexDirection.Row, Gap: compact ? 2.0: 3.0}
+        let segments = Container{FlexDirection: FlexDirection.Row, Gap: compact ? AppTheme.Space2: AppTheme.Space4}
         for index in 0 ... 10 {
             segments.Add(
                 Container{
                     Width: compact ? 9.0: 12.0,
                     Height: compact ? 5.0: 6.0,
-                    BorderRadius: 1,
-                    BackgroundColor: index >= lit ? ui.Rule: mature ? Color.Parse("#558000"): ui.Orange
+                    BorderRadius: AppTheme.Radius1,
+                    BackgroundColor: index >= lit ? AppTheme.Rule: mature ? AppTheme.MatureSlot: AppTheme.Orange
                 }
             )
         }
@@ -756,35 +791,33 @@ class HistoryPage : Cell[HistoryInput] {
         let preview = Hidden(ui.Privacy, SafeText(note, 512))
         let sign = row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "+": "−"
         let notes = Container{
-            Padding: Edges{Left: 6},
+            Padding: Edges{Left: AppTheme.Space6},
             FlexDirection: FlexDirection.Row,
             MinWidth: 0,
             Overflow: Overflow.Hidden,
-            Gap: 6,
+            Gap: AppTheme.Space6,
             Grow(
                 Label(
                     ui,
                     (row.Self ? ui.Strings.Get("To self") + " · ": "") + preview,
-                    12,
-                    row.Memo.Length > 0 ? ui.Ink: ui.Dim,
+                    AppTheme.Type12,
+                    row.Memo.Length > 0 ? AppTheme.Ink: AppTheme.Dim,
                     ""
                 )
             )
         }
         if row.Recipients.Length > 1 {
-            notes.Add(Label(ui, "+" + (row.Recipients.Length - 1).ToString(), 12, ui.Dim, ""))
+            notes.Add(Label(ui, "+" + (row.Recipients.Length - 1).ToString(), AppTheme.Type12, AppTheme.Dim, ""))
         }
         let line = Goo
             .Button{
+            BasedOn: AppTheme.ListRowStyle,
             Height: row.Width >= 1700 ? 42.0: 38.0,
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 12,
-            Padding: Edges{Left: 10, Right: 10},
-            BorderWidth: Edges{Bottom: 1},
-            BorderColor: row.Open ? Color.Transparent: ui.Rule,
-            BackgroundColor: row.Open ? ui.Expanded: Color.Transparent,
-            Hover: Style{BackgroundColor: Color.Parse("#0c0c0c")},
+            Gap: AppTheme.Space12,
+            Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
+            BorderColor: row.Open ? Color.Transparent: AppTheme.Rule,
+            BackgroundColor: row.Open ? AppTheme.Expanded: Color.Transparent,
+            Hover: Style{BackgroundColor: AppTheme.RowHover},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -830,7 +863,7 @@ class HistoryPage : Cell[HistoryInput] {
                     case HistoryRowKind.Pending: "schedule"
                     case HistoryRowKind.Sent: "north_east"
                 },
-                16,
+                AppTheme.Icon16,
                 Tint(row.Kind)
             ),
             Container{
@@ -840,8 +873,8 @@ class HistoryPage : Cell[HistoryInput] {
                 Label(
                     ui,
                     sign + Amount(ui.Privacy, row.Amount),
-                    14,
-                    row.Kind == HistoryRowKind.Pending ? ui.Pink: Tint(row.Kind),
+                    AppTheme.Type14,
+                    row.Kind == HistoryRowKind.Pending ? AppTheme.Pink: Tint(row.Kind),
                     ""
                 )
             },
@@ -851,9 +884,9 @@ class HistoryPage : Cell[HistoryInput] {
                 FlexShrink: 0,
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 8,
+                Gap: AppTheme.Space8,
                 segments,
-                Container{Width: 52, Label(ui, depth, 12, mature ? ui.Body: ui.Orange, "")}
+                Container{Width: 52, Label(ui, depth, AppTheme.Type12, mature ? AppTheme.Body: AppTheme.Orange, "")}
             }
         }
         WidgetKeyBindings.BindActivation(line)
@@ -863,7 +896,7 @@ class HistoryPage : Cell[HistoryInput] {
                     Width: 64,
                     FlexShrink: 0,
                     AlignItems: AlignItems.FlexEnd,
-                    Label(ui, pending ? "": Count(row.Height), 12, ui.Body, "")
+                    Label(ui, pending ? "": Count(row.Height), AppTheme.Type12, AppTheme.Body, "")
                 }
             )
         }
@@ -872,11 +905,15 @@ class HistoryPage : Cell[HistoryInput] {
                 Width: compact ? 84.0: 88.0,
                 FlexShrink: 0,
                 AlignItems: AlignItems.FlexEnd,
-                Label(ui, row.Time > 0 ? Moment(row.Time): "", 12, ui.Body, "")
+                Label(ui, row.Time > 0 ? Moment(row.Time): "", AppTheme.Type12, AppTheme.Body, "")
             }
         )
         line.Children.Add(
-            MaterialIcons.Create(row.Open ? "expand_more": "chevron_right", 14, row.Open ? ui.Ink: ui.Dim)
+            MaterialIcons.Create(
+                row.Open ? "expand_more": "chevron_right",
+                AppTheme.Icon14,
+                row.Open ? AppTheme.Ink: AppTheme.Dim
+            )
         )
         if !row.Open {
             return line
@@ -889,17 +926,22 @@ class HistoryPage : Cell[HistoryInput] {
         let recipients = ProofRecipients(row)
         let recipient = recipients.ElementAtOrDefault(proofRecipient)
         let panel = Container{
-            Gap: 12,
-            Padding: Edges{Top: 4, Bottom: 14, Left: row.Width < 1000 ? 16.0: 38.0, Right: 16},
-            BackgroundColor: ui.Expanded,
-            BorderWidth: Edges{Bottom: 1},
-            BorderColor: ui.Rule
+            Gap: AppTheme.Space12,
+            Padding: Edges{
+                Top: AppTheme.Space4,
+                Bottom: AppTheme.Space14,
+                Left: row.Width < 1000 ? AppTheme.Space16: AppTheme.ControlRegular,
+                Right: AppTheme.Space16
+            },
+            BackgroundColor: AppTheme.Expanded,
+            BorderWidth: Edges{Bottom: AppTheme.Border1},
+            BorderColor: AppTheme.Rule
         }
         if row.Kind == HistoryRowKind.Sent {
             let tabs = Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 10,
+                Gap: AppTheme.Space10,
                 Segments(
                     "tabs",
                     "Transaction",
@@ -915,14 +957,16 @@ class HistoryPage : Cell[HistoryInput] {
                     }
                 ),
                 Container{FlexGrow: 1},
-                IconButton{
-                    Icon: MaterialIcons.Create("visibility", 16, ui.Body),
-                    AccessibilityName: ui.Strings.Get("observer view"),
-                    OnClick: () -> {
-                        observed = row.TxId
-                        Rebuild()
+                (
+                    AppTheme.IconButton with{
+                        Icon = MaterialIcons.Create("visibility", AppTheme.Icon16, AppTheme.Body),
+                        AccessibilityName = ui.Strings.Get("observer view"),
+                        OnClick = () -> {
+                            observed = row.TxId
+                            Rebuild()
+                        }
                     }
-                }.Build()
+                ).Build()
             }
             if tab == "proof" {
                 tabs.Add(
@@ -966,21 +1010,23 @@ class HistoryPage : Cell[HistoryInput] {
                         "proof key",
                         proofFor == row.TxId ? proofKey: "",
                         Grouped(proofFor == row.TxId ? proofKey: ""),
-                        ui.Ink
+                        AppTheme.Ink
                     )
                 )
-                panel.Add(Block("transaction", row.TxId, Grouped(row.TxId), ui.Body))
-                panel.Add(Block("recipient", recipient?.Address ?? "", Spaced(recipient?.Address ?? "", 10), ui.Body))
+                panel.Add(Block("transaction", row.TxId, Grouped(row.TxId), AppTheme.Body))
+                panel.Add(
+                    Block("recipient", recipient?.Address ?? "", Spaced(recipient?.Address ?? "", 10), AppTheme.Body)
+                )
                 let ready = proofFor == row.TxId && proofKey.Length > 0
                 let actions = Container{
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
-                    Gap: 10,
+                    Gap: AppTheme.Space10,
                     if ready {
                         Status(
                             ui,
                             ui.Strings.Get(proofValid ? "valid": "invalid"),
-                            proofValid ? ui.Lime: ui.Pink,
+                            proofValid ? AppTheme.Lime: AppTheme.Pink,
                             proofValid ? "check": "close"
                         )
                     } else {
@@ -990,8 +1036,8 @@ class HistoryPage : Cell[HistoryInput] {
                         ui,
                         "amount",
                         Amount(ui.Privacy, recipient?.Amount ?? 0UL) + " BNT",
-                        ui.Ink,
-                        14,
+                        AppTheme.Ink,
+                        AppTheme.Type14,
                         compact: true
                     ),
                     Container{FlexGrow: 1},
@@ -1002,22 +1048,27 @@ class HistoryPage : Cell[HistoryInput] {
                 return panel
             }
         }
-        let values = Container{FlexDirection: FlexDirection.Row, FlexWrap: FlexWrap.Wrap, RowGap: 8, ColumnGap: 26}
+        let values = Container{
+            FlexDirection: FlexDirection.Row,
+            FlexWrap: FlexWrap.Wrap,
+            RowGap: AppTheme.Space8,
+            ColumnGap: AppTheme.Space24
+        }
         values.Add(
             Figure(
                 ui,
                 "height",
                 row.Height > 0 ? Count(row.Height): ui.Strings.Get("pending"),
-                row.Height > 0 ? ui.Ink: ui.Orange,
-                13,
+                row.Height > 0 ? AppTheme.Ink: AppTheme.Orange,
+                AppTheme.Type13,
                 compact: true
             )
         )
         if row.Time > 0 {
-            values.Add(Figure(ui, "time", Time(row.Time), ui.Ink, 13, compact: true))
+            values.Add(Figure(ui, "time", Time(row.Time), AppTheme.Ink, AppTheme.Type13, compact: true))
         }
         if row.Kind == HistoryRowKind.Sent || row.Kind == HistoryRowKind.Pending {
-            values.Add(Figure(ui, "fee", Amount(ui.Privacy, row.Fee), ui.Ink, 13, compact: true))
+            values.Add(Figure(ui, "fee", Amount(ui.Privacy, row.Fee), AppTheme.Ink, AppTheme.Type13, compact: true))
             if row.Recipients.Length == 1 {
                 let address = row.Recipients[0].Address
                 values.Add(
@@ -1030,15 +1081,17 @@ class HistoryPage : Cell[HistoryInput] {
                                 address.Length - 6
                             ): address
                         ),
-                        ui.Ink,
-                        13,
+                        AppTheme.Ink,
+                        AppTheme.Type13,
                         compact: true
                     )
                 )
             }
         }
         if row.Kind == HistoryRowKind.Mined && !row.Maturity.Ready {
-            values.Add(Figure(ui, "spendable at", Count(row.Height + 60), ui.Orange, 13, compact: true))
+            values.Add(
+                Figure(ui, "spendable at", Count(row.Height + 60), AppTheme.Orange, AppTheme.Type13, compact: true)
+            )
         }
         if row.Kind == HistoryRowKind.Received {
             values.Add(
@@ -1046,8 +1099,8 @@ class HistoryPage : Cell[HistoryInput] {
                     ui,
                     "output",
                     row.Outputs.Length > 0 ? row.Outputs: "#" + row.Index.ToString(),
-                    ui.Ink,
-                    13,
+                    AppTheme.Ink,
+                    AppTheme.Type13,
                     compact: true
                 )
             )
@@ -1060,13 +1113,20 @@ class HistoryPage : Cell[HistoryInput] {
             for index in 0 ... row.Recipients.Length {
                 let entry = row.Recipients[index]
                 let details = Container{
-                    Gap: 4,
+                    Gap: AppTheme.Space4,
                     if row.Self {
-                        Figure(ui, "output", "#" + index.ToString(), ui.Ink, 13, compact: true)
+                        Figure(ui, "output", "#" + index.ToString(), AppTheme.Ink, AppTheme.Type13, compact: true)
                     } else {
-                        Block("recipient", entry.Address, Spaced(entry.Address, 10), ui.Body)
+                        Block("recipient", entry.Address, Spaced(entry.Address, 10), AppTheme.Body)
                     },
-                    Figure(ui, "amount", Amount(ui.Privacy, entry.Amount) + " BNT", ui.Ink, 13, compact: true)
+                    Figure(
+                        ui,
+                        "amount",
+                        Amount(ui.Privacy, entry.Amount) + " BNT",
+                        AppTheme.Ink,
+                        AppTheme.Type13,
+                        compact: true
+                    )
                 }
                 if entry.Memo.Length > 0 {
                     details.Add(MemoSection(row, entry.Memo))
@@ -1074,28 +1134,29 @@ class HistoryPage : Cell[HistoryInput] {
                 panel.Add(details)
             }
         }
-        panel.Add(Block("transaction", row.TxId, Grouped(row.TxId), ui.Body))
+        panel.Add(Block("transaction", row.TxId, Grouped(row.TxId), AppTheme.Body))
         return panel
     }
 
     private func MemoSection(row HistoryRow, memo string) Blob {
         let ui = current.Ui
         let section = Container{
-            Gap: 3,
+            Gap: AppTheme.Space4,
             MinWidth: 0,
             Overflow: Overflow.Hidden,
-            Label(ui, ui.Strings.Get("memo"), 12, ui.Dim, "")
+            Label(ui, ui.Strings.Get("memo"), AppTheme.Type12, AppTheme.Dim, "")
         }
         if current.Session.Messages.Lookup(row.TxId) != nil {
             let preview = Hidden(ui.Privacy, MessagesPage.Preview(SafeText(memo, 512)))
-            let label = Label(ui, preview, 13, ui.Ink, "")
+            let label = Label(ui, preview, AppTheme.Type13, AppTheme.Ink, "")
             let button = Goo
                 .Button{
+                BasedOn: AppTheme.ButtonStyle,
                 MinWidth: 0,
-                Padding: 8,
-                BorderRadius: 6,
-                BackgroundColor: ui.Rule,
-                Hover: Style{BackgroundColor: ui.Edge},
+                Padding: AppTheme.Space8,
+                BorderRadius: AppTheme.Radius6,
+                BackgroundColor: AppTheme.Rule,
+                Hover: Style{BackgroundColor: AppTheme.Edge},
                 Focus: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: preview},
                 OnClick: () -> current.OnMessage(row.TxId),
@@ -1112,9 +1173,9 @@ class HistoryPage : Cell[HistoryInput] {
                     ScrollbarY: Theme.Read().Scrollbar,
                     Text{
                         Content: Hidden(ui.Privacy, SafeText(memo, 512)),
-                        FontFamily: ui.Font,
-                        FontSize: 13,
-                        Color: ui.Ink,
+                        FontFamily: AppTheme.Font,
+                        FontSize: AppTheme.Type13,
+                        Color: AppTheme.Ink,
                         TextWrap: TextWrap.Wrap,
                         MinWidth: 0
                     }
@@ -1127,24 +1188,26 @@ class HistoryPage : Cell[HistoryInput] {
     private func Block(label string, value string, text string, color Color) Blob {
         let ui = current.Ui
         return Container{
-            Gap: 3,
+            Gap: AppTheme.Space4,
             MinWidth: 0,
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 6,
-                Label(ui, ui.Strings.Get(label), 12, ui.Dim, ""),
-                IconButton{
-                    Icon: MaterialIcons.Create("content_copy", 14, ui.Dim),
-                    AccessibilityName: ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
-                    Disabled: value.Length == 0,
-                    OnClick: () -> ui.Actions.Copy(value, 120000)
-                }.Build()
+                Gap: AppTheme.Space6,
+                Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Dim, ""),
+                (
+                    AppTheme.IconButton with{
+                        Icon = MaterialIcons.Create("content_copy", AppTheme.Icon14, AppTheme.Dim),
+                        AccessibilityName = ui.Strings.Get("Copy") + " " + ui.Strings.Get(label),
+                        Disabled = value.Length == 0,
+                        OnClick = () -> ui.Actions.Copy(value, 120000)
+                    }
+                ).Build()
             },
             Text{
                 Content: Hidden(ui.Privacy, text),
-                FontFamily: ui.Font,
-                FontSize: 13,
+                FontFamily: AppTheme.Font,
+                FontSize: AppTheme.Type13,
                 LineHeight: 1.5,
                 Color: color,
                 TextWrap: TextWrap.Wrap
@@ -1171,25 +1234,27 @@ class HistoryPage : Cell[HistoryInput] {
                 SelectedIds: []string{selected},
                 AccessibilityName: ui.Strings.Get(label),
                 CreateRoot: (group ToggleGroupInput, root Container) -> Container{
-                    BorderWidth: 1,
-                    BorderColor: ui.Edge,
-                    BorderRadius: 4,
+                    BasedOn: AppTheme.FlushSegmentGroupStyle,
+                    BorderWidth: AppTheme.Border1,
+                    BorderColor: AppTheme.Edge,
+                    BorderRadius: AppTheme.Radius4,
                     Overflow: Overflow.Hidden,
                     FlexShrink: 0
                 },
                 CreateItem: (group ToggleGroupInput, item ToggleOption, button Button) -> {
                     let active = item.Id == selected
-                    button.MinHeight = 28
-                    button.Height = 28
-                    button.Padding = Edges{Left: 10, Right: 10}
-                    button.BorderWidth = 0
-                    button.BorderRadius = 0
+                    button.BasedOn = AppTheme.SegmentStyle
+                    button.MinHeight = AppTheme.ControlCompact
+                    button.Padding = Edges{Left: AppTheme.Space10, Right: AppTheme.Space10}
+                    button.BorderWidth = AppTheme.Border0
                     button.BoxShadow = BoxShadow{}
-                    button.BackgroundColor = active ? ui.Lime: Color.Transparent
-                    button.Color = active ? ui.Black: ui.Body
-                    button.Hover = Style{BackgroundColor: active ? ui.Lime: ui.Rule}
+                    button.BackgroundColor = active ? AppTheme.Selected: Color.Transparent
+                    button.Color = active ? AppTheme.Ink: AppTheme.Body
+                    button.Hover = Style{BackgroundColor: active ? AppTheme.Selected: AppTheme.Rule}
                     button.Children.Clear()
-                    button.Children.Add(Label(ui, ui.Strings.Get(item.Id), 12, active ? ui.Black: ui.Body, ""))
+                    button.Children.Add(
+                        Label(ui, ui.Strings.Get(item.Id), AppTheme.Type12, active ? AppTheme.Ink: AppTheme.Body, "")
+                    )
                     return button
                 },
                 OnChange: ids -> {
@@ -1210,17 +1275,13 @@ class HistoryPage : Cell[HistoryInput] {
         let ui = input.Ui
         let button = Goo
             .Button{
+            BasedOn: AppTheme.ButtonStyle,
             Handle: exportAnchor,
-            Height: 30,
-            FlexDirection: FlexDirection.Row,
-            AlignItems: AlignItems.Center,
-            Gap: 8,
-            Padding: Edges{Left: 12, Right: 12},
-            BorderWidth: 1,
-            BorderColor: exporting ? ui.ExportEdge: ui.Edge,
-            BorderRadius: 4,
-            BackgroundColor: exporting ? ui.FaintRule: ui.Raised,
-            Hover: Style{BorderColor: ui.ExportEdge},
+            Height: AppTheme.CompactButton.Height,
+            Padding: Edges{Left: AppTheme.Space12, Right: AppTheme.Space12},
+            BorderColor: exporting ? AppTheme.ExportEdge: AppTheme.Edge,
+            BackgroundColor: exporting ? AppTheme.FaintRule: AppTheme.Raised,
+            Hover: Style{BorderColor: AppTheme.ExportEdge},
             Focus: Theme.Read().FocusStyle,
             Disabled: shown.Length == 0,
             Opacity: shown.Length == 0 ? 0.4: 1.0,
@@ -1234,19 +1295,19 @@ class HistoryPage : Cell[HistoryInput] {
                 exporting = !exporting
                 Rebuild()
             },
-            MaterialIcons.Create("download", 16, ui.Ink),
-            Label(ui, ui.Strings.Get("export"), 12, ui.Ink, "")
+            MaterialIcons.Create("download", AppTheme.Icon16, AppTheme.Ink),
+            Label(ui, ui.Strings.Get("export"), AppTheme.Type12, AppTheme.Ink, "")
         }
         WidgetKeyBindings.BindActivation(button)
         let shownRange = to > 0 ? Count(from) + " – " + Count(to): ui.Strings.Get(period)
         let content = Container{
-            Gap: 12,
+            Gap: AppTheme.Space12,
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
-                Gap: 8,
-                Label(ui, ui.Strings.Get("export"), 14, ui.Ink, ""),
-                Label(ui, shownRange, 12, ui.Dim, ""),
+                Gap: AppTheme.Space8,
+                Label(ui, ui.Strings.Get("export"), AppTheme.Type14, AppTheme.Ink, ""),
+                Label(ui, shownRange, AppTheme.Type12, AppTheme.Dim, ""),
                 Container{FlexGrow: 1},
                 Info(
                     "export",
@@ -1258,7 +1319,7 @@ class HistoryPage : Cell[HistoryInput] {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                Label(ui, ui.Strings.Get("format"), 12, ui.Dim, ""),
+                Label(ui, ui.Strings.Get("format"), AppTheme.Type12, AppTheme.Dim, ""),
                 Segments(
                     "format",
                     "format",
@@ -1270,22 +1331,22 @@ class HistoryPage : Cell[HistoryInput] {
                     }
                 )
             },
-            Checkbox{
-                State: memos ? AccessibilityChecked.True: AccessibilityChecked.False,
-                Label: ui.Strings.Get("memos"),
-                LabelFontSize: 12,
-                Size: 14,
-                BorderRadius: 2,
-                OnChange: state -> {
-                    memos = state == AccessibilityChecked.True
-                    Rebuild()
+            (
+                AppTheme.Checkbox with{
+                    State = memos ? AccessibilityChecked.True: AccessibilityChecked.False,
+                    Label = ui.Strings.Get("memos"),
+                    LabelFontSize = AppTheme.Type12,
+                    OnChange = state -> {
+                        memos = state == AccessibilityChecked.True
+                        Rebuild()
+                    }
                 }
-            }.Build(),
+            ).Build(),
             Container{
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 JustifyContent: JustifyContent.SpaceBetween,
-                Figure(ui, "rows", shown.Length.ToString(), ui.Ink, 14, compact: true),
+                Figure(ui, "rows", shown.Length.ToString(), AppTheme.Ink, AppTheme.Type14, compact: true),
                 Button(ui, "save", () -> SaveExport(input), shown.Length == 0, true)
             }
         }
@@ -1298,11 +1359,11 @@ class HistoryPage : Cell[HistoryInput] {
                     Open: exporting,
                     Anchor: exportAnchor,
                     Placement: PopoverPlacement.BottomEnd,
-                    Gap: 8,
+                    Gap: AppTheme.Space8,
                     Width: 300,
-                    Padding: 14,
-                    BackgroundColor: ui.Raised,
-                    BorderColor: ui.Edge,
+                    Padding: AppTheme.Space14,
+                    BackgroundColor: AppTheme.Raised,
+                    BorderColor: AppTheme.Edge,
                     Content: content,
                     Role: AccessibilityRole.Dialog,
                     AccessibilityName: ui.Strings.Get("export"),
