@@ -8,8 +8,6 @@ import Gyroid.Components.TextParts
 import Gyroid.Services
 import System
 import System.IO
-import System.Threading
-import System.Threading.Tasks
 
 data struct SeedPageInput {
     var Session WalletSession
@@ -143,59 +141,25 @@ class SeedPage : Cell, IDisposable {
     }
 
     private func Export(input SeedPageInput) {
-        guard let owner = input.Ui.Actions.window else {
-            return
-        }
         let current = generation
-        try {
-            let pending = owner.ShowFileDialogAsync(
-                FileDialogKind.SaveFile,
-                FileDialogOptions{
-                    Title: input.Ui.Strings.Get("Export"),
-                    InitialPath: Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                        "seed.txt"
-                    )
-                }
-            )
-            let request = [input.Words.Length]char
-            Array.Copy(input.Words, request, request.Length)
-            exportResult = ""
-            let keys = input.Session.Keys
-            input.Ui.Actions.Run(ct -> CompleteExport(owner, pending, keys, request, current, ct), secret: request)
-        } catch (failure Exception) {
-            exportResult = failure.Message
-        }
-    }
-
-    private async func CompleteExport(
-        owner Window,
-        pending Task[FileDialogResult],
-        keys WalletKeys,
-        request[]char,
-        current int32,
-        ct CancellationToken
-    ) {
-        var result = ""
-        try {
-            let chosen = await pending
-            if chosen.Status == FileDialogStatus.Success && chosen.Paths.Count > 0 {
-                await keys.ExportSeedAsync(chosen.Paths[0], request, ct)
-                result = "Saved"
-            } else if chosen.Status != FileDialogStatus.Cancelled {
-                result = "File dialog unavailable"
-            }
-        } catch (failure Exception) {
-            result = failure.Message
-        }
-        let message = result
-        owner.TryPost(
-            () -> {
+        let request = [input.Words.Length]char
+        Array.Copy(input.Words, request, request.Length)
+        exportResult = ""
+        let keys = input.Session.Keys
+        input
+            .Ui
+            .Actions
+            .SaveFile(
+            input.Ui.Strings.Get("Export"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "seed.txt"),
+            (path, ct) -> keys.ExportSeedAsync(path, request, ct),
+            message -> {
                 if current == generation {
                     exportResult = message
                     Rebuild()
                 }
-            }
+            },
+            secret: request
         )
     }
 

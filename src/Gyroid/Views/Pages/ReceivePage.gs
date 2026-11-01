@@ -12,13 +12,11 @@ import Gyroid.Components.TextParts
 import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Services.WalletText
-import Net.Codecrete.QrCodeGenerator
 import System
 import System.Collections.Generic
 import System.IO
 import System.Text
 import System.Threading
-import System.Threading.Tasks
 
 data struct ReceivePageInput {
     var Ui Presentation
@@ -62,7 +60,6 @@ data struct ReceivePresentationInput {
     var Address string
     var Privacy bool
     var Busy bool
-    var Paid bool
     var Language string
     var Height float64
     var Change Action[string, string]
@@ -80,6 +77,7 @@ class ReceivePage : Cell, IDisposable {
     private var prepared ReceivePrepared?
     private var generation int32
     private var lifetime CancellationTokenSource?
+    private var error string = ""
 
     init() {
         change = (field, value) -> {
@@ -105,24 +103,24 @@ class ReceivePage : Cell, IDisposable {
         if input == next {
             return
         }
-        let presentationChanged = input.Privacy != next.Privacy ||
-            input.Busy != next.Busy ||
-            input.Language != next.Language ||
-            input.Height != next.Height
+        let sourceChanged = input.Request != next.Request || input.Address != next.Address || !input.History.Equals(
+            next.History
+        )
         input = next
-        if presentationChanged {
-            if let result = prepared {
-                Publish(result)
-            }
+        Publish(prepared)
+        if sourceChanged {
+            Prepare()
         }
-        Prepare()
     }
 
     private func Prepare() {
         guard let owner = input.Ui.Actions.window else {
             return
         }
-        let cancellation = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
+        lifetime?.Cancel()
+        lifetime?.Dispose()
+        let cancellation = CancellationTokenSource.CreateLinkedTokenSource(owner.Closed)
+        error = ""
         lifetime = cancellation
         generation++
         let id = generation
@@ -157,53 +155,35 @@ class ReceivePage : Cell, IDisposable {
             let result = WalletSession.PrepareReceive(request, address, history, height, previous, token)
             owner.TryPost(
                 () -> {
-                    if id != generation ||
-                        token.IsCancellationRequested ||
-                        input.Address != address ||
-                        input
-                        .Request
-                        .Amount
-                        .Trim() != result
-                        .Draft
-                        .Amount ||
-                        input
-                        .Request
-                        .Memo
-                        .Trim() != result
-                        .Draft
-                        .Memo ||
-                        input
-                        .Request
-                        .Format != request.Format {
-                        return
+                    if id == generation {
+                        prepared = result
+                        input.Request.Reference = request.Reference
+                        input.Request.Since = request.Since
+                        input.Request.ExistingOutputs = request.ExistingOutputs
+                        Publish(result)
                     }
-                    prepared = result
-                    input.Request.Reference = request.Reference
-                    input.Request.Since = request.Since
-                    input.Request.ExistingOutputs = request.ExistingOutputs
-                    Publish(result)
                 }
             )
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
             owner.TryPost(
                 () -> {
-                    if id == generation && !token.IsCancellationRequested {
-                        presentation.Error = failure.Message
-                        Rebuild()
+                    if id == generation {
+                        error = failure.Message
+                        Publish(prepared)
                     }
                 }
             )
         }
     }
 
-    private func Publish(result ReceivePrepared) {
-        let output = result.Paid ?? result.Possible
+    private func Publish(result ReceivePrepared?) {
+        let output = result?.Paid ?? result?.Possible
         status = ReceiveStatusInput{
             Ui: input.Ui,
-            Paid: result.Paid != nil,
-            Possible: result.Possible != nil,
+            Paid: result?.Paid != nil,
+            Possible: result?.Possible != nil,
             Amount: output?.Amount ?? uint64(0),
-            Confirmations: if let value = result.Paid {
+            Confirmations: if let value = result?.Paid {
                 if value.BlockHeight == 0 || input.ChainHeight < value.BlockHeight {
                     uint64(0)
                 } else {
@@ -212,20 +192,20 @@ class ReceivePage : Cell, IDisposable {
             } else {
                 uint64(0)
             },
-            Reference: result.Possible != nil ? result.Request.Reference: "",
+            Reference: result?.Possible != nil ? result?.Draft.Reference ?? "": "",
             Privacy: input.Privacy,
             Language: input.Language
         }
         presentation = ReceivePresentationInput{
             Ui: input.Ui,
-            Draft: result.Draft,
+            Draft: result?.Draft ??
+                ReceiveDraft{Amount: "", Memo: "", Reference: "", FullMemo: "", AmountIssue: "", MemoIssue: ""},
             Request: input.Request,
             Prepared: result,
-            Error: "",
+            Error: error,
             Address: input.Address,
             Privacy: input.Privacy,
             Busy: input.Busy,
-            Paid: result.Paid != nil,
             Language: input.Language,
             Height: input.Height,
             Change: change,
@@ -318,7 +298,6 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                         AccessibilityName: ui.Strings.Get("Amount"),
                         Placeholder: ui.Strings.Get("amount"),
                         Value: request.Amount,
-                        Controlled: false,
                         ContentDirection: Direction.LeftToRight,
                         Trailing: Label(ui, "BNT", AppTheme.Type12, AppTheme.Dim, ""),
                         Password: input.Privacy,
@@ -340,7 +319,6 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                         TextField{
                             AccessibilityName: ui.Strings.Get("Memo"),
                             Value: request.Memo,
-                            Controlled: false,
                             ContentDirection: Direction.LeftToRight,
                             OnChange: value -> input.Change.Invoke("memo", value),
                             Invalid: draft.MemoIssue.Length > 0,
@@ -365,23 +343,23 @@ class ReceiveForm : Cell[ReceiveFormInput] {
 }
 
 class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
-    private var qrText string = ""
-    private var qrCode QrCode?
-    private var qrPath VectorPath = VectorPath.Empty
+    private var exportPayload string = ""
     private var generation int32
     private var exportResult string = ""
 
     protected override func Build(input ReceivePresentationInput) Blob {
         let ui = input.Ui
         let draft = input.Draft
-        guard let prepared = input.Prepared else {
-            return Container{}
+        let prepared = input.Prepared
+        let paid = prepared?.Paid != nil
+        let empty = input.Request.Amount.Length == 0 && input.Request.Memo.Length == 0
+        let shown = prepared?.Shown ?? (empty ? "address": input.Request.Format)
+        let link = prepared?.Link ?? ""
+        let payload = prepared?.Payload ?? input.Address
+        let ranges = List[TextStyleRange]()
+        if link.Length > 0 {
+            ranges.Add(TextStyleRange(TextRange(0, 11), Style{Color: AppTheme.Dim}))
         }
-        let empty = draft.Amount.Length == 0 && draft.Memo.Length == 0
-        let shown = prepared.Shown
-        let link = prepared.Link
-        let payload = prepared.Payload
-        let ranges = List[TextStyleRange]{TextStyleRange(TextRange(0, 11), Style{Color: AppTheme.Dim})}
         let amountStart = link.IndexOf("?amount=", StringComparison.Ordinal)
         if amountStart >= 0 {
             ranges.Add(TextStyleRange(TextRange(amountStart, 8), Style{Color: AppTheme.Dim}))
@@ -390,20 +368,13 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         if memoStart >= 0 {
             ranges.Add(TextStyleRange(TextRange(memoStart - 1, 6), Style{Color: AppTheme.Dim}))
         }
-        if payload != qrText {
-            generation++
-            exportResult = ""
-            qrText = payload
-            qrCode = prepared.Code
-            qrPath = prepared.Path
-        }
         let side = Math.Clamp(input.Height - 340, 180.0, 400.0)
         let code = Container{
             Width: side,
             Height: side,
             BorderRadius: AppTheme.Radius10,
             Overflow: Overflow.Hidden,
-            BackgroundColor: input.Privacy || input.Paid ? AppTheme.Surface: AppTheme.Ink,
+            BackgroundColor: input.Privacy || paid ? AppTheme.Surface: AppTheme.Ink,
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center,
             Accessibility: Accessibility{
@@ -413,13 +384,13 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         }
         if input.Privacy {
             code.Add(MaterialIcons.Create("visibility_off", AppTheme.Icon32, AppTheme.Dim))
-        } else if input.Paid {
+        } else if paid {
             code.Add(
                 Shape{
                     Position: PositionType.Absolute,
                     Width: side,
                     Height: side,
-                    Path: qrPath,
+                    Path: prepared?.Path ?? VectorPath.Empty,
                     Fit: ShapeFit.Fill,
                     BackgroundColor: AppTheme.Rule
                 }
@@ -427,7 +398,13 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
             code.Add(MaterialIcons.Create("check", 56, AppTheme.Mint))
         } else {
             code.Add(
-                Shape{Width: side, Height: side, Path: qrPath, Fit: ShapeFit.Fill, BackgroundColor: AppTheme.Black}
+                Shape{
+                    Width: side,
+                    Height: side,
+                    Path: prepared?.Path ?? VectorPath.Empty,
+                    Fit: ShapeFit.Fill,
+                    BackgroundColor: AppTheme.Black
+                }
             )
         }
         let options = [empty ? 2: 3]NavigationItem
@@ -474,12 +451,15 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         field.Accessibility = Accessibility{Role: AccessibilityRole.Status}
         if shown == "link" {
             field.Accessibility = Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Copy link")}
-            field.Disabled = input.Busy || draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0
+            field.Disabled = prepared == nil || input.Busy || draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0
             field.OnClick = () -> ui.Actions.Copy(payload, 120000)
             WidgetKeyBindings.BindActivation(field)
         }
-        let disabled = input.Busy || shown != "address" && (draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0)
-        let action = if input.Paid {
+        let disabled = prepared == nil ||
+            input.Busy ||
+            shown != "address" &&
+            (draft.AmountIssue.Length > 0 || draft.MemoIssue.Length > 0)
+        let action = if paid {
             Action(ui, "add", "New request", AppTheme.Ink, AppTheme.Edge, AppTheme.Raised, disabled, input.Reset)
         } else if shown == "qr" {
             Action(
@@ -490,13 +470,17 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                 AppTheme.Lime,
                 AppTheme.LimeQuiet,
                 disabled,
-                () -> SaveQr(input)
+                () -> {
+                    if let value = prepared {
+                        SaveQr(ui, value)
+                    }
+                }
             )
         } else {
             TextParts.Copy(ui, payload, shown == "link" ? "Copy link": "Copy address", disabled: disabled, text: true)
         }
         let actions = Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, field, action}
-        let message = exportResult.Length > 0 ? exportResult: input.Error
+        let message = exportResult.Length > 0 && exportPayload == payload ? exportResult: input.Error
         if message.Length > 0 {
             actions.Add(Label(ui, ui.Strings.Get(message), AppTheme.Type13, AppTheme.Body, ""))
         }
@@ -510,7 +494,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                 Padding: AppTheme.Space4,
                 BorderWidth: AppTheme.Border2,
                 BorderRadius: AppTheme.Radius14,
-                BorderColor: shown == "qr" && !input.Paid ? AppTheme.Lime: Color.Transparent,
+                BorderColor: shown == "qr" && !paid ? AppTheme.Lime: Color.Transparent,
                 Margin: -AppTheme.Space6,
                 code
             },
@@ -524,7 +508,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                             Draft: draft,
                             Request: input.Request,
                             Privacy: input.Privacy,
-                            Disabled: input.Busy || input.Paid,
+                            Disabled: input.Busy || paid,
                             Language: input.Language,
                             Change: input.Change
                         }
@@ -559,55 +543,19 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         }
     )
 
-    private func SaveQr(input ReceivePresentationInput) {
-        guard let code = qrCode else {
-            return
-        }
-        guard let owner = input.Ui.Actions.window else {
+    private func SaveQr(ui Presentation, prepared ReceivePrepared) {
+        guard let code = prepared.Code else {
             return
         }
         generation++
         let current = generation
-        try {
-            let pending = owner.ShowFileDialogAsync(
-                FileDialogKind.SaveFile,
-                FileDialogOptions{
-                    Title: input.Ui.Strings.Get("Save QR image"),
-                    InitialPath: Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                        "blocknet-request.png"
-                    )
-                }
-            )
-            exportResult = ""
-            input.Ui.Actions.Run(ct -> CompleteExport(owner, pending, code, current, ct))
-        } catch (failure Exception) {
-            exportResult = failure.Message
-        }
-    }
-
-    private async func CompleteExport(
-        owner Window,
-        pending Task[FileDialogResult],
-        code QrCode,
-        current int32,
-        ct CancellationToken
-    ) {
-        var result = ""
-        try {
-            let chosen = await pending
-            if chosen.Status == FileDialogStatus.Success && chosen.Paths.Count > 0 {
-                await WalletSession.ExportReceiveAsync(chosen.Paths[0], code, ct)
-                result = "Saved"
-            } else if chosen.Status != FileDialogStatus.Cancelled {
-                result = "File dialog unavailable"
-            }
-        } catch (failure Exception) {
-            result = failure.Message
-        }
-        let message = result
-        owner.TryPost(
-            () -> {
+        exportPayload = prepared.Payload
+        exportResult = ""
+        ui.Actions.SaveFile(
+            ui.Strings.Get("Save QR image"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "blocknet-request.png"),
+            (path, ct) -> WalletSession.ExportReceiveAsync(path, code, ct),
+            message -> {
                 if current == generation {
                     exportResult = message
                     Rebuild()

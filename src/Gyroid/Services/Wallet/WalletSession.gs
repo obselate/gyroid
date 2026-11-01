@@ -14,7 +14,6 @@ import System.Threading
 import System.Threading.Tasks
 
 class ReceivePrepared {
-    var Request ReceiveRequest
     var Draft ReceiveDraft
     var Link string = ""
     var Payload string = ""
@@ -1247,7 +1246,7 @@ class WalletSession : IDisposable {
             let link = "blocknet://" + address + (query.Count > 0 ? "?" + String.Join("&", query): "")
             let shown = empty && request.Format == "link" ? "address": request.Format
             let payload = shown == "address" ? address: link
-            let result = ReceivePrepared{Request: request, Draft: draft, Link: link, Shown: shown, Payload: payload}
+            let result = ReceivePrepared{Draft: draft, Link: link, Shown: shown, Payload: payload}
             let atoms = draft.Amount.Length > 0 && draft.AmountIssue.Length == 0 ? WalletAmount.Parse(
                 draft.Amount
             ): uint64(0)
@@ -1272,9 +1271,6 @@ class WalletSession : IDisposable {
                         }
                     }
                 }
-            }
-            if result.Paid != nil {
-                result.Possible = nil
             }
             if previous != nil && previous.Payload == payload {
                 result.Code = previous.Code
@@ -1308,7 +1304,6 @@ class WalletSession : IDisposable {
         }
 
         async func ExportReceiveAsync(path string, code QrCode, ct CancellationToken) {
-            ct.ThrowIfCancellationRequested()
             await File.WriteAllBytesAsync(path, code.ToPngBitmap(4, 8), ct)
         }
 

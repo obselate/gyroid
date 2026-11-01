@@ -45,6 +45,85 @@ class UiService : IDisposable {
         run(task, done, secret, extra)
     }
 
+    func SaveFile(
+        title string,
+        initial string,
+        write Func[string, CancellationToken, Task],
+        finished Action[string],
+        secret[]?char = nil
+    ) {
+        guard let host = window else {
+            if let buffer = secret {
+                Array.Clear(buffer)
+            }
+            return
+        }
+        try {
+            let pending = host.ShowFileDialogAsync(
+                FileDialogKind.SaveFile,
+                FileDialogOptions{Title: title, InitialPath: initial}
+            )
+            Background(ct -> CompleteSaveChoice(host, pending, write, finished, secret, ct))
+        } catch (failure Exception) {
+            if let buffer = secret {
+                Array.Clear(buffer)
+            }
+            finished(failure.Message)
+        }
+    }
+
+    private async func CompleteSaveChoice(
+        host Window,
+        pending Task[FileDialogResult],
+        write Func[string, CancellationToken, Task],
+        finished Action[string],
+        secret[]?char,
+        ct CancellationToken
+    ) {
+        var message = ""
+        var transferred = false
+        try {
+            let chosen = await pending.WaitAsync(ct)
+            if chosen.Status == FileDialogStatus.Success && chosen.Paths.Count > 0 {
+                let path = chosen.Paths[0]
+                transferred = host.TryPost(
+                    () -> Run(token -> CompleteSaveWrite(host, path, write, finished, token), secret: secret)
+                )
+                return
+            }
+            if chosen.Status != FileDialogStatus.Cancelled {
+                message = "File dialog unavailable"
+            }
+        } catch (failure Exception) {
+            message = failure.Message
+        } finally {
+            if !transferred {
+                if let buffer = secret {
+                    Array.Clear(buffer)
+                }
+            }
+        }
+        let result = message
+        host.TryPost(() -> finished(result))
+    }
+
+    private async func CompleteSaveWrite(
+        host Window,
+        path string,
+        write Func[string, CancellationToken, Task],
+        finished Action[string],
+        ct CancellationToken
+    ) {
+        var message = "Saved"
+        try {
+            await write(path, ct)
+        } catch (failure Exception) {
+            message = failure.Message
+        }
+        let result = message
+        host.TryPost(() -> finished(result))
+    }
+
     func Delay(ms float64, action Action) WindowTimer? -> window?.SetTimeout(action, ms)
 
     private var clipboardTimer WindowTimer?
