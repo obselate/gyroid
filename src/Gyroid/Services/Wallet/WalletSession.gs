@@ -912,6 +912,7 @@ class WalletSession : IDisposable {
     private async func UnloadCoreAsync(ct CancellationToken) {
         StopEvents()
         Send.InvalidateConfirmation()
+        Messages.Reset()
         if managed {
             try {
                 if state == WalletState.Unlocked {
@@ -1162,13 +1163,16 @@ class WalletSession : IDisposable {
         scanUnchangedSince = default(DateTimeOffset)
         scanRestarted = false
         History.Reset()
-        if state == WalletState.Locked || state == WalletState.Unloaded {
+        if state != WalletState.Unlocked {
             Messages.Reset()
         }
         snapshot = WalletSnapshot{State: state, Connected: connected}
     }
 
     func PublishCurrent() {
+        if state != WalletState.Unlocked {
+            Messages.Reset()
+        }
         snapshot = WalletSnapshot{
             State: state,
             Connected: connected,
