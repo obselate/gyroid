@@ -58,7 +58,7 @@ class PrivacyChecks {
         await PrivateFiles.WriteAtomic(
             path,
             async (stream) -> {
-                using let writer = Utf8JsonWriter(stream)
+                using let writer = Utf8JsonWriter(stream, JsonWriterOptions{Indented: true})
                 writer.WriteStartObject()
                 for entry in state.RootElement.EnumerateObject() {
                     if entry.Name != wallet && Regex.IsMatch(entry.Name, "^[^:]+:[0-9a-f]{64}$") {

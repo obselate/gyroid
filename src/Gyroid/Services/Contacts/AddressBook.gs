@@ -77,7 +77,7 @@ class AddressBook {
                 .WriteAtomic(
                 path,
                 stream -> {
-                    using let writer = Utf8JsonWriter(stream)
+                    using let writer = Utf8JsonWriter(stream, JsonWriterOptions{Indented: true})
                     writer.WriteStartObject()
                     for entry in contacts {
                         writer.WriteString(entry.Key, entry.Value)

@@ -174,7 +174,7 @@ class SettingsStore {
             await PrivateFiles.WriteAtomic(
                 path,
                 async (stream) -> {
-                    using let writer = Utf8JsonWriter(stream)
+                    using let writer = Utf8JsonWriter(stream, JsonWriterOptions{Indented: true})
                     writer.WriteStartObject()
                     writer.WriteString("active_wallet", settings.ActiveWallet)
                     WriteSetting(writer, root, "network", "GYROID_NETWORK", settings.Network)
