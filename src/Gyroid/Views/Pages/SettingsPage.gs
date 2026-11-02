@@ -151,7 +151,7 @@ class SettingsRegionState {
     let Advanced SettingsAdvancedState = SettingsAdvancedState()
 }
 
-class SettingsPage : Cell {
+class SettingsPage : Cell, IDisposable {
     private var state SettingsCompositionInput
     private var generalOwner SettingsGeneral?
     private var walletOwner SettingsWallet?
@@ -160,6 +160,9 @@ class SettingsPage : Cell {
     private var advancedOwner SettingsAdvanced?
     private var nodeOwner SettingsNode?
     private var mountedSection string = ""
+    private var generation int32
+    private var issue string = ""
+    private let savePreference Action[Func[CancellationToken, Task]]
     private let startupDraft SettingsRegionState = SettingsRegionState()
     private let openDialog Action[string]
     private let openPurge Action[string, string, int32]
@@ -173,10 +176,11 @@ class SettingsPage : Cell {
     init() {
         openDialog = kind -> dialogs?.Open(kind)
         refreshNodeData = RefreshNodeData
+        savePreference = SavePreference
         openPurge = (size, unit, wallets) -> dialogs?.OpenPurge(size, unit, wallets, refreshNodeData)
         configureGeneral = region -> {
             generalOwner = region
-            region.Accept(current)
+            region.Accept(current, savePreference)
         }
         configureNode = region -> {
             nodeOwner = region
@@ -207,7 +211,7 @@ class SettingsPage : Cell {
             advancedOwner = nil
         }
         current = input with{Settings = input.Session.Settings}
-        generalOwner?.Accept(current)
+        generalOwner?.Accept(current, savePreference)
         nodeOwner?.Accept(current, startupDraft)
         walletOwner?.Accept(current, openDialog)
         advancedOwner?.Accept(current, openPurge, startupDraft.Advanced)
@@ -325,6 +329,9 @@ class SettingsPage : Cell {
                 default: Cell.Mount[SettingsAdvanced]("advanced", configureAdvanced)
             }
         )
+        if issue.Length > 0 {
+            pane.Add(Label(ui, ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
+        }
         let root = Container{
             FlexDirection: FlexDirection.Row,
             Gap: AppTheme.Space16,
@@ -344,7 +351,52 @@ class SettingsPage : Cell {
 
     private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
         input.Session.ApplyPreference(change)
-        input.Ui.Actions.Run(ct -> input.Session.SavePreferencesAsync(ct), input.OnPreference)
+        SavePreference(ct -> input.Session.SavePreferencesAsync(ct))
+    }
+
+    private func SavePreference(task Func[CancellationToken, Task]) {
+        guard let owner = current.Window else {
+            return
+        }
+        generation++
+        let request = generation
+        let saved = current.OnPreference
+        current.Ui.Actions.Background(ct -> CompletePreference(task, owner, saved, request, ct))
+    }
+
+    private async func CompletePreference(
+        task Func[CancellationToken, Task],
+        owner Window,
+        saved Action,
+        request int32,
+        ct CancellationToken
+    ) {
+        var error = ""
+        try {
+            await task(ct)
+        } catch (failure OperationCanceledException) when ct.IsCancellationRequested {
+            return
+        } catch (failure Exception) {
+            error = failure.Message
+        }
+        owner.TryPost(
+            () -> {
+                if generation != request {
+                    return
+                }
+                if error.Length == 0 {
+                    saved.Invoke()
+                }
+                if issue != error {
+                    issue = error
+                    Rebuild()
+                }
+            }
+        )
+    }
+
+    func Dispose() {
+        generation++
     }
 
     private func Security(input SettingsPageInput) Blob {
@@ -363,7 +415,7 @@ class SettingsPage : Cell {
                         []string{"5m", "15m", "1h", "never"},
                         state.AutoLock.ToString(),
                         false,
-                        id -> ui.Actions.Run(ct -> input.Session.SaveAutoLockAsync(int32.Parse(id), ct))
+                        id -> SavePreference(ct -> input.Session.SaveAutoLockAsync(int32.Parse(id), ct))
                     )
                 }
             ),
@@ -398,7 +450,10 @@ class SettingsPage : Cell {
                         input,
                         "hide values on start",
                         state.Privacy,
-                        () -> ui.Actions.Run(ct -> input.Session.SavePrivacyAsync(!state.Privacy, ct))
+                        () -> {
+                            let enabled = !state.Privacy
+                            SavePreference(ct -> input.Session.SavePrivacyAsync(enabled, ct))
+                        }
                     )
                 }
             )
@@ -427,15 +482,15 @@ class SettingsPage : Cell {
     }
 }
 
-class SettingsGeneral : Cell, IDisposable {
+class SettingsGeneral : Cell {
     private var state SettingsGeneralInput
     private var context SettingsPageInput
     private var rowHeight float64
-    private var generation int32
-    private var issue string = ""
+    private var savePreference Action[Func[CancellationToken, Task]]
 
-    func Accept(input SettingsPageInput) {
+    func Accept(input SettingsPageInput, savePreference Action[Func[CancellationToken, Task]]) {
         context = input
+        this.savePreference = savePreference
         let settings = input.Settings
         rowHeight = RowHeight(input.Height)
         let next = SettingsGeneralInput{
@@ -454,48 +509,11 @@ class SettingsGeneral : Cell, IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
-        let content = Container{MinHeight: 0, Gap: AppTheme.Space8, General(context)}
-        if issue.Length > 0 {
-            content.Add(Label(context.Ui, context.Ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
-        }
-        return content
-    }
+    override func Build() Blob -> General(context)
 
     private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
-        guard let owner = input.Window else {
-            return
-        }
-        generation++
-        let request = generation
-        let session = input.Session
-        session.ApplyPreference(change)
-        input.Ui.Actions.Background(_ -> SavePreference(session, owner, input.OnPreference, request))
-    }
-
-    private async func SavePreference(session WalletSession, owner Window, saved Action, request int32) {
-        var error = ""
-        try {
-            await session.SavePreferencesAsync(CancellationToken.None)
-        } catch (failure Exception) {
-            error = failure.Message
-        }
-        owner.TryPost(
-            () -> {
-                if error.Length == 0 {
-                    saved.Invoke()
-                }
-                if generation != request {
-                    return
-                }
-                issue = error
-                Rebuild()
-            }
-        )
-    }
-
-    func Dispose() {
-        generation++
+        input.Session.ApplyPreference(change)
+        savePreference.Invoke(ct -> input.Session.SavePreferencesAsync(ct))
     }
 
     private func General(input SettingsPageInput) Blob {
