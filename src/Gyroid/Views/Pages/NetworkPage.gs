@@ -724,6 +724,7 @@ class NetworkPeers : Cell {
                     row.Key,
                     cell -> {
                         cell.Accept(this, row)
+                        cell.Hover(hovered)
                         realized.Add(cell)
                     }
                 )
@@ -921,8 +922,6 @@ class NetworkPeers : Cell {
 
     func Release(row NetworkPeerRow) -> realized.Remove(row)
 
-    func IsHovered(id string) bool -> hovered == id
-
     func PeerRow(peer NetworkPeer, active bool) Blob {
         let input = current
         let ui = input.Ui
@@ -990,12 +989,11 @@ class NetworkPeerRow : Cell, IDisposable {
     private var hovered bool
 
     func Accept(nextOwner NetworkPeers, next NetworkRow) {
-        if owner == nextOwner && current.Equals(next) {
+        if current.Equals(next) {
             return
         }
         owner = nextOwner
         current = next
-        hovered = owner.IsHovered(current.Peer?.Id ?? "")
         Rebuild()
     }
 
