@@ -95,6 +95,11 @@ class SendService {
                     Address: WalletValidation.ValidateAddress(resolved.Address)
                 }
             }
+            for previous in 0 ... index {
+                if recipients[previous].Address == recipients[index].Address {
+                    throw WalletException("Use each address only once")
+                }
+            }
         }
         return handles
     }

@@ -287,6 +287,7 @@ class Strings {
             case "signed by blocknet.id": "由 blocknet.id 签名"
             case "Add a recipient": "请添加收款人"
             case "Use no more than 255 recipients": "收款人不能超过 255 人"
+            case "Use each address only once": "每个地址只能使用一次"
             case "Checksum does not match. Check for a typo": "校验和不匹配。请检查是否输错"
             case "Testnet address. This wallet is on mainnet": "测试网地址。此钱包在主网"
             case "Mainnet address. This wallet is on testnet": "主网地址。此钱包在测试网"
