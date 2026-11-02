@@ -241,6 +241,11 @@ class Cli {
                 } else if command == "message" {
                     wallet.RefreshAsync().GetAwaiter().GetResult()
                     wallet.RequireUnlocked()
+                    {
+                        let password = ReadPassword()
+                        defer Array.Clear(password)
+                        wallet.UnlockAsync(password).GetAwaiter().GetResult()
+                    }
                     wallet.Messages.RefreshAsync().GetAwaiter().GetResult()
                     if wallet.Messages.Error.Length > 0 {
                         throw WalletException(wallet.Messages.Error)

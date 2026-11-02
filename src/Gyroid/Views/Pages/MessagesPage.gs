@@ -164,6 +164,7 @@ class MessagesPage : Cell, IDisposable {
             projection = MessagesProjection{Conversations: []ConversationView{}, Thread: []MessageThreadRow{}}
             conversation = nil
             selected = ""
+            password = ""
         }
         input = next
         listWidth = Math.Clamp(next.Width * 0.25, 200.0, 300.0)
@@ -284,11 +285,13 @@ class MessagesPage : Cell, IDisposable {
     private var dialog string = ""
     private var address string = ""
     private var issue string = ""
+    private var password string = ""
     private var busy bool
 
     func Dispose() {
         generation++
         operationGeneration++
+        password = ""
         selection?.Cancel()
         selection?.Dispose()
     }
@@ -350,6 +353,35 @@ class MessagesPage : Cell, IDisposable {
         Accept(MessagesInput{... input, Request: input.State.Request})
     }
 
+    private func OpenMessages() {
+        let secret = password.ToCharArray()
+        let session = input.Session
+        var message = ""
+        let version = operationGeneration
+        password = ""
+        issue = ""
+        input
+            .Ui
+            .Actions
+            .Run(
+            async (ct) -> {
+                try {
+                    await session.UnlockAsync(secret, ct)
+                } catch (failure Exception) when !(failure is OperationCanceledException) {
+                    message = failure.Message
+                }
+            },
+            () -> {
+                if version != operationGeneration {
+                    return
+                }
+                issue = message
+                Rebuild()
+            },
+            secret
+        )
+    }
+
     override func Build() Blob {
         let ui = input.Ui
         let root = Container{
@@ -360,7 +392,7 @@ class MessagesPage : Cell, IDisposable {
             FlexDirection: FlexDirection.Row,
             Gap: AppTheme.Space12
         }
-        if !input.Drawer {
+        if !input.Drawer && input.Address.Length > 0 {
             root.Add(Cell.Mount[MessageConversationList]("conversations", configureList))
         }
         let thread = WalletParts.Card(ui, AppTheme.Space0, AppTheme.Space0, AppTheme.Radius6)
@@ -369,7 +401,30 @@ class MessagesPage : Cell, IDisposable {
         thread.MinWidth = 0
         thread.MinHeight = 0
         thread.Overflow = Overflow.Hidden
-        if let current = conversation {
+        if input.Address.Length == 0 && !input.Locked {
+            let unlock = WalletForm(ui, !input.Working, OpenMessages, []string{password})
+            thread.Add(
+                Container{
+                    Padding: AppTheme.Space16,
+                    Gap: AppTheme.Space12,
+                    Label(ui, "Enter password to open messages", AppTheme.Type13, AppTheme.Dim, ""),
+                    unlock.Field(
+                        "Password",
+                        password,
+                        value -> {
+                            password = value
+                            issue = ""
+                            Rebuild()
+                        },
+                        secret: true,
+                        disabled: input.Working,
+                        labelled: false,
+                        invalid: issue.Length > 0
+                    ),
+                    Button(ui, "Unlock", unlock.Submit, !unlock.CanSubmit, true)
+                }
+            )
+        } else if let current = conversation {
             thread.Add(Header(input, current))
             thread.Add(Cell.Mount[MessageThread]("thread:" + current.Id, configureThread))
             thread.Add(Cell.Mount[MessageComposer]("composer:" + current.Id, configureComposer))

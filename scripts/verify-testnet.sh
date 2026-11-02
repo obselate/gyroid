@@ -181,7 +181,7 @@ def cli_error(output):
 
 def cli(*arguments, reply=None, prompt=None):
     command = [gyroid, *arguments]
-    if reply is None:
+    if reply is None and arguments[0] != "message":
         result = subprocess.run(command, env=environment, cwd=root, capture_output=True, timeout=30)
         if result.returncode:
             cli_error(result.stderr)
@@ -195,7 +195,8 @@ def cli(*arguments, reply=None, prompt=None):
     processes.append(process)
     os.close(slave)
     output = b""
-    sent = False
+    sent = reply is None
+    password_sent = False
     deadline = time.monotonic() + 30
     try:
         while time.monotonic() < deadline:
@@ -207,6 +208,9 @@ def cli(*arguments, reply=None, prompt=None):
                 if not chunk:
                     break
                 output += chunk
+                if arguments[0] == "message" and not password_sent and b"Password:" in output:
+                    os.write(master, password.encode() + b"\r")
+                    password_sent = True
                 if not sent and prompt in output:
                     os.write(master, reply.encode() + b"\r")
                     sent = True

@@ -200,12 +200,14 @@ partial class MessagingService {
         false
     ).Estimate
 
-    func UpdateWallet(address JsonElement) {
-        let own = NodeJson.Text(address, "address")
+    async func UnlockAsync(password[]char, ct CancellationToken) {
+        using let keys = await session.Node.Api.ViewKeysAsync(password, "", []char{}, ct)
+        using let address = await session.Node.Api.JsonAsync("wallet/address", ct: ct)
+        let own = NodeJson.Text(address.RootElement, "address")
         if own != OwnAddress {
             Reset()
             Address.Decode(own, Network)
-            let local = MessagingStore(Network, own)
+            let local = MessagingStore(Network, own, keys.ViewPrivate)
             lock sending {
                 store = local
                 ownAddress = own
@@ -220,7 +222,7 @@ partial class MessagingService {
                 Interlocked.Increment(ref viewRevision)
             }
         }
-        viewOnly = NodeJson.Flag(address, "view_only")
+        viewOnly = NodeJson.Flag(address.RootElement, "view_only")
     }
 
     func QueueRefresh(
@@ -556,7 +558,7 @@ partial class MessagingService {
     private async func Persist(local MessagingStore, ct CancellationToken) {
         await syncGate.WaitAsync(ct)
         try {
-            if object.ReferenceEquals(local, store) {
+            if object.ReferenceEquals(local, store) && session.State == WalletState.Unlocked {
                 local.Save()
             }
         } finally {
@@ -583,6 +585,7 @@ partial class MessagingService {
             sentMemos = Dictionary[string, Dictionary[string, DecodedMemo]](StringComparer.Ordinal)
             ownAddress = ""
             selected = ""
+            store?.Dispose()
             store = nil
             Error = ""
             Interlocked.Increment(ref viewRevision)

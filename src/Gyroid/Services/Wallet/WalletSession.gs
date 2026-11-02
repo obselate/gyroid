@@ -753,6 +753,7 @@ class WalletSession : IDisposable {
             )
             managed = true
             state = WalletState.Unlocked
+            await Messages.UnlockAsync(password, ct)
             Touch()
             settings.ActiveWallet = filename
             PublishEmpty()
@@ -787,7 +788,7 @@ class WalletSession : IDisposable {
                 },
                 ct
             )
-            await ActivateCoreAsync(filename, ct)
+            await ActivateCoreAsync(filename, password, ct)
         } finally {
             if let buffer = normalized {
                 Array.Clear(buffer)
@@ -822,6 +823,7 @@ class WalletSession : IDisposable {
                 )
             }
             state = WalletState.Unlocked
+            await Messages.UnlockAsync(password, ct)
             Keys.BackupPending = File.Exists(Library.WalletPath(settings.ActiveWallet) + ".backup-pending")
             Touch()
             try {
@@ -959,10 +961,11 @@ class WalletSession : IDisposable {
             disposed { }
     }
 
-    async func ActivateCoreAsync(filename string, ct CancellationToken) {
+    async func ActivateCoreAsync(filename string, password[]char, ct CancellationToken) {
         managed = true
         connected = true
         state = WalletState.Unlocked
+        await Messages.UnlockAsync(password, ct)
         settings.ActiveWallet = filename
         Keys.BackupPending = File.Exists(Library.WalletPath(filename) + ".backup-pending")
         Touch()
@@ -999,7 +1002,7 @@ class WalletSession : IDisposable {
             } catch (error WalletException) when error.StatusCode == 400 {
                 throw WalletException("Check the spend public key and view private key")
             }
-            await ActivateCoreAsync(filename, ct)
+            await ActivateCoreAsync(filename, password, ct)
         } finally {
             End()
         }
@@ -1047,11 +1050,6 @@ class WalletSession : IDisposable {
                     ... snapshot,
                     Address: NodeJson.Text(address.RootElement, "address"),
                     ViewOnly: NodeJson.Flag(address.RootElement, "view_only")
-                }
-                try {
-                    Messages.UpdateWallet(address.RootElement)
-                } catch (error Exception) {
-                    Messages.Error = error.Message
                 }
             }
             let sends = await History.ReadSendsAsync(ct)
@@ -1197,6 +1195,7 @@ class WalletSession : IDisposable {
         eventsChanged.Writer.TryComplete()
         shutdown.Dispose()
         Send.InvalidateConfirmation()
+        Messages.Reset()
         Node.Dispose()
         managed = false
         connected = false

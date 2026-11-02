@@ -113,7 +113,7 @@ class WalletLibrary {
                 File.Move(temporary, destination, false)
             }
             await session.LoadWalletCoreAsync(destination, password, CancellationToken.None)
-            await session.ActivateCoreAsync(filename, CancellationToken.None)
+            await session.ActivateCoreAsync(filename, password, CancellationToken.None)
         } catch (error IOException) {
             throw WalletException("Wallet file could not be imported. Existing files are never replaced")
         } catch (error UnauthorizedAccessException) {
