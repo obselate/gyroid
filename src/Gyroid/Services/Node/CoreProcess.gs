@@ -27,6 +27,19 @@ func OpenWalletProcessToken(process IntPtr, access uint32, out token IntPtr) boo
 @DllImport("libproc", EntryPoint: "proc_pidpath")
 func WalletMacProcessPath(pid int32, path[]uint8, size uint32) int32;
 
+@DllImport("libproc", EntryPoint: "proc_pidinfo")
+func WalletMacProcessInfo(pid int32, flavor int32, argument uint64, buffer IntPtr, size int32) int32;
+
+@DllImport("libc", EntryPoint: "sysctl", SetLastError: true)
+func WalletMacSysctl(
+    name[]int32,
+    count uint32,
+    value IntPtr,
+    ref size UIntPtr,
+    replacement IntPtr,
+    replacementSize UIntPtr
+) int32;
+
 @DllImport("ntdll.dll", EntryPoint: "NtQueryInformationProcess")
 func WalletProcessInformation(process IntPtr, kind uint32, buffer IntPtr, size int32, out length int32) int32;
 
@@ -51,6 +64,17 @@ class CoreProcess {
                 }
                 if !sameUser {
                     throw WalletException("API listener identity could not be verified")
+                }
+            } else if OperatingSystem.IsMacOS() {
+                let buffer = Marshal.AllocHGlobal(64)
+                try {
+                    if WalletMacProcessInfo(pid, 13, 0, buffer, 64) != 64 ||
+                        uint32(Marshal.ReadInt32(buffer, 36)) != WalletUserId() ||
+                        uint32(Marshal.ReadInt32(buffer, 44)) != WalletUserId() {
+                        throw WalletException("API listener identity could not be verified")
+                    }
+                } finally {
+                    Marshal.FreeHGlobal(buffer)
                 }
             } else if OperatingSystem.IsWindows() {
                 let process = OpenWalletProcess(4096, false, pid)
@@ -89,6 +113,56 @@ class CoreProcess {
         func Arguments(pid int32)[]string {
             if OperatingSystem.IsLinux() {
                 return File.ReadAllText("/proc/" + pid.ToString() + "/cmdline").Split('\0')
+            }
+            if OperatingSystem.IsMacOS() {
+                let maximum = Marshal.AllocHGlobal(4)
+                var size = UIntPtr(4)
+                var capacity int32 = 0
+                try {
+                    if WalletMacSysctl([]int32{1, 8}, 2, maximum, ref size, IntPtr.Zero, UIntPtr.Zero) != 0 {
+                        throw WalletException("Core process arguments could not be verified")
+                    }
+                    capacity = Marshal.ReadInt32(maximum)
+                } finally {
+                    Marshal.FreeHGlobal(maximum)
+                }
+                if capacity < 4 {
+                    throw WalletException("Core process arguments could not be verified")
+                }
+                let buffer = Marshal.AllocHGlobal(capacity)
+                size = UIntPtr(uint32(capacity))
+                try {
+                    if WalletMacSysctl([]int32{1, 49, pid}, 3, buffer, ref size, IntPtr.Zero, UIntPtr.Zero) != 0 {
+                        throw WalletException("Core process arguments could not be verified")
+                    }
+                    let length = int32(size.ToUInt32())
+                    let count = Marshal.ReadInt32(buffer)
+                    if length < 4 || count < 1 || count > length - 4 {
+                        throw WalletException("Core process arguments could not be verified")
+                    }
+                    var offset = 4
+                    while offset < length && Marshal.ReadByte(buffer, offset) != 0 {
+                        offset = offset + 1
+                    }
+                    while offset < length && Marshal.ReadByte(buffer, offset) == 0 {
+                        offset = offset + 1
+                    }
+                    let arguments = [count]string
+                    for index in 0 ... count {
+                        let start = offset
+                        while offset < length && Marshal.ReadByte(buffer, offset) != 0 {
+                            offset = offset + 1
+                        }
+                        if offset >= length {
+                            throw WalletException("Core process arguments could not be verified")
+                        }
+                        arguments[index] = Marshal.PtrToStringUTF8(IntPtr.Add(buffer, start), offset - start) ?? ""
+                        offset = offset + 1
+                    }
+                    return arguments
+                } finally {
+                    Marshal.FreeHGlobal(buffer)
+                }
             }
             let process = OpenWalletProcess(4096, false, pid)
             let buffer = Marshal.AllocHGlobal(65536)
@@ -133,7 +207,7 @@ class CoreProcess {
         }
 
         func VerifyNetwork(pid int32, network string) {
-            if OperatingSystem.IsLinux() || OperatingSystem.IsWindows() {
+            if OperatingSystem.IsLinux() || OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() {
                 if IsTestnet(Arguments(pid)) != (network == "testnet") {
                     throw WalletException("Running core network does not match the configured network")
                 }

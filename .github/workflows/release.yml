@@ -3,6 +3,9 @@ name: Release
 on:
   push:
     tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,7 +36,7 @@ jobs:
       - run: bash scripts/verify.sh
       - run: bash scripts/release-linux.sh
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: linux-x64
@@ -79,8 +82,49 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      NuGetLockFilePath: ${{ github.workspace }}/src/Gyroid/packages.osx-arm64.lock.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: src/Gyroid/packages.osx-arm64.lock.json
+      - run: test "$(uname -m)" = arm64
+      - run: bash scripts/install-shader-tools.sh
+      - run: dotnet tool install --tool-path "$RUNNER_TEMP/goo" Goo.DevTools --version 0.27.1
+      - run: bash scripts/verify.sh
+      - run: bash scripts/generate-macos-icon.sh
+      - name: Package NativeAOT app and DMG
+        run: |
+          dotnet restore src/Gyroid/Gyroid.gsproj -r osx-arm64 --locked-mode
+          "$RUNNER_TEMP/goo/goo" package --project src/Gyroid/Gyroid.gsproj --target macos --output "$GITHUB_WORKSPACE/artifacts/macos"
+          version=$(python3 -c 'import xml.etree.ElementTree as E; print(E.parse("src/Gyroid/Gyroid.gsproj").findtext("PropertyGroup/Version"))')
+          mkdir -p artifacts/release
+          mv "artifacts/macos/dev.gyroid.wallet-$version-osx-arm64.dmg" "artifacts/release/gyroid-$version-macos-arm64.dmg"
+      - name: Smoke installed app
+        run: bash scripts/verify-macos.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: macos-arm64
+          path: artifacts/release/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: macos-smoke
+          path: artifacts/macos-smoke/
+          if-no-files-found: warn
+          retention-days: 7
+
   release:
-    needs: [linux, windows]
+    needs: [linux, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -91,16 +135,17 @@ jobs:
         with:
           path: artifacts/release
           merge-multiple: true
-      - name: Check both archives
+      - name: Check all archives
         working-directory: artifacts/release
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           version=${RELEASE_TAG#v}
-          sha256sum "gyroid-$version-linux-x64.tar.gz" "gyroid-$version-win-x64.zip" > SHA256SUMS
+          sha256sum "gyroid-$version-linux-x64.tar.gz" "gyroid-$version-win-x64.zip" "gyroid-$version-macos-arm64.dmg" > SHA256SUMS
           sha256sum -c SHA256SUMS
+          printf '\n## macOS Apple silicon\n\nRequires Apple silicon and macOS 14 or later. No .NET runtime is required. Copy Gyroid.app from the DMG to Applications. The app is ad-hoc signed and is not notarized. On first launch, use Settings > Privacy & Security > Open Anyway if macOS blocks it. Payment links are not registered in this build.\n' >> release-notes.md
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" artifacts/release/*.tar.gz artifacts/release/*.zip artifacts/release/SHA256SUMS --verify-tag --draft --generate-notes --notes-file artifacts/release/release-notes.md --title "Gyroid $RELEASE_TAG"
+        run: gh release create "$RELEASE_TAG" artifacts/release/*.tar.gz artifacts/release/*.zip artifacts/release/*.dmg artifacts/release/SHA256SUMS --verify-tag --draft --generate-notes --notes-file artifacts/release/release-notes.md --title "Gyroid $RELEASE_TAG"

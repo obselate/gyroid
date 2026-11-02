@@ -336,7 +336,7 @@ class NodeSupervisor : IDisposable {
                 return true
             }
         }
-        if OperatingSystem.IsLinux() || OperatingSystem.IsWindows() {
+        if OperatingSystem.IsLinux() || OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() {
             for candidate in Process.GetProcesses() {
                 using let current = candidate
                 try {

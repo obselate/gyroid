@@ -2,6 +2,15 @@
 set -euo pipefail
 root="${1:-${RUNNER_TEMP:?Set RUNNER_TEMP or pass an installation directory}}"
 mkdir -p "$root/slang" "$root/vulkan-sdk/bin"
+if [[ "$(uname -s)" == Darwin ]]; then
+  curl -fsSLo "$root/slang.tar.gz" https://github.com/shader-slang/slang/releases/download/v2026.16/slang-2026.16-macos-aarch64.tar.gz
+  echo "5d7edc2c91c38d1914c14a5a410f0fe517bce9a284395336715ba36a091e9d9e  $root/slang.tar.gz" | shasum -a 256 -c -
+  tar -xzf "$root/slang.tar.gz" -C "$root/slang"
+  rm "$root/slang.tar.gz"
+  brew list spirv-tools >/dev/null 2>&1 || brew install spirv-tools
+  printf 'SLANG_SDK=%s/slang\nVULKAN_SDK=%s\n' "$root" "$(brew --prefix spirv-tools)" >> "${GITHUB_ENV:?Set GITHUB_ENV to the environment output file}"
+  exit 0
+fi
 curl -fsSLo "$root/slang.tar.gz" https://github.com/shader-slang/slang/releases/download/v2026.16/slang-2026.16-linux-x86_64-glibc-2.27.tar.gz
 echo "b9c5e195ce9a7124147d47febe78b7f8c59c96829add50b0938bd04b8056fb88  $root/slang.tar.gz" | sha256sum -c -
 tar -xzf "$root/slang.tar.gz" -C "$root/slang"

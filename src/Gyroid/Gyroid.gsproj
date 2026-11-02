@@ -2,6 +2,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <Version>0.2.7</Version>
+    <Product>Gyroid</Product>
+    <GooPackageId>dev.gyroid.wallet</GooPackageId>
+    <GooPackageIcon Condition="$([MSBuild]::IsOSPlatform('OSX'))">assets/gyroid.icns</GooPackageIcon>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Gyroid</RootNamespace>
     <AssemblyName>Gyroid</AssemblyName>
