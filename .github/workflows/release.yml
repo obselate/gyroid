@@ -96,7 +96,7 @@ jobs:
           cache-dependency-path: src/Gyroid/packages.osx-arm64.lock.json
       - run: test "$(uname -m)" = arm64
       - run: bash scripts/install-shader-tools.sh
-      - run: dotnet tool install --tool-path "$RUNNER_TEMP/goo" Goo.DevTools --version 0.27.1
+      - run: dotnet tool install --tool-path "$RUNNER_TEMP/goo" Goo.DevTools --version 0.27.2
       - run: bash scripts/verify.sh
       - run: bash scripts/generate-macos-icon.sh
       - name: Package NativeAOT app and DMG
@@ -155,7 +155,7 @@ jobs:
           version=${RELEASE_TAG#v}
           sha256sum "gyroid-$version-linux-x64.tar.gz" "gyroid-$version-win-x64.zip" "gyroid-$version-macos-arm64.dmg" > SHA256SUMS
           sha256sum -c SHA256SUMS
-          printf '\n## macOS Apple silicon\n\nRequires Apple silicon and macOS 14 or later. No .NET runtime is required. Copy Gyroid.app from the DMG to Applications. The app is ad-hoc signed and is not notarized. On first launch, use Settings > Privacy & Security > Open Anyway if macOS blocks it. Payment links are not registered in this build.\n' >> release-notes.md
+          printf '\n## macOS Apple silicon\n\nRequires Apple silicon and macOS 14 or later. No .NET runtime is required. Copy Gyroid.app from the DMG to Applications. The app is ad-hoc signed and is not notarized. On first launch, use Settings > Privacy & Security > Open Anyway if macOS blocks it.\n' >> release-notes.md
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
