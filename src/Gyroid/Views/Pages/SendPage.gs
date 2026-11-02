@@ -1157,13 +1157,14 @@ class SendReview : Cell {
         let list = VirtualRows(shown, AppTheme.ControlRegular + AppTheme.Space12, rowKey, rowBuilder, false)
         list.MinHeight = 0
         list.FlexShrink = 1
-        list.Height = Math.Min(rowsHeight, Math.Max(AppTheme.ControlRegular, input.Height - AppTheme.Space24 * 10))
+        list.Height = rowsHeight
         list.BorderWidth = Edges{Top: AppTheme.Border1}
         list.BorderColor = AppTheme.Rule
         let remaining = spendable - Math.Min(spendable, pending.Total)
         let content = Container{
             Gap: compact ? AppTheme.Space14: AppTheme.Space16,
             MinHeight: 0,
+            MaxHeight: input.Height,
             FlexShrink: 1,
             WalletParts.Header(
                 Label(
