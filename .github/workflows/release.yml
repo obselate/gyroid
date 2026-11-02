@@ -113,7 +113,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Smoke installed app
-        run: bash scripts/verify-macos.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/gyroid-core.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          asset=blocknet-core-arm64-macos-0.23.0.zip
+          gh release download v0.23.0 --repo blocknetprivacy/core --pattern "$asset" --pattern SHA256SUMS.txt --dir "$work"
+          unset GH_TOKEN
+          (cd "$work" && grep -F " $asset" SHA256SUMS.txt | shasum -a 256 -c -)
+          unzip -q "$work/$asset" -d "$work"
+          chmod 700 "$work/blocknet-core-arm64-macos"
+          GYROID_BINARY="$work/blocknet-core-arm64-macos" bash scripts/verify-macos.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

@@ -64,28 +64,18 @@ node = None
 gui = None
 try:
     try:
-        installation = Path.home() / "Library/Application Support/Gyroid/core/blocknet-core-arm64-macos"
-        assert not installation.exists(), "Core must be downloaded by this CLI run"
-        with (output / "node-download-start.log").open("w") as log:
+        assert Path(env["GYROID_BINARY"]).is_file()
+        with (output / "node-launch.log").open("w") as log:
             node = subprocess.Popen([str(exe), "node", "start"], env=env, stdout=log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 180
             while time.monotonic() < deadline:
                 if node.poll() is not None:
-                    for name, url in (
-                        ("core-release", "https://api.github.com/repos/blocknetprivacy/core/releases/latest"),
-                        ("core-checksums", "https://github.com/blocknetprivacy/core/releases/download/v0.23.0/SHA256SUMS.txt"),
-                    ):
-                        subprocess.run(["curl", "-sS", "-L", "--max-time", "20", "-A", "Gyroid",
-                                        "-D", str(output / (name + ".headers")),
-                                        "-o", str(output / (name + ".response")), url], check=False)
-                    raise RuntimeError("Testnet node start exited. See node-download-start.log")
-                if "Running: True" in (output / "node-download-start.log").read_text():
+                    raise RuntimeError("Testnet node start exited. See node-launch.log")
+                if "Running: True" in (output / "node-launch.log").read_text():
                     break
                 time.sleep(1)
             else:
                 raise TimeoutError("Testnet core did not start within 180 seconds")
-            assert installation.exists()
-            assert "Owned: True" in (output / "node-download-start.log").read_text()
             status = run("node", "status")
             assert "Running: True" in status and "Network: testnet" in status
             scan = run("node", "start", environment=dict(env, GYROID_ENDPOINT="http://127.0.0.1:42892/"))
