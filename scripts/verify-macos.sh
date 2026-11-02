@@ -14,6 +14,18 @@ hdiutil attach artifacts/release/*.dmg -nobrowse -readonly -mountpoint "$work/mo
 ditto "$work/mount/Gyroid.app" "$work/Applications Test/Gyroid.app"
 hdiutil detach "$work/mount"
 codesign --verify --deep --strict --verbose=2 "$work/Applications Test/Gyroid.app" 2>&1 | tee "$output/signature.log"
+clang -x c -o "$work/verify-layout" - <<'C'
+#include <stddef.h>
+#include <sys/stat.h>
+#include <sys/proc_info.h>
+_Static_assert(offsetof(struct stat, st_mode) == 4, "stat mode offset");
+_Static_assert(offsetof(struct stat, st_uid) == 16, "stat uid offset");
+_Static_assert(sizeof(struct proc_bsdshortinfo) == 64, "process info size");
+_Static_assert(offsetof(struct proc_bsdshortinfo, pbsi_uid) == 36, "process uid offset");
+_Static_assert(offsetof(struct proc_bsdshortinfo, pbsi_ruid) == 44, "process real uid offset");
+int main(void) { return 0; }
+C
+"$work/verify-layout"
 python3 - "$work" "$output" <<'PY'
 from pathlib import Path
 import json
@@ -27,7 +39,9 @@ work, output = map(Path, sys.argv[1:])
 exe = work / "Applications Test/Gyroid.app/Contents/MacOS/Gyroid"
 env = dict(os.environ, GYROID_NETWORK="testnet", GYROID_SETTINGS=str(work / "settings.json"),
            GYROID_DATA_DIR=str(work / "testnet"), GYROID_WALLET_DIR=str(work / "wallets"),
-           GYROID_ENDPOINT="http://127.0.0.1:42891/", GYROID_NODE_MODE="automatic")
+           GYROID_ENDPOINT="http://127.0.0.1:42891/", GYROID_NODE_MODE="automatic",
+           BNT_CONFIG_DIR=str(work / "bnt"))
+Path(env["BNT_CONFIG_DIR"]).mkdir()
 settings = Path(env["GYROID_SETTINGS"])
 settings.write_text(json.dumps({"network": "testnet"}))
 settings.chmod(0o600)

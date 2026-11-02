@@ -106,14 +106,14 @@ jobs:
           version=$(python3 -c 'import xml.etree.ElementTree as E; print(E.parse("src/Gyroid/Gyroid.gsproj").findtext("PropertyGroup/Version"))')
           mkdir -p artifacts/release
           mv "artifacts/macos/dev.gyroid.wallet-$version-osx-arm64.dmg" "artifacts/release/gyroid-$version-macos-arm64.dmg"
-      - name: Smoke installed app
-        run: bash scripts/verify-macos.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: macos-arm64
           path: artifacts/release/*.dmg
           if-no-files-found: error
           retention-days: 7
+      - name: Smoke installed app
+        run: bash scripts/verify-macos.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
