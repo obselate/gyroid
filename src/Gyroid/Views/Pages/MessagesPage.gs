@@ -386,8 +386,7 @@ class MessagesPage : Cell, IDisposable {
                 if version != operationGeneration {
                     return
                 }
-                issue = message
-                Rebuild()
+                SetIssue(message)
             },
             secret
         )
