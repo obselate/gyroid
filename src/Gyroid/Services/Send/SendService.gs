@@ -103,6 +103,9 @@ class SendService {
         if requests.Length == 0 {
             throw WalletException("Add a recipient")
         }
+        if requests.Length > MaximumRecipients {
+            throw WalletException("Use no more than 255 recipients")
+        }
         let recipients = [requests.Length]WalletRecipient
         var total uint64 = 0
         for index in 0 ... requests.Length {
@@ -410,6 +413,8 @@ class SendService {
     }
 
     shared {
+        const MaximumRecipients int32 = 255
+
         func PrepareDraft(row SendRow, contacts SortedDictionary[string, string], network string) {
             row.AmountIssue = ""
             row.Atoms = nil
