@@ -207,13 +207,18 @@ partial class MessagingService {
 
     async func UnlockAsync(password[]char, ct CancellationToken) {
         try {
-            using let keys = await session.Node.Api.ViewKeysAsync(password, "", []char{}, ct)
             using let address = await session.Node.Api.JsonAsync("wallet/address", ct: ct)
             let own = NodeJson.Text(address.RootElement, "address")
+            viewOnly = NodeJson.Flag(address.RootElement, "view_only")
             if own != OwnAddress {
                 Reset()
                 Address.Decode(own, Network)
-                let local = MessagingStore(Network, own, keys.ViewPrivate)
+                let local = if viewOnly {
+                    MessagingStore(Network, own, []char{})
+                } else {
+                    using let keys = await session.Node.Api.ViewKeysAsync(password, "", []char{}, ct)
+                    MessagingStore(Network, own, keys.ViewPrivate)
+                }
                 lock sending {
                     store = local
                     ownAddress = own
@@ -228,7 +233,6 @@ partial class MessagingService {
                     Interlocked.Increment(ref viewRevision)
                 }
             }
-            viewOnly = NodeJson.Flag(address.RootElement, "view_only")
         } catch (error Exception) when !(error is OperationCanceledException) {
             ct.ThrowIfCancellationRequested()
             Error = error.Message

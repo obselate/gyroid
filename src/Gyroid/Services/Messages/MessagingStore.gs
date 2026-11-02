@@ -12,10 +12,10 @@ import System.Text.Json
 import System.Threading.Tasks
 
 class MessagingStore : IDisposable {
-    private let path string
-    private let key Key
+    private let path string?
+    private let key Key?
     private let verificationOrder Queue[string] = Queue[string]()
-    private var canSave bool = true
+    private var canSave bool
     var Error string = ""
     let Conversations ConcurrentDictionary[string, Conversation] = ConcurrentDictionary[string, Conversation](
         StringComparer.Ordinal
@@ -28,6 +28,10 @@ class MessagingStore : IDisposable {
     let Removed ConcurrentDictionary[string, int64] = ConcurrentDictionary[string, int64](StringComparer.Ordinal)
 
     init(network string, address string, viewPrivate[]char) {
+        if viewPrivate.Length == 0 {
+            return
+        }
+        canSave = true
         let directory = Path.GetDirectoryName(SettingsStore.ConfigurationPath()) ??
             throw WalletException("Settings file must have a parent directory")
         let secret = Convert.FromHexString(ReadOnlySpan[char](viewPrivate))
@@ -52,6 +56,9 @@ class MessagingStore : IDisposable {
         } finally {
             CryptographicOperations.ZeroMemory(Span[uint8](secret))
             CryptographicOperations.ZeroMemory(Span[uint8](material))
+        }
+        guard let path = path else {
+            return
         }
         let legacy = Path.Combine(
             directory,
@@ -206,6 +213,9 @@ class MessagingStore : IDisposable {
             if !canSave {
                 return
             }
+            guard let path = path else {
+                return
+            }
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "")
             PrivateFiles
                 .WriteAtomic(
@@ -294,7 +304,7 @@ class MessagingStore : IDisposable {
     func Dispose() {
         lock verificationOrder {
             canSave = false
-            key.Dispose()
+            key?.Dispose()
         }
     }
 }
