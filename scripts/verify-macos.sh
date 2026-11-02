@@ -63,38 +63,40 @@ run("settings")
 node = None
 gui = None
 try:
-    with (output / "gui.log").open("w") as gui_log:
-        gui = subprocess.Popen([str(exe)], env=env, stdout=gui_log, stderr=subprocess.STDOUT)
-        time.sleep(20)
-        subprocess.run(["screencapture", "-x", str(output / "gui.png")], check=True)
-        gui_failed = gui.poll() is not None
-        if not gui_failed:
-            gui.send_signal(signal.SIGINT)
-            gui.wait(timeout=20)
-    with (output / "node-start.log").open("w") as log:
-        node = subprocess.Popen([str(exe), "node", "start"], env=env, stdout=log, stderr=subprocess.STDOUT)
-        deadline = time.monotonic() + 180
-        while time.monotonic() < deadline:
-            if node.poll() is not None:
-                for name, url in (
-                    ("core-release", "https://api.github.com/repos/blocknetprivacy/core/releases/latest"),
-                    ("core-checksums", "https://github.com/blocknetprivacy/core/releases/download/v0.23.0/SHA256SUMS.txt"),
-                ):
-                    subprocess.run(["curl", "-sS", "-L", "--max-time", "20", "-A", "Gyroid",
-                                    "-D", str(output / (name + ".headers")),
-                                    "-o", str(output / (name + ".response")), url], check=False)
-                raise RuntimeError("Testnet node start exited. See node-start.log")
-            if "Running: True" in (output / "node-start.log").read_text():
-                break
-            time.sleep(1)
-        else:
-            raise TimeoutError("Testnet core did not start within 180 seconds")
-        status = run("node", "status")
-        assert "Running: True" in status and "Network: testnet" in status
-        scan = run("node", "start", environment=dict(env, GYROID_ENDPOINT="http://127.0.0.1:42892/"))
-        assert "Running: True" in scan and "Network: testnet" in scan and "42891" in scan
-        if gui_failed:
-            raise RuntimeError("GUI exited before screenshot. See gui.log")
+    try:
+        installation = Path.home() / "Library/Application Support/Gyroid/core/blocknet-core-arm64-macos"
+        assert not installation.exists(), "Core must be downloaded by this CLI run"
+        with (output / "node-download-start.log").open("w") as log:
+            node = subprocess.Popen([str(exe), "node", "start"], env=env, stdout=log, stderr=subprocess.STDOUT)
+            deadline = time.monotonic() + 180
+            while time.monotonic() < deadline:
+                if node.poll() is not None:
+                    for name, url in (
+                        ("core-release", "https://api.github.com/repos/blocknetprivacy/core/releases/latest"),
+                        ("core-checksums", "https://github.com/blocknetprivacy/core/releases/download/v0.23.0/SHA256SUMS.txt"),
+                    ):
+                        subprocess.run(["curl", "-sS", "-L", "--max-time", "20", "-A", "Gyroid",
+                                        "-D", str(output / (name + ".headers")),
+                                        "-o", str(output / (name + ".response")), url], check=False)
+                    raise RuntimeError("Testnet node start exited. See node-download-start.log")
+                if "Running: True" in (output / "node-download-start.log").read_text():
+                    break
+                time.sleep(1)
+            else:
+                raise TimeoutError("Testnet core did not start within 180 seconds")
+            assert installation.exists()
+            assert "Owned: True" in (output / "node-download-start.log").read_text()
+            status = run("node", "status")
+            assert "Running: True" in status and "Network: testnet" in status
+            scan = run("node", "start", environment=dict(env, GYROID_ENDPOINT="http://127.0.0.1:42892/"))
+            assert "Running: True" in scan and "Network: testnet" in scan and "42891" in scan
+    finally:
+        with (output / "gui.log").open("w") as gui_log:
+            gui = subprocess.Popen([str(exe)], env=env, stdout=gui_log, stderr=subprocess.STDOUT)
+            time.sleep(20)
+            subprocess.run(["screencapture", "-x", str(output / "gui.png")], check=True)
+            if gui.poll() is not None:
+                raise RuntimeError("GUI exited before screenshot. See gui.log")
 finally:
     for process in (gui, node):
         if process is not None and process.poll() is None:
