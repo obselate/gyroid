@@ -20,7 +20,6 @@ partial class App {
     private let configureMessages Action[MessagesPage]
     private let configureMessageOverlay Action[MessageOverlay]
     private let openMessages Action
-    private let closeMessageDrawer Action
     private let reloadMessageContacts Action
 
     private func ObserveMessages() {
@@ -61,7 +60,6 @@ partial class App {
         Privacy: ui.Privacy,
         Language: ui.Strings.Language,
         OnOpen: openMessages,
-        OnClose: closeMessageDrawer,
         OnContacts: reloadMessageContacts
     }
 
@@ -91,12 +89,19 @@ class MessageOverlay : Cell, IDisposable {
     private var timer WindowTimer?
     private var disposed bool
     private let configureDrawer Action[MessagesPage]
+    private let closeDrawer Action
 
     prop IsDrawerOpen bool -> drawer
 
     init() {
+        closeDrawer = () -> CloseDrawer()
         configureDrawer = child -> child.Accept(
-            MessagesInput{... input.Messages, Width: Math.Min(480.0, input.Width - 112), Drawer: true}
+            MessagesInput{
+                ... input.Messages,
+                Width: Math.Min(480.0, input.Width - 112),
+                Drawer: true,
+                OnClose: closeDrawer
+            }
         )
     }
 

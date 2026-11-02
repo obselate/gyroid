@@ -286,7 +286,6 @@ partial class App : Cell, IDisposable {
             SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
         )
         openMessages = () -> Open(AppPage.Messages)
-        closeMessageDrawer = () -> messageOverlay?.CloseDrawer()
         reloadMessageContacts = () -> LoadContacts()
         configureMessages = child -> child.Accept(MessagesPageInput())
         configureMessageOverlay = child -> {
