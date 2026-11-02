@@ -512,10 +512,13 @@ partial class MessagingService {
 
     async func MarkRead(conversation Conversation, ct CancellationToken = default(CancellationToken)) {
         let local = store ?? throw WalletException("Load a wallet first")
+        let changed = conversation.Unread > 0
         conversation.Unread = 0
         local.MarkRead(conversation)
-        Interlocked.Increment(ref viewRevision)
-        session.Changed?.Invoke()
+        if changed {
+            Interlocked.Increment(ref viewRevision)
+            session.Changed?.Invoke()
+        }
         await Persist(local, ct)
     }
 
