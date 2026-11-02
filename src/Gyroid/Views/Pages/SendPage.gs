@@ -211,6 +211,7 @@ class SendPage : Cell, IDisposable {
             Issue: issue
         },
         CanSubmit: model.CanSubmit,
+        CanAdd: input.Rows.Count < SendService.MaximumRecipients,
         Loading: input.Display.Busy || reading,
         Focus: reviewFocus,
         Submit: submit,
@@ -921,6 +922,7 @@ data struct SendActionsInput {
     var Display SendDisplay
     var Balance SendBalanceInput
     var CanSubmit bool
+    var CanAdd bool
     var Loading bool
     var Focus bool
     var Submit Action
@@ -942,19 +944,20 @@ class SendActions : Cell {
         let input = current
         let display = input.Display
         let ui = display.Ui
+        let addDisabled = display.Busy || !input.CanAdd
         let review = Button(ui, "Review", input.Submit, !input.CanSubmit, true, input.Focus, input.Loading)
         review.MinWidth = 140
         let add = ControlParts.Button(
             ui,
             "recipient",
             input.Add,
-            display.Busy,
+            addDisabled,
             busy: false,
             appearance: AppTheme.CompactButton with{
                 BackgroundColor = Color.Transparent,
                 BorderWidth = AppTheme.Border0,
                 TextColor = AppTheme.Lime,
-                Leading = MaterialIcons.Create("add", AppTheme.Icon16, display.Busy ? AppTheme.Dim: AppTheme.Lime),
+                Leading = MaterialIcons.Create("add", AppTheme.Icon16, addDisabled ? AppTheme.Dim: AppTheme.Lime),
                 AccessibilityName = ui.Strings.Get("Add recipient")
             }
         )
