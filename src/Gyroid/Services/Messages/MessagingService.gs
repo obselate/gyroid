@@ -201,28 +201,33 @@ partial class MessagingService {
     ).Estimate
 
     async func UnlockAsync(password[]char, ct CancellationToken) {
-        using let keys = await session.Node.Api.ViewKeysAsync(password, "", []char{}, ct)
-        using let address = await session.Node.Api.JsonAsync("wallet/address", ct: ct)
-        let own = NodeJson.Text(address.RootElement, "address")
-        if own != OwnAddress {
-            Reset()
-            Address.Decode(own, Network)
-            let local = MessagingStore(Network, own, keys.ViewPrivate)
-            lock sending {
-                store = local
-                ownAddress = own
-                Error = local.Error
-                conversations = local.Conversations.Values.Where(item -> item.IsGroup || item.Id != own).ToList()
-                for conversation in conversations {
-                    for message in conversation.Messages {
-                        sending[message] = conversation.Id
-                        sendCancellations[message] = CancellationTokenSource()
+        try {
+            using let keys = await session.Node.Api.ViewKeysAsync(password, "", []char{}, ct)
+            using let address = await session.Node.Api.JsonAsync("wallet/address", ct: ct)
+            let own = NodeJson.Text(address.RootElement, "address")
+            if own != OwnAddress {
+                Reset()
+                Address.Decode(own, Network)
+                let local = MessagingStore(Network, own, keys.ViewPrivate)
+                lock sending {
+                    store = local
+                    ownAddress = own
+                    Error = local.Error
+                    conversations = local.Conversations.Values.Where(item -> item.IsGroup || item.Id != own).ToList()
+                    for conversation in conversations {
+                        for message in conversation.Messages {
+                            sending[message] = conversation.Id
+                            sendCancellations[message] = CancellationTokenSource()
+                        }
                     }
+                    Interlocked.Increment(ref viewRevision)
                 }
-                Interlocked.Increment(ref viewRevision)
             }
+            viewOnly = NodeJson.Flag(address.RootElement, "view_only")
+        } catch (error Exception) when !(error is OperationCanceledException) {
+            ct.ThrowIfCancellationRequested()
+            Error = error.Message
         }
-        viewOnly = NodeJson.Flag(address.RootElement, "view_only")
     }
 
     func QueueRefresh(

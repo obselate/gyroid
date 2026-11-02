@@ -410,7 +410,7 @@ try:
     since = time.monotonic()
     message = "Gyroid verified message round trip across Blocknet testnet memos"
     wait_for(lambda: time.monotonic() - submitted_at >= 2.1 and api(0, "wallet/balance").get("spendable", 0) > 0)
-    cli("message", "send", addresses[1], message)
+    cli("message", "send", addresses[1], message, reply="send", prompt=b"Type send to submit:")
     if (root / "contacts.json").exists():
         raise RuntimeError()
     api(0, "mining/start", {})
