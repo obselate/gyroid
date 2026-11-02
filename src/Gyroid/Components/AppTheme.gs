@@ -2,6 +2,7 @@ package Gyroid.Components
 
 import Goo
 import Goo.Widgets.Actions
+import Goo.Widgets.Icons
 import Goo.Widgets.Inputs
 import Goo.Widgets.Layout
 import System
@@ -173,6 +174,28 @@ class AppTheme {
             BorderWidth: Border0
         }
         let IconButton IconButton = IconButton{RootStyle: IconButtonStyle, HoverBackgroundColor: Rule}
+        let InfoButton IconButton = IconButton{
+            Icon: MaterialIcons.Create("info", Icon14, Ink),
+            CreateRoot: (value, icon) -> Goo
+                .Button{
+                BasedOn: DisclosureStyle,
+                Width: Space22,
+                Height: Space20,
+                FlexShrink: 0,
+                BorderRadius: Radius3,
+                Opacity: value.Active ? 1: float64(Dim.R / Ink.R),
+                Hover: Style{Opacity: 1},
+                Active: Style{Opacity: 1},
+                Focus: Style{Opacity: 1, OutlineWidth: Border1, OutlineColor: Ink, OutlineOffset: Border0},
+                Accessibility: Accessibility{
+                    Role: AccessibilityRole.Button,
+                    Name: value.AccessibilityName!!,
+                    Selected: value.Active
+                },
+                OnClick: value.OnClick,
+                icon
+            }
+        }
         let TabStyle Style = Style{
             Height: ControlCompact,
             BorderRadius: Radius4,

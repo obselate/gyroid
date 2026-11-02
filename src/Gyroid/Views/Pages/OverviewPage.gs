@@ -538,7 +538,7 @@ class OverviewUpgrade : Cell[OverviewUpgradeInput] {
         let ui = input.Ui
         let bar = WalletParts.Card(
             ui,
-            Edges{Top: AppTheme.Space0, Bottom: AppTheme.Space0, Left: AppTheme.Space16, Right: AppTheme.Space10},
+            Edges{Top: AppTheme.Space0, Bottom: AppTheme.Space0, Left: AppTheme.Space16, Right: AppTheme.Space16},
             AppTheme.Space14
         )
         bar.FlexShrink = 0
@@ -566,8 +566,7 @@ class OverviewUpgrade : Cell[OverviewUpgradeInput] {
         }
         bar.Add(
             (
-                AppTheme.IconButton with{
-                    Icon = MaterialIcons.Create("info", AppTheme.Icon16, AppTheme.Body),
+                AppTheme.InfoButton with{
                     AccessibilityName = ui.Strings.Get("Upgrade notice"),
                     OnClick = input.OnUpgrade
                 }
@@ -834,6 +833,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
             let name = TextParts.Legend(ui, ui.Strings.Get(label), tint)
             name.Height = 18
             if label == "confirming" {
+                name.Gap = AppTheme.Space2
                 name.Add(Info(ui))
             }
             let text = masked ? "••••••••": Fixed(units)

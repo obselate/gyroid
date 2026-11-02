@@ -2,8 +2,6 @@ package Gyroid.Components
 
 import Goo
 import Goo.Widgets
-import Goo.Widgets.Actions
-import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.Views
 
@@ -39,9 +37,10 @@ class InfoTip : Cell[InfoTipInput] {
         return Container{
             Handle: anchor,
             FlexShrink: 0,
+            AlignSelf: AlignSelf.Center,
             (
-                AppTheme.IconButton with{
-                    Icon = MaterialIcons.Create("info", AppTheme.Icon16, visible ? AppTheme.Ink: AppTheme.Body),
+                AppTheme.InfoButton with{
+                    Active = visible,
                     AccessibilityName = ui.Strings.Get(input.Topic),
                     OnClick = () -> {
                         visible = !visible

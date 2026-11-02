@@ -1129,7 +1129,17 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
             root.Add(MessageParts.Problem(input.Ui, issue))
         }
         root.Add(
-            ActionRow([]Blob{ControlParts.Button(input.Ui, "Sign", form.Submit, !form.CanSubmit, true, busy: busy)})
+            ActionRow(
+                []Blob{
+                    ControlParts.Button(input.Ui, "Sign", form.Submit, !form.CanSubmit, true, busy: busy),
+                    Info(
+                        input,
+                        "info-sign",
+                        "sign",
+                        []string{"Sign a message with your wallet key so others can confirm you own this address."}
+                    )
+                }
+            )
         )
         return root
     }
@@ -1223,7 +1233,13 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
             ActionRow(
                 []Blob{
                     Verdict(input, verdict),
-                    ControlParts.Button(input.Ui, "Verify", form.Submit, !form.CanSubmit, true, busy: busy)
+                    ControlParts.Button(input.Ui, "Verify", form.Submit, !form.CanSubmit, true, busy: busy),
+                    Info(
+                        input,
+                        "info-verify",
+                        "verify",
+                        []string{"Check that a message signature was made by the stated address."}
+                    )
                 }
             )
         }
@@ -1346,7 +1362,15 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
             ActionRow(
                 []Blob{
                     Verdict(input, verdict),
-                    ControlParts.Button(input.Ui, "Verify", form.Submit, !form.CanSubmit, true, busy: busy)
+                    ControlParts.Button(input.Ui, "Verify", form.Submit, !form.CanSubmit, true, busy: busy),
+                    Info(
+                        input,
+                        "info-proof",
+                        "proof",
+                        []string{
+                            "Check a payment with its transaction, proof key, address and amount without sharing wallet keys."
+                        }
+                    )
                 }
             )
         }
@@ -1506,24 +1530,7 @@ class ToolsHealthRegion : Cell, IDisposable {
             Stat(input, "stale", report == nil ? "—": stale.ToString(), stale > 0 ? AppTheme.Orange: AppTheme.Ink, true)
         )
         stats.Add(Stat(input, "duplicates", report == nil ? "—": Count(report.Duplicates), AppTheme.Ink, true))
-        card.Add(
-            Container{
-                FlexDirection: FlexDirection.Row,
-                AlignItems: AlignItems.Center,
-                Gap: AppTheme.Space8,
-                Grow(stats),
-                Info(
-                    input,
-                    "info-health",
-                    "health",
-                    []string{
-                        "Check compares every output with the main chain. It changes nothing",
-                        "Stale: its block or transaction left the main chain after a reorg. It was never spendable",
-                        "Duplicates: outputs that share one key image. Only one of them can be spent"
-                    }
-                )
-            }
-        )
+        card.Add(stats)
         let values = Container{
             FlexDirection: FlexDirection.Row,
             Gap: compact ? AppTheme.Space8: AppTheme.Space12,
@@ -1568,7 +1575,23 @@ class ToolsHealthRegion : Cell, IDisposable {
         if auditIssue.Length > 0 {
             card.Add(MessageParts.Problem(ui, auditIssue))
         }
-        card.Add(ActionRow([]Blob{Button(ui, "Check", () -> Audit(view), input.Busy || auditing)}))
+        card.Add(
+            ActionRow(
+                []Blob{
+                    Button(ui, "Check", () -> Audit(view), input.Busy || auditing),
+                    Info(
+                        input,
+                        "info-health",
+                        "health",
+                        []string{
+                            "Check compares every output with the main chain. It changes nothing",
+                            "Stale: its block or transaction left the main chain after a reorg. It was never spendable",
+                            "Duplicates: outputs that share one key image. Only one of them can be spent"
+                        }
+                    )
+                }
+            )
+        )
         return card
     }
 

@@ -236,8 +236,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                         JustifyContent: JustifyContent.SpaceBetween,
                         Label(ui, ui.Strings.Get("Network upgrade"), AppTheme.Type13, AppTheme.Body, ""),
                         (
-                            AppTheme.IconButton with{
-                                Icon = MaterialIcons.Create("info", AppTheme.Icon16, AppTheme.Body),
+                            AppTheme.InfoButton with{
                                 AccessibilityName = ui.Strings.Get("Network upgrade"),
                                 OnClick = () -> {
                                     nodeOpen = false
