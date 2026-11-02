@@ -43,5 +43,4 @@ data struct NetworkRow {
     var Ban BannedPeer?
     var Language string
     var Wide bool
-    var Hovered bool
 }

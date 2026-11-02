@@ -1192,7 +1192,7 @@ class HistoryTransactions : Cell, IDisposable {
             RefreshRows()
         }
         rowKey = row -> row.Key
-        rowBuilder = row -> Row(row)
+        rowBuilder = row -> Cell.Mount[Blob, HistoryTransactionRow](row.Key, Row(row))
         recipientKey = entry -> entry.Index.ToString()
         recipientBuilder = entry -> Recipient(entry)
         list.MetricsChanged += metrics -> {
@@ -1985,6 +1985,10 @@ class HistoryTransactions : Cell, IDisposable {
             )
         }
     }
+}
+
+class HistoryTransactionRow : Cell[Blob] {
+    protected override func Build(input Blob) Blob -> input
 }
 
 class HistoryExport : Cell, IDisposable {

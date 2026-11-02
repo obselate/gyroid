@@ -16,6 +16,7 @@ import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Services.WalletText
 import System
+import System.Collections.Generic
 import System.Globalization
 import System.Linq
 import System.Threading
@@ -712,12 +713,20 @@ class NetworkPeers : Cell {
     private var rows[]NetworkRow = []NetworkRow{}
     private let rowKey Func[NetworkRow, string] = (row NetworkRow) -> row.Key
     private let rowBuilder Func[NetworkRow, Blob]
+    private let realized HashSet[NetworkPeerRow] = HashSet[NetworkPeerRow]()
+    private var peerMapCell NetworkPeerMap?
 
     init() {
         hoverPeer = Hover
         rowBuilder = row -> {
-            if let peer = row.Peer {
-                return PeerRow(current, peer)
+            if row.Peer != nil {
+                return Cell.Mount[NetworkPeerRow](
+                    row.Key,
+                    cell -> {
+                        cell.Accept(this, row)
+                        realized.Add(cell)
+                    }
+                )
             }
             return BanRow(current.Ui, row.Ban ?? throw InvalidOperationException("Network row has no peer"))
         }
@@ -728,7 +737,7 @@ class NetworkPeers : Cell {
             return
         }
         if !next.Online || next.PeerId != current.PeerId {
-            hovered = ""
+            Hover("")
         }
         current = next
         PrepareRows()
@@ -749,8 +758,7 @@ class NetworkPeers : Cell {
                     Key: "peer:" + peer.Id,
                     Peer: peer,
                     Language: current.Language,
-                    Wide: current.Width >= 1100,
-                    Hovered: peer.Id == hovered
+                    Wide: current.Width >= 1100
                 }
             )
                 .ToArray()
@@ -807,16 +815,20 @@ class NetworkPeers : Cell {
             }
         )
         card.Add(
-            Cell.Mount[NetworkPeerMapInput, NetworkPeerMap](
+            Cell.Mount[NetworkPeerMap](
                 "peer-map",
-                NetworkPeerMapInput{
-                    Ui: ui,
-                    Peers: input.Peers,
-                    Banned: input.Banned,
-                    Hovered: hovered,
-                    Hover: hoverPeer,
-                    Online: input.Online,
-                    Language: input.Language
+                cell -> {
+                    peerMapCell = cell
+                    cell.Accept(
+                        NetworkPeerMapInput{
+                            Ui: ui,
+                            Peers: input.Peers,
+                            Banned: input.Banned,
+                            Hover: hoverPeer,
+                            Online: input.Online,
+                            Language: input.Language
+                        }
+                    )
                 }
             )
         )
@@ -900,12 +912,19 @@ class NetworkPeers : Cell {
     private func Hover(id string) {
         if hovered != id {
             hovered = id
-            PrepareRows()
-            Rebuild()
+            for row in realized {
+                row.Hover(id)
+            }
+            peerMapCell?.Hover(id)
         }
     }
 
-    private func PeerRow(input NetworkPeersInput, peer NetworkPeer) Blob {
+    func Release(row NetworkPeerRow) -> realized.Remove(row)
+
+    func IsHovered(id string) bool -> hovered == id
+
+    func PeerRow(peer NetworkPeer, active bool) Blob {
+        let input = current
         let ui = input.Ui
         let row = Container{
             BasedOn: AppTheme.ListRowStyle,
@@ -913,7 +932,7 @@ class NetworkPeers : Cell {
             FlexShrink: 0,
             Padding: Edges{Left: AppTheme.Space8, Right: AppTheme.Space8},
             BorderRadius: AppTheme.Radius8,
-            BackgroundColor: peer.Id == hovered ? AppTheme.Rule: Color.Transparent,
+            BackgroundColor: active ? AppTheme.Rule: Color.Transparent,
             Accessibility: Accessibility{Name: Short(peer.Id) + " " + peer.Transport + " " + peer.Address},
             OnPointerEnter: (event PointerEvent) -> Hover(peer.Id),
             OnPointerLeave: (event PointerEvent) -> Hover(""),
@@ -965,24 +984,72 @@ class NetworkPeers : Cell {
     }
 }
 
+class NetworkPeerRow : Cell, IDisposable {
+    private var owner NetworkPeers
+    private var current NetworkRow
+    private var hovered bool
+
+    func Accept(nextOwner NetworkPeers, next NetworkRow) {
+        if owner == nextOwner && current.Equals(next) {
+            return
+        }
+        owner = nextOwner
+        current = next
+        hovered = owner.IsHovered(current.Peer?.Id ?? "")
+        Rebuild()
+    }
+
+    func Hover(id string) {
+        let next = current.Peer?.Id == id
+        if hovered != next {
+            hovered = next
+            Rebuild()
+        }
+    }
+
+    override func Build() Blob -> owner.PeerRow(
+        current.Peer ?? throw InvalidOperationException("Network row has no peer"),
+        hovered
+    )
+
+    func Dispose() -> owner.Release(this)
+}
+
 data struct NetworkPeerMapInput {
     var Ui Presentation
     var Online bool
     var Peers[]NetworkPeer
     var Banned[]BannedPeer
-    var Hovered string
     var Hover Action[string]
     var Language string
 }
 
-class NetworkPeerMap : Cell[NetworkPeerMapInput] {
+class NetworkPeerMap : Cell {
     private let peerMap ElementHandle = ElementHandle()
+    private var current NetworkPeerMapInput
+    private var hovered string = ""
 
     init() {
         peerMap.MetricsChanged += _ -> Rebuild()
     }
 
-    protected override func Build(input NetworkPeerMapInput) Blob {
+    func Accept(next NetworkPeerMapInput) {
+        if current.Equals(next) {
+            return
+        }
+        current = next
+        Rebuild()
+    }
+
+    func Hover(id string) {
+        if hovered != id {
+            hovered = id
+            Rebuild()
+        }
+    }
+
+    override func Build() Blob {
+        let input = current
         let ui = input.Ui
         let plot = Container{
             Handle: peerMap,
@@ -1052,7 +1119,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
             let px = x + Math.Cos(angle) * ring
             let py = y + Math.Sin(angle) * ring
             let color = peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
-            let active = peer.Id == input.Hovered
+            let active = peer.Id == hovered
             let radius = active ? 7.0: 5.5
             if active {
                 plot.Add(Lines(width, height, PathBuilder(0, 0, width, height).MoveTo(x, y).LineTo(px, py), color))
