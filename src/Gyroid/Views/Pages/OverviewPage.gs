@@ -830,11 +830,22 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
             ("in mempool", unconfirmed, AppTheme.Blue)
         }
         for (label, units, tint) in items {
-            let name = TextParts.Legend(ui, ui.Strings.Get(label), tint)
-            name.Height = 18
-            if label == "confirming" {
-                name.Gap = AppTheme.Space2
-                name.Add(Info(ui))
+            let name = Container{
+                FlexDirection: FlexDirection.Row,
+                AlignItems: AlignItems.Center,
+                Gap: AppTheme.Space8,
+                Height: AppTheme.Icon18,
+                Container{BasedOn: AppTheme.MarkerStyle, BackgroundColor: tint, FlexShrink: 0},
+                if label == "confirming" {
+                    Container{
+                        FlexDirection: FlexDirection.Row,
+                        AlignItems: AlignItems.Center,
+                        Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, ""),
+                        Info(ui)
+                    }
+                } else {
+                    Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, "")
+                }
             }
             let text = masked ? "••••••••": Fixed(units)
             let color = if masked || empty {
