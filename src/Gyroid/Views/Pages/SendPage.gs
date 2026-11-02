@@ -1102,6 +1102,7 @@ class SendReview : Cell {
     private var current SendReviewInput
     private var openRow string = ""
     private var shown[]SendReviewItem = []SendReviewItem{}
+    private var rowsHeight float64
     private let rowKey Func[SendReviewItem, string]
     private let rowBuilder Func[SendReviewItem, Blob]
 
@@ -1132,6 +1133,15 @@ class SendReview : Cell {
             .ToArray()
         if !shown.SequenceEqual(rows) {
             shown = rows
+            rowsHeight = rows.Sum(
+                (row SendReviewItem) -> (AppTheme.ControlRegular + AppTheme.Space12) * (row.Expanded ? 2: 1) +
+                    (
+                    row.Row.Memo.Length > 0 ?
+                    (row.Expanded ? AppTheme.ControlRegular + AppTheme.Space12: AppTheme.Type13 + AppTheme.Space12):
+                    0
+                ) +
+                    (row.Expanded && row.Row.Handle.Length > 0 ? AppTheme.Type13 + AppTheme.Space6: 0)
+            )
         }
         Rebuild()
     }
@@ -1147,14 +1157,13 @@ class SendReview : Cell {
         let list = VirtualRows(shown, AppTheme.ControlRegular + AppTheme.Space12, rowKey, rowBuilder, false)
         list.MinHeight = 0
         list.FlexShrink = 1
-        list.FlexGrow = 1
+        list.Height = Math.Min(rowsHeight, Math.Max(AppTheme.ControlRegular, input.Height - AppTheme.Space24 * 10))
         list.BorderWidth = Edges{Top: AppTheme.Border1}
         list.BorderColor = AppTheme.Rule
         let remaining = spendable - Math.Min(spendable, pending.Total)
         let content = Container{
             Gap: compact ? AppTheme.Space14: AppTheme.Space16,
             MinHeight: 0,
-            Height: input.Height,
             FlexShrink: 1,
             WalletParts.Header(
                 Label(
@@ -1168,7 +1177,7 @@ class SendReview : Cell {
                 value: Label(ui, "BNT", AppTheme.Type14, AppTheme.Dim, ""),
                 alignment: AlignItems.Baseline
             ),
-            ListParts.Viewport(list, grow: true),
+            ListParts.Viewport(list, grow: false),
             Cell.Mount[SendBalanceInput, SendBalance](
                 "review-totals",
                 SendBalanceInput{
