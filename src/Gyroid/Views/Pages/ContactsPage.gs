@@ -162,7 +162,7 @@ class ContactsPage : Cell, IDisposable {
             let destination = input.Contacts.TryGetValue(key, out let address) ? address: ""
             card.Add(Editor(input, key, destination))
         }
-        let list = VirtualRows(rows, 48 + AppTheme.Space8, rowKey, rowBuilder, false)
+        let list = VirtualRows(rows, 48 + AppTheme.Space8, rowKey, rowBuilder, false, version: 0)
         list.Handle = listHandle
         list.Height = rows.Length * (48 + AppTheme.Space8)
         list.FlexShrink = 1

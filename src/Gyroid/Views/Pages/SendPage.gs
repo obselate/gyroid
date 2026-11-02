@@ -250,7 +250,8 @@ class SendPage : Cell, IDisposable {
                 AppTheme.ControlRegular + AppTheme.Space8,
                 editorKey,
                 editorBuilder,
-                false
+                false,
+                version: 0
             )
             list.MinHeight = 0
             list.FlexShrink = 1
@@ -774,7 +775,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
         if matches.Length == 0 {
             return field
         }
-        let list = VirtualRows(matches, AppTheme.ControlRegular, suggestionKey, suggestionBuilder, false)
+        let list = VirtualRows(matches, AppTheme.ControlRegular, suggestionKey, suggestionBuilder, false, version: 0)
         list.MinHeight = 0
         list.Height = matches.Length * AppTheme.ControlRegular
         list.Accessibility = Accessibility{Role: AccessibilityRole.List, Name: ui.Strings.Get("contacts")}
@@ -1157,7 +1158,7 @@ class SendReview : Cell {
         let ui = input.Ui
         let compact = input.Height < 700
         let close = value.Close
-        let list = VirtualRows(shown, AppTheme.ControlRegular + AppTheme.Space12, rowKey, rowBuilder, false)
+        let list = VirtualRows(shown, AppTheme.ControlRegular + AppTheme.Space12, rowKey, rowBuilder, false, version: 0)
         list.MinHeight = 0
         list.FlexShrink = 1
         list.Height = Math.Min(rowsHeight, Math.Max(AppTheme.ControlRegular, input.Height - AppTheme.Space24 * 10))

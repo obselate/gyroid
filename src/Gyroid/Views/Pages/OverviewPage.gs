@@ -1294,7 +1294,7 @@ class OverviewRecent : Cell {
             }
             return card
         }
-        let list = VirtualRows(rows, 48.0, rowKey, rowBuilder)
+        let list = VirtualRows(rows, 48.0, rowKey, rowBuilder, version: 0)
         list.FlexGrow = 1
         list.FlexBasis = 0
         list.MinHeight = 0

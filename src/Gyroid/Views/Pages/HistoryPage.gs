@@ -1300,7 +1300,7 @@ class HistoryTransactions : Cell, IDisposable {
         let input = current
         let ui = input.Ui
         let panel = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0}
-        let rows = VirtualRows(shown, 38, rowKey, rowBuilder, false)
+        let rows = VirtualRows(shown, 38, rowKey, rowBuilder, false, version: 0)
         rows.Handle = list
         rows.FlexGrow = 1
         rows.FlexBasis = 0
@@ -1701,7 +1701,8 @@ class HistoryTransactions : Cell, IDisposable {
                 76,
                 recipientKey,
                 recipientBuilder,
-                false
+                false,
+                version: 0
             )
             recipients.Height = Math.Min(
                 228.0,

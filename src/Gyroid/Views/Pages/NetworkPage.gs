@@ -845,7 +845,14 @@ class NetworkPeers : Cell {
             }
         )
         let list = rows.Length == 0 && tab == "banned" ?
-        ListParts.Empty(ui, "no banned peers"): VirtualRows(rows, tab == "peers" ? 30: 44, rowKey, rowBuilder, false)
+        ListParts.Empty(ui, "no banned peers"): VirtualRows(
+            rows,
+            tab == "peers" ? 30: 44,
+            rowKey,
+            rowBuilder,
+            false,
+            version: 0
+        )
         list.MinHeight = 0
         list.FlexGrow = rows.Length > 0 ? 1: 0
         list.FlexBasis = rows.Length > 0 ? 0: Length.Auto

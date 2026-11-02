@@ -21,9 +21,9 @@
       },
       "Goo.Widgets": {
         "type": "Direct",
-        "requested": "[0.18.1, 0.18.1]",
-        "resolved": "0.18.1",
-        "contentHash": "XWb9Td+OsA07UiXag5p+qJol2dcLKbJ31LW0mJRk9lpAnCTQhD+SJx4JCgVMyshgPQWXhWv/QCSI8k+tqd5Mog==",
+        "requested": "[0.18.2, 0.18.2]",
+        "resolved": "0.18.2",
+        "contentHash": "s3gVE8Bs6jL1bS+N/H+h28Px3+eVg57cwT/mqdor2kTwtAtG/OUDBTaIB497xByzN1v1RAT7NOGjBPW8OxJSew==",
         "dependencies": {
           "Goo": "0.24.2"
         }

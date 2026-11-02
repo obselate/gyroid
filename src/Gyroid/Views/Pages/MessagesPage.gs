@@ -623,7 +623,7 @@ class MessageConversationList : Cell {
                 }
             )
         )
-        let list = VirtualRows(input.Conversations, 72, rowKey, rowBuilder, false)
+        let list = VirtualRows(input.Conversations, 72, rowKey, rowBuilder, false, version: 0)
         list.MinHeight = 0
         list.FlexGrow = 1
         list.FlexBasis = 0
@@ -913,7 +913,7 @@ class MessageThread : Cell, IDisposable {
     }
 
     override func Build() Blob {
-        let list = VirtualRows(rows, 64, rowKey, rowBuilder, following)
+        let list = VirtualRows(rows, 64, rowKey, rowBuilder, following, version: 0)
         list.Handle = scroll
         list.MinHeight = 0
         list.FlexGrow = 1
@@ -1190,7 +1190,7 @@ class MessageDialog : Cell, IDisposable {
                 )
             }
             if !contact {
-                let choices = VirtualRows(contacts, 36, rowKey, rowBuilder, false)
+                let choices = VirtualRows(contacts, 36, rowKey, rowBuilder, false, version: 0)
                 choices.Height = Math.Min(200, contacts.Length * 36)
                 choices.MinHeight = 0
                 choices.FlexShrink = 1

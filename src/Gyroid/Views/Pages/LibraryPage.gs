@@ -287,7 +287,7 @@ class LibraryList : Cell, IDisposable {
                     }
                 )
             )
-            let list = VirtualRows(input.Wallets, 48 + AppTheme.Space8, rowKey, rowBuilder, false)
+            let list = VirtualRows(input.Wallets, 48 + AppTheme.Space8, rowKey, rowBuilder, false, version: 0)
             let expandedHeight = (opened ?? input.ActiveWallet).Length > 0 ? AppTheme.ControlRegular +
                 AppTheme.Space12: 0
             let issueHeight = issue.Length > 0 && expandedHeight > 0 ?
