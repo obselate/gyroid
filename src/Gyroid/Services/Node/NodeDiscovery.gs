@@ -11,11 +11,11 @@ class NodeDiscovery {
     shared {
         func Discover(settings WalletSettings) {
             let network = settings.Network
-            let cfg = Environment.GetEnvironmentVariable("BNT_CONFIG_DIR") ?? if OperatingSystem.IsWindows() {
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "bnt")
-            } else {
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "bnt")
-            }
+            let cfg = Environment.GetEnvironmentVariable("BNT_CONFIG_DIR") ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".config",
+                "bnt"
+            )
             let platform = CoreRelease.Platform()
             let executable = CoreRelease.ExecutableName()
             let cores = Path.Combine(cfg, "cores")
