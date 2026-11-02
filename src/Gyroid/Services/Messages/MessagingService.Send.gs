@@ -249,6 +249,7 @@ partial class MessagingService {
             let list = List[Conversation](conversations)
             list.RemoveAll(item -> item.Id == conversation.Id)
             list.Add(conversation)
+            list.Sort((left, right) -> string.Compare(left.Title, right.Title, StringComparison.OrdinalIgnoreCase))
             conversations = list
             Interlocked.Increment(ref viewRevision)
         }
