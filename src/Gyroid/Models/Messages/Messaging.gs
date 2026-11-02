@@ -36,6 +36,7 @@ class Message {
     var InvitationName string = ""
     var SentAt DateTimeOffset
     var State MessageState
+    var FailureReason string = ""
     var Confirmations int32
     var ArrivedAt DateTimeOffset?
     var Height int64
@@ -79,6 +80,7 @@ data struct MessageView {
     var SentAt DateTimeOffset
     var ArrivedAt DateTimeOffset?
     var State MessageState
+    var FailureReason string
     var Confirmations int32
     var Height int64
     var Verification Verification

@@ -146,6 +146,11 @@ class MessagesPage : Cell, IDisposable {
         if next == input {
             return
         }
+        if MessagesInput{... next, Error: input.Error} == input {
+            input = next
+            issueCell?.Accept(input.Ui, issue.Length > 0 ? issue: input.Error)
+            return
+        }
         let reset = input.Wallet != next.Wallet || input.Address != next.Address || input.Network != next.Network
         let prepare = reset ||
             input.Revision != next.Revision ||
@@ -236,8 +241,7 @@ class MessagesPage : Cell, IDisposable {
             window?.TryPost(
                 () -> {
                     if version == generation {
-                        issue = error
-                        Rebuild()
+                        SetIssue(error)
                     }
                 }
             )
@@ -274,8 +278,7 @@ class MessagesPage : Cell, IDisposable {
                         .Session
                         .Settings
                         .ActiveWallet == input.Wallet {
-                        issue = error
-                        Rebuild()
+                        SetIssue(error)
                     }
                 }
             )
@@ -285,6 +288,7 @@ class MessagesPage : Cell, IDisposable {
     private var dialog string = ""
     private var address string = ""
     private var issue string = ""
+    private var issueCell MessageIssue?
     private var password string = ""
     private var busy bool
 
@@ -294,6 +298,11 @@ class MessagesPage : Cell, IDisposable {
         password = ""
         selection?.Cancel()
         selection?.Dispose()
+    }
+
+    private func SetIssue(message string) {
+        issue = message
+        issueCell?.Accept(input.Ui, issue.Length > 0 ? issue: input.Error)
     }
 
     private func Run(input MessagesInput, action Func[CancellationToken, Task]) {
@@ -314,7 +323,9 @@ class MessagesPage : Cell, IDisposable {
         var error = ""
         try {
             await action(ct)
-        } catch (failure Exception) when !(failure is OperationCanceledException) {
+        } catch (failure MessageDeliveryException) { } catch (failure Exception) when !(
+            failure is OperationCanceledException
+        ) {
             error = failure.Message
         }
         input
@@ -444,22 +455,15 @@ class MessagesPage : Cell, IDisposable {
                 }
             )
         }
-        let error = issue.Length > 0 ? issue: input.Error
-        if error.Length > 0 {
-            thread.Add(
-                Container{
-                    Padding: AppTheme.Space12,
-                    FlexShrink: 0,
-                    Text{
-                        Content: ui.Strings.Explain(error),
-                        FontFamily: AppTheme.Font,
-                        FontSize: AppTheme.Type12,
-                        Color: AppTheme.Pink,
-                        TextWrap: TextWrap.Wrap
-                    }
+        root.Add(
+            Cell.Mount[MessageIssue](
+                "issue",
+                child -> {
+                    issueCell = child
+                    child.Accept(input.Ui, issue.Length > 0 ? issue: input.Error)
                 }
             )
-        }
+        )
         root.Add(thread)
         if dialog.Length > 0 {
             root.Add(
@@ -613,6 +617,35 @@ class MessagesPage : Cell, IDisposable {
 
     shared {
         func Preview(text string) string -> text.Replace("\r", " ").Replace("\n", " ")
+    }
+}
+
+class MessageIssue : Cell {
+    private var ui Presentation
+    private var message string = ""
+
+    func Accept(next Presentation, error string) {
+        if ui == next && message == error {
+            return
+        }
+        ui = next
+        message = error
+        Rebuild()
+    }
+
+    override func Build() Blob {
+        if message.Length == 0 {
+            return Container{}
+        }
+        return Container{
+            BasedOn: AppTheme.InformationCardStyle,
+            Position: PositionType.Absolute,
+            Right: AppTheme.Space24,
+            Top: AppTheme.Space24,
+            Width: AppTheme.Space24 * 12,
+            ZIndex: 20,
+            MessageParts.Problem(ui, message)
+        }
     }
 }
 

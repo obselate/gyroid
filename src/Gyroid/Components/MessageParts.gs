@@ -210,6 +210,16 @@ class MessageBubble : Cell[MessageBubbleInput] {
                     AlignItems: AlignItems.Center,
                     Gap: AppTheme.Space8,
                     Label(ui, ui.Strings.Get("Not sent"), AppTheme.Type11, AppTheme.Pink, ""),
+                    Cell.Mount[InfoTipInput, InfoTip](
+                        "failure",
+                        InfoTipInput{
+                            Ui: ui,
+                            Topic: "Not sent",
+                            Lines: []string{ui.Strings.Explain(message.FailureReason)},
+                            Language: input.Language,
+                            Width: AppTheme.Space24 * 12
+                        }
+                    ),
                     Button(ui, "Retry", () -> input.OnRetry(message.Key), !input.CanRetry)
                 }
             )

@@ -7,6 +7,10 @@ import System.Linq
 import System.Text.Json
 import System.Threading
 
+class MessageDeliveryException : Exception {
+    init(reason Exception) : base(reason.Message, reason) { }
+}
+
 partial class MessagingService {
     private let session WalletSession
     private let syncGate SemaphoreSlim = SemaphoreSlim(1, 1)
@@ -130,6 +134,7 @@ partial class MessagingService {
                                 SentAt: message.SentAt,
                                 ArrivedAt: message.ArrivedAt,
                                 State: message.State,
+                                FailureReason: message.FailureReason,
                                 Confirmations: message.Confirmations,
                                 Height: message.Height,
                                 Verification: message.Verification
@@ -323,6 +328,7 @@ partial class MessagingService {
                 message.SendPayload = Array.Empty[uint8]()
             }
             message.State = MessageState.InProgress
+            message.FailureReason = ""
             Interlocked.Increment(ref viewRevision)
         }
         session.Changed?.Invoke()
@@ -353,6 +359,7 @@ partial class MessagingService {
                     return
                 }
                 message.State = MessageState.Failed
+                message.FailureReason = error.Message
                 Interlocked.Increment(ref viewRevision)
                 local = store
             }
@@ -360,7 +367,7 @@ partial class MessagingService {
             if local != nil {
                 await Persist(local, CancellationToken.None)
             }
-            throw error
+            throw MessageDeliveryException(error)
         }
     }
 

@@ -118,6 +118,7 @@ class MessagingStore : IDisposable {
                                 Outgoing: true,
                                 SenderAddress: address,
                                 SenderName: "You",
+                                FailureReason: NodeJson.Text(message, "failure_reason"),
                                 Text: NodeJson.Text(message, "text"),
                                 SentAt: DateTimeOffset.FromUnixTimeSeconds(
                                     ReadNumber(ReadField(message, "sent_at", JsonValueKind.Number))
@@ -234,6 +235,7 @@ class MessagingStore : IDisposable {
                                 writer.WriteString("idempotency_key", message.IdempotencyKey)
                                 writer.WriteBase64String("payload", ReadOnlySpan[uint8](message.SendPayload))
                                 writer.WriteString("text", message.Text)
+                                writer.WriteString("failure_reason", message.FailureReason)
                                 writer.WriteNumber("sent_at", message.SentAt.ToUnixTimeSeconds())
                                 writer.WriteEndObject()
                             }
