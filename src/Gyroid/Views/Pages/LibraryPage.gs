@@ -148,20 +148,36 @@ class LibraryPage : Cell, IDisposable {
 
     override func Build() Blob {
         let card = WalletParts.PageCard(input.Ui, maxWidth: 560, fill: true)
-        if input.Busy {
-            card.Add(
+        card.Gap = 0
+        let status = Label(input.Ui, input.Status, AppTheme.Type13, AppTheme.Dim, "")
+        status.LineHeight = 1
+        card.Add(
+            Container{
+                Height: input.Busy ? AppTheme.Icon14 + AppTheme.GetPageGap(0): 0,
+                MinHeight: 0,
+                FlexShrink: 0,
+                Overflow: Overflow.Hidden,
+                TransitionMs: 180,
+                TransitionEasing: Easing.Linear,
+                TransitionProperties: []TransitionProperty{TransitionProperty.Height},
                 Container{
+                    Height: AppTheme.Icon14,
+                    FlexShrink: 0,
                     FlexDirection: FlexDirection.Row,
                     AlignItems: AlignItems.Center,
                     Gap: AppTheme.Space6,
-                    Cell.Mount[SpinnerInput, Spinner](
-                        "library-busy",
-                        SpinnerInput{Size: AppTheme.Icon14, Color: AppTheme.Lime, Label: input.Status}
-                    ),
-                    Label(input.Ui, input.Status, AppTheme.Type13, AppTheme.Dim, "")
+                    if input.Busy {
+                        Cell.Mount[SpinnerInput, Spinner](
+                            "library-busy",
+                            SpinnerInput{Size: AppTheme.Icon14, Color: AppTheme.Lime, Label: input.Status}
+                        )
+                    } else {
+                        Container{}
+                    },
+                    status
                 }
-            )
-        }
+            }
+        )
         if form.Length > 0 {
             card.Add(
                 Cell.Mount[LibraryFormInput, LibraryForm](
