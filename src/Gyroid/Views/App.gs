@@ -495,6 +495,7 @@ partial class App : Cell, IDisposable {
                 Directory: wallet.Settings.WalletDirectory,
                 Network: wallet.Settings.Network,
                 Busy: ui.Working(),
+                Status: wallet.Node.Status.Phase == NodePhase.None ? ui.Strings.Get("Working"): PhaseText(),
                 Language: ui.Strings.Language,
                 ChooseFile: chooseFile,
                 OnNavigate: navigate,

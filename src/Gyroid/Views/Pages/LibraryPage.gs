@@ -28,6 +28,7 @@ data struct LibraryInput {
     var Directory string
     var Network string
     var Busy bool
+    var Status string
     var Language string
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
     var OnNavigate Action[AppPage]
@@ -146,6 +147,9 @@ class LibraryPage : Cell, IDisposable {
 
     override func Build() Blob {
         let card = WalletParts.PageCard(input.Ui, maxWidth: 560, fill: true)
+        if input.Busy {
+            card.Add(Status(input.Ui, input.Status, AppTheme.Dim, "schedule"))
+        }
         if form.Length > 0 {
             card.Add(
                 Cell.Mount[LibraryFormInput, LibraryForm](
@@ -336,15 +340,15 @@ class LibraryList : Cell, IDisposable {
                 Top: AppTheme.Space0,
                 Bottom: AppTheme.Space0
             },
-            BorderColor: primary ? AppTheme.Lime: AppTheme.Rule,
-            BackgroundColor: AppTheme.Surface,
+            BorderColor: input.Busy ? AppTheme.Edge: primary ? AppTheme.Lime: AppTheme.Rule,
+            BackgroundColor: input.Busy ? AppTheme.Raised: AppTheme.Surface,
             Disabled: input.Busy,
             Hover: Style{BackgroundColor: AppTheme.Rule},
             Focus: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
-            MaterialIcons.Create(icon, AppTheme.Icon20, AppTheme.Lime),
-            Label(ui, ui.Strings.Get(label), AppTheme.Type14, AppTheme.Ink, "")
+            MaterialIcons.Create(icon, AppTheme.Icon20, input.Busy ? AppTheme.Dim: AppTheme.Lime),
+            Label(ui, ui.Strings.Get(label), AppTheme.Type14, input.Busy ? AppTheme.Dim: AppTheme.Ink, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button

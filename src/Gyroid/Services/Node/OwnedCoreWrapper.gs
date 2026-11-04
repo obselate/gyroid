@@ -7,18 +7,6 @@ import System.IO
 import System.Runtime.InteropServices
 import System.Threading.Tasks
 
-@DllImport("kernel32.dll", EntryPoint: "AllocConsole")
-func AllocateWalletConsole() bool;
-
-@DllImport("kernel32.dll", EntryPoint: "FreeConsole")
-func ReleaseWalletConsole() bool;
-
-@DllImport("kernel32.dll", EntryPoint: "GetConsoleWindow")
-func WalletConsoleWindow() IntPtr;
-
-@DllImport("user32.dll", EntryPoint: "ShowWindow")
-func ShowWalletConsole(window IntPtr, command int32) bool;
-
 @UnmanagedFunctionPointer(CallingConvention.Winapi)
 delegate WalletConsoleHandler(signal uint32) int32;
 
@@ -33,11 +21,6 @@ class OwnedCoreWrapper {
         func RunWindows(arguments[]string) int32 {
             using let input = Console.OpenStandardInput()
             let output = Console.Out
-            ReleaseWalletConsole()
-            if !AllocateWalletConsole() {
-                throw WalletException("Could not allocate the owned core console")
-            }
-            ShowWalletConsole(WalletConsoleWindow(), 0)
             let handler WalletConsoleHandler = _ -> 1
             if !SetWalletConsoleHandler(handler, true) {
                 throw WalletException("Could not register the owned core console handler")
