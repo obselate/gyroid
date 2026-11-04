@@ -437,6 +437,9 @@ class HistoryPage : Cell, IDisposable {
                 }
             )
         }
+        if resolving || fetching || loading {
+            bar.Add(Loading(ui, "history-range-loading"))
+        }
         if to > 0 {
             bar.Add(
                 Container{
@@ -591,7 +594,7 @@ class HistoryPage : Cell, IDisposable {
     }
 
     private func Segments(key string, label string, ids[]string, selected string, chosen Action[string]) Blob ->
-    ControlParts.Segment(current.Ui, label, ids, ids, selected, false, chosen, key: key)
+    ControlParts.Segment(current.Ui, label, ids, ids, selected, resolving || fetching || loading, chosen, key: key)
 
     private func Info(topic string, text string, input HistoryInput) Blob -> Cell.Mount[InfoTipInput, InfoTip](
         "info-" + topic,

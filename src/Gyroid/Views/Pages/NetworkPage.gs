@@ -151,6 +151,9 @@ class NetworkPage : Cell, IDisposable {
 
     override func Build() Blob {
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: AppTheme.Space12}
+        if loading && !loaded {
+            page.Add(ControlParts.Loading(input.Ui, "network-loading"))
+        }
         if failed {
             page.Add(
                 Banner{

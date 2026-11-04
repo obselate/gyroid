@@ -123,6 +123,7 @@ class MessagesPage : Cell, IDisposable {
                         Ui: input.Ui,
                         Recipients: projection.Recipients,
                         CanSend: input.Mode == MessengerMode.Send,
+                        Busy: busy || input.Working,
                         Unavailable: input.Locked ? "Wallet is locked":
                         input.ViewOnly ? "View-only wallet": "Node not connected",
                         Measure: measureDraft,
@@ -133,7 +134,11 @@ class MessagesPage : Cell, IDisposable {
                         OnSend: text -> {
                             if let current = conversation {
                                 let service = input.Session.Messages
-                                Run(input, ct -> service.Send(current, text, ct))
+                                Run(
+                                    input,
+                                    ct -> service.Send(current, text, ct),
+                                    () -> input.State.Drafts[current.Id] = ""
+                                )
                             }
                         }
                     }
@@ -305,24 +310,27 @@ class MessagesPage : Cell, IDisposable {
         issueCell?.Accept(input.Ui, issue.Length > 0 ? issue: input.Error)
     }
 
-    private func Run(input MessagesInput, action Func[CancellationToken, Task]) {
+    private func Run(input MessagesInput, action Func[CancellationToken, Task], done Action? = nil) {
         busy = true
         issue = ""
         operationGeneration++
         let version = operationGeneration
-        input.Ui.Actions.Background(ct -> Execute(input, action, version, ct))
+        input.Ui.Actions.Background(ct -> Execute(input, action, done, version, ct))
         Rebuild()
     }
 
     private async func Execute(
         input MessagesInput,
         action Func[CancellationToken, Task],
+        done Action?,
         version int64,
         ct CancellationToken
     ) {
         var error = ""
+        var completed = false
         try {
             await action(ct)
+            completed = true
         } catch (failure MessageDeliveryException) { } catch (failure Exception) when !(
             failure is OperationCanceledException
         ) {
@@ -350,6 +358,9 @@ class MessagesPage : Cell, IDisposable {
                     return
                 }
                 busy = false
+                if completed {
+                    done?.Invoke()
+                }
                 issue = error
                 Rebuild()
             }
@@ -438,10 +449,10 @@ class MessagesPage : Cell, IDisposable {
         } else if let current = conversation {
             thread.Add(Header(input, current))
             thread.Add(Cell.Mount[MessageThread]("thread:" + current.Id, configureThread))
-            thread.Add(
-                busy ? Loading(ui, "message-loading"):
-                Cell.Mount[MessageComposer]("composer:" + current.Id, configureComposer)
-            )
+            thread.Add(Cell.Mount[MessageComposer]("composer:" + current.Id, configureComposer))
+            if busy {
+                thread.Add(Loading(ui, "message-loading"))
+            }
         } else {
             thread.Add(
                 Container{

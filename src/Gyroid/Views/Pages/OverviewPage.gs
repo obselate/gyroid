@@ -991,6 +991,7 @@ class OverviewNetwork : Cell, IDisposable {
             () -> if id == generation {
                 request?.Dispose()
                 request = nil
+                Rebuild()
                 if let value = result {
                     let changed = hashrate != value.Hashrate || difficulty != value.Difficulty
                     let blocksChanged = !blocks.SequenceEqual(value.Blocks)
@@ -1026,6 +1027,9 @@ class OverviewNetwork : Cell, IDisposable {
         let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space10)
         card.FlexGrow = 1
         card.FlexBasis = 0
+        if request != nil && blocks.Length == 0 {
+            card.Add(ControlParts.Loading(ui, "overview-network-loading"))
+        }
         card.OnPointerDown = (event PointerEvent) -> if !event.IsFromInteractiveChild {
             input.OnNavigate(AppPage.Network)
         }

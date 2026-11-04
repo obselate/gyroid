@@ -232,6 +232,7 @@ data struct MessageComposerInput {
     var Ui Presentation
     var Recipients int32
     var CanSend bool
+    var Busy bool
     var Unavailable string
     var Measure Func[string, MessageEstimate]
     var Language string
@@ -256,9 +257,10 @@ class MessageComposer : Cell, IDisposable {
         if next == input {
             return
         }
-        let measure = !initialized || next.Recipients != input.Recipients || next.CanSend != input.CanSend
+        let draftChanged = !initialized || next.Draft != input.Draft
+        let measure = draftChanged || next.Recipients != input.Recipients || next.CanSend != input.CanSend
         input = next
-        if !initialized {
+        if draftChanged {
             draft = next.Draft
         }
         if measure && next.CanSend && next.Recipients > 0 {
@@ -277,14 +279,11 @@ class MessageComposer : Cell, IDisposable {
     }
 
     private func Send(input MessageComposerInput, enabled bool) {
-        if !enabled || sending {
+        if !enabled || sending || input.Busy {
             return
         }
         let text = draft
         sending = true
-        draft = ""
-        estimate = input.Measure(draft)
-        input.OnDraft("")
         let animate = input.Ui.Actions.playbackActive()
         if animate {
             arrow.To(Point{X: 0, Y: -36}, Motion.Tween(160, Easing.EaseIn))
@@ -331,7 +330,7 @@ class MessageComposer : Cell, IDisposable {
         }
         let estimate = this.estimate
         let hasText = !String.IsNullOrWhiteSpace(draft)
-        let enabled = hasText && estimate.Fits
+        let enabled = hasText && estimate.Fits && !input.Busy
         let animate = ui.Actions.playbackActive()
         if !initialized || !animate {
             initialized = true
@@ -367,6 +366,7 @@ class MessageComposer : Cell, IDisposable {
                     "draft",
                     TextAreaInput{
                         Value: draft,
+                        Disabled: input.Busy,
                         OnChange: value -> {
                             draft = value
                             this.estimate = input.Measure(value)

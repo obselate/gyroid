@@ -196,12 +196,9 @@ class ControlParts {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space6,
-            Cell.Mount[Goo.Widgets.Feedback.SpinnerInput, Goo.Widgets.Feedback.Spinner](
+            Cell.Mount[SpinnerInput, Spinner](
                 key,
-                Goo
-                    .Widgets
-                    .Feedback
-                    .SpinnerInput{Size: AppTheme.Icon14, Color: AppTheme.Lime, Label: ui.Strings.Get(status)}
+                SpinnerInput{Size: AppTheme.Icon14, Color: AppTheme.Lime, Label: ui.Strings.Get(status)}
             ),
             TextParts.Label(ui, ui.Strings.Get(status), AppTheme.Type13, AppTheme.Dim, "")
         }

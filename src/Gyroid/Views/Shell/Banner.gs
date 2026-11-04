@@ -52,7 +52,7 @@ partial class App {
                             Run(ct -> wallet.ConnectAsync(ct))
                         },
                         ui.Working() || wallet.Busy || Preparing(),
-                        busy: ui.Working() || wallet.Busy || Preparing()
+                        busy: ui.Working()
                     )
                 }
             ): nil,
