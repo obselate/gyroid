@@ -44,14 +44,15 @@ partial class App {
                 .NodeError
                 .Length > 0 ? ActionRow(
                 []Blob{
-                    Button(
+                    ControlParts.Button(
                         ui,
                         "Retry",
                         () -> {
                             refreshError = ""
                             Run(ct -> wallet.ConnectAsync(ct))
                         },
-                        ui.Working() || wallet.Busy || Preparing()
+                        ui.Working() || wallet.Busy || Preparing(),
+                        busy: ui.Working() || wallet.Busy || Preparing()
                     )
                 }
             ): nil,

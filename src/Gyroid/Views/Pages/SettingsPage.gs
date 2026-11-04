@@ -305,6 +305,9 @@ class SettingsPage : Cell, IDisposable {
             ),
             AppTheme.Space10
         )
+        if state.Busy {
+            header.Add(Loading(ui, "settings-loading"))
+        }
         header.Padding = Edges{
             Top: AppTheme.Space6,
             Left: AppTheme.Space2,
@@ -853,6 +856,8 @@ class SettingsStartup : Cell, IDisposable {
     private var validated WalletSettings?
     private var validationIssue string = ""
     private var lifetime CancellationTokenSource?
+    private var applying bool
+    private var validating bool
 
     func Accept(input SettingsPageInput, draft SettingsRegionState) {
         context = input
@@ -863,6 +868,7 @@ class SettingsStartup : Cell, IDisposable {
         }
         if draft.Source?.StartupDiffers(settings) != false {
             generation++
+            validating = false
             validated = nil
             validationIssue = ""
             draft.Source = settings
@@ -897,12 +903,15 @@ class SettingsStartup : Cell, IDisposable {
             return Container{}
         }
         let content = Container{MinHeight: 0, Gap: AppTheme.Space8, Startup(context, value)}
+        if validating {
+            content.Add(Loading(context.Ui, "settings-validation-loading"))
+        }
         if validationIssue.Length > 0 {
             content.Add(
                 Label(context.Ui, context.Ui.Strings.Explain(validationIssue), AppTheme.Type13, AppTheme.Pink, "")
             )
         }
-        if validated != nil {
+        if validated != nil || applying {
             content.Add(ConfirmApply(context))
         }
         return content
@@ -913,6 +922,7 @@ class SettingsStartup : Cell, IDisposable {
         let form = WalletForm(
             ui,
             !state.Busy &&
+                !validating &&
                 (
                 value.Network != state.Network ||
                     value.Endpoint != state.Endpoint ||
@@ -1036,14 +1046,37 @@ class SettingsStartup : Cell, IDisposable {
     }
 
     private func SaveSettings(input SettingsPageInput) {
+        if applying || validating {
+            return
+        }
         guard let value = draft.Value, let owner = input.Window else {
             return
         }
         if let next = validated {
-            validated = nil
-            input.Ui.Actions.Run(ct -> input.Session.ApplySettingsAsync(next, ct), input.OnClose)
+            applying = true
+            input
+                .Ui
+                .Actions
+                .Run(
+                async (ct) -> {
+                    try {
+                        await input.Session.ApplySettingsAsync(next, ct)
+                    } finally {
+                        owner.TryPost(
+                            () -> {
+                                applying = false
+                                validated = nil
+                                Rebuild()
+                            }
+                        )
+                    }
+                },
+                input.OnClose
+            )
             return
         }
+        validating = true
+        Rebuild()
         generation++
         let request = generation
         let next = value.Copy()
@@ -1075,7 +1108,12 @@ class SettingsStartup : Cell, IDisposable {
                 guard let edited = draft.Value else {
                     return
                 }
-                if request != generation || value.StartupDiffers(edited) {
+                if request != generation {
+                    return
+                }
+                validating = false
+                if value.StartupDiffers(edited) {
+                    Rebuild()
                     return
                 }
                 validationIssue = issue
@@ -1097,6 +1135,9 @@ class SettingsStartup : Cell, IDisposable {
     private func ConfirmApply(input SettingsPageInput) Blob {
         let ui = input.Ui
         let close Action = () -> {
+            if applying {
+                return
+            }
             validated = nil
             Rebuild()
         }
@@ -1108,7 +1149,7 @@ class SettingsStartup : Cell, IDisposable {
                 Preset = ModalDialogPreset.Confirm,
                 AccessibilityName = ui.Strings.Get("Apply settings"),
                 Width = Math.Min(state.Width - 48, 440),
-                Content = Container{
+                Content = applying ? Loading(ui, "apply-loading"): Container{
                     Gap: AppTheme.Space10,
                     Label(ui, ui.Strings.Get("Apply settings"), AppTheme.Type17, AppTheme.Ink, ""),
                     Label(
@@ -1366,6 +1407,7 @@ class SettingsAdvanced : Cell, IDisposable {
     private var checkpointGeneration int32
     private var generation int32
     private var certifyGeneration int32
+    private var certifying bool
 
     func Accept(input SettingsPageInput, openPurge Action[string, string, int32], data SettingsAdvancedState) {
         this.data = data
@@ -1393,6 +1435,7 @@ class SettingsAdvanced : Cell, IDisposable {
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
             generation++
             certifyGeneration++
+            certifying = false
             checkpointGeneration++
             data.chainLoaded = false
             data.dataSize = -1
@@ -1616,7 +1659,8 @@ class SettingsAdvanced : Cell, IDisposable {
                 FlexShrink: 0,
                 Label(ui, note, AppTheme.Type13, AppTheme.Dim, ""),
                 Container{FlexGrow: 1},
-                Button(ui, "Certify", () -> Certify(input), data.state.Busy)
+                certifying ? Loading(ui, "certify-loading", "checking"): Container{Display: Display.None},
+                Button(ui, "Certify", () -> Certify(input), data.state.Busy || certifying)
             }
         )
         pane.Add(
@@ -1824,6 +1868,8 @@ class SettingsAdvanced : Cell, IDisposable {
             return
         }
         certifyGeneration++
+        certifying = true
+        Rebuild()
         let request = certifyGeneration
         let token = lifetime.Token
         let session = input.Session
@@ -1843,6 +1889,7 @@ class SettingsAdvanced : Cell, IDisposable {
         owner.TryPost(
             () -> {
                 if request == certifyGeneration {
+                    certifying = false
                     data.certificate = result
                     data.loadIssue = issue
                     Rebuild()
@@ -2084,7 +2131,13 @@ class SettingsDialogs : Cell, IDisposable {
                 true,
                 passwordIssue
             ),
-            ActionRow([]Blob{Button(ui, "Cancel", close), Button(ui, "Show", form.Submit, !form.CanSubmit, true)}),
+            ActionRow(
+                []Blob{
+                    loading ? Loading(ui, "keys-loading"): Container{Display: Display.None},
+                    Button(ui, "Cancel", close, loading),
+                    ControlParts.Button(ui, "Show", form.Submit, !form.CanSubmit, true, busy: false)
+                }
+            ),
             close
         )
     }
@@ -2253,6 +2306,7 @@ class SettingsDialogs : Cell, IDisposable {
             content,
             ActionRow(
                 []Blob{
+                    state.Busy ? Loading(ui, "keys-export-loading"): Container{Display: Display.None},
                     Button(
                         ui,
                         "Copy all",
@@ -2266,7 +2320,7 @@ class SettingsDialogs : Cell, IDisposable {
                             30000
                         )
                     ),
-                    Button(
+                    ControlParts.Button(
                         ui,
                         "Save…",
                         () -> input.ChooseFile.Invoke(
@@ -2282,7 +2336,8 @@ class SettingsDialogs : Cell, IDisposable {
                                 }
                             }
                         ),
-                        state.Busy
+                        state.Busy,
+                        busy: state.Busy
                     ),
                     Button(ui, "Done", close, false, true)
                 }
@@ -2517,7 +2572,10 @@ class SettingsDialogs : Cell, IDisposable {
                     Label(ui, Tail(state.Directory), AppTheme.Type12, AppTheme.Dim, "")
                 }
             )
-            actions.Add(Button(ui, "Cancel", close))
+            if creating {
+                actions.Add(Loading(ui, "view-only-loading"))
+            }
+            actions.Add(Button(ui, "Cancel", close, creating))
             actions.Add(Button(ui, "Create", form.Submit, !form.CanSubmit, true))
         }
         return WalletParts.Modal(

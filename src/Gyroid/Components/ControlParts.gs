@@ -192,6 +192,20 @@ class ControlParts {
             return button
         }
 
+        func Loading(ui Presentation, key string, status string = "Working") Blob -> Container{
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: AppTheme.Space6,
+            Cell.Mount[Goo.Widgets.Feedback.SpinnerInput, Goo.Widgets.Feedback.Spinner](
+                key,
+                Goo
+                    .Widgets
+                    .Feedback
+                    .SpinnerInput{Size: AppTheme.Icon14, Color: AppTheme.Lime, Label: ui.Strings.Get(status)}
+            ),
+            TextParts.Label(ui, ui.Strings.Get(status), AppTheme.Type13, AppTheme.Dim, "")
+        }
+
         func Entry(ui Presentation, field TextField) Blob -> (
             field with{
                 Width = Percent(100),

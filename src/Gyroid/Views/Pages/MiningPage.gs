@@ -23,6 +23,7 @@ data struct MiningPageInput {
     var Height float64
     var Visible bool
     var NodeRunning bool
+    var Busy bool
     var Network string
     var Endpoint string
 }
@@ -32,6 +33,7 @@ data struct MiningCommandInput {
     var Language string
     var Running bool
     var Available bool
+    var Busy bool
     var Toggle Action
 }
 
@@ -41,6 +43,7 @@ data struct MiningSetupInput {
     var Wallet string
     var Height float64
     var Threads int32
+    var Busy bool
     var SetThreads Action[int32]
 }
 
@@ -136,6 +139,9 @@ class MiningPage : Cell, IDisposable {
             )
         )
         head.MinHeight = 34
+        if input.Busy {
+            head.Add(ControlParts.Loading(ui, "mining-loading"))
+        }
         head.Add(
             Cell.Mount[MiningCommandInput, MiningCommand](
                 "command",
@@ -144,6 +150,7 @@ class MiningPage : Cell, IDisposable {
                     Language: input.Language,
                     Running: running,
                     Available: input.NodeRunning && report.Available,
+                    Busy: input.Busy,
                     Toggle: toggle
                 }
             )
@@ -162,6 +169,7 @@ class MiningPage : Cell, IDisposable {
                         Wallet: input.Wallet,
                         Height: input.Height,
                         Threads: status.Threads,
+                        Busy: input.Busy,
                         SetThreads: setThreads
                     }
                 )
@@ -309,7 +317,7 @@ class MiningCommand : Cell[MiningCommandInput] {
             input.Ui,
             input.Running ? "Stop": "Start mining",
             input.Toggle,
-            disabled: !input.Available,
+            disabled: !input.Available || input.Busy,
             appearance: AppTheme.Button with{
                 FontSize = AppTheme.Type13,
                 BorderColor = input.Running ? AppTheme.Edge: AppTheme.Lime,
@@ -334,6 +342,7 @@ class MiningSetup : Cell[MiningSetupInput] {
             MaterialIcons.Create("chevron_left", AppTheme.Icon14, threads > 1 ? AppTheme.Ink: AppTheme.Dim),
             ui.Strings.Get("Fewer threads"),
             () -> input.SetThreads(threads - 1),
+            disabled: input.Busy || threads <= 1,
             size: AppTheme.ControlCompact
         )
         let moreButton = ControlParts.Icon(
@@ -345,6 +354,7 @@ class MiningSetup : Cell[MiningSetupInput] {
             ),
             ui.Strings.Get("More threads"),
             () -> input.SetThreads(threads + 1),
+            disabled: input.Busy || threads < 1 || threads >= cores,
             size: AppTheme.ControlCompact
         )
         return Container{

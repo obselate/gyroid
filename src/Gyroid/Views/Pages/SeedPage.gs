@@ -68,6 +68,9 @@ class SeedPage : Cell, IDisposable {
         let ui = input.Ui
         let card = WalletParts.PageCard(ui, maxWidth: 760, fill: true)
         card.Add(Label(ui, ui.Strings.Get("recovery phrase"), AppTheme.Type17, AppTheme.Ink, ""))
+        if input.Busy {
+            card.Add(Loading(ui, "seed-loading"))
+        }
         if input.Words.Length == 0 {
             if input.Issue.Length > 0 {
                 card.Add(MessageParts.Problem(ui, input.Issue))

@@ -123,6 +123,9 @@ class SendPage : Cell, IDisposable {
                 Spendable: input.Spendable ?? uint64(0),
                 Submit: () -> Submit(),
                 Close: () -> {
+                    if input.Display.Busy {
+                        return
+                    }
                     estimate = nil
                     reviewFocus = true
                     Rebuild()
@@ -163,7 +166,7 @@ class SendPage : Cell, IDisposable {
     }
 
     private func Refresh(rebuild bool = true) {
-        let display = input.Display
+        let display = input.Display with{Busy = input.Display.Busy || reading}
         let spendable = input.Spendable ?? uint64(0)
         model.Refresh(input.Rows, spendable, display.Busy || reading)
         let rows = [input.Rows.Count]SendEditorInput
@@ -320,7 +323,7 @@ class SendPage : Cell, IDisposable {
             .ToArray()
         reading = true
         issue = ""
-        Refresh(false)
+        Refresh()
         go Estimate(session, window, network, wallet, id, drafts, requests, token)
     }
 
@@ -380,7 +383,7 @@ class SendPage : Cell, IDisposable {
         let id = generation
         reading = true
         issue = ""
-        Refresh(false)
+        Refresh()
         go ReadMaximum(session, window, network, wallet, id, row, address, memo, token)
     }
 
@@ -428,7 +431,6 @@ class SendPage : Cell, IDisposable {
             return
         }
         let window = input.Display.Window
-        estimate = nil
         let session = input.Session
         let network = input.Display.Network
         let wallet = input.Wallet
@@ -453,6 +455,7 @@ class SendPage : Cell, IDisposable {
                             drafts.Add(SendRow())
                         }
                         if Current(id, session, network, wallet) {
+                            estimate = nil
                             if outcome.Fee > 0 {
                                 sent = pending
                                 result = outcome
@@ -972,6 +975,7 @@ class SendActions : Cell {
                 JustifyContent: JustifyContent.SpaceBetween,
                 Gap: AppTheme.Space12,
                 add,
+                input.Loading ? Loading(ui, "prepare-loading"): Container{Display: Display.None},
                 review
             }
         }
@@ -1157,7 +1161,11 @@ class SendReview : Cell {
         let spendable = value.Spendable
         let ui = input.Ui
         let compact = input.Height < 700
-        let close = value.Close
+        let close Action = () -> {
+            if !input.Busy {
+                value.Close()
+            }
+        }
         let list = VirtualRows(shown, AppTheme.ControlRegular + AppTheme.Space12, rowKey, rowBuilder, false, version: 0)
         list.MinHeight = 0
         list.FlexShrink = 1
@@ -1226,6 +1234,9 @@ class SendReview : Cell {
                 Figure(ui, "Remaining", WalletText.Amount(ui.Privacy, remaining), AppTheme.Ink, AppTheme.Type14, "")
             }
         }
+        if input.Busy {
+            content.Add(Loading(ui, "send-loading"))
+        }
         return WalletParts.Modal(
             ui,
             "confirm-send",
@@ -1239,8 +1250,8 @@ class SendReview : Cell {
                 Content: content,
                 Footer: ActionRow(
                     []Blob{
-                        ControlParts.Button(ui, "Cancel", close, busy: false),
-                        ControlParts.Button(ui, "Send", value.Submit, input.Busy, true, busy: input.Busy)
+                        ControlParts.Button(ui, "Cancel", close, input.Busy, busy: false),
+                        ControlParts.Button(ui, "Send", value.Submit, input.Busy, true, busy: false)
                     }
                 ),
                 ConfirmText: ui.Strings.Get("Send"),

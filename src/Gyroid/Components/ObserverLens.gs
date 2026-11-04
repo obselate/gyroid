@@ -214,6 +214,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 Content = content,
                 Footer = ActionRow(
                     []Blob{
+                        input.Loading ? Loading(ui, "observer-loading", "checking"): Container{Display: Display.None},
                         Button(ui, "Prove", input.OnProve, input.Loading || !confirmed),
                         Button(ui, "Close", input.OnClose)
                     }

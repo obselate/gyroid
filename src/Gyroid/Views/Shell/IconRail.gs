@@ -84,7 +84,7 @@ partial class App {
             Id: "lock",
             Label: ui.Strings.Get("lock"),
             Content: MaterialIcons.Create("lock", AppTheme.Icon20, wallet.LockQueued ? AppTheme.Dim: AppTheme.Body),
-            Disabled: wallet.LockQueued
+            Disabled: blocked || wallet.LockQueued
         }
         return ControlParts.Navigation(
             ui,

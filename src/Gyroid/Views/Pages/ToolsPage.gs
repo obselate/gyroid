@@ -499,6 +499,9 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             )
         )
         let gap = compact ? AppTheme.Space8: AppTheme.Space12
+        if context.Busy {
+            card.Add(Loading(ui, "privacy-loading"))
+        }
         if auditIssue.Length > 0 {
             card.Add(MessageParts.Problem(ui, auditIssue))
         }
@@ -950,6 +953,9 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             if issue.Length > 0 {
                 card.Add(MessageParts.Problem(ui, issue))
             }
+            if busy {
+                footer.Add(Loading(ui, "phrase-loading"))
+            }
             footer.Add(ControlParts.Button(ui, "Continue", phraseForm.Submit, !phraseForm.CanSubmit, true, busy: busy))
             card.Add(footer)
             return card
@@ -1131,6 +1137,7 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         root.Add(
             ActionRow(
                 []Blob{
+                    busy ? Loading(input.Ui, "sign-loading"): Container{Display: Display.None},
                     ControlParts.Button(input.Ui, "Sign", form.Submit, !form.CanSubmit, true, busy: busy),
                     Info(
                         input,
@@ -1232,6 +1239,7 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
             form.Field("Signature", input.State.VerifySignature, value -> input.State.VerifySignature = value.Trim()),
             ActionRow(
                 []Blob{
+                    busy ? Loading(input.Ui, "verify-loading", "checking"): Container{Display: Display.None},
                     Verdict(input, verdict),
                     ControlParts.Button(input.Ui, "Verify", form.Submit, !form.CanSubmit, true, busy: busy),
                     Info(
@@ -1361,6 +1369,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
             ),
             ActionRow(
                 []Blob{
+                    busy ? Loading(input.Ui, "proof-verify-loading", "checking"): Container{Display: Display.None},
                     Verdict(input, verdict),
                     ControlParts.Button(input.Ui, "Verify", form.Submit, !form.CanSubmit, true, busy: busy),
                     Info(
@@ -1578,6 +1587,7 @@ class ToolsHealthRegion : Cell, IDisposable {
         card.Add(
             ActionRow(
                 []Blob{
+                    auditing ? Loading(ui, "health-loading", "checking"): Container{Display: Display.None},
                     Button(ui, "Check", () -> Audit(view), input.Busy || auditing),
                     Info(
                         input,

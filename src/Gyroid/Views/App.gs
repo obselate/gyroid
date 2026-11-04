@@ -387,6 +387,7 @@ partial class App : Cell, IDisposable {
                     window?.State != WindowState.Minimized &&
                     window?.Occlusion != WindowOcclusion.Occluded,
                 NodeRunning: wallet.Node.Status.Running,
+                Busy: ui.Working(),
                 Height: height
             }
         )

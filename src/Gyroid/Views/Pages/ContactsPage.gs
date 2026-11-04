@@ -284,6 +284,9 @@ class ContactsPage : Cell, IDisposable {
     private func DeleteDialog(input ContactsInput) Blob {
         let ui = input.Ui
         let close Action = () -> {
+            if input.Busy {
+                return
+            }
             deleting = ""
             Rebuild()
         }
@@ -295,21 +298,23 @@ class ContactsPage : Cell, IDisposable {
                 Preset = ModalDialogPreset.Confirm,
                 AccessibilityName = ui.Strings.Get("Delete"),
                 Width = 420,
-                Content = Label(ui, deleting, AppTheme.Type16, AppTheme.Ink, ""),
+                Content = input.Busy ? Loading(ui, "contact-delete-loading"):
+                Label(ui, deleting, AppTheme.Type16, AppTheme.Ink, ""),
                 ConfirmText = ui.Strings.Get("Delete"),
                 CancelText = ui.Strings.Get("Cancel"),
                 ConfirmDisabled = input.Busy,
                 OnConfirm = () -> {
                     let removed = deleting
-                    deleting = ""
                     Store(
                         input,
                         removed,
                         "",
                         nil,
                         () -> if editing == removed {
+                            deleting = ""
                             Reset()
                         } else {
+                            deleting = ""
                             Rebuild()
                         }
                     )
@@ -401,6 +406,7 @@ class ContactEditor : Cell[ContactEditorInput] {
             FlexShrink: 0,
             BackgroundColor: AppTheme.Raised,
             fields,
+            input.Busy ? Loading(ui, "contact-save-loading"): Container{Display: Display.None},
             ActionRow(
                 []Blob{
                     Button(ui, "Cancel", input.OnCancel, input.Busy || input.Contacts.Count == 0),

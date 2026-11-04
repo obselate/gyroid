@@ -431,13 +431,17 @@ class MessagesPage : Cell, IDisposable {
                         labelled: false,
                         invalid: issue.Length > 0
                     ),
+                    input.Working ? Loading(ui, "messages-unlock-loading"): Container{Display: Display.None},
                     Button(ui, "Unlock", unlock.Submit, !unlock.CanSubmit, true)
                 }
             )
         } else if let current = conversation {
             thread.Add(Header(input, current))
             thread.Add(Cell.Mount[MessageThread]("thread:" + current.Id, configureThread))
-            thread.Add(Cell.Mount[MessageComposer]("composer:" + current.Id, configureComposer))
+            thread.Add(
+                busy ? Loading(ui, "message-loading"):
+                Cell.Mount[MessageComposer]("composer:" + current.Id, configureComposer)
+            )
         } else {
             thread.Add(
                 Container{
@@ -1294,6 +1298,9 @@ class MessageDialog : Cell, IDisposable {
                     )
                 )
             }
+        }
+        if busy {
+            content.Add(Loading(ui, "conversation-loading"))
         }
         if issue.Length > 0 {
             content.Add(MessageParts.Problem(ui, issue))

@@ -480,6 +480,9 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
             TextParts.Copy(ui, payload, shown == "link" ? "Copy link": "Copy address", disabled: disabled, text: true)
         }
         let actions = Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, field, action}
+        if input.Busy {
+            actions.Add(Loading(ui, "receive-loading"))
+        }
         let message = exportResult.Length > 0 && exportPayload == payload ? exportResult: input.Error
         if message.Length > 0 {
             actions.Add(Label(ui, ui.Strings.Get(message), AppTheme.Type13, AppTheme.Body, ""))

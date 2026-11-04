@@ -1612,7 +1612,7 @@ class HistoryTransactions : Cell, IDisposable {
                             proofValid ? "check": "close"
                         )
                     } else {
-                        Container{}
+                        proofIssue.Length == 0 ? Loading(ui, "proof-loading"): Container{}
                     },
                     Figure(
                         ui,
@@ -2001,6 +2001,7 @@ class HistoryExport : Cell, IDisposable {
     private let exportAnchor ElementHandle = ElementHandle()
     private var generation int32
     private var issue string = ""
+    private var writing bool
 
     public func Accept(input HistoryExportInput) {
         if current.Equals(input) {
@@ -2030,7 +2031,7 @@ class HistoryExport : Cell, IDisposable {
         let ui = input.Ui
         let button = ControlParts.Button(
             ui,
-            "export",
+            writing ? "Working": "export",
             () -> {
                 exporting = !exporting
                 if exporting {
@@ -2038,7 +2039,8 @@ class HistoryExport : Cell, IDisposable {
                 }
                 Rebuild()
             },
-            input.Count == 0,
+            input.Count == 0 || writing,
+            busy: writing,
             appearance: AppTheme.CompactButton with{
                 Leading = MaterialIcons.Create("download", AppTheme.Icon16, AppTheme.Ink),
                 BorderColor = exporting ? AppTheme.StrongEdge: AppTheme.Edge,
@@ -2103,6 +2105,10 @@ class HistoryExport : Cell, IDisposable {
         return Container{
             Handle: exportAnchor,
             FlexShrink: 0,
+            FlexDirection: FlexDirection.Row,
+            AlignItems: AlignItems.Center,
+            Gap: AppTheme.Space6,
+            writing ? Loading(ui, "history-export-loading"): Container{Display: Display.None},
             button,
             Cell.Mount[PopoverInput, Popover](
                 "export",
@@ -2149,7 +2155,11 @@ class HistoryExport : Cell, IDisposable {
             FileDialogKind.SaveFile,
             "save",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "history." + suffix),
-            path -> input.Ui.Actions.Run(ct -> Export(input, path, rows, known, withMemos, suffix, run, ct))
+            path -> {
+                writing = true
+                Rebuild()
+                input.Ui.Actions.Run(ct -> Export(input, path, rows, known, withMemos, suffix, run, ct))
+            }
         )
     }
 
@@ -2176,6 +2186,7 @@ class HistoryExport : Cell, IDisposable {
         input.Window?.TryPost(
             () -> {
                 if run == generation {
+                    writing = false
                     issue = result
                     exporting = result.Length > 0
                     Rebuild()
