@@ -3,6 +3,7 @@ package Gyroid.Views
 import Goo
 import Goo.Widgets
 import Goo.Widgets.Data
+import Goo.Widgets.Feedback
 import Goo.Widgets.Icons
 import Goo.Widgets.Layout
 import Gyroid.Components
@@ -148,7 +149,18 @@ class LibraryPage : Cell, IDisposable {
     override func Build() Blob {
         let card = WalletParts.PageCard(input.Ui, maxWidth: 560, fill: true)
         if input.Busy {
-            card.Add(Status(input.Ui, input.Status, AppTheme.Dim, "schedule"))
+            card.Add(
+                Container{
+                    FlexDirection: FlexDirection.Row,
+                    AlignItems: AlignItems.Center,
+                    Gap: AppTheme.Space6,
+                    Cell.Mount[SpinnerInput, Spinner](
+                        "library-busy",
+                        SpinnerInput{Size: AppTheme.Icon14, Color: AppTheme.Lime, Label: input.Status}
+                    ),
+                    Label(input.Ui, input.Status, AppTheme.Type13, AppTheme.Dim, "")
+                }
+            )
         }
         if form.Length > 0 {
             card.Add(
