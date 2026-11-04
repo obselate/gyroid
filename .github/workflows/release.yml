@@ -96,7 +96,7 @@ jobs:
           cache-dependency-path: src/Gyroid/packages.osx-arm64.lock.json
       - run: test "$(uname -m)" = arm64
       - run: bash scripts/install-shader-tools.sh
-      - run: dotnet tool install --tool-path "$RUNNER_TEMP/goo" Goo.DevTools --version 0.27.5
+      - run: dotnet tool install --tool-path "$RUNNER_TEMP/goo" Goo.DevTools --version 0.27.8
       - run: bash scripts/verify.sh
       - run: bash scripts/generate-macos-icon.sh
       - name: Package NativeAOT app and DMG
