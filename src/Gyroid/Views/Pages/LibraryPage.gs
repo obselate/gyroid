@@ -157,7 +157,7 @@ class LibraryPage : Cell, IDisposable {
                 MinHeight: 0,
                 FlexShrink: 0,
                 Overflow: Overflow.Hidden,
-                TransitionMs: 180,
+                TransitionMs: input.Session.Settings.ReduceMotion ? 0: 180,
                 TransitionEasing: Easing.Linear,
                 TransitionProperties: []TransitionProperty{TransitionProperty.Height},
                 Container{
