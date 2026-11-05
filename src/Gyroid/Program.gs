@@ -18,6 +18,7 @@ func GetConsoleProcessList(processes[]uint32, count uint32) uint32;
 @DllImport("kernel32.dll")
 func FreeConsole() int32;
 
+@STAThread
 func Main() {
     let arguments = Environment.GetCommandLineArgs()
     if OperatingSystem.IsWindows() && arguments.Length >= 3 && arguments[1] == "--owned-core" {
