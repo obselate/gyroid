@@ -1036,9 +1036,16 @@ class NetworkPeerMap : Cell {
     private let peerMap ElementHandle = ElementHandle()
     private var current NetworkPeerMapInput
     private var hovered string = ""
+    private var markers NetworkPeerMarkers?
+    private var mapWidth float64
+    private var mapHeight float64
 
     init() {
-        peerMap.MetricsChanged += _ -> Rebuild()
+        peerMap.MetricsChanged += _ -> {
+            if peerMap.BorderBox.Width != mapWidth || peerMap.BorderBox.Height != mapHeight {
+                Rebuild()
+            }
+        }
     }
 
     func Accept(next NetworkPeerMapInput) {
@@ -1050,10 +1057,8 @@ class NetworkPeerMap : Cell {
     }
 
     func Hover(id string) {
-        if hovered != id {
-            hovered = id
-            Rebuild()
-        }
+        hovered = id
+        markers?.Hover(id)
     }
 
     override func Build() Blob {
@@ -1071,6 +1076,8 @@ class NetworkPeerMap : Cell {
         }
         let width = peerMap.BorderBox.Width
         let height = peerMap.BorderBox.Height
+        mapWidth = width
+        mapHeight = height
         if width <= 0 || height <= 0 {
             return plot
         }
@@ -1121,41 +1128,63 @@ class NetworkPeerMap : Cell {
             let mark = MaterialIcons.Create("close", AppTheme.Icon14, AppTheme.Pink)
             plot.Add(Place(x + Math.Cos(angle) * outer - 7, y + Math.Sin(angle) * outer - 7, mark))
         }
-        for index in 0 ... input.Peers.Length {
-            let peer = input.Peers[index]
-            let angle = -Math.PI / 2 + index * 2.39996
-            let px = x + Math.Cos(angle) * ring
-            let py = y + Math.Sin(angle) * ring
-            let color = peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
-            let active = peer.Id == hovered
-            let radius = active ? 7.0: 5.5
-            if active {
-                plot.Add(Lines(width, height, PathBuilder(0, 0, width, height).MoveTo(x, y).LineTo(px, py), color))
-            }
-            let dot = Dot(px, py, radius, color)
-            dot.Key = "peer:" + peer.Id
-            dot.BorderWidth = active ? 1.5: AppTheme.Border0
-            dot.BorderColor = AppTheme.Ink
-            dot.OnPointerEnter = (event PointerEvent) -> input.Hover(peer.Id)
-            dot.OnPointerLeave = (event PointerEvent) -> input.Hover("")
-            plot.Add(dot)
-            if active {
-                plot.Add(
-                    ChartParts.Tooltip(
-                        px + 14 + 250 > width ? Math.Max(0.0, px - 264): px + 14,
-                        Math.Max(0.0, py - 34),
-                        Container{
-                            Gap: AppTheme.Space4,
-                            Tip(ui, "peer ID", NetworkPeers.Short(peer.Id), AppTheme.Ink),
-                            Tip(ui, "via", peer.Transport + " · " + peer.Family, color),
-                            Tip(ui, "address", peer.Address, AppTheme.Ink)
-                        },
-                        zIndex: 4
-                    )
-                )
-            }
-        }
+        plot.Add(
+            Cell.Mount[NetworkPeerMarkers](
+                "markers",
+                cell -> {
+                    markers = cell
+                    cell.Accept(this, input, width, height)
+                    cell.Hover(hovered)
+                }
+            )
+        )
         return plot
+    }
+
+    func MarkerDot(input NetworkPeerMapInput, peer NetworkPeer, position Point, active bool) Blob {
+        let dot = Dot(
+            position.X,
+            position.Y,
+            active ? 7.0: 5.5,
+            peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
+        )
+        dot.Key = "peer:" + peer.Id
+        dot.BorderWidth = active ? 1.5: AppTheme.Border0
+        dot.BorderColor = AppTheme.Ink
+        dot.OnPointerEnter = (event PointerEvent) -> input.Hover(peer.Id)
+        dot.OnPointerLeave = (event PointerEvent) -> input.Hover("")
+        return dot
+    }
+
+    func Highlight(
+        plot Container,
+        input NetworkPeerMapInput,
+        peer NetworkPeer,
+        position Point,
+        width float64,
+        height float64
+    ) {
+        let ui = input.Ui
+        let px = position.X
+        let py = position.Y
+        let color = peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
+        plot.Add(
+            Lines(width, height, PathBuilder(0, 0, width, height).MoveTo(width / 2, height / 2).LineTo(px, py), color)
+        )
+        plot.Add(MarkerDot(input, peer, position, true))
+        plot.Add(
+            ChartParts.Tooltip(
+                px + 14 + 250 > width ? Math.Max(0.0, px - 264): px + 14,
+                Math.Max(0.0, py - 34),
+                Container{
+                    Gap: AppTheme.Space4,
+                    Tip(ui, "peer ID", NetworkPeers.Short(peer.Id), AppTheme.Ink),
+                    Tip(ui, "via", peer.Transport + " · " + peer.Family, color),
+                    Tip(ui, "address", peer.Address, AppTheme.Ink)
+                },
+                zIndex: 4
+            )
+        )
     }
 
     private func Tip(ui Presentation, label string, value string, color Color) Blob ->
@@ -1192,5 +1221,54 @@ class NetworkPeerMap : Cell {
         let point = ChartParts.Point(x, y, color, radius * 2)
         point.HitTestSelf = true
         return point
+    }
+}
+
+class NetworkPeerMarkers : Cell {
+    private var owner NetworkPeerMap
+    private var current NetworkPeerMapInput
+    private var width float64
+    private var height float64
+    private var hovered string = ""
+    private var dots[]Blob = []Blob{}
+    private var positions[]Point = []Point{}
+
+    func Accept(nextOwner NetworkPeerMap, next NetworkPeerMapInput, nextWidth float64, nextHeight float64) {
+        if current.Equals(next) && width == nextWidth && height == nextHeight {
+            return
+        }
+        owner = nextOwner
+        current = next
+        width = nextWidth
+        height = nextHeight
+        dots = [next.Peers.Length]Blob
+        positions = [next.Peers.Length]Point
+        let ring = (Math.Min(width, height) / 2 - 4) * 0.62
+        for index in 0 ... next.Peers.Length {
+            let angle = -Math.PI / 2 + index * 2.39996
+            positions[index] = Point{X: width / 2 + Math.Cos(angle) * ring, Y: height / 2 + Math.Sin(angle) * ring}
+            dots[index] = owner.MarkerDot(next, next.Peers[index], positions[index], false)
+        }
+        Rebuild()
+    }
+
+    func Hover(id string) {
+        if hovered != id {
+            hovered = id
+            Rebuild()
+        }
+    }
+
+    override func Build() Blob {
+        let plot = Container{Position: PositionType.Absolute, HitTestSelf: false, Width: width, Height: height}
+        for index in 0 ... dots.Length {
+            let peer = current.Peers[index]
+            if peer.Id == hovered {
+                owner.Highlight(plot, current, peer, positions[index], width, height)
+            } else {
+                plot.Add(dots[index])
+            }
+        }
+        return plot
     }
 }
