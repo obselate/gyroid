@@ -1,7 +1,7 @@
 <Project Sdk="Gsharp.NET.Sdk/0.5.212">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <Product>Gyroid</Product>
     <GooPackageId>dev.gyroid.wallet</GooPackageId>
     <GooPackageIcon Condition="$([MSBuild]::IsOSPlatform('OSX'))">assets/gyroid.icns</GooPackageIcon>
