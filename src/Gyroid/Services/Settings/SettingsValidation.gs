@@ -96,6 +96,34 @@ class SettingsValidation {
             }
         }
 
+        func PoolUrlError(value string) string {
+            let text = value.Contains("://", StringComparison.Ordinal) ? value: "stratum+tcp://" + value
+            if value.Length > 0 && value == value.Trim() && Uri.TryCreate(text, UriKind.Absolute, out let endpoint) &&
+                endpoint != nil &&
+                (
+                endpoint.Scheme == "stratum+tcp" || endpoint.Scheme == "stratum+ssl" || endpoint.Scheme == "stratum+tls"
+            ) &&
+                endpoint
+                .Host
+                .Length > 0 &&
+                endpoint.Port >= 1 &&
+                endpoint.Port <= 65535 &&
+                endpoint
+                .UserInfo
+                .Length == 0 &&
+                endpoint
+                .Query
+                .Length == 0 &&
+                endpoint
+                .Fragment
+                .Length == 0 &&
+                endpoint.AbsolutePath == "/" &&
+                !value.EndsWith("/", StringComparison.Ordinal) && !value.Contains(',') {
+                return ""
+            }
+            return "Enter a pool host and port, with an optional stratum+tcp, stratum+ssl or stratum+tls scheme"
+        }
+
         func ListenError(value string) string {
             let parts = value.Split('/')
             let valid = parts.Length == 5 && parts[0].Length == 0 && parts[3] == "tcp" && uint16.TryParse(

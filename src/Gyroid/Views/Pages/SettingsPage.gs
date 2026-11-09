@@ -74,6 +74,7 @@ data struct SettingsGeneralInput {
 data struct SettingsNodeInput {
     var Language string
     var Mode string
+    var DownloadCheckpoints bool
     var Directory string
     var Height uint64
     var ChainHeight uint64
@@ -159,6 +160,7 @@ class SettingsPage : Cell, IDisposable {
     private var dialogs SettingsDialogs?
     private var advancedOwner SettingsAdvanced?
     private var nodeOwner SettingsNode?
+    private var miningOwner SettingsMining?
     private var mountedSection string = ""
     private var generation int32
     private var issue string = ""
@@ -169,6 +171,7 @@ class SettingsPage : Cell, IDisposable {
     private let refreshNodeData Action
     private let configureGeneral Action[SettingsGeneral]
     private let configureNode Action[SettingsNode]
+    private let configureMining Action[SettingsMining]
     private let configureWallet Action[SettingsWallet]
     private let configureAdvanced Action[SettingsAdvanced]
     private let configureDialogs Action[SettingsDialogs]
@@ -185,6 +188,10 @@ class SettingsPage : Cell, IDisposable {
         configureNode = region -> {
             nodeOwner = region
             region.Accept(current, startupDraft)
+        }
+        configureMining = region -> {
+            miningOwner = region
+            region.Accept(current)
         }
         configureWallet = region -> {
             walletOwner = region
@@ -207,12 +214,14 @@ class SettingsPage : Cell, IDisposable {
             mountedSection = section
             generalOwner = nil
             nodeOwner = nil
+            miningOwner = nil
             walletOwner = nil
             advancedOwner = nil
         }
         current = input with{Settings = input.Session.Settings}
         generalOwner?.Accept(current, savePreference)
         nodeOwner?.Accept(current, startupDraft)
+        miningOwner?.Accept(current)
         walletOwner?.Accept(current, openDialog)
         advancedOwner?.Accept(current, openPurge, startupDraft.Advanced)
         dialogs?.Accept(current)
@@ -244,7 +253,7 @@ class SettingsPage : Cell, IDisposable {
     override func Build() Blob {
         let input = current
         let ui = input.Ui
-        let sections = List[string]{"general", "security", "node"}
+        let sections = List[string]{"general", "security", "node", "mining"}
         if state.State == WalletState.Unlocked {
             sections.Add("wallet")
         }
@@ -264,6 +273,7 @@ class SettingsPage : Cell, IDisposable {
                     switch id {
                         case "security": "lock"
                         case "node": "dns"
+                        case "mining": "hardware"
                         case "wallet": "account_balance_wallet"
                         case "advanced": "build"
                         default: "notes"
@@ -328,6 +338,7 @@ class SettingsPage : Cell, IDisposable {
                 case "general": Cell.Mount[SettingsGeneral]("general", configureGeneral)
                 case "security": Security(current)
                 case "node": Cell.Mount[SettingsNode]("node", configureNode)
+                case "mining": Cell.Mount[SettingsMining]("mining", configureMining)
                 case "wallet": Cell.Mount[SettingsWallet]("wallet", configureWallet)
                 default: Cell.Mount[SettingsAdvanced]("advanced", configureAdvanced)
             }
@@ -648,6 +659,7 @@ class SettingsNode : Cell, IDisposable {
         let next = SettingsNodeInput{
             Language: input.Language,
             Mode: settings.NodeMode,
+            DownloadCheckpoints: settings.DownloadCheckpoints,
             Directory: status.DataDirectory.Length > 0 ? status.DataDirectory: settings.DataDirectory,
             Height: status.Height,
             ChainHeight: status.ChainHeight,
@@ -791,6 +803,25 @@ class SettingsNode : Cell, IDisposable {
                 WalletParts.Line(ui, rowHeight, "height", height.ToArray()),
                 WalletParts.Line(ui, rowHeight, "core", core.ToArray()),
                 WalletParts.Line(ui, rowHeight, "network upgrade", upgrade.ToArray()),
+                WalletParts.Line(
+                    ui,
+                    rowHeight,
+                    "Download checkpoints",
+                    []Blob{
+                        Toggle(
+                            input,
+                            "Download checkpoints",
+                            state.DownloadCheckpoints,
+                            () -> {
+                                input.Session.ApplyPreference(
+                                    value -> value.DownloadCheckpoints = !state.DownloadCheckpoints
+                                )
+                                ui.Actions.Run(ct -> input.Session.SavePreferencesAsync(ct))
+                            },
+                            state.Busy
+                        )
+                    }
+                ),
                 WalletParts.Line(
                     ui,
                     rowHeight,

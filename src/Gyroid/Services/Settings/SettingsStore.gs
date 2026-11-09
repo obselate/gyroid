@@ -63,6 +63,10 @@ class SettingsStore {
                     settings.BinaryPath = NodeJson.Text(root, "binary_path")
                     settings.ListenAddress = NodeJson.Text(root, "listen_address", settings.ListenAddress)
                     settings.NodeMode = NodeJson.Text(root, "node_mode", "automatic")
+                    settings.DownloadCheckpoints = !root.TryGetProperty("download_checkpoints", out let checkpoints) ||
+                        checkpoints.ValueKind != JsonValueKind.False
+                    settings.MiningMode = NodeJson.Text(root, "mining_mode") == "pool" ? "pool": "solo"
+                    settings.PoolUrl = NodeJson.Text(root, "pool_url")
                     settings.Language = NodeJson.Text(root, "language")
                     settings.Privacy = NodeJson.Flag(root, "privacy")
                     if root.TryGetProperty("auto_lock_minutes", out let minutes) {
@@ -184,6 +188,9 @@ class SettingsStore {
                     WriteSetting(writer, root, "binary_path", "GYROID_BINARY", settings.BinaryPath)
                     WriteSetting(writer, root, "listen_address", "GYROID_LISTEN", settings.ListenAddress)
                     WriteSetting(writer, root, "node_mode", "GYROID_NODE_MODE", settings.NodeMode)
+                    writer.WriteBoolean("download_checkpoints", settings.DownloadCheckpoints)
+                    writer.WriteString("mining_mode", settings.MiningMode)
+                    writer.WriteString("pool_url", settings.PoolUrl)
                     writer.WriteString("language", settings.Language)
                     writer.WriteBoolean("privacy", settings.Privacy)
                     writer.WriteNumber("auto_lock_minutes", settings.AutoLockMinutes)

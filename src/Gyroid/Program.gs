@@ -21,6 +21,10 @@ func FreeConsole() int32;
 @STAThread
 func Main() {
     let arguments = Environment.GetCommandLineArgs()
+    if arguments.Length >= 3 && arguments[1] == "--owned-seine" {
+        Environment.ExitCode = SeineMiner.RunOwned(arguments)
+        return
+    }
     if OperatingSystem.IsWindows() && arguments.Length >= 3 && arguments[1] == "--owned-core" {
         Environment.ExitCode = OwnedCoreWrapper.RunWindows(arguments)
         return

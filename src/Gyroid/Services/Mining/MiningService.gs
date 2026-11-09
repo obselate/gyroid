@@ -10,12 +10,16 @@ import System.Threading.Tasks
 
 class MiningService {
     let session WalletSession
+    let Pool SeineMiner = SeineMiner()
 
     init(session WalletSession) {
         this.session = session
     }
 
     async func StatusAsync(ct CancellationToken = default(CancellationToken)) MiningStatus {
+        if session.settings.MiningMode == "pool" {
+            return await Pool.StatusAsync(ct)
+        }
         using let response = await session.Node.Api.JsonAsync("mining", ct: ct)
         let root = response.RootElement
         return MiningStatus{
@@ -71,7 +75,7 @@ class MiningService {
             if requests.Reader.TryPeek(out _) {
                 return previous
             }
-            let waiting = status.Running && session.Node.Status.Peers == 0
+            let waiting = status.Running && !status.Pool && session.Node.Status.Peers == 0
             report = previous.Report.Record(
                 status,
                 waiting,
@@ -82,19 +86,63 @@ class MiningService {
         return MiningPollResult{Request: state, Report: report}
     }
 
-    func StartAsync(ct CancellationToken = default(CancellationToken)) Task -> PostAsync("mining/start", nil, ct)
+    async func StartAsync(ct CancellationToken = default(CancellationToken)) {
+        await session.BeginAsync(ct)
+        try {
+            session.RequireUnlocked()
+            if session.settings.MiningMode != "pool" {
+                await Pool.StopAsync()
+                session.Touch()
+                using let started = await session.Node.Api.JsonAsync("mining/start", ct: ct, method: HttpMethod.Post)
+                return
+            }
+            let issue = SettingsValidation.PoolUrlError(session.settings.PoolUrl)
+            if issue.Length > 0 {
+                throw WalletException(issue)
+            }
+            try {
+                using let stopped = await session.Node.Api.JsonAsync("mining/stop", ct: ct, method: HttpMethod.Post)
+            } catch (error WalletException) when error.StatusCode == 409 { }
+            await Pool.StopAsync()
+            let address = session.Snapshot.Address
+            if address.Length == 0 {
+                throw WalletException("Open a wallet before starting pool mining")
+            }
+            session.Touch()
+            await Pool.StartAsync(session.settings.PoolUrl, address, ct)
+        } catch (error WalletException) when error.StatusCode == 409 { } finally {
+            session.End()
+        }
+    }
 
-    func StopAsync(ct CancellationToken = default(CancellationToken)) Task -> PostAsync("mining/stop", nil, ct)
+    async func StopAsync(ct CancellationToken = default(CancellationToken)) {
+        if session.settings.MiningMode == "pool" {
+            await session.BeginAsync(ct)
+            try {
+                await Pool.StopAsync()
+            } finally {
+                session.End()
+            }
+        } else {
+            await PostAsync("mining/stop", nil, ct)
+        }
+    }
 
-    func SetThreadsAsync(threads int32, ct CancellationToken = default(CancellationToken)) Task -> PostAsync(
-        "mining/threads",
-        writer -> {
-            writer.WriteStartObject()
-            writer.WriteNumber("threads", threads)
-            writer.WriteEndObject()
-        },
-        ct
-    )
+    func SetThreadsAsync(threads int32, ct CancellationToken = default(CancellationToken)) Task {
+        if session.settings.MiningMode == "pool" {
+            Pool.SetThreads(threads)
+            return Task.CompletedTask
+        }
+        return PostAsync(
+            "mining/threads",
+            writer -> {
+                writer.WriteStartObject()
+                writer.WriteNumber("threads", threads)
+                writer.WriteEndObject()
+            },
+            ct
+        )
+    }
 
     private async func PostAsync(path string, body Action[Utf8JsonWriter]?, ct CancellationToken) {
         await session.BeginAsync(ct)

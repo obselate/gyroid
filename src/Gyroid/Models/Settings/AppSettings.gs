@@ -9,6 +9,9 @@ open class AppSettings {
     var BinaryPath string = ""
     var ListenAddress string = "/ip4/127.0.0.1/tcp/0"
     var NodeMode string = "automatic"
+    var DownloadCheckpoints bool = true
+    var MiningMode string = "solo"
+    var PoolUrl string = ""
     var Language string = ""
     var Privacy bool
     var AutoLockMinutes int32

@@ -545,6 +545,35 @@ class WalletSession : IDisposable {
         }
     }
 
+    async func SaveMiningAsync(mode string, pool string, ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            if mode != "solo" && mode != "pool" {
+                throw WalletException("Choose Solo (built-in) or Pool (Seine)")
+            }
+            if mode == "pool" {
+                let issue = SettingsValidation.PoolUrlError(pool)
+                if issue.Length > 0 {
+                    throw WalletException(issue)
+                }
+            }
+            await Mining.Pool.StopAsync()
+            if state == WalletState.Unlocked {
+                try {
+                    using let stopped = await Node.Api.JsonAsync("mining/stop", ct: ct, method: HttpMethod.Post)
+                } catch (error WalletException) when error.StatusCode == 409 { }
+            }
+            let next = settings.Copy()
+            next.MiningMode = mode
+            next.PoolUrl = pool
+            await SettingsStore.SaveAsync(next, ct, settings)
+            settings.MiningMode = mode
+            settings.PoolUrl = pool
+        } finally {
+            End()
+        }
+    }
+
     async func StartNodeAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {
@@ -874,6 +903,7 @@ class WalletSession : IDisposable {
     }
 
     private async func LockCoreAsync(ct CancellationToken) {
+        await Mining.Pool.StopAsync()
         StopEvents()
         lockQueued = false
         RequireManaged()
@@ -910,6 +940,7 @@ class WalletSession : IDisposable {
     }
 
     private async func UnloadCoreAsync(ct CancellationToken) {
+        await Mining.Pool.StopAsync()
         StopEvents()
         Send.InvalidateConfirmation()
         Messages.Reset()
@@ -1192,6 +1223,7 @@ class WalletSession : IDisposable {
         }
         disposed = true
         Node.Exited = nil
+        Mining.Pool.Dispose()
         shutdown.Cancel()
         background.GetAwaiter().GetResult()
         autoLockChanged.Writer.TryComplete()
