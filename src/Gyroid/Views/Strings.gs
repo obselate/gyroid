@@ -666,6 +666,7 @@ class Strings {
             case "Solo (built-in)": "单独挖矿（内置）"
             case "Pool (Seine)": "矿池挖矿（Seine）"
             case "Pool URL": "矿池地址"
+            case "Use GPU": "使用 GPU"
             case "Download checkpoints": "下载检查点"
             case "Seine takes 2% of mining time as a developer fee": "Seine 将 2% 的挖矿时间用于开发者费用"
             case "Seine connects to the configured Stratum pool": "Seine 连接到设置的 Stratum 矿池"

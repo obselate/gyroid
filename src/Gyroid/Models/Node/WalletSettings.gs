@@ -19,6 +19,7 @@ class WalletSettings : AppSettings {
         DownloadCheckpoints: DownloadCheckpoints,
         MiningMode: MiningMode,
         PoolUrl: PoolUrl,
+        UseGpu: UseGpu,
         Language: Language,
         Privacy: Privacy,
         AutoLockMinutes: AutoLockMinutes,

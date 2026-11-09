@@ -109,7 +109,7 @@ class MiningService {
                 throw WalletException("Open a wallet before starting pool mining")
             }
             session.Touch()
-            await Pool.StartAsync(session.settings.PoolUrl, address, ct)
+            await Pool.StartAsync(session.settings.PoolUrl, address, session.settings.UseGpu, ct)
         } catch (error WalletException) when error.StatusCode == 409 { } finally {
             session.End()
         }

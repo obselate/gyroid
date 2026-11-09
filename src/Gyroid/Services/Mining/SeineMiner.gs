@@ -22,8 +22,9 @@ class SeineMiner : IDisposable {
     private var threads int32 = 1
     private var download int32 = -1
     private var active bool
+    prop Running bool -> active && process != nil && !process!!.HasExited
 
-    async func StartAsync(pool string, address string, ct CancellationToken) {
+    async func StartAsync(pool string, address string, useGpu bool, ct CancellationToken) {
         try {
             download = 0
             active = true
@@ -62,8 +63,6 @@ class SeineMiner : IDisposable {
                 "Gyroid",
                 "--ui",
                 "plain",
-                "--backend",
-                "cpu",
                 "--threads",
                 threads.ToString(CultureInfo.InvariantCulture),
                 "--api-server",
@@ -81,6 +80,10 @@ class SeineMiner : IDisposable {
                 directory
             } {
                 start.ArgumentList.Add(argument)
+            }
+            if !useGpu {
+                start.ArgumentList.Add("--backend")
+                start.ArgumentList.Add("cpu")
             }
             start.Environment["HOME"] = directory
             start.Environment["USERPROFILE"] = directory
