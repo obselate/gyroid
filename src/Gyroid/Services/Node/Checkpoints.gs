@@ -19,7 +19,7 @@ class Checkpoints {
             try {
                 using let http = HttpClient(SocketsHttpHandler{AllowAutoRedirect: false, UseProxy: false})
                 using let response = await http.GetAsync(
-                    "https://longhornpool.net/checkpoints.dat",
+                    "https://bntpool.com/checkpoints.dat",
                     HttpCompletionOption.ResponseHeadersRead,
                     ct
                 )

@@ -381,6 +381,7 @@ partial class App : Cell, IDisposable {
                 Wallet: wallet.Settings.ActiveWallet,
                 Network: wallet.Settings.Network,
                 Endpoint: wallet.Settings.Endpoint,
+                Mode: wallet.Settings.MiningMode,
                 Language: ui.Strings.Language,
                 Visible: !hidden &&
                     window?.IsVisible == true &&

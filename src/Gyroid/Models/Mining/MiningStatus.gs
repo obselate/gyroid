@@ -9,6 +9,11 @@ data struct MiningStatus {
     var Hashes uint64
     var Blocks uint64
     var Started DateTimeOffset
+    var Pool bool
+    var Accepted uint64
+    var Rejected uint64
+    var Connection string = ""
+    var DownloadPercent int32 = -1
 }
 
 data struct MiningSample {
@@ -39,14 +44,14 @@ class MiningHistory {
 }
 
 data struct MiningReport {
-    var Status MiningStatus
+    var Status MiningStatus = MiningStatus{}
     var Available bool = true
     var Waiting bool
     var Samples[]MiningSample = []MiningSample{}
     var Top float64 = 0.16
 
     func Record(status MiningStatus, waiting bool, continuous bool, now DateTimeOffset) MiningReport {
-        let history = status.Started == Status.Started ? Samples: []MiningSample{}
+        let history = status.Started == Status.Started && status.Pool == Status.Pool ? Samples: []MiningSample{}
         let result = MiningReport{... this, Status: status, Available: true, Waiting: waiting, Samples: history}
         if !status.Running || waiting || status.Hashes == 0 {
             return result

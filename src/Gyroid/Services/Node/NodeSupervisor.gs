@@ -453,22 +453,25 @@ class NodeSupervisor : IDisposable {
                 return true
             }
         }
-        ReportProgress(NodePhase.Checkpoints, 0)
-        using let deadline = CancellationTokenSource.CreateLinkedTokenSource(ct)
-        deadline.CancelAfter(TimeSpan.FromSeconds(5))
-        let downloaded = await Checkpoints.FetchAsync(
-            (count, length) -> ReportProgress(
-                NodePhase.Checkpoints,
-                if length > 0 {
-                    int32(Math.Min(100L, count * 100 / length))
-                } else {
-                    nil
-                }
-            ),
-            ct,
-            deadline.Token
-        )
-        let selected = Checkpoints.Select(baseline, downloaded)
+        var selected = baseline
+        if settings.DownloadCheckpoints {
+            ReportProgress(NodePhase.Checkpoints, 0)
+            using let deadline = CancellationTokenSource.CreateLinkedTokenSource(ct)
+            deadline.CancelAfter(TimeSpan.FromSeconds(5))
+            let downloaded = await Checkpoints.FetchAsync(
+                (count, length) -> ReportProgress(
+                    NodePhase.Checkpoints,
+                    if length > 0 {
+                        int32(Math.Min(100L, count * 100 / length))
+                    } else {
+                        nil
+                    }
+                ),
+                ct,
+                deadline.Token
+            )
+            selected = Checkpoints.Select(baseline, downloaded)
+        }
         await PrivateFiles.WriteAtomic(path, stream -> stream.WriteAsync(selected, 0, selected.Length, ct), true, false)
         CheckpointHeight = Checkpoints.Height(Checkpoints.Parse(selected))
         ReportProgress(NodePhase.Checkpoints, 100)

@@ -26,6 +26,7 @@ data struct MiningPageInput {
     var Busy bool
     var Network string
     var Endpoint string
+    var Mode string
 }
 
 data struct MiningCommandInput {
@@ -78,6 +79,10 @@ class MiningPage : Cell, IDisposable {
         "Rewards go to the wallet that is open when mining starts",
         "Mining waits for at least one peer"
     }
+    private let poolAbout[]string = []string{
+        "Seine connects to the configured Stratum pool",
+        "Rewards go to the wallet that is open when mining starts"
+    }
     private var source MiningPageInput
     private var request CancellationTokenSource?
     private var refreshRequested chan[MiningPollRequest] = Chan.Unbounded[MiningPollRequest]()
@@ -98,7 +103,8 @@ class MiningPage : Cell, IDisposable {
             source.Window != input.Window ||
             source.Wallet != input.Wallet ||
             source.Network != input.Network ||
-            source.Endpoint != input.Endpoint
+            source.Endpoint != input.Endpoint ||
+            source.Mode != input.Mode
         let stateChanged = source.Visible != input.Visible || source.NodeRunning != input.NodeRunning
         source = input
         if replaced {
@@ -135,7 +141,13 @@ class MiningPage : Cell, IDisposable {
             AppTheme.Space10,
             Cell.Mount[InfoTipInput, InfoTip](
                 "about",
-                InfoTipInput{Ui: ui, Topic: "About mining", Lines: about, Language: input.Language, Width: 300}
+                InfoTipInput{
+                    Ui: ui,
+                    Topic: "About mining",
+                    Lines: input.Mode == "pool" ? poolAbout: about,
+                    Language: input.Language,
+                    Width: 300
+                }
             )
         )
         head.MinHeight = 34
@@ -156,6 +168,37 @@ class MiningPage : Cell, IDisposable {
             )
         )
         card.Add(head)
+        card.Add(
+            Label(
+                ui,
+                ui.Strings.Get(input.Mode == "pool" ? "Pool (Seine)": "Solo (built-in)"),
+                AppTheme.Type13,
+                AppTheme.Dim,
+                ""
+            )
+        )
+        if status.DownloadPercent >= 0 {
+            card.Add(
+                Label(
+                    ui,
+                    ui.Strings.Get("Downloading Seine") + " " + status.DownloadPercent.ToString() + "%",
+                    AppTheme.Type13,
+                    AppTheme.Body,
+                    ""
+                )
+            )
+        }
+        if status.Connection.Length > 0 {
+            card.Add(
+                Label(
+                    ui,
+                    ui.Strings.Get(status.Connection),
+                    AppTheme.Type13,
+                    status.Connection == "Pool connected" ? AppTheme.Mint: AppTheme.Orange,
+                    ""
+                )
+            )
+        }
         if !report.Available || !input.NodeRunning {
             card.MaxWidth = 620
             card.Add(Label(ui, ui.Strings.Get("Node unavailable"), AppTheme.Type14, AppTheme.Body, ""))
@@ -176,7 +219,9 @@ class MiningPage : Cell, IDisposable {
             )
         } else {
             card.FlexGrow = 1
-            let rate = samples.Length > 0 ? samples[samples.Length - 1].Rate: status.Hashrate
+            let rate = status.Pool ? status.Hashrate: samples.Length > 0 ? samples[
+                samples.Length - 1
+            ].Rate: status.Hashrate
             card.Add(
                 Cell.Mount[MiningRateInput, MiningRate](
                     "rate",
@@ -489,8 +534,13 @@ class MiningReadings : Cell[MiningReadingsInput] {
         }
         let size = compact ? AppTheme.Type14: AppTheme.Type16
         stats.Add(TextParts.Figure(ui, "threads", status.Threads.ToString(), "", size, AppTheme.Ink))
-        stats.Add(TextParts.Figure(ui, "hashes", Count(status.Hashes), "", size, AppTheme.Ink))
-        stats.Add(TextParts.Figure(ui, "blocks found", Count(status.Blocks), "", size, AppTheme.Ink))
+        if status.Pool {
+            stats.Add(TextParts.Figure(ui, "accepted shares", Count(status.Accepted), "", size, AppTheme.Ink))
+            stats.Add(TextParts.Figure(ui, "rejected shares", Count(status.Rejected), "", size, AppTheme.Ink))
+        } else {
+            stats.Add(TextParts.Figure(ui, "hashes", Count(status.Hashes), "", size, AppTheme.Ink))
+            stats.Add(TextParts.Figure(ui, "blocks found", Count(status.Blocks), "", size, AppTheme.Ink))
+        }
         stats.Add(
             TextParts.Figure(
                 ui,
