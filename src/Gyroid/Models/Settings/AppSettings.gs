@@ -12,6 +12,7 @@ open class AppSettings {
     var DownloadCheckpoints bool = true
     var MiningMode string = "solo"
     var PoolUrl string = ""
+    var UseGpu bool = true
     var Language string = ""
     var Privacy bool
     var AutoLockMinutes int32

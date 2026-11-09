@@ -67,6 +67,8 @@ class SettingsStore {
                         checkpoints.ValueKind != JsonValueKind.False
                     settings.MiningMode = NodeJson.Text(root, "mining_mode") == "pool" ? "pool": "solo"
                     settings.PoolUrl = NodeJson.Text(root, "pool_url")
+                    settings.UseGpu = !root.TryGetProperty("use_gpu", out let gpu) ||
+                        gpu.ValueKind != JsonValueKind.False
                     settings.Language = NodeJson.Text(root, "language")
                     settings.Privacy = NodeJson.Flag(root, "privacy")
                     if root.TryGetProperty("auto_lock_minutes", out let minutes) {
@@ -191,6 +193,7 @@ class SettingsStore {
                     writer.WriteBoolean("download_checkpoints", settings.DownloadCheckpoints)
                     writer.WriteString("mining_mode", settings.MiningMode)
                     writer.WriteString("pool_url", settings.PoolUrl)
+                    writer.WriteBoolean("use_gpu", settings.UseGpu)
                     writer.WriteString("language", settings.Language)
                     writer.WriteBoolean("privacy", settings.Privacy)
                     writer.WriteNumber("auto_lock_minutes", settings.AutoLockMinutes)

@@ -574,6 +574,25 @@ class WalletSession : IDisposable {
         }
     }
 
+    async func SaveMiningGpuAsync(value bool, ct CancellationToken = default(CancellationToken)) {
+        await BeginAsync(ct)
+        try {
+            let restart = Mining.Pool.Running && settings.UseGpu != value
+            if restart {
+                await Mining.Pool.StopAsync()
+            }
+            let next = settings.Copy()
+            next.UseGpu = value
+            await SettingsStore.SaveAsync(next, ct, settings)
+            settings.UseGpu = value
+            if restart {
+                await Mining.Pool.StartAsync(settings.PoolUrl, snapshot.Address, value, ct)
+            }
+        } finally {
+            End()
+        }
+    }
+
     async func StartNodeAsync(ct CancellationToken = default(CancellationToken)) {
         await BeginAsync(ct)
         try {

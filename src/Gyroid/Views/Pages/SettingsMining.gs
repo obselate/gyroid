@@ -15,12 +15,17 @@ class SettingsMining : Cell {
     private var savedMode string = ""
     private var savedPool string = ""
     private var issue string = ""
+    private var savedGpu bool = true
 
     func Accept(input SettingsPageInput) {
         let settings = input.Settings
         let changed = savedMode != settings.MiningMode || savedPool != settings.PoolUrl
-        let refresh = changed || context.Busy != input.Busy || context.Language != input.Language
+        let refresh = changed ||
+            savedGpu != settings.UseGpu ||
+            context.Busy != input.Busy ||
+            context.Language != input.Language
         context = input
+        savedGpu = settings.UseGpu
         if changed {
             mode = settings.MiningMode
             pool = settings.PoolUrl
@@ -73,6 +78,25 @@ class SettingsMining : Cell {
                     },
                     issue: issue,
                     placeholder: "stratum+tcp://bntpool.com:3333"
+                )
+            )
+            content.Add(
+                WalletParts.Line(
+                    ui,
+                    RowHeight(input.Height),
+                    "Use GPU",
+                    []Blob{
+                        Toggle(
+                            input,
+                            "Use GPU",
+                            savedGpu,
+                            () -> {
+                                let value = !savedGpu
+                                ui.Actions.Run(ct -> input.Session.SaveMiningGpuAsync(value, ct))
+                            },
+                            input.Busy
+                        )
+                    }
                 )
             )
             content.Add(
