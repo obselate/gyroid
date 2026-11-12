@@ -557,7 +557,7 @@ class MiningReadings : Cell[MiningReadingsInput] {
 
 class MiningChart : Cell[MiningChartInput] {
     private let plot ElementHandle = ElementHandle()
-    private var hover int32 = -1
+    private let hover State[int32] = State[int32](-1)
 
     protected override func Build(input MiningChartInput) Blob {
         let ui = input.Ui
@@ -639,8 +639,8 @@ class MiningChart : Cell[MiningChartInput] {
                 }
             )
             area.Add(ChartParts.Point(Percent(100), Percent(samples[samples.Length - 1].Y * 100), AppTheme.Lime))
-            if hover >= 0 && hover < samples.Length {
-                let sample = samples[hover]
+            if hover.Value >= 0 && hover.Value < samples.Length {
+                let sample = samples[hover.Value]
                 let x = sample.X
                 let y = sample.Y
                 area.Add(
@@ -708,7 +708,7 @@ class MiningChart : Cell[MiningChartInput] {
                 }
             }
         }
-        hover = nearest
+        hover.Value = nearest
     }
 
     private func Tick(ui Presentation, text string) Blob -> Text{
