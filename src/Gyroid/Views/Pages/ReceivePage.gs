@@ -67,7 +67,7 @@ data struct ReceivePresentationInput {
     var Reset Action
 }
 
-class ReceivePage : Cell, IDisposable {
+class ReceivePage : Cell[ReceivePageInput], IDisposable {
     private var input ReceivePageInput
     private var presentation ReceivePresentationInput
     private var status ReceiveStatusInput
@@ -99,7 +99,7 @@ class ReceivePage : Cell, IDisposable {
         }
     }
 
-    public func Accept(next ReceivePageInput) {
+    protected override func InputChanged(next ReceivePageInput) {
         if input == next {
             return
         }
@@ -153,7 +153,7 @@ class ReceivePage : Cell, IDisposable {
     ) {
         try {
             let result = WalletSession.PrepareReceive(request, address, history, height, previous, token)
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     if id == generation {
                         prepared = result
@@ -165,7 +165,7 @@ class ReceivePage : Cell, IDisposable {
                 }
             )
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     if id == generation {
                         error = failure.Message
@@ -303,7 +303,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                         Password: input.Privacy,
                         Disabled: input.Disabled,
                         Invalid: draft.AmountIssue.Length > 0,
-                        IssueText: if draft.AmountIssue.Length > 0 {
+                        Error: if draft.AmountIssue.Length > 0 {
                             ui.Strings.Explain(draft.AmountIssue)
                         } else {
                             nil
@@ -322,7 +322,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                             ContentDirection: Direction.LeftToRight,
                             OnChange: value -> input.Change.Invoke("memo", value),
                             Invalid: draft.MemoIssue.Length > 0,
-                            IssueText: draft.MemoIssue.Length > 0 ? ui.Strings.Explain(draft.MemoIssue): nil,
+                            Error: draft.MemoIssue.Length > 0 ? ui.Strings.Explain(draft.MemoIssue): nil,
                             Disabled: input.Disabled,
                             Password: input.Privacy,
                             Placeholder: ui.Strings.Get("memo"),
@@ -392,7 +392,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                     Height: side,
                     Path: prepared?.Path ?? VectorPath.Empty,
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: AppTheme.Rule
+                    Fill: VectorPaint(AppTheme.Rule)
                 }
             )
             code.Add(MaterialIcons.Create("check", 56, AppTheme.Mint))
@@ -403,7 +403,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                     Height: side,
                     Path: prepared?.Path ?? VectorPath.Empty,
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: AppTheme.Black
+                    Fill: VectorPaint(AppTheme.Black)
                 }
             )
         }

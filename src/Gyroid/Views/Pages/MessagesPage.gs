@@ -50,16 +50,71 @@ data struct MessagesInput {
     var Language string
 }
 
-class MessagesPage : Cell, IDisposable {
+class MessagesPage : Cell[MessagesInput], IDisposable {
     private var input MessagesInput
     private var conversation Conversation?
     private var selected string = ""
     private var selection CancellationTokenSource?
     private var generation int64
     private var operationGeneration int64
-    private let configureThread Action[MessageThread]
-    private let configureList Action[MessageConversationList]
-    private let configureComposer Action[MessageComposer]
+    private func ReadThreadInput() MessageThreadInput -> MessageThreadInput{
+        Ui: input.Ui,
+        Conversation: conversation,
+        Rows: projection.Thread,
+        Width: threadWidth,
+        Privacy: input.Privacy,
+        Language: input.Language,
+        Request: input.State.Request,
+        MessageId: input.State.MessageId,
+        CanRetry: input.Mode == MessengerMode.Send && !busy && !input.Working,
+        OnOpen: key -> {
+            detail = input.Session.Messages.Thread(selected).FirstOrDefault(item -> item.Key == key)
+            Rebuild()
+        },
+        OnRetry: key -> {
+            let current Conversation? = input.Session.Messages.Conversations.FirstOrDefault(item -> item.Id == selected)
+            if let conversation = current {
+                let selectedMessage Message? = conversation.Messages.FirstOrDefault(item -> item.Key == key)
+                if let message = selectedMessage {
+                    let service = input.Session.Messages
+                    Run(input, ct -> service.Resend(conversation, message, ct))
+                }
+            }
+        }
+    }
+
+    private func ReadListInput() MessagesListInput -> MessagesListInput{
+        Ui: input.Ui,
+        Conversations: projection.Conversations,
+        Width: listWidth,
+        Busy: busy || input.Working,
+        CanSend: input.Mode == MessengerMode.Send,
+        OnSelect: id -> Select(input, input.Session.Messages.Conversations.FirstOrDefault(item -> item.Id == id)),
+        OnBegin: kind -> Begin(kind)
+    }
+
+    private func ReadComposerInput() MessageComposerInput {
+        let current = conversation!!
+        return MessageComposerInput{
+            Ui: input.Ui,
+            Recipients: projection.Recipients,
+            CanSend: input.Mode == MessengerMode.Send,
+            Busy: busy || input.Working,
+            Unavailable: input.Locked ? "Wallet is locked":
+            input.ViewOnly ? "View-only wallet": "Node not connected",
+            Measure: measureDraft,
+            Language: input.Language,
+            Draft: input.State.Drafts.GetValueOrDefault(current.Id, ""),
+            Width: threadWidth,
+            OnDraft: value -> input.State.Drafts[selected] = value,
+            OnSend: text -> {
+                if let current = conversation {
+                    let service = input.Session.Messages
+                    Run(input, ct -> service.Send(current, text, ct), () -> input.State.Drafts[current.Id] = "")
+                }
+            }
+        }
+    }
     private let measureDraft Func[string, MessageEstimate]
     private var threadWidth float64
     private var listWidth float64
@@ -71,89 +126,16 @@ class MessagesPage : Cell, IDisposable {
             .Session
             .Messages
             .Measure(conversation ?? throw InvalidOperationException("No conversation selected"), text)
-        configureThread = child -> child.Accept(
-            MessageThreadInput{
-                Ui: input.Ui,
-                Conversation: conversation,
-                Rows: projection.Thread,
-                Width: threadWidth,
-                Privacy: input.Privacy,
-                Language: input.Language,
-                Request: input.State.Request,
-                MessageId: input.State.MessageId,
-                CanRetry: input.Mode == MessengerMode.Send && !busy && !input.Working,
-                OnOpen: key -> {
-                    detail = input.Session.Messages.Thread(selected).FirstOrDefault(item -> item.Key == key)
-                    Rebuild()
-                },
-                OnRetry: key -> {
-                    let current Conversation? = input
-                        .Session
-                        .Messages
-                        .Conversations
-                        .FirstOrDefault(item -> item.Id == selected)
-                    if let conversation = current {
-                        let selectedMessage Message? = conversation.Messages.FirstOrDefault(item -> item.Key == key)
-                        if let message = selectedMessage {
-                            let service = input.Session.Messages
-                            Run(input, ct -> service.Resend(conversation, message, ct))
-                        }
-                    }
-                }
-            }
-        )
-        configureList = child -> child.Accept(
-            MessagesListInput{
-                Ui: input.Ui,
-                Conversations: projection.Conversations,
-                Width: listWidth,
-                Busy: busy || input.Working,
-                CanSend: input.Mode == MessengerMode.Send,
-                OnSelect: id -> Select(
-                    input,
-                    input.Session.Messages.Conversations.FirstOrDefault(item -> item.Id == id)
-                ),
-                OnBegin: kind -> Begin(kind)
-            }
-        )
-        configureComposer = child -> {
-            if let current = conversation {
-                child.Accept(
-                    MessageComposerInput{
-                        Ui: input.Ui,
-                        Recipients: projection.Recipients,
-                        CanSend: input.Mode == MessengerMode.Send,
-                        Busy: busy || input.Working,
-                        Unavailable: input.Locked ? "Wallet is locked":
-                        input.ViewOnly ? "View-only wallet": "Node not connected",
-                        Measure: measureDraft,
-                        Language: input.Language,
-                        Draft: input.State.Drafts.GetValueOrDefault(current.Id, ""),
-                        Width: threadWidth,
-                        OnDraft: value -> input.State.Drafts[selected] = value,
-                        OnSend: text -> {
-                            if let current = conversation {
-                                let service = input.Session.Messages
-                                Run(
-                                    input,
-                                    ct -> service.Send(current, text, ct),
-                                    () -> input.State.Drafts[current.Id] = ""
-                                )
-                            }
-                        }
-                    }
-                )
-            }
-        }
     }
 
-    func Accept(next MessagesInput) {
+    protected override func InputChanged(next MessagesInput) {
         if next == input {
             return
         }
         if MessagesInput{... next, Error: input.Error} == input {
             input = next
-            issueCell?.Accept(input.Ui, issue.Length > 0 ? issue: input.Error)
+
+            Rebuild()
             return
         }
         let reset = input.Wallet != next.Wallet || input.Address != next.Address || input.Network != next.Network
@@ -195,7 +177,6 @@ class MessagesPage : Cell, IDisposable {
             let previous = projection
             go PrepareView(next, id, fallback, previous, version, token, window)
         }
-        Rebuild()
     }
 
     private func PrepareView(
@@ -221,7 +202,7 @@ class MessagesPage : Cell, IDisposable {
                 source.Contacts,
                 token
             )
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if version != generation || token.IsCancellationRequested {
                         return
@@ -243,7 +224,7 @@ class MessagesPage : Cell, IDisposable {
             )
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
             let error = failure.Message
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if version == generation {
                         SetIssue(error)
@@ -274,7 +255,7 @@ class MessagesPage : Cell, IDisposable {
             await service.Select(current, token)
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
             let error = failure.Message
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if version == generation &&
                         service.OwnAddress == input.Address &&
@@ -293,7 +274,6 @@ class MessagesPage : Cell, IDisposable {
     private var dialog string = ""
     private var address string = ""
     private var issue string = ""
-    private var issueCell MessageIssue?
     private var password string = ""
     private var busy bool
 
@@ -307,7 +287,8 @@ class MessagesPage : Cell, IDisposable {
 
     private func SetIssue(message string) {
         issue = message
-        issueCell?.Accept(input.Ui, issue.Length > 0 ? issue: input.Error)
+
+        Rebuild()
     }
 
     private func Run(input MessagesInput, action Func[CancellationToken, Task], done Action? = nil) {
@@ -340,7 +321,7 @@ class MessagesPage : Cell, IDisposable {
             .Ui
             .Actions
             .window
-            ?.TryPost(
+            ?.Post(
             () -> {
                 if version != operationGeneration ||
                     input
@@ -372,7 +353,7 @@ class MessagesPage : Cell, IDisposable {
         input.State.MessageId = ""
         input.State.NewConversation = conversation
         input.State.Request++
-        Accept(MessagesInput{... input, Request: input.State.Request})
+        InputChanged(MessagesInput{... input, Request: input.State.Request})
     }
 
     private func OpenMessages() {
@@ -414,7 +395,7 @@ class MessagesPage : Cell, IDisposable {
             Gap: AppTheme.Space12
         }
         if !input.Drawer && input.Address.Length > 0 {
-            root.Add(Cell.Mount[MessageConversationList]("conversations", configureList))
+            root.Add(Cell.Mount[MessagesListInput, MessageConversationList]("conversations", ReadListInput()))
         }
         let thread = WalletParts.Card(ui, AppTheme.Space0, AppTheme.Space0, AppTheme.Radius6)
         thread.FlexGrow = 1
@@ -448,8 +429,8 @@ class MessagesPage : Cell, IDisposable {
             )
         } else if let current = conversation {
             thread.Add(Header(input, current))
-            thread.Add(Cell.Mount[MessageThread]("thread:" + current.Id, configureThread))
-            thread.Add(Cell.Mount[MessageComposer]("composer:" + current.Id, configureComposer))
+            thread.Add(Cell.Mount[MessageThreadInput, MessageThread]("thread:" + current.Id, ReadThreadInput()))
+            thread.Add(Cell.Mount[MessageComposerInput, MessageComposer]("composer:" + current.Id, ReadComposerInput()))
             if busy {
                 thread.Add(Loading(ui, "message-loading"))
             }
@@ -470,43 +451,38 @@ class MessagesPage : Cell, IDisposable {
             )
         }
         root.Add(
-            Cell.Mount[MessageIssue](
+            Cell.Mount[MessageIssueInput, MessageIssue](
                 "issue",
-                child -> {
-                    issueCell = child
-                    child.Accept(input.Ui, issue.Length > 0 ? issue: input.Error)
-                }
+                MessageIssueInput{Next: input.Ui, Error: issue.Length > 0 ? issue: input.Error}
             )
         )
         root.Add(thread)
         if dialog.Length > 0 {
             root.Add(
-                Cell.Mount[MessageDialog](
+                Cell.Mount[MessageDialogInput, MessageDialog](
                     "message-dialog:" + dialog,
-                    child -> child.Accept(
-                        MessageDialogInput{
-                            Ui: input.Ui,
-                            Session: input.Session,
-                            Revision: input.Revision,
-                            WalletId: input.Wallet,
-                            Network: input.Network,
-                            Contacts: input.Contacts,
-                            Conversation: conversation,
-                            Kind: dialog,
-                            Address: address,
-                            Privacy: input.Privacy,
-                            Language: input.Language,
-                            OnContacts: input.OnContacts,
-                            OnSelect: current -> {
-                                dialog = ""
-                                Select(input, current)
-                            },
-                            OnClose: () -> {
-                                dialog = ""
-                                Rebuild()
-                            }
+                    MessageDialogInput{
+                        Ui: input.Ui,
+                        Session: input.Session,
+                        Revision: input.Revision,
+                        WalletId: input.Wallet,
+                        Network: input.Network,
+                        Contacts: input.Contacts,
+                        Conversation: conversation,
+                        Kind: dialog,
+                        Address: address,
+                        Privacy: input.Privacy,
+                        Language: input.Language,
+                        OnContacts: input.OnContacts,
+                        OnSelect: current -> {
+                            dialog = ""
+                            Select(input, current)
+                        },
+                        OnClose: () -> {
+                            dialog = ""
+                            Rebuild()
                         }
-                    )
+                    }
                 )
             )
         }
@@ -634,17 +610,23 @@ class MessagesPage : Cell, IDisposable {
     }
 }
 
-class MessageIssue : Cell {
+data struct MessageIssueInput {
+    var Next Presentation
+    var Error string
+}
+
+class MessageIssue : Cell[MessageIssueInput] {
     private var ui Presentation
     private var message string = ""
 
-    func Accept(next Presentation, error string) {
+    protected override func InputChanged(value MessageIssueInput) {
+        let next = value.Next
+        let error = value.Error
         if ui == next && message == error {
             return
         }
         ui = next
         message = error
-        Rebuild()
     }
 
     override func Build() Blob {
@@ -673,7 +655,7 @@ data struct MessagesListInput {
     var OnBegin Action[string]
 }
 
-class MessageConversationList : Cell {
+class MessageConversationList : Cell[MessagesListInput] {
     private var input MessagesListInput
     private let rowKey Func[ConversationView, string]
     private let rowBuilder Func[ConversationView, Blob]
@@ -683,12 +665,11 @@ class MessageConversationList : Cell {
         rowBuilder = row -> Row(row)
     }
 
-    func Accept(next MessagesListInput) {
+    protected override func InputChanged(next MessagesListInput) {
         if input == next {
             return
         }
         input = next
-        Rebuild()
     }
 
     override func Build() Blob {
@@ -752,8 +733,8 @@ class MessageConversationList : Cell {
             MinWidth: 0,
             Gap: AppTheme.Space6,
             BackgroundColor: conversation.Selected ? AppTheme.LimeQuiet: Color.Transparent,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: Hidden(conversation.Privacy, conversation.Title) +
@@ -834,7 +815,7 @@ data struct MessageDisplayRow {
     var Bubble MessageBubbleInput
 }
 
-class MessageThread : Cell, IDisposable {
+class MessageThread : Cell[MessageThreadInput], IDisposable {
     private var input MessageThreadInput
     private var rows[]MessageDisplayRow = []MessageDisplayRow{}
     private var seen HashSet[string] = HashSet[string](StringComparer.Ordinal)
@@ -868,7 +849,7 @@ class MessageThread : Cell, IDisposable {
         highlightTimer?.Dispose()
     }
 
-    func Accept(next MessageThreadInput) {
+    protected override func InputChanged(next MessageThreadInput) {
         if next == input {
             return
         }
@@ -964,7 +945,7 @@ class MessageThread : Cell, IDisposable {
                 )
             }
             let result = prepared.SequenceEqual(oldRows) ? oldRows: prepared.ToArray()
-            window.TryPost(
+            window.Post(
                 () -> {
                     if version != generation || token.IsCancellationRequested {
                         return
@@ -1043,7 +1024,7 @@ data struct MessageDialogInput {
     var OnClose Action
 }
 
-class MessageDialog : Cell, IDisposable {
+class MessageDialog : Cell[MessageDialogInput], IDisposable {
     private var name string = ""
     private var address string = ""
     private var initialized bool
@@ -1081,7 +1062,7 @@ class MessageDialog : Cell, IDisposable {
         )
     }
 
-    func Accept(next MessageDialogInput) {
+    protected override func InputChanged(next MessageDialogInput) {
         if next == input {
             return
         }
@@ -1091,7 +1072,6 @@ class MessageDialog : Cell, IDisposable {
             address = next.Address
         }
         RefreshContacts()
-        Rebuild()
     }
 
     private func RefreshContacts() {
@@ -1137,7 +1117,7 @@ class MessageDialog : Cell, IDisposable {
                 token
             )
             let rows = result.SequenceEqual(previous) ? previous: result
-            window.TryPost(
+            window.Post(
                 () -> {
                     if version == contactGeneration && !token.IsCancellationRequested {
                         contacts = rows
@@ -1147,7 +1127,7 @@ class MessageDialog : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) when token.IsCancellationRequested { } catch (error Exception) {
             let message = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if version == contactGeneration {
                         issue = message
@@ -1214,7 +1194,7 @@ class MessageDialog : Cell, IDisposable {
             .Ui
             .Actions
             .window
-            ?.TryPost(
+            ?.Post(
             () -> {
                 if version != generation ||
                     service.OwnAddress != identity ||
@@ -1342,7 +1322,9 @@ class MessageDialog : Cell, IDisposable {
                 ),
                 OnConfirm: () -> Submit(input),
                 OnCancel: close,
-                OnClose: close
+                OnOpenChange: isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }
@@ -1393,7 +1375,9 @@ class MessageDetails : Cell[MessageDetailsInput] {
                 Content: content,
                 Footer: Button(ui, "Close", close),
                 OnCancel: close,
-                OnClose: close
+                OnOpenChange: isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }

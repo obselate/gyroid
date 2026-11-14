@@ -182,7 +182,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             BorderColor: invalid ? AppTheme.Pink: AppTheme.Blue,
             BackgroundColor: message.Outgoing ? AppTheme.Lime: AppTheme.Rule,
             Gap: AppTheme.Space4,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: content + " " + time + " " + ui.Strings.Get(verification)
@@ -242,7 +242,7 @@ data struct MessageComposerInput {
     var OnSend Action[string]
 }
 
-class MessageComposer : Cell, IDisposable {
+class MessageComposer : Cell[MessageComposerInput] {
     private let arrow Anim[Point]
     private let fill Anim[float64]
     private var ready bool
@@ -253,7 +253,7 @@ class MessageComposer : Cell, IDisposable {
     private var input MessageComposerInput
     private var estimate MessageEstimate = MessageEstimate()
 
-    func Accept(next MessageComposerInput) {
+    protected override func InputChanged(next MessageComposerInput) {
         if next == input {
             return
         }
@@ -266,16 +266,12 @@ class MessageComposer : Cell, IDisposable {
         if measure && next.CanSend && next.Recipients > 0 {
             estimate = next.Measure(draft)
         }
-        Rebuild()
+        AnimateDraft()
     }
 
     init() {
         arrow = AnimateValue(Point{X: 0, Y: 36})
         fill = AnimateValue(0.0)
-    }
-
-    func Dispose() {
-        timer?.Dispose()
     }
 
     private func Send(input MessageComposerInput, enabled bool) {
@@ -290,12 +286,9 @@ class MessageComposer : Cell, IDisposable {
         } else {
             arrow.Set(Point{X: 0, Y: -36})
         }
-        input.OnSend(text)
+        InvokeInputCallback(input.OnSend, text)
         timer?.Dispose()
-        timer = input
-            .Ui
-            .Actions
-            .Delay(
+        timer = After(
             animate ? 160.0: 0.0,
             () -> {
                 sending = false
@@ -306,10 +299,28 @@ class MessageComposer : Cell, IDisposable {
                 } else {
                     fill.Set(0)
                 }
-                Rebuild()
             }
         )
-        Rebuild()
+    }
+
+    private func AnimateDraft() {
+        let hasText = !String.IsNullOrWhiteSpace(draft)
+        let animate = input.Ui.Actions.playbackActive()
+        if !initialized || !animate {
+            initialized = true
+            ready = hasText
+            if !sending {
+                arrow.Snap(Point{X: 0, Y: hasText ? 0.0: 36.0})
+                fill.Snap(hasText ? 1.0: 0.0)
+            }
+        } else if !sending && hasText != ready {
+            ready = hasText
+            arrow.To(
+                Point{X: 0, Y: hasText ? 0.0: 36.0},
+                Motion.Tween(hasText ? 180.0: 140.0, hasText ? Easing.EaseOut: Easing.EaseIn)
+            )
+            fill.To(hasText ? 1.0: 0.0, Motion.Tween(hasText ? 180.0: 140.0, Easing.Linear))
+        }
     }
 
     override func Build() Blob {
@@ -331,22 +342,6 @@ class MessageComposer : Cell, IDisposable {
         let estimate = this.estimate
         let hasText = !String.IsNullOrWhiteSpace(draft)
         let enabled = hasText && estimate.Fits && !input.Busy
-        let animate = ui.Actions.playbackActive()
-        if !initialized || !animate {
-            initialized = true
-            ready = hasText
-            if !sending {
-                arrow.Snap(Point{X: 0, Y: hasText ? 0.0: 36.0})
-                fill.Snap(hasText ? 1.0: 0.0)
-            }
-        } else if !sending && hasText != ready {
-            ready = hasText
-            arrow.To(
-                Point{X: 0, Y: hasText ? 0.0: 36.0},
-                Motion.Tween(hasText ? 180.0: 140.0, hasText ? Easing.EaseOut: Easing.EaseIn)
-            )
-            fill.To(hasText ? 1.0: 0.0, Motion.Tween(hasText ? 180.0: 140.0, Easing.Linear))
-        }
         let send Action = () -> Send(input, enabled)
         let rows = Math.Clamp(
             1 + draft.Count(character -> character == '\n') +
@@ -370,8 +365,8 @@ class MessageComposer : Cell, IDisposable {
                         OnChange: value -> {
                             draft = value
                             this.estimate = input.Measure(value)
-                            input.OnDraft(value)
-                            Rebuild()
+                            InvokeInputCallback(input.OnDraft, value)
+                            AnimateDraft()
                         },
                         Placeholder: ui.Strings.Get("Message"),
                         AccessibilityName: ui.Strings.Get("Message"),
@@ -379,7 +374,7 @@ class MessageComposer : Cell, IDisposable {
                         Width: Percent(100),
                         Height: rows * 19.0 + 14,
                         MinimumRows: 1,
-                        MinimumHeight: 33,
+                        MinHeight: 33,
                         FontSize: AppTheme.Type13,
                         FontFamily: AppTheme.Font,
                         BackgroundColor: AppTheme.Black,
@@ -393,8 +388,8 @@ class MessageComposer : Cell, IDisposable {
                                 Bottom: AppTheme.Space8
                             }
                             editor.KeyBindings = []KeyBinding{
-                                KeyBinding{Key: Key.Enter, Action: send},
-                                KeyBinding{Key: Key.KeypadEnter, Action: send}
+                                KeyBinding{Key: Key.Enter, OnPress: send},
+                                KeyBinding{Key: Key.KeypadEnter, OnPress: send}
                             }
                             return editor
                         }
@@ -410,7 +405,7 @@ class MessageComposer : Cell, IDisposable {
             Overflow: Overflow.Hidden,
             BackgroundColor: AppTheme.Rule,
             Disabled: !enabled || sending,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Send message")},
             OnClick: send,
             Container{

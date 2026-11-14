@@ -184,9 +184,9 @@ class AppTheme {
                 FlexShrink: 0,
                 BorderRadius: Radius3,
                 Opacity: value.Active ? 1: float64(Dim.R / Ink.R),
-                Hover: Style{Opacity: 1},
-                Active: Style{Opacity: 1},
-                Focus: Style{Opacity: 1, OutlineWidth: Border1, OutlineColor: Ink, OutlineOffset: Border0},
+                HoverStyle: Style{Opacity: 1},
+                ActiveStyle: Style{Opacity: 1},
+                FocusStyle: Style{Opacity: 1, OutlineWidth: Border1, OutlineColor: Ink, OutlineOffset: Border0},
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Button,
                     Name: value.AccessibilityName!!,

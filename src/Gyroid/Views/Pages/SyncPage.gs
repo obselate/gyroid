@@ -43,11 +43,23 @@ data struct SyncState {
     var Network string
 }
 
-class SyncPage : Cell, IDisposable {
+class SyncPage : Cell[SyncInput], IDisposable {
     private let started int64 = Stopwatch.GetTimestamp()
     private let peerSamples List[SyncSample] = List[SyncSample]()
     private let rateSamples List[SyncSample] = List[SyncSample]()
-    private let configureChart Action[SyncChart]
+    private func ReadChartInput() SyncChartInput -> SyncChartInput{
+        Ui: input.Ui,
+        Language: input.Language,
+        Samples: samples,
+        Now: now,
+        Step: state.Step,
+        Peak: peak,
+        Stalled: stalled,
+        Width: (input.Fill ? input.Width: Math.Min(760, input.Width - 48)) -
+        AppTheme.GetPagePadding(input.Width, input.Height) * 2,
+        Height: input.Height,
+        Fill: input.Fill
+    }
     private var input SyncInput
     private var state SyncState
     private var pending SyncState
@@ -61,25 +73,7 @@ class SyncPage : Cell, IDisposable {
     private var connectedAt int64
     private var progressAt int64
 
-    init() {
-        configureChart = chart -> chart.Accept(
-            SyncChartInput{
-                Ui: input.Ui,
-                Language: input.Language,
-                Samples: samples,
-                Now: now,
-                Step: state.Step,
-                Peak: peak,
-                Stalled: stalled,
-                Width: (input.Fill ? input.Width: Math.Min(760, input.Width - 48)) -
-                AppTheme.GetPagePadding(input.Width, input.Height) * 2,
-                Height: input.Height,
-                Fill: input.Fill
-            }
-        )
-    }
-
-    func Accept(next SyncInput) {
+    protected override func InputChanged(next SyncInput) {
         if accepted && input == next {
             return
         }
@@ -230,13 +224,13 @@ class SyncPage : Cell, IDisposable {
             card.Add(Track(ui, percent / 100.0, 0, AppTheme.Lime))
         } else if step == 3 {
             let limit = node.Limit
-            card.Add(Cell.Mount[SyncChart]("sync-chart", configureChart))
+            card.Add(Cell.Mount[SyncChartInput, SyncChart]("sync-chart", ReadChartInput()))
             card.Add(Slots(ui, node.Peers, limit))
         } else if step == 4 {
             let done = node.Progress
             let share = node.ChainHeight > 0 ? Math.Min(1.0, float64(done) / node.ChainHeight): 0.0
             let color = stalled ? AppTheme.Orange: AppTheme.Lime
-            card.Add(Cell.Mount[SyncChart]("sync-chart", configureChart))
+            card.Add(Cell.Mount[SyncChartInput, SyncChart]("sync-chart", ReadChartInput()))
             let checkpoint = node.ChainHeight > 0 ? Math.Min(
                 1.0,
                 float64(node.CheckpointHeight) / node.ChainHeight
@@ -464,7 +458,7 @@ data struct SyncChartInput {
     var Fill bool
 }
 
-class SyncChart : Cell {
+class SyncChart : Cell[SyncChartInput] {
     private let spark ElementHandle = ElementHandle()
     private var input SyncChartInput
     private var chart Blob = Container{}
@@ -479,7 +473,7 @@ class SyncChart : Cell {
         }
     }
 
-    func Accept(next SyncChartInput) {
+    protected override func InputChanged(next SyncChartInput) {
         if input != next {
             input = next
             Prepare()
@@ -573,7 +567,7 @@ class SyncChart : Cell {
                     Height: height,
                     Path: area.Build(),
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: fill
+                    Fill: VectorPaint(fill)
                 }
             )
             chart.Add(
@@ -583,8 +577,7 @@ class SyncChart : Cell {
                     Height: height,
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: 1.6,
-                    BorderColor: color
+                    Stroke: VectorStroke(1.6, VectorPaint(color))
                 }
             )
             chart.Add(

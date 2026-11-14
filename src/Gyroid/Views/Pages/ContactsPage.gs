@@ -18,7 +18,6 @@ import System.Threading.Tasks
 
 data struct ContactsInput {
     var Ui Presentation
-    var Window Window?
     var Contacts SortedDictionary[string, string]
     var Privacy bool
     var Busy bool
@@ -43,15 +42,12 @@ class ContactDraft {
     public var Issue string = ""
 }
 
-class ContactsPage : Cell, IDisposable {
+class ContactsPage : Cell[ContactsInput] {
     private var current ContactsInput
     private var rows[]ContactRow = []ContactRow{}
     private var draft ContactDraft = ContactDraft{}
     private let rowKey Func[ContactRow, string]
     private let rowBuilder Func[ContactRow, Blob]
-    private var generation int32
-    private var disposed bool
-    private var lifetime CancellationTokenSource? = nil
     private var issue string = ""
 
     init() {
@@ -59,8 +55,8 @@ class ContactsPage : Cell, IDisposable {
         rowBuilder = row -> Row(row)
     }
 
-    public func Accept(input ContactsInput) {
-        if disposed || current.Equals(input) {
+    protected override func InputChanged(input ContactsInput) {
+        if current.Equals(input) {
             return
         }
         let prepare = current.Contacts != input.Contacts ||
@@ -68,22 +64,15 @@ class ContactsPage : Cell, IDisposable {
             current.Busy != input.Busy ||
             current.Language != input.Language
         current = input
-        Rebuild()
         if !prepare {
             return
         }
-        generation++
-        if let window = input.Window {
-            let source = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
-            lifetime = source
-            let token = source.Token
-            let id = generation
-            let previous = rows
-            go Prepare(input, previous, window, id, token)
-        }
+        let token = Latest("rows")
+        let previous = rows
+        go Prepare(input, previous, token)
     }
 
-    private func Prepare(input ContactsInput, previous[]ContactRow, window Window, id int32, token CancellationToken) {
+    private func Prepare(input ContactsInput, previous[]ContactRow, token CancellationToken) {
         try {
             let prepared = List[ContactRow](input.Contacts.Count)
             for (name, destination) in input.Contacts {
@@ -100,33 +89,24 @@ class ContactsPage : Cell, IDisposable {
                 )
             }
             let result = prepared.SequenceEqual(previous) ? previous: prepared.ToArray()
-            window.TryPost(
+            Post(
                 () -> {
-                    if id == generation {
+                    if !token.IsCancellationRequested {
                         rows = result
                         issue = ""
-                        Rebuild()
                     }
                 }
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let message = error.Message
-            window.TryPost(
+            Post(
                 () -> {
-                    if id == generation {
+                    if !token.IsCancellationRequested {
                         issue = message
-                        Rebuild()
                     }
                 }
             )
         }
-    }
-
-    public func Dispose() {
-        disposed = true
-        generation++
-        lifetime?.Cancel()
-        lifetime?.Dispose()
     }
 
     private var editing string? = nil
@@ -261,6 +241,7 @@ class ContactsPage : Cell, IDisposable {
     Store(input, editing ?? "", label, destination, Reset)
 
     private func Store(input ContactsInput, original string, label string, destination string?, done Action) {
+        let lifetime = Lifetime
         var result SortedDictionary[string, string]? = nil
         input
             .Ui
@@ -273,7 +254,7 @@ class ContactsPage : Cell, IDisposable {
             () -> {
                 if let next = result {
                     input.OnChange(next)
-                    if !disposed {
+                    if !lifetime.IsCancellationRequested {
                         done()
                     }
                 }
@@ -320,7 +301,9 @@ class ContactsPage : Cell, IDisposable {
                     )
                 },
                 OnCancel = close,
-                OnClose = close
+                OnOpenChange = isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }

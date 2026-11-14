@@ -48,7 +48,7 @@ partial class App {
         } else {
             if backgroundMode != "off" {
                 clock.Start()
-                frameTimer ??= window?.SetInterval(() -> Tick(), 50)
+                frameTimer ??= window?.Every(50, () -> Tick())
             } else {
                 clock.Stop()
                 frameTimer?.Dispose()

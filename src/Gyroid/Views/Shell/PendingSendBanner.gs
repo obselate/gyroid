@@ -177,7 +177,9 @@ class PendingSendRegion : Cell[PendingSendInput] {
                     input.OnConfirm(resume)
                 },
                 OnCancel = close,
-                OnClose = close
+                OnOpenChange = isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }

@@ -136,7 +136,9 @@ class WalletParts {
                 Content = content,
                 Footer = footer,
                 OnCancel = close,
-                OnClose = close
+                OnOpenChange = isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
 

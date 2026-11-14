@@ -220,7 +220,9 @@ class ObserverLens : Cell[ObserverLensInput] {
                     }
                 ),
                 OnCancel = input.OnClose,
-                OnClose = input.OnClose
+                OnOpenChange = isOpen -> if !isOpen {
+                    input.OnClose()
+                }
             }
         )
     }

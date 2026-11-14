@@ -56,8 +56,8 @@ class ControlParts {
                         button.Height = AppTheme.ControlCompact
                         button.MinHeight = AppTheme.ControlCompact
                         button.BackgroundColor = active ? AppTheme.Rule: Color.Transparent
-                        button.Hover = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
-                        button.Focus = Theme.Read().FocusStyle
+                        button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
+                        button.FocusStyle = Theme.Read().FocusStyle
                         button.BorderWidth = AppTheme.Border0
                         button.BoxShadow = BoxShadow{}
                         button.Opacity = item.Disabled ? 0.4: 1.0
@@ -67,7 +67,7 @@ class ControlParts {
                         )
                         return button
                     },
-                    OnChange: values -> {
+                    OnSelectionChange: values -> {
                         if values.Length > 0 && values[0] != selected {
                             chosen(values[0])
                         }
@@ -107,9 +107,9 @@ class ControlParts {
                     JustifyContent: JustifyContent.Center,
                     Disabled: value.Disabled,
                     OnClick: value.OnClick,
-                    Hover: Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule},
+                    HoverStyle: Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule},
                     BorderColor: active ? AppTheme.Lime: AppTheme.Edge,
-                    Focus: Theme.Read().FocusStyle,
+                    FocusStyle: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
                     content
                 }
@@ -139,7 +139,7 @@ class ControlParts {
                 },
                 CreateItem: (bar TabBarInput, item NavigationItem, button Button) -> {
                     button.BasedOn = item.Id == bar.SelectedId ? AppTheme.SelectedTabStyle: AppTheme.TabStyle
-                    button.Focus = Theme.Read().FocusStyle
+                    button.FocusStyle = Theme.Read().FocusStyle
                     button.Overflow = Overflow.Hidden
                     if equalWidth {
                         button.FlexGrow = 1
@@ -272,8 +272,7 @@ class ControlParts {
                     Height: size,
                     Path: track.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: thickness,
-                    BorderColor: trackColor
+                    Stroke: VectorStroke(thickness, VectorPaint(trackColor))
                 },
                 Shape{
                     Position: PositionType.Absolute,
@@ -281,8 +280,7 @@ class ControlParts {
                     Height: size,
                     Path: arc.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: thickness,
-                    BorderColor: share > 0 ? color: Color.Transparent
+                    Stroke: VectorStroke(thickness, VectorPaint(share > 0 ? color: Color.Transparent))
                 }
             }
         }

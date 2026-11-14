@@ -95,20 +95,13 @@ func Main() {
     if OperatingSystem.IsWindows() && GetConsoleProcessList([2]uint32, 2) == 1 {
         FreeConsole()
     }
-    let version = Assembly.GetExecutingAssembly().GetCustomAttribute[AssemblyInformationalVersionAttribute]()
-    Window.ConfigureApplication(
-        "Gyroid",
-        (version?.InformationalVersion ?? "unknown").Split('+')[0],
-        "dev.gyroid.wallet"
-    )
+    Application.Configure(Assembly.GetExecutingAssembly())
     PaymentLinkRegistration.Register()
     var activationTarget App? = nil
-    Window.ApplicationActivated += request -> {
+    Application.Activated += request -> {
         activationTarget?.Activate(request)
     }
-    let initial = ApplicationActivation{IsInitial: true, Arguments: arguments.Skip(1).ToArray()}
-    Window.InitializeApplicationActivation(initial)
-    let instance = SingleInstance.AcquireAsync("dev.gyroid.wallet", initial).GetAwaiter().GetResult()
+    let instance = Application.AcquireSingleInstance(arguments.Skip(1).ToArray())
     if instance.Status != SingleInstanceStatus.Primary {
         Console.Error.WriteLine(instance.Status.ToString() + " " + instance.Error)
         return
@@ -123,10 +116,8 @@ func Main() {
     let window = Window{
         Title: "Gyroid",
         AccessibilityAdapter: NativeAccessibilityAdapter(),
-        Width: int32(Option(arguments, "--width", 1280)),
-        Height: int32(Option(arguments, "--height", 800)),
-        MinWidth: 960,
-        MinHeight: 640,
+        Size: LayoutSize(Option(arguments, "--width", 1280), Option(arguments, "--height", 800)),
+        MinSize: LayoutSize(960, 640),
         Resizable: true,
         ResizeBand: 6,
         Transparent: true,
@@ -135,7 +126,7 @@ func Main() {
         Root: view
     }
     if Array.IndexOf(arguments, "--scale") >= 0 {
-        window.UiScale = float32(Option(arguments, "--scale", 1))
+        window.UiScale = Option(arguments, "--scale", 1)
     }
     WindowChrome.ReplaceTitlebar(window)
     view.Attach(window)
@@ -165,7 +156,7 @@ func Main() {
     window.Open()
     view.UpdateScale()
     view.Start()
-    window.Run()
+    Application.Run(window)
     view.Stopped().GetAwaiter().GetResult()
     if wallet.State == WalletState.Unlocked || wallet.State == WalletState.Unknown {
         try {

@@ -34,7 +34,7 @@ data struct SendTraceInput {
     var OnClose Action
 }
 
-class SendTrace : Cell[SendTraceInput], IDisposable {
+class SendTrace : Cell[SendTraceInput] {
     private let fades[]Anim[float64] = [6]Anim[float64]
 
     private let shifts[]Anim[Point] = [6]Anim[Point]
@@ -43,7 +43,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
 
     private var traced SendResult?
 
-    private var compact bool
+    private let compact State[bool] = State[bool](false)
 
     private var timer WindowTimer?
 
@@ -55,23 +55,14 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         seal = AnimateValue(1.0)
     }
 
-    func Dispose() {
-        timer?.Dispose()
-        timer = nil
-    }
-
     private func Start(input SendTraceInput) {
         traced = input.Result
-        compact = false
+        compact.Value = false
         timer?.Dispose()
-        timer = input
-            .Ui
-            .Actions
-            .Delay(
+        timer = After(
             6000,
             () -> {
-                compact = true
-                Rebuild()
+                compact.Value = true
             }
         )
         let still = Point{X: 0, Y: 0}
@@ -109,10 +100,13 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         }
     }
 
-    protected override func Build(input SendTraceInput) Blob {
+    protected override func InputChanged(input SendTraceInput) {
         if !Object.ReferenceEquals(traced, input.Result) {
             Start(input)
         }
+    }
+
+    protected override func Build(input SendTraceInput) Blob {
         let ui = input.Ui
         let result = input.Result
         let estimate = input.Estimate
@@ -158,7 +152,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
         close.Key = "trace-close"
         let strip = Container{
             FlexDirection: FlexDirection.Row,
-            AlignItems: if compact {
+            AlignItems: if compact.Value {
                 AlignItems.Center
             } else {
                 AlignItems.FlexStart
@@ -174,7 +168,7 @@ class SendTrace : Cell[SendTraceInput], IDisposable {
                 Name: ui.Strings.Get("sent") + " " + Amount(ui.Privacy, estimate.Amount) + " BNT " + status
             }
         }
-        if compact {
+        if compact.Value {
             strip.Add(Label(ui, "◆", AppTheme.Type14, AppTheme.Lime, ""))
             strip.Add(txid)
             strip.Add(Label(ui, "-" + Amount(ui.Privacy, estimate.Amount), AppTheme.Type12, AppTheme.Pink, ""))

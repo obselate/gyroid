@@ -90,26 +90,23 @@ data struct ToolsLockInput {
     var AutoLock int32
 }
 
-class ToolsPage : Cell {
-    private let configurePrivacy Action[ToolsPrivacyRegion]
-    private let configureHealth Action[ToolsHealthRegion]
+class ToolsPage : Cell[ToolsInput] {
+    private func ReadPrivacyInput() ToolsInput -> current
+
+    private func ReadHealthInput() ToolsHealthInput -> ToolsHealthInput{
+        Region: current.Region,
+        State: current.State,
+        Outputs: current.Outputs,
+        OnReport: reportChanged
+    }
     private let reportChanged Action
     private var current ToolsInput
 
     init() {
         reportChanged = () -> Rebuild()
-        configurePrivacy = region -> region.Accept(current)
-        configureHealth = region -> region.Accept(
-            ToolsHealthInput{
-                Region: current.Region,
-                State: current.State,
-                Outputs: current.Outputs,
-                OnReport: reportChanged
-            }
-        )
     }
 
-    func Accept(input ToolsInput) {
+    protected override func InputChanged(input ToolsInput) {
         if !current.Equals(input) {
             current = input
             Rebuild()
@@ -119,7 +116,7 @@ class ToolsPage : Cell {
     override func Build() Blob {
         let input = current
         if input.Section == AppPage.Privacy {
-            return Cell.Mount[ToolsPrivacyRegion]("privacy-" + input.Region.Identity, configurePrivacy)
+            return Cell.Mount[ToolsInput, ToolsPrivacyRegion]("privacy-" + input.Region.Identity, ReadPrivacyInput())
         }
         let region = input.Region
         let ui = region.Ui
@@ -151,14 +148,14 @@ class ToolsPage : Cell {
                 case "sign": Cell.Mount[ToolsRegionInput, ToolsSignRegion]("sign-" + region.Identity, region)
                 case "verify": Cell.Mount[ToolsRegionInput, ToolsVerifyRegion]("verify-" + region.Identity, region)
                 case "proof": Cell.Mount[ToolsRegionInput, ToolsProofRegion]("proof-" + region.Identity, region)
-                default: Cell.Mount[ToolsHealthRegion]("health-" + region.Identity, configureHealth)
+                default: Cell.Mount[ToolsHealthInput, ToolsHealthRegion]("health-" + region.Identity, ReadHealthInput())
             }
         )
         return card
     }
 }
 
-class ToolsPrivacyRegion : Cell, IDisposable {
+class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
     private var current ToolsInput
     private var loaded bool
     private var checking bool
@@ -184,7 +181,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
         }
     }
 
-    func Accept(input ToolsInput) {
+    protected override func InputChanged(input ToolsInput) {
         if current.Equals(input) {
             return
         }
@@ -198,7 +195,6 @@ class ToolsPrivacyRegion : Cell, IDisposable {
                 go ReadChecks(session, window, identity, run)
             }
         }
-        Rebuild()
     }
 
     private func ReadChecks(session WalletSession, window Window, identity string, run int32) {
@@ -208,7 +204,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             try {
                 mode = session.Checks.WalletFileMode()
             } catch (failure Exception) { }
-            window.TryPost(
+            window.Post(
                 () -> {
                     if run == generation && identity == ReadWalletIdentity(session) {
                         checkedAt = date
@@ -295,9 +291,9 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             Gap: AppTheme.Space10,
             (
                 AppTheme.Switch with{
-                    Checked = context.Privacy,
+                    Value = context.Privacy,
                     AccessibilityName = ui.Strings.Get("hide amounts"),
-                    OnClick = input.OnPrivacy
+                    OnChange = _ -> input.OnPrivacy()
                 }
             ).Build(),
             Label(
@@ -314,7 +310,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space8,
             BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Disabled: context.Busy,
             Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get("Node settings")},
             OnClick: input.OnNodeSettings,
@@ -549,7 +545,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             Gap: compact ? AppTheme.Space8: AppTheme.Space10,
             BorderColor: AppTheme.Rule,
             BackgroundColor: AppTheme.Raised,
-            Hover: Style{BorderColor: AppTheme.StrongRule, BackgroundColor: AppTheme.FaintRule},
+            HoverStyle: Style{BorderColor: AppTheme.StrongRule, BackgroundColor: AppTheme.FaintRule},
             top,
             Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, MinHeight: 30, value},
             Container{
@@ -617,7 +613,7 @@ class ToolsLockRegion : Cell[ToolsLockInput] {
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space10,
             BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Disabled: context.Busy,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -757,7 +753,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         try {
             phrase = await session.Keys.PhraseAsync(secret, linked.Token)
             let completed = TaskCompletionSource[bool](TaskCreationOptions.RunContinuationsAsynchronously)
-            if window.TryPost(
+            if window.Post(
                 () -> {
                     try {
                         if run == generation && identity == ReadWalletIdentity(session) {
@@ -774,7 +770,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             }
         } catch (failure OperationCanceledException) { } catch (failure Exception) {
             let message = failure.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if run == generation && identity == ReadWalletIdentity(session) {
                         busy = false
@@ -1187,7 +1183,7 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
@@ -1296,7 +1292,7 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
@@ -1430,7 +1426,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
@@ -1449,7 +1445,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
     }
 }
 
-class ToolsHealthRegion : Cell, IDisposable {
+class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
     private var current ToolsHealthInput
     private var source OutputReport?
     private var rows[]DataGridRow = []DataGridRow{}
@@ -1459,7 +1455,7 @@ class ToolsHealthRegion : Cell, IDisposable {
     private var auditing bool
     private var auditIssue string = ""
 
-    func Accept(input ToolsHealthInput) {
+    protected override func InputChanged(input ToolsHealthInput) {
         if current.Equals(input) && source == input.State.Report {
             return
         }
@@ -1478,7 +1474,6 @@ class ToolsHealthRegion : Cell, IDisposable {
         if source != input.State.Report || old.Privacy != next.Privacy || old.Language != next.Language {
             PrepareRows()
         }
-        Rebuild()
     }
 
     private func PrepareRows() {
@@ -1694,7 +1689,7 @@ class ToolsParts {
             } catch (failure Exception) {
                 error = failure.Message
             }
-            window.TryPost(() -> publish(report, error))
+            window.Post(() -> publish(report, error))
         }
 
         func ReadWalletIdentity(session WalletSession) string ->

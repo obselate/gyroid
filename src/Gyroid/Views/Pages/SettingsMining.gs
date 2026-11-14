@@ -8,7 +8,7 @@ import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Views.SettingsParts
 
-class SettingsMining : Cell {
+class SettingsMining : Cell[SettingsPageInput] {
     private var context SettingsPageInput
     private var mode string = "solo"
     private var pool string = ""
@@ -17,13 +17,9 @@ class SettingsMining : Cell {
     private var issue string = ""
     private var savedGpu bool = true
 
-    func Accept(input SettingsPageInput) {
+    protected override func InputChanged(input SettingsPageInput) {
         let settings = input.Settings
         let changed = savedMode != settings.MiningMode || savedPool != settings.PoolUrl
-        let refresh = changed ||
-            savedGpu != settings.UseGpu ||
-            context.Busy != input.Busy ||
-            context.Language != input.Language
         context = input
         savedGpu = settings.UseGpu
         if changed {
@@ -32,9 +28,6 @@ class SettingsMining : Cell {
             savedMode = mode
             savedPool = pool
             issue = pool.Length == 0 ? "": SettingsValidation.PoolUrlError(pool)
-        }
-        if refresh {
-            Rebuild()
         }
     }
 
@@ -62,7 +55,6 @@ class SettingsMining : Cell {
                 input.Busy,
                 value -> {
                     mode = value
-                    Rebuild()
                 }
             )
         }
@@ -74,7 +66,6 @@ class SettingsMining : Cell {
                     value -> {
                         pool = value
                         issue = SettingsValidation.PoolUrlError(value)
-                        Rebuild()
                     },
                     issue: issue,
                     placeholder: "stratum+tcp://bntpool.com:3333"

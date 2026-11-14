@@ -38,8 +38,8 @@ partial class App {
     }.Build()
 
     private func ControlGlyph(chrome WindowChrome, command WindowChromeAction) Blob {
-        let buttonWidth = chrome.ControlWidth * pixelScale
-        let buttonHeight = chrome.Height * pixelScale
+        let buttonWidth = chrome.ControlWidth!!* pixelScale
+        let buttonHeight = chrome.Height!!.Magnitude * pixelScale
         let size = Math.Round(10 * pixelScale)
         let line = Math.Max(1.0, Math.Floor(pixelScale))
         let left = width * pixelScale - buttonWidth * switch command {
@@ -73,11 +73,13 @@ partial class App {
             }
         }
         return Shape{
-            Width: chrome.ControlWidth,
-            Height: chrome.Height,
+            Width: chrome.ControlWidth!!,
+            Height: chrome.Height!!,
             Path: path.Build(),
             Fit: ShapeFit.Fill,
             UseCurrentColor: true
+            ,
+            Fill: VectorPaint(Color.White)
         }
     }
 

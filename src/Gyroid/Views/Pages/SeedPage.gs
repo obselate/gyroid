@@ -22,7 +22,7 @@ data struct SeedPageInput {
     var OnRetry Action
 }
 
-class SeedPage : Cell, IDisposable {
+class SeedPage : Cell[SeedPageInput], IDisposable {
     private var input SeedPageInput
     private var visible bool
     private var saved bool
@@ -38,7 +38,7 @@ class SeedPage : Cell, IDisposable {
         clipboardChanged = () -> Rebuild()
     }
 
-    func Accept(next SeedPageInput) {
+    protected override func InputChanged(next SeedPageInput) {
         if actions != next.Ui.Actions {
             if let source = actions {
                 source.ClipboardChanged -= clipboardChanged
@@ -61,7 +61,6 @@ class SeedPage : Cell, IDisposable {
             copiedOwner = ReadOnlyMemory[uint8].Empty
         }
         input = next
-        Rebuild()
     }
 
     override func Build() Blob {
@@ -119,7 +118,7 @@ class SeedPage : Cell, IDisposable {
                 (
                     AppTheme.Checkbox with{
                         Label = ui.Strings.Get("I saved these words"),
-                        State = saved ? AccessibilityChecked.True: AccessibilityChecked.False,
+                        Value = saved ? AccessibilityChecked.True: AccessibilityChecked.False,
                         OnChange = state -> {
                             saved = state == AccessibilityChecked.True
                         }

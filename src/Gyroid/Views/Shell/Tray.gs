@@ -30,7 +30,7 @@ partial class App {
         }
         wallet.EnableEvents()
         Run(ct -> wallet.ConnectAsync(ct))
-        refreshTimer = host.SetInterval(() -> Refresh(wallet.State == WalletState.Unlocked), 60000)
+        refreshTimer = host.Every(60000, () -> Refresh(wallet.State == WalletState.Unlocked))
         UpdatePlayback()
         UpdateTray()
         tray = TrayIcon.Create(host, TraySettings()).Icon

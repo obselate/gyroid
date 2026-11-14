@@ -133,7 +133,7 @@ class LayoutParts {
                         Height: 8,
                         Path: dashes.Build(),
                         Fit: ShapeFit.Fill,
-                        BackgroundColor: AppTheme.Orange
+                        Fill: VectorPaint(AppTheme.Orange)
                     }
                 )
             }
@@ -157,7 +157,7 @@ class LayoutParts {
                         Height: 8,
                         Path: stripes.Build(),
                         Fit: ShapeFit.Fill,
-                        BackgroundColor: AppTheme.Pink
+                        Fill: VectorPaint(AppTheme.Pink)
                     }
                 }
             )

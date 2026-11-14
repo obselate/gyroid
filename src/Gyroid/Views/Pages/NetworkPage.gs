@@ -53,7 +53,7 @@ data struct NetworkSource {
     var Start int64
 }
 
-class NetworkPage : Cell, IDisposable {
+class NetworkPage : Cell[NetworkInput], IDisposable {
     private var input NetworkInput
     private var report NetworkReport = NetworkReport()
     private var source NetworkSource
@@ -68,25 +68,19 @@ class NetworkPage : Cell, IDisposable {
     private var failed bool
     private var loadedHistory[]WalletOutput = []WalletOutput{}
     private var loadedSends[]WalletSend = []WalletSend{}
-    private let configurePeers Action[NetworkPeers]
-
-    init() {
-        configurePeers = cell -> cell.Accept(
-            NetworkPeersInput{
-                Ui: input.Ui,
-                Peers: report.Peers,
-                Banned: report.Banned,
-                Tcp: report.Tcp,
-                IdentityAge: report.Status.IdentityAge,
-                PeerId: report.Status.PeerId,
-                Online: report.Status.Running,
-                Width: input.Width,
-                Language: input.Language
-            }
-        )
+    private func ReadPeersInput() NetworkPeersInput -> NetworkPeersInput{
+        Ui: input.Ui,
+        Peers: report.Peers,
+        Banned: report.Banned,
+        Tcp: report.Tcp,
+        IdentityAge: report.Status.IdentityAge,
+        PeerId: report.Status.PeerId,
+        Online: report.Status.Running,
+        Width: input.Width,
+        Language: input.Language
     }
 
-    public func Accept(next NetworkInput) {
+    protected override func InputChanged(next NetworkInput) {
         if next == input {
             return
         }
@@ -103,7 +97,6 @@ class NetworkPage : Cell, IDisposable {
             report = NetworkReport()
         }
         RequestReport()
-        Rebuild()
     }
 
     private func RequestReport() {
@@ -197,7 +190,7 @@ class NetworkPage : Cell, IDisposable {
                         Height: input.Height
                     }
                 ),
-                Cell.Mount[NetworkPeers]("network-peers", configurePeers)
+                Cell.Mount[NetworkPeersInput, NetworkPeers]("network-peers", ReadPeersInput())
             }
         )
         return page
@@ -232,7 +225,7 @@ class NetworkPage : Cell, IDisposable {
                 if token.IsCancellationRequested {
                     return
                 }
-                window?.TryPost(
+                window?.Post(
                     () -> {
                         if id != generation {
                             return
@@ -569,18 +562,23 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                             .Build(),
                         Fit: ShapeFit.Fill,
                         CornerRadius: 2,
-                        BackgroundColor: if chosen {
-                            pending ? AppTheme.OrangeMuted: AppTheme.LimeMuted
-                        } else {
-                            pending ? AppTheme.OrangeQuiet: AppTheme.LimeQuiet
-                        },
-                        BorderWidth: chosen ? 1.4: AppTheme.Border1,
-                        BorderColor: if chosen {
-                            AppTheme.Ink
-                        } else {
-                            pending ? AppTheme.OrangeStrong: AppTheme.LimeStrong
-                        },
-                        Dashes: pending && !chosen ? DashPattern([]float64{3, 2}, 0): nil
+                        Fill: VectorPaint(
+                            if chosen {
+                                pending ? AppTheme.OrangeMuted: AppTheme.LimeMuted
+                            } else {
+                                pending ? AppTheme.OrangeQuiet: AppTheme.LimeQuiet
+                            }
+                        ),
+                        Stroke: VectorStroke(
+                            chosen ? 1.4: AppTheme.Border1,
+                            VectorPaint(
+                                if chosen {
+                                    AppTheme.Ink
+                                } else {
+                                    pending ? AppTheme.OrangeStrong: AppTheme.LimeStrong
+                                }
+                            )
+                        ){.Dashes: pending && !chosen ? DashPattern([]float64{3, 2}, 0): nil}
                     }
                 }
             )
@@ -707,7 +705,7 @@ data struct NetworkPeersInput {
     var IdentityAge string
 }
 
-class NetworkPeers : Cell {
+class NetworkPeers : Cell[NetworkPeersInput] {
     private var tab string = "peers"
     private var hovered string = ""
     private var revealed bool
@@ -723,12 +721,14 @@ class NetworkPeers : Cell {
         hoverPeer = Hover
         rowBuilder = row -> {
             if row.Peer != nil {
-                return Cell.Mount[NetworkPeerRow](
+                return Cell.Mount[NetworkPeerRowInput, NetworkPeerRow](
                     row.Key,
-                    cell -> {
-                        cell.Accept(this, row)
+                    NetworkPeerRowInput{NextOwner: this, Next: row},
+                    () -> {
+                        let cell = NetworkPeerRow()
                         cell.Hover(hovered)
                         realized.Add(cell)
+                        return cell
                     }
                 )
             }
@@ -736,7 +736,7 @@ class NetworkPeers : Cell {
         }
     }
 
-    public func Accept(next NetworkPeersInput) {
+    protected override func InputChanged(next NetworkPeersInput) {
         if next == current {
             return
         }
@@ -745,7 +745,6 @@ class NetworkPeers : Cell {
         }
         current = next
         PrepareRows()
-        Rebuild()
     }
 
     private func PrepareRows() {
@@ -819,20 +818,20 @@ class NetworkPeers : Cell {
             }
         )
         card.Add(
-            Cell.Mount[NetworkPeerMap](
+            Cell.Mount[NetworkPeerMapInput, NetworkPeerMap](
                 "peer-map",
-                cell -> {
+                NetworkPeerMapInput{
+                    Ui: ui,
+                    Peers: input.Peers,
+                    Banned: input.Banned,
+                    Hover: hoverPeer,
+                    Online: input.Online,
+                    Language: input.Language
+                },
+                () -> {
+                    let cell = NetworkPeerMap()
                     peerMapCell = cell
-                    cell.Accept(
-                        NetworkPeerMapInput{
-                            Ui: ui,
-                            Peers: input.Peers,
-                            Banned: input.Banned,
-                            Hover: hoverPeer,
-                            Online: input.Online,
-                            Language: input.Language
-                        }
-                    )
+                    return cell
                 }
             )
         )
@@ -993,18 +992,24 @@ class NetworkPeers : Cell {
     }
 }
 
-class NetworkPeerRow : Cell, IDisposable {
+data struct NetworkPeerRowInput {
+    var NextOwner NetworkPeers
+    var Next NetworkRow
+}
+
+class NetworkPeerRow : Cell[NetworkPeerRowInput], IDisposable {
     private var owner NetworkPeers
     private var current NetworkRow
     private var hovered bool
 
-    func Accept(nextOwner NetworkPeers, next NetworkRow) {
+    protected override func InputChanged(value NetworkPeerRowInput) {
+        let nextOwner = value.NextOwner
+        let next = value.Next
         if current.Equals(next) {
             return
         }
         owner = nextOwner
         current = next
-        Rebuild()
     }
 
     func Hover(id string) {
@@ -1032,7 +1037,7 @@ data struct NetworkPeerMapInput {
     var Language string
 }
 
-class NetworkPeerMap : Cell {
+class NetworkPeerMap : Cell[NetworkPeerMapInput] {
     private let peerMap ElementHandle = ElementHandle()
     private var current NetworkPeerMapInput
     private var hovered string = ""
@@ -1048,12 +1053,11 @@ class NetworkPeerMap : Cell {
         }
     }
 
-    func Accept(next NetworkPeerMapInput) {
+    protected override func InputChanged(next NetworkPeerMapInput) {
         if current.Equals(next) {
             return
         }
         current = next
-        Rebuild()
     }
 
     func Hover(id string) {
@@ -1117,9 +1121,8 @@ class NetworkPeerMap : Cell {
                 Height: 28,
                 Path: hexagon.Close().Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Surface,
-                BorderWidth: 1.5,
-                BorderColor: input.Online ? AppTheme.Lime: AppTheme.Dim
+                Fill: VectorPaint(AppTheme.Surface),
+                Stroke: VectorStroke(1.5, VectorPaint(input.Online ? AppTheme.Lime: AppTheme.Dim))
             }
         )
         plot.Add(Dot(x, y, 3, input.Online ? AppTheme.Lime: AppTheme.Dim))
@@ -1129,12 +1132,14 @@ class NetworkPeerMap : Cell {
             plot.Add(Place(x + Math.Cos(angle) * outer - 7, y + Math.Sin(angle) * outer - 7, mark))
         }
         plot.Add(
-            Cell.Mount[NetworkPeerMarkers](
+            Cell.Mount[NetworkPeerMarkersInput, NetworkPeerMarkers](
                 "markers",
-                cell -> {
+                NetworkPeerMarkersInput{NextOwner: this, Next: input, NextWidth: width, NextHeight: height},
+                () -> {
+                    let cell = NetworkPeerMarkers()
                     markers = cell
-                    cell.Accept(this, input, width, height)
                     cell.Hover(hovered)
+                    return cell
                 }
             )
         )
@@ -1202,9 +1207,7 @@ class NetworkPeerMap : Cell {
             .ArcTo(radius, radius, 0, false, true, radius, 0)
             .Build(),
         Fit: ShapeFit.Fill,
-        BorderWidth: AppTheme.Border1,
-        BorderColor: color,
-        Dashes: dashes
+        Stroke: VectorStroke(AppTheme.Border1, VectorPaint(color)){.Dashes: dashes}
     }
 
     private func Lines(width float64, height float64, path PathBuilder, color Color) Blob -> Shape{
@@ -1213,8 +1216,7 @@ class NetworkPeerMap : Cell {
         Height: height,
         Path: path.Build(),
         Fit: ShapeFit.Fill,
-        BorderWidth: AppTheme.Border1,
-        BorderColor: color
+        Stroke: VectorStroke(AppTheme.Border1, VectorPaint(color))
     }
 
     private func Dot(x float64, y float64, radius float64, color Color) Container {
@@ -1224,7 +1226,14 @@ class NetworkPeerMap : Cell {
     }
 }
 
-class NetworkPeerMarkers : Cell {
+data struct NetworkPeerMarkersInput {
+    var NextOwner NetworkPeerMap
+    var Next NetworkPeerMapInput
+    var NextWidth float64
+    var NextHeight float64
+}
+
+class NetworkPeerMarkers : Cell[NetworkPeerMarkersInput] {
     private var owner NetworkPeerMap
     private var current NetworkPeerMapInput
     private var width float64
@@ -1233,7 +1242,11 @@ class NetworkPeerMarkers : Cell {
     private var dots[]Blob = []Blob{}
     private var positions[]Point = []Point{}
 
-    func Accept(nextOwner NetworkPeerMap, next NetworkPeerMapInput, nextWidth float64, nextHeight float64) {
+    protected override func InputChanged(value NetworkPeerMarkersInput) {
+        let nextOwner = value.NextOwner
+        let next = value.Next
+        let nextWidth = value.NextWidth
+        let nextHeight = value.NextHeight
         if current.Equals(next) && width == nextWidth && height == nextHeight {
             return
         }
@@ -1249,7 +1262,6 @@ class NetworkPeerMarkers : Cell {
             positions[index] = Point{X: width / 2 + Math.Cos(angle) * ring, Y: height / 2 + Math.Sin(angle) * ring}
             dots[index] = owner.MarkerDot(next, next.Peers[index], positions[index], false)
         }
-        Rebuild()
     }
 
     func Hover(id string) {

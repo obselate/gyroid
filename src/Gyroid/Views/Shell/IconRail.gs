@@ -17,7 +17,7 @@ partial class App {
         let button = Goo
             .Button{
             Width: 60,
-            Height: input.ItemHeight,
+            Height: input.ItemHeight!!,
             FlexShrink: 1,
             FlexDirection: FlexDirection.Column,
             AlignItems: AlignItems.Center,
@@ -25,8 +25,8 @@ partial class App {
             Gap: AppTheme.Space4,
             BorderRadius: AppTheme.Radius10,
             BackgroundColor: selected ? AppTheme.LimeQuiet: Color.Transparent,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle
         }
         if let icon = item.Content {
             button.Add(icon)
