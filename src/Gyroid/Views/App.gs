@@ -224,13 +224,13 @@ partial class App : Cell, IDisposable {
     private var workerTask Task = Task.CompletedTask
     private var closed bool
 
-    private prop width float64 -> Host.Size.Width
+    private var width float64 = 1280
 
-    private prop height float64 -> Host.Size.Height
+    private var height float64 = 800
 
-    private prop pixelScale float64 -> Host.PixelScale
+    private var pixelScale float64 = 1
     private let scaleOverride bool
-    private let maximumScalePercent State[int32] = State[int32](100)
+    private var maximumScalePercent int32 = 100
 
     private var screen AppPage = AppPage.None
 
@@ -366,7 +366,7 @@ partial class App : Cell, IDisposable {
         Language: ui.Strings.Language,
         Width: width,
         Height: height,
-        MaximumScalePercent: maximumScalePercent.Value,
+        MaximumScalePercent: maximumScalePercent,
         ChooseFile: chooseFile,
         OnSection: selectSection,
         OnLanguage: setLanguage,
@@ -378,6 +378,7 @@ partial class App : Cell, IDisposable {
 
     private func ReadContactsInput() ContactsInput -> ContactsInput{
         Ui: ui,
+        Window: window,
         Contacts: contacts,
         Privacy: ui.Privacy,
         Busy: ui.Working(),
@@ -587,6 +588,12 @@ partial class App : Cell, IDisposable {
         lifetime = source
         let token = source.Token
         workerTask = RunWorkersAsync(token)
+        Resize(owner)
+        owner.MetricsChanged += metrics -> {
+            pixelScale = metrics.DisplayScaleX * metrics.UiScale
+            Resize(owner)
+            Rebuild()
+        }
 
         owner.DisplayChanged += () -> {
             UpdateScale()
@@ -595,6 +602,7 @@ partial class App : Cell, IDisposable {
         owner.StateChanged += _ -> {
             UpdateBackgroundLock()
             UpdatePlayback()
+            Rebuild()
         }
         owner.OcclusionChanged += _ -> {
             UpdateBackgroundLock()
@@ -604,6 +612,7 @@ partial class App : Cell, IDisposable {
         owner.FocusChanged += _ -> {
             UpdateBackgroundLock()
             UpdatePlayback()
+            Rebuild()
         }
         owner.VisibilityChanged += _ -> {
             UpdateBackgroundLock()
@@ -709,6 +718,11 @@ partial class App : Cell, IDisposable {
         }
     }
 
+    private func Resize(owner Window) {
+        width = owner.Size.Width / owner.UiScale
+        height = owner.Size.Height / owner.UiScale
+    }
+
     func UpdateScale() {
         guard let owner = window else {
             return
@@ -718,14 +732,15 @@ partial class App : Cell, IDisposable {
         }
         let display = owner.GetCurrentDisplay()
         let usable = display?.UsableBounds ?? display?.Bounds
-        maximumScalePercent.Value = if let bounds = usable {
+        maximumScalePercent = if let bounds = usable {
             int32(Math.Clamp(Math.Floor(Math.Min(bounds.Width / 960, bounds.Height / 640) * 4) * 25, 100.0, 200.0))
         } else {
             100
         }
         if !scaleOverride {
-            owner.UiScale = float64(Math.Min(wallet.Settings.UiScalePercent, maximumScalePercent.Value)) / 100
+            owner.UiScale = float64(Math.Min(wallet.Settings.UiScalePercent, maximumScalePercent)) / 100
         }
+        Resize(owner)
     }
 
     private func ReadSource() AppSource -> AppSource{

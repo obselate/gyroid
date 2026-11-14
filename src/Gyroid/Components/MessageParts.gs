@@ -242,7 +242,7 @@ data struct MessageComposerInput {
     var OnSend Action[string]
 }
 
-class MessageComposer : Cell[MessageComposerInput] {
+class MessageComposer : Cell[MessageComposerInput], IDisposable {
     private let arrow Anim[Point]
     private let fill Anim[float64]
     private var ready bool
@@ -266,12 +266,16 @@ class MessageComposer : Cell[MessageComposerInput] {
         if measure && next.CanSend && next.Recipients > 0 {
             estimate = next.Measure(draft)
         }
-        AnimateDraft()
+        Rebuild()
     }
 
     init() {
         arrow = AnimateValue(Point{X: 0, Y: 36})
         fill = AnimateValue(0.0)
+    }
+
+    func Dispose() {
+        timer?.Dispose()
     }
 
     private func Send(input MessageComposerInput, enabled bool) {
@@ -286,9 +290,12 @@ class MessageComposer : Cell[MessageComposerInput] {
         } else {
             arrow.Set(Point{X: 0, Y: -36})
         }
-        InvokeInputCallback(input.OnSend, text)
+        input.OnSend(text)
         timer?.Dispose()
-        timer = After(
+        timer = input
+            .Ui
+            .Actions
+            .Delay(
             animate ? 160.0: 0.0,
             () -> {
                 sending = false
@@ -299,28 +306,10 @@ class MessageComposer : Cell[MessageComposerInput] {
                 } else {
                     fill.Set(0)
                 }
+                Rebuild()
             }
         )
-    }
-
-    private func AnimateDraft() {
-        let hasText = !String.IsNullOrWhiteSpace(draft)
-        let animate = input.Ui.Actions.playbackActive()
-        if !initialized || !animate {
-            initialized = true
-            ready = hasText
-            if !sending {
-                arrow.Snap(Point{X: 0, Y: hasText ? 0.0: 36.0})
-                fill.Snap(hasText ? 1.0: 0.0)
-            }
-        } else if !sending && hasText != ready {
-            ready = hasText
-            arrow.To(
-                Point{X: 0, Y: hasText ? 0.0: 36.0},
-                Motion.Tween(hasText ? 180.0: 140.0, hasText ? Easing.EaseOut: Easing.EaseIn)
-            )
-            fill.To(hasText ? 1.0: 0.0, Motion.Tween(hasText ? 180.0: 140.0, Easing.Linear))
-        }
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -342,6 +331,22 @@ class MessageComposer : Cell[MessageComposerInput] {
         let estimate = this.estimate
         let hasText = !String.IsNullOrWhiteSpace(draft)
         let enabled = hasText && estimate.Fits && !input.Busy
+        let animate = ui.Actions.playbackActive()
+        if !initialized || !animate {
+            initialized = true
+            ready = hasText
+            if !sending {
+                arrow.Snap(Point{X: 0, Y: hasText ? 0.0: 36.0})
+                fill.Snap(hasText ? 1.0: 0.0)
+            }
+        } else if !sending && hasText != ready {
+            ready = hasText
+            arrow.To(
+                Point{X: 0, Y: hasText ? 0.0: 36.0},
+                Motion.Tween(hasText ? 180.0: 140.0, hasText ? Easing.EaseOut: Easing.EaseIn)
+            )
+            fill.To(hasText ? 1.0: 0.0, Motion.Tween(hasText ? 180.0: 140.0, Easing.Linear))
+        }
         let send Action = () -> Send(input, enabled)
         let rows = Math.Clamp(
             1 + draft.Count(character -> character == '\n') +
@@ -365,8 +370,8 @@ class MessageComposer : Cell[MessageComposerInput] {
                         OnChange: value -> {
                             draft = value
                             this.estimate = input.Measure(value)
-                            InvokeInputCallback(input.OnDraft, value)
-                            AnimateDraft()
+                            input.OnDraft(value)
+                            Rebuild()
                         },
                         Placeholder: ui.Strings.Get("Message"),
                         AccessibilityName: ui.Strings.Get("Message"),

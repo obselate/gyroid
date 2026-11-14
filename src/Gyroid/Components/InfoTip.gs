@@ -44,6 +44,7 @@ class InfoTip : Cell[InfoTipInput] {
                     AccessibilityName = ui.Strings.Get(input.Topic),
                     OnClick = () -> {
                         visible = !visible
+                        Rebuild()
                     }
                 }
             ).Build(),
@@ -66,6 +67,7 @@ class InfoTip : Cell[InfoTipInput] {
                     AccessibilityName: ui.Strings.Get(input.Topic),
                     OnDismiss: reason -> {
                         visible = false
+                        Rebuild()
                     }
                 }
             )

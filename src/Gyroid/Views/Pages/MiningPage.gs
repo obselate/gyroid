@@ -125,6 +125,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         } else if stateChanged {
             Refresh()
         }
+        Rebuild()
     }
 
     override func Build() Blob {

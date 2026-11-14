@@ -195,6 +195,7 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
                 go ReadChecks(session, window, identity, run)
             }
         }
+        Rebuild()
     }
 
     private func ReadChecks(session WalletSession, window Window, identity string, run int32) {
@@ -1474,6 +1475,7 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
         if source != input.State.Report || old.Privacy != next.Privacy || old.Language != next.Language {
             PrepareRows()
         }
+        Rebuild()
     }
 
     private func PrepareRows() {

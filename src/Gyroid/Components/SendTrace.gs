@@ -34,7 +34,7 @@ data struct SendTraceInput {
     var OnClose Action
 }
 
-class SendTrace : Cell[SendTraceInput] {
+class SendTrace : Cell[SendTraceInput], IDisposable {
     private let fades[]Anim[float64] = [6]Anim[float64]
 
     private let shifts[]Anim[Point] = [6]Anim[Point]
@@ -43,7 +43,7 @@ class SendTrace : Cell[SendTraceInput] {
 
     private var traced SendResult?
 
-    private let compact State[bool] = State[bool](false)
+    private var compact bool
 
     private var timer WindowTimer?
 
@@ -55,14 +55,23 @@ class SendTrace : Cell[SendTraceInput] {
         seal = AnimateValue(1.0)
     }
 
+    func Dispose() {
+        timer?.Dispose()
+        timer = nil
+    }
+
     private func Start(input SendTraceInput) {
         traced = input.Result
-        compact.Value = false
+        compact = false
         timer?.Dispose()
-        timer = After(
+        timer = input
+            .Ui
+            .Actions
+            .Delay(
             6000,
             () -> {
-                compact.Value = true
+                compact = true
+                Rebuild()
             }
         )
         let still = Point{X: 0, Y: 0}
@@ -100,13 +109,10 @@ class SendTrace : Cell[SendTraceInput] {
         }
     }
 
-    protected override func InputChanged(input SendTraceInput) {
+    protected override func Build(input SendTraceInput) Blob {
         if !Object.ReferenceEquals(traced, input.Result) {
             Start(input)
         }
-    }
-
-    protected override func Build(input SendTraceInput) Blob {
         let ui = input.Ui
         let result = input.Result
         let estimate = input.Estimate
@@ -152,7 +158,7 @@ class SendTrace : Cell[SendTraceInput] {
         close.Key = "trace-close"
         let strip = Container{
             FlexDirection: FlexDirection.Row,
-            AlignItems: if compact.Value {
+            AlignItems: if compact {
                 AlignItems.Center
             } else {
                 AlignItems.FlexStart
@@ -168,7 +174,7 @@ class SendTrace : Cell[SendTraceInput] {
                 Name: ui.Strings.Get("sent") + " " + Amount(ui.Privacy, estimate.Amount) + " BNT " + status
             }
         }
-        if compact.Value {
+        if compact {
             strip.Add(Label(ui, "◆", AppTheme.Type14, AppTheme.Lime, ""))
             strip.Add(txid)
             strip.Add(Label(ui, "-" + Amount(ui.Privacy, estimate.Amount), AppTheme.Type12, AppTheme.Pink, ""))

@@ -61,6 +61,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
             copiedOwner = ReadOnlyMemory[uint8].Empty
         }
         input = next
+        Rebuild()
     }
 
     override func Build() Blob {

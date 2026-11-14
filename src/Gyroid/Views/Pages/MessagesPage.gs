@@ -177,6 +177,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             let previous = projection
             go PrepareView(next, id, fallback, previous, version, token, window)
         }
+        Rebuild()
     }
 
     private func PrepareView(
@@ -627,6 +628,7 @@ class MessageIssue : Cell[MessageIssueInput] {
         }
         ui = next
         message = error
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -670,6 +672,7 @@ class MessageConversationList : Cell[MessagesListInput] {
             return
         }
         input = next
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -1072,6 +1075,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
             address = next.Address
         }
         RefreshContacts()
+        Rebuild()
     }
 
     private func RefreshContacts() {

@@ -97,6 +97,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             report = NetworkReport()
         }
         RequestReport()
+        Rebuild()
     }
 
     private func RequestReport() {
@@ -745,6 +746,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
         }
         current = next
         PrepareRows()
+        Rebuild()
     }
 
     private func PrepareRows() {
@@ -1010,6 +1012,7 @@ class NetworkPeerRow : Cell[NetworkPeerRowInput], IDisposable {
         }
         owner = nextOwner
         current = next
+        Rebuild()
     }
 
     func Hover(id string) {
@@ -1058,6 +1061,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
             return
         }
         current = next
+        Rebuild()
     }
 
     func Hover(id string) {
@@ -1262,6 +1266,7 @@ class NetworkPeerMarkers : Cell[NetworkPeerMarkersInput] {
             positions[index] = Point{X: width / 2 + Math.Cos(angle) * ring, Y: height / 2 + Math.Sin(angle) * ring}
             dots[index] = owner.MarkerDot(next, next.Peers[index], positions[index], false)
         }
+        Rebuild()
     }
 
     func Hover(id string) {

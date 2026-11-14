@@ -263,6 +263,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         if resumePagination {
             LoadMore()
         }
+        Rebuild()
     }
 
     private func Active(id HistoryIdentity) bool -> SourceIdentity(current.Session).Equals(id) && ReadSource(
@@ -811,6 +812,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
             at -= Math.Min(at, mark)
         }
         input.RequestTimes(marks)
+        Rebuild()
     }
 
     public func Mark(height uint64) -> hoverCell?.Mark(height)
@@ -1012,6 +1014,7 @@ class HistoryRibbonHover : Cell[HistoryRibbonHoverInput] {
         current = input
         plotWidth = width
         plotHeight = height
+        Rebuild()
     }
 
     public func Mark(height uint64) {
@@ -1182,6 +1185,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
     private var view ObserverView?
     private var viewLoading bool
     private var selectedRevision int32 = -1
+    private var selectionTimer WindowTimer?
     private var viewIssue string = ""
     private let closeObserver Action
     private let proveObserved Action
@@ -1265,7 +1269,14 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
         input.RequestTimes(input.Rows.Skip(Math.Max(0, firstVisible - 10)).Take(50).Select(row -> row.Height))
         RefreshRows()
         if selected.Length > 0 {
-            list.ScrollToItem(selected)
+            selectionTimer?.Dispose()
+            selectionTimer = input.Window?.After(
+                1,
+                () -> {
+                    selectionTimer = nil
+                    list.ScrollToItem(selected)
+                }
+            )
         }
     }
 
@@ -1300,6 +1311,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
     }
 
     public func Dispose() {
+        selectionTimer?.Dispose()
         proofGeneration++
         observeGeneration++
         lifetime.Cancel()
@@ -2032,6 +2044,7 @@ class HistoryExport : Cell[HistoryExportInput], IDisposable {
         if exporting {
             exportRows = input.Count
         }
+        Rebuild()
     }
 
     public func Dispose() {

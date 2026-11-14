@@ -171,6 +171,7 @@ class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
                 }
             }
         }
+        Rebuild()
     }
 
     override func Build() Blob {

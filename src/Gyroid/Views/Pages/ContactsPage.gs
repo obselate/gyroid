@@ -18,6 +18,7 @@ import System.Threading.Tasks
 
 data struct ContactsInput {
     var Ui Presentation
+    var Window Window?
     var Contacts SortedDictionary[string, string]
     var Privacy bool
     var Busy bool
@@ -42,12 +43,15 @@ class ContactDraft {
     public var Issue string = ""
 }
 
-class ContactsPage : Cell[ContactsInput] {
+class ContactsPage : Cell[ContactsInput], IDisposable {
     private var current ContactsInput
     private var rows[]ContactRow = []ContactRow{}
     private var draft ContactDraft = ContactDraft{}
     private let rowKey Func[ContactRow, string]
     private let rowBuilder Func[ContactRow, Blob]
+    private var generation int32
+    private var disposed bool
+    private var lifetime CancellationTokenSource? = nil
     private var issue string = ""
 
     init() {
@@ -56,7 +60,7 @@ class ContactsPage : Cell[ContactsInput] {
     }
 
     protected override func InputChanged(input ContactsInput) {
-        if current.Equals(input) {
+        if disposed || current.Equals(input) {
             return
         }
         let prepare = current.Contacts != input.Contacts ||
@@ -64,15 +68,22 @@ class ContactsPage : Cell[ContactsInput] {
             current.Busy != input.Busy ||
             current.Language != input.Language
         current = input
+        Rebuild()
         if !prepare {
             return
         }
-        let token = Latest("rows")
-        let previous = rows
-        go Prepare(input, previous, token)
+        generation++
+        if let window = input.Window {
+            let source = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
+            lifetime = source
+            let token = source.Token
+            let id = generation
+            let previous = rows
+            go Prepare(input, previous, window, id, token)
+        }
     }
 
-    private func Prepare(input ContactsInput, previous[]ContactRow, token CancellationToken) {
+    private func Prepare(input ContactsInput, previous[]ContactRow, window Window, id int32, token CancellationToken) {
         try {
             let prepared = List[ContactRow](input.Contacts.Count)
             for (name, destination) in input.Contacts {
@@ -89,24 +100,33 @@ class ContactsPage : Cell[ContactsInput] {
                 )
             }
             let result = prepared.SequenceEqual(previous) ? previous: prepared.ToArray()
-            Post(
+            window.Post(
                 () -> {
-                    if !token.IsCancellationRequested {
+                    if id == generation {
                         rows = result
                         issue = ""
+                        Rebuild()
                     }
                 }
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let message = error.Message
-            Post(
+            window.Post(
                 () -> {
-                    if !token.IsCancellationRequested {
+                    if id == generation {
                         issue = message
+                        Rebuild()
                     }
                 }
             )
         }
+    }
+
+    public func Dispose() {
+        disposed = true
+        generation++
+        lifetime?.Cancel()
+        lifetime?.Dispose()
     }
 
     private var editing string? = nil
@@ -241,7 +261,6 @@ class ContactsPage : Cell[ContactsInput] {
     Store(input, editing ?? "", label, destination, Reset)
 
     private func Store(input ContactsInput, original string, label string, destination string?, done Action) {
-        let lifetime = Lifetime
         var result SortedDictionary[string, string]? = nil
         input
             .Ui
@@ -254,7 +273,7 @@ class ContactsPage : Cell[ContactsInput] {
             () -> {
                 if let next = result {
                     input.OnChange(next)
-                    if !lifetime.IsCancellationRequested {
+                    if !disposed {
                         done()
                     }
                 }

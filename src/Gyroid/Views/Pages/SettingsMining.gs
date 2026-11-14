@@ -20,6 +20,10 @@ class SettingsMining : Cell[SettingsPageInput] {
     protected override func InputChanged(input SettingsPageInput) {
         let settings = input.Settings
         let changed = savedMode != settings.MiningMode || savedPool != settings.PoolUrl
+        let refresh = changed ||
+            savedGpu != settings.UseGpu ||
+            context.Busy != input.Busy ||
+            context.Language != input.Language
         context = input
         savedGpu = settings.UseGpu
         if changed {
@@ -28,6 +32,9 @@ class SettingsMining : Cell[SettingsPageInput] {
             savedMode = mode
             savedPool = pool
             issue = pool.Length == 0 ? "": SettingsValidation.PoolUrlError(pool)
+        }
+        if refresh {
+            Rebuild()
         }
     }
 
@@ -55,6 +62,7 @@ class SettingsMining : Cell[SettingsPageInput] {
                 input.Busy,
                 value -> {
                     mode = value
+                    Rebuild()
                 }
             )
         }
@@ -66,6 +74,7 @@ class SettingsMining : Cell[SettingsPageInput] {
                     value -> {
                         pool = value
                         issue = SettingsValidation.PoolUrlError(value)
+                        Rebuild()
                     },
                     issue: issue,
                     placeholder: "stratum+tcp://bntpool.com:3333"

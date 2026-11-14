@@ -319,18 +319,19 @@ class CopyControl : Cell[CopyControlInput], IDisposable {
     private var actions UiService?
     private let changed Action
     private var value string = ""
-    private let copied State[bool] = State[bool](false)
+    private var wasCopied bool
 
     init() {
-        changed = () -> Post(
-            () -> {
-                if let source = actions {
-                    copied.Value = value.Length > 0 && ReadOnlySpan[char](source.ClipboardText).SequenceEqual(
-                        System.MemoryExtensions.AsSpan(value)
-                    )
+        changed = () -> {
+            if let source = actions {
+                let copied = value.Length > 0 && ReadOnlySpan[char](source.ClipboardText).SequenceEqual(
+                    System.MemoryExtensions.AsSpan(value)
+                )
+                if copied != wasCopied {
+                    Rebuild()
                 }
             }
-        )
+        }
     }
 
     public func Dispose() {
@@ -340,7 +341,7 @@ class CopyControl : Cell[CopyControlInput], IDisposable {
         actions = nil
     }
 
-    protected override func InputChanged(input CopyControlInput) {
+    protected override func Build(input CopyControlInput) Blob {
         if actions != input.Ui.Actions {
             if let source = actions {
                 source.ClipboardChanged -= changed
@@ -348,15 +349,12 @@ class CopyControl : Cell[CopyControlInput], IDisposable {
             actions = input.Ui.Actions
             input.Ui.Actions.ClipboardChanged += changed
         }
-        value = input.Value
-        copied.Value = input.Value.Length > 0 && ReadOnlySpan[char](input.Ui.Actions.ClipboardText).SequenceEqual(
+        let ui = input.Ui
+        let copied = input.Value.Length > 0 && ReadOnlySpan[char](ui.Actions.ClipboardText).SequenceEqual(
             System.MemoryExtensions.AsSpan(input.Value)
         )
-    }
-
-    protected override func Build(input CopyControlInput) Blob {
-        let ui = input.Ui
-        let copied = this.copied.Value
+        value = input.Value
+        wasCopied = copied
         let copy = () -> ui.Actions.Copy(input.Value, input.ClearAfterMs)
         if input.Text {
             let color = copied ? AppTheme.Mint: AppTheme.Lime
@@ -410,18 +408,16 @@ class DecodeLabel : Cell[DecodeLabelInput] {
         progress = Animate(1.0)
     }
 
-    protected override func InputChanged(input DecodeLabelInput) {
+    protected override func Build(input DecodeLabelInput) Blob {
         if revision != input.Revision {
             revision = input.Revision
             if input.Ui.Actions.playbackActive() && Stopwatch.GetElapsedTime(input.Revision).TotalMilliseconds < 250 {
-                progress.Play(0, 1, Motion.Tween(250))
+                progress.Snap(0)
+                progress.To(1, Motion.Tween(250))
             } else {
                 progress.Snap(1)
             }
         }
-    }
-
-    protected override func Build(input DecodeLabelInput) Blob {
         if progress.Value < 1 && input.Ui.Actions.playbackActive() {
             return TextParts.Frame(
                 input.Ui,

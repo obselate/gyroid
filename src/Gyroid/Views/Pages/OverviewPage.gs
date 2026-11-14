@@ -155,6 +155,7 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
         language = nextLanguage
         identity = nextIdentity
         readSource = nextSource
+        Rebuild()
         if !prepare {
             return
         }
@@ -953,6 +954,7 @@ class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
             blocks = report.Blocks
         }
         source = next
+        Rebuild()
         Read()
     }
 
@@ -1110,6 +1112,7 @@ class OverviewRecent : Cell[OverviewRecentInput] {
         }
         source = next
         PrepareRows()
+        Rebuild()
     }
 
     private func PrepareRows() {

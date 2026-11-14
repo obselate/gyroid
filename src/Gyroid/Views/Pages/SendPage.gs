@@ -895,6 +895,7 @@ class SendTotal : Cell[SendTotalInput] {
             return
         }
         current = input
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -931,6 +932,7 @@ class SendActions : Cell[SendActionsInput] {
             return
         }
         current = input
+        Rebuild()
     }
 
     override func Build() Blob {

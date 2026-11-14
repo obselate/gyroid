@@ -160,7 +160,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private var nodeOwner SettingsNode?
     private var mountedSection string = ""
     private var generation int32
-    private let issue State[string] = State[string]("")
+    private var issue string = ""
     private let savePreference Action[Func[CancellationToken, Task]]
     private let startupDraft SettingsRegionState = SettingsRegionState()
     private let openDialog Action[string]
@@ -242,6 +242,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             return
         }
         state = next
+        Rebuild()
     }
 
     private func RefreshNodeData() {
@@ -346,8 +347,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 )
             }
         )
-        if issue.Value.Length > 0 {
-            pane.Add(Label(ui, ui.Strings.Explain(issue.Value), AppTheme.Type13, AppTheme.Pink, ""))
+        if issue.Length > 0 {
+            pane.Add(Label(ui, ui.Strings.Explain(issue), AppTheme.Type13, AppTheme.Pink, ""))
         }
         let root = Container{
             FlexDirection: FlexDirection.Row,
@@ -372,14 +373,18 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     }
 
     private func SavePreference(task Func[CancellationToken, Task]) {
+        guard let owner = current.Window else {
+            return
+        }
         generation++
         let request = generation
         let saved = current.OnPreference
-        current.Ui.Actions.Background(ct -> CompletePreference(task, saved, request, ct))
+        current.Ui.Actions.Background(ct -> CompletePreference(task, owner, saved, request, ct))
     }
 
     private async func CompletePreference(
         task Func[CancellationToken, Task],
+        owner Window,
         saved Action,
         request int32,
         ct CancellationToken
@@ -392,7 +397,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        Post(
+        owner.Post(
             () -> {
                 if generation != request {
                     return
@@ -400,7 +405,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                 if error.Length == 0 {
                     saved.Invoke()
                 }
-                issue.Value = error
+                if issue != error {
+                    issue = error
+                    Rebuild()
+                }
             }
         )
     }
@@ -523,6 +531,7 @@ class SettingsGeneral : Cell[SettingsGeneralContext] {
             return
         }
         state = next
+        Rebuild()
     }
 
     override func Build() Blob -> General(context)
@@ -644,7 +653,7 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
     private var rowHeight float64
     private var draft SettingsRegionState
     private var directoryRead string = ""
-    private let directoryExists State[bool] = State[bool](false)
+    private var directoryExists bool
     private var generation int32
 
     private func ReadStartupInput() SettingsStartupContext -> SettingsStartupContext{Input: context, Draft: draft}
@@ -679,29 +688,32 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
         if input.Section == "node" && next.Directory != directoryRead {
             generation++
             directoryRead = next.Directory
-            directoryExists.Value = false
+            directoryExists = false
             let request = generation
             let path = next.Directory
+            let owner = input.Window
             let session = input.Session
-            go ReadDirectory(session, path, request)
+            go ReadDirectory(session, path, owner, request)
         }
         if next.Equals(state) {
             return
         }
         state = next
+        Rebuild()
     }
 
     override func Build() Blob -> NodeSection(context)
 
-    private func ReadDirectory(session WalletSession, path string, request int32) {
+    private func ReadDirectory(session WalletSession, path string, owner Window?, request int32) {
         var exists = false
         try {
             exists = session.SettingsDirectoryExists(path)
         } catch (failure Exception) { }
-        Post(
+        owner?.Post(
             () -> {
-                if request == generation {
-                    directoryExists.Value = exists
+                if request == generation && directoryExists != exists {
+                    directoryExists = exists
+                    Rebuild()
                 }
             }
         )
@@ -710,7 +722,8 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
     func InvalidateDirectory() {
         generation++
         directoryRead = ""
-        directoryExists.Value = false
+        directoryExists = false
+        Rebuild()
     }
 
     func Dispose() {
@@ -829,7 +842,7 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
                             ui,
                             "Open",
                             () -> ui.Actions.Run(ct -> input.Session.OpenSettingsDirectoryAsync(folder, ct)),
-                            state.Busy || !directoryExists.Value
+                            state.Busy || !directoryExists
                         )
                     }
                 )
@@ -930,6 +943,7 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
             return
         }
         state = next
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -1252,6 +1266,7 @@ class SettingsWallet : Cell[SettingsWalletContext], IDisposable {
             return
         }
         state = next
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -1524,6 +1539,7 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
             return
         }
         data.state = next
+        Rebuild()
     }
 
     override func Build() Blob {
@@ -2093,6 +2109,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
             return
         }
         state = next
+        Rebuild()
     }
 
     func Open(kind string) {
