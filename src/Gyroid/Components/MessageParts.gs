@@ -379,7 +379,7 @@ class MessageComposer : Cell[MessageComposerInput] {
                         FontFamily: AppTheme.Font,
                         BackgroundColor: AppTheme.Black,
                         TextColor: AppTheme.Ink,
-                        CreateEditor: (value, editor) -> {
+                        ConfigureEditor: (value, editor) -> {
                             editor.BorderWidth = AppTheme.Border0
                             editor.Padding = Edges{
                                 Left: AppTheme.Space8,
@@ -391,7 +391,6 @@ class MessageComposer : Cell[MessageComposerInput] {
                                 KeyBinding{Key: Key.Enter, OnPress: send},
                                 KeyBinding{Key: Key.KeypadEnter, OnPress: send}
                             }
-                            return editor
                         }
                     }
                 )

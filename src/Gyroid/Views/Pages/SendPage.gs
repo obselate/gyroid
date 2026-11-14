@@ -781,9 +781,10 @@ class SendRecipientEditor : Cell[SendEditorInput] {
                     Placement: PopoverPlacement.BottomStart,
                     Gap: AppTheme.Space6,
                     Width: Math.Max(240.0, anchor.BorderBox.Width),
-                    CreatePanel: (value, bounds, content) -> Container{
-                        BasedOn: AppTheme.TooltipStyle,
-                        Padding: AppTheme.Space6
+                    ConfigurePanel: (value, bounds, content, panel) -> {
+                        panel.BasedOn = AppTheme.TooltipStyle
+                        panel.Padding = AppTheme.Space6
+                        panel.BoxShadow = BoxShadow{}
                     },
                     TakeFocus: false,
                     Content: ListParts.Viewport(list, grow: false),

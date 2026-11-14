@@ -320,7 +320,13 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 ViewportMargin: 0,
                 Viewport: ElementRect{X: 0, Y: 52, Width: width, Height: Math.Max(1.0, center - 8)},
                 Content: Container{FlexDirection: FlexDirection.Row, caret, card},
-                CreatePanel: (input PopoverInput, bounds ElementRect, content Blob) -> Container{},
+                ConfigurePanel: (input, bounds, content, panel) -> {
+                    panel.Padding = 0
+                    panel.BackgroundColor = Color.Transparent
+                    panel.BorderWidth = 0
+                    panel.BorderRadius = 0
+                    panel.BoxShadow = BoxShadow{}
+                },
                 Role: AccessibilityRole.Dialog,
                 AccessibilityName: ui.Strings.Get("node"),
                 OnDismiss: reason -> {

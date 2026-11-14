@@ -177,7 +177,7 @@ class ObserverLens : Cell[ObserverLensInput] {
             "lens",
             AppTheme.Dialog with{
                 Open = true,
-                CreateRoot = (dialog, backdrop, panel) -> DialogRoot(ui),
+                ConfigureRoot = (dialog, backdrop, panel, root) -> ConfigureDialogRoot(root),
                 AccessibilityName = ui.Strings.Get("sent"),
                 Width = Math.Min(input.Width - 40, 780),
                 Header = Container{

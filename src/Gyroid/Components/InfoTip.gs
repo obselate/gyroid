@@ -58,7 +58,10 @@ class InfoTip : Cell[InfoTipInput] {
                     Padding: AppTheme.Space14,
                     BackgroundColor: AppTheme.Raised,
                     BorderColor: AppTheme.Edge,
-                    CreatePanel: (value, bounds, content) -> Container{BasedOn: AppTheme.InformationCardStyle,},
+                    ConfigurePanel: (value, bounds, content, panel) -> {
+                        panel.BasedOn = AppTheme.InformationCardStyle
+                        panel.BoxShadow = BoxShadow{}
+                    },
                     Content: lines,
                     AccessibilityName: ui.Strings.Get(input.Topic),
                     OnDismiss: reason -> {

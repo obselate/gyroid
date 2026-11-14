@@ -105,7 +105,7 @@ class WalletParts {
                 BorderRadius = dialog.BorderRadius ?? AppTheme.Dialog.BorderRadius,
                 Padding = dialog.Padding ?? AppTheme.Dialog.Padding,
                 Gap = dialog.Gap ?? AppTheme.Dialog.Gap,
-                CreateRoot = (dialog, backdrop, panel) -> DialogRoot(ui)
+                ConfigureRoot = (dialog, backdrop, panel, root) -> ConfigureDialogRoot(root)
             }
         )
 
