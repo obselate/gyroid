@@ -719,8 +719,8 @@ partial class App : Cell, IDisposable {
     }
 
     private func Resize(owner Window) {
-        width = owner.Size.Width / owner.UiScale
-        height = owner.Size.Height / owner.UiScale
+        width = owner.NativeWidth / owner.UiScale
+        height = owner.NativeHeight / owner.UiScale
     }
 
     func UpdateScale() {
