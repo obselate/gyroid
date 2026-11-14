@@ -60,7 +60,7 @@ data struct SendEditorInput {
     var Maximum Action
 }
 
-class SendPage : Cell, IDisposable {
+class SendPage : Cell[SendPageInput], IDisposable {
     private var input SendPageInput
     private var estimate SendEstimate?
     private var sent SendEstimate?
@@ -79,11 +79,34 @@ class SendPage : Cell, IDisposable {
     private let remove Action[SendRow]
     private let maximum Action
     private let add Action
-    private var total SendTotal?
-    private var actions SendActions?
-    private let configureTotal Action[SendTotal]
-    private let configureActions Action[SendActions]
-    private let configureReview Action[SendReview]
+
+    private func ReadTotalInput() SendTotalInput -> SendTotalInput{
+        Display: input.Display,
+        Amount: model.Total,
+        Over: model.Over
+    }
+
+    private func ReadActionsInput() SendActionsInput {
+        let next = ActionsInput()
+        reviewFocus = false
+        return next
+    }
+
+    private func ReadReviewInput() SendReviewInput -> SendReviewInput{
+        Display: input.Display,
+        Estimate: estimate!!,
+        Rows: reviewRows,
+        Spendable: input.Spendable ?? uint64(0),
+        Submit: () -> Submit(),
+        Close: () -> {
+            if input.Display.Busy {
+                return
+            }
+            estimate = nil
+            reviewFocus = true
+            Rebuild()
+        }
+    }
     private let editorKey Func[SendEditorInput, string]
     private let editorBuilder Func[SendEditorInput, Blob]
 
@@ -91,7 +114,7 @@ class SendPage : Cell, IDisposable {
         changed = row -> {
             Restart()
             SendService.PrepareDraft(row, input.Display.Contacts, input.Display.Network)
-            Refresh(false)
+            Refresh()
         }
         submit = () -> Review()
         remove = row -> {
@@ -105,37 +128,11 @@ class SendPage : Cell, IDisposable {
             Restart()
             Refresh()
         }
-        configureTotal = child -> {
-            total = child
-            child.Accept(SendTotalInput{Display: input.Display, Amount: model.Total, Over: model.Over})
-        }
-        configureActions = child -> {
-            actions = child
-            child.Accept(ActionsInput())
-            reviewFocus = false
-        }
         editorKey = row -> row.Row.Id
-        configureReview = child -> child.Accept(
-            SendReviewInput{
-                Display: input.Display,
-                Estimate: estimate!!,
-                Rows: reviewRows,
-                Spendable: input.Spendable ?? uint64(0),
-                Submit: () -> Submit(),
-                Close: () -> {
-                    if input.Display.Busy {
-                        return
-                    }
-                    estimate = nil
-                    reviewFocus = true
-                    Rebuild()
-                }
-            }
-        )
         editorBuilder = row -> Cell.Mount[SendEditorInput, SendRecipientEditor](row.Row.Id, row)
     }
 
-    public func Accept(next SendPageInput) {
+    protected override func InputChanged(next SendPageInput) {
         if (next with{Sends = sent == nil ? input.Sends: next.Sends}) == input {
             return
         }
@@ -165,7 +162,7 @@ class SendPage : Cell, IDisposable {
         issue = ""
     }
 
-    private func Refresh(rebuild bool = true) {
+    private func Refresh() {
         let display = input.Display with{Busy = input.Display.Busy || reading}
         let spendable = input.Spendable ?? uint64(0)
         model.Refresh(input.Rows, spendable, display.Busy || reading)
@@ -192,14 +189,7 @@ class SendPage : Cell, IDisposable {
         if !editorRows.SequenceEqual(rows) {
             editorRows = rows
         }
-        if rebuild {
-            Rebuild()
-        } else {
-            actions?.Accept(ActionsInput())
-            if input.Rows.Count > 1 {
-                total?.Accept(SendTotalInput{Display: display, Amount: model.Total, Over: model.Over})
-            }
-        }
+        Rebuild()
     }
 
     private func ActionsInput() SendActionsInput -> SendActionsInput{
@@ -247,7 +237,7 @@ class SendPage : Cell, IDisposable {
         )
         if multi {
             card.Height = Percent(100)
-            card.Add(Cell.Mount[SendTotal]("amount-total", configureTotal))
+            card.Add(Cell.Mount[SendTotalInput, SendTotal]("amount-total", ReadTotalInput()))
             let list = VirtualRows(
                 editorRows,
                 AppTheme.ControlRegular + AppTheme.Space8,
@@ -263,7 +253,7 @@ class SendPage : Cell, IDisposable {
         } else {
             card.Add(editorBuilder(editorRows[0]))
         }
-        card.Add(Cell.Mount[SendActions]("actions", configureActions))
+        card.Add(Cell.Mount[SendActionsInput, SendActions]("actions", ReadActionsInput()))
         if let shown = sent, let outcome = result {
             card.Add(
                 Cell.Mount[SendTraceInput, SendTrace](
@@ -286,7 +276,7 @@ class SendPage : Cell, IDisposable {
             )
         }
         if estimate != nil {
-            card.Add(Cell.Mount[SendReview]("review", configureReview))
+            card.Add(Cell.Mount[SendReviewInput, SendReview]("review", ReadReviewInput()))
         }
         return card
     }
@@ -357,7 +347,7 @@ class SendPage : Cell, IDisposable {
         } catch (error Exception) {
             problem = error.Message
         }
-        window?.TryPost(
+        window?.Post(
             () -> {
                 if !Current(id, session, network, wallet) {
                     return
@@ -407,7 +397,7 @@ class SendPage : Cell, IDisposable {
         } catch (error Exception) {
             problem = error.Message
         }
-        window?.TryPost(
+        window?.Post(
             () -> {
                 if !Current(id, session, network, wallet) {
                     return
@@ -445,7 +435,7 @@ class SendPage : Cell, IDisposable {
             .Run(
             async (ct) -> {
                 let outcome = await session.Send.SubmitAsync(pending, ct)
-                window?.TryPost(
+                window?.Post(
                     () -> {
                         if session.Settings.Network != network || session.Settings.ActiveWallet != wallet {
                             return
@@ -739,7 +729,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
                     Password: input.Privacy,
                     Disabled: input.Busy,
                     Invalid: issue.Length > 0,
-                    IssueText: if issue.Length > 0 {
+                    Error: if issue.Length > 0 {
                         ui.Strings.Explain(issue)
                     } else {
                         nil
@@ -791,9 +781,10 @@ class SendRecipientEditor : Cell[SendEditorInput] {
                     Placement: PopoverPlacement.BottomStart,
                     Gap: AppTheme.Space6,
                     Width: Math.Max(240.0, anchor.BorderBox.Width),
-                    CreatePanel: (value, bounds, content) -> Container{
-                        BasedOn: AppTheme.TooltipStyle,
-                        Padding: AppTheme.Space6
+                    ConfigurePanel: (value, bounds, content, panel) -> {
+                        panel.BasedOn = AppTheme.TooltipStyle
+                        panel.Padding = AppTheme.Space6
+                        panel.BoxShadow = BoxShadow{}
                     },
                     TakeFocus: false,
                     Content: ListParts.Viewport(list, grow: false),
@@ -819,8 +810,8 @@ class SendRecipientEditor : Cell[SendEditorInput] {
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
             BorderRadius: AppTheme.Radius8,
             BorderWidth: AppTheme.Border0,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: suggestion.Name},
             OnClick: () -> {
                 row.Address = suggestion.Name
@@ -859,7 +850,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
                 Password: input.Privacy,
                 Disabled: input.Busy,
                 Invalid: issue.Length > 0,
-                IssueText: if issue.Length > 0 {
+                Error: if issue.Length > 0 {
                     ui.Strings.Explain(issue)
                 } else {
                     nil
@@ -896,10 +887,10 @@ data struct SendTotalInput {
     var Over bool
 }
 
-class SendTotal : Cell {
+class SendTotal : Cell[SendTotalInput] {
     private var current SendTotalInput
 
-    public func Accept(input SendTotalInput) {
+    protected override func InputChanged(input SendTotalInput) {
         if current == input {
             return
         }
@@ -933,10 +924,10 @@ data struct SendActionsInput {
     var Add Action
 }
 
-class SendActions : Cell {
+class SendActions : Cell[SendActionsInput] {
     private var current SendActionsInput
 
-    public func Accept(input SendActionsInput) {
+    protected override func InputChanged(input SendActionsInput) {
         if current == input {
             return
         }
@@ -1106,7 +1097,7 @@ data struct SendReviewItem {
     var Expanded bool
 }
 
-class SendReview : Cell {
+class SendReview : Cell[SendReviewInput] {
     private var current SendReviewInput
     private var openRow string = ""
     private var shown[]SendReviewItem = []SendReviewItem{}
@@ -1119,7 +1110,7 @@ class SendReview : Cell {
         rowBuilder = row -> Recipient(row)
     }
 
-    public func Accept(input SendReviewInput) {
+    protected override func InputChanged(input SendReviewInput) {
         if current == input {
             return
         }
@@ -1259,7 +1250,9 @@ class SendReview : Cell {
                 ConfirmDisabled: input.Busy,
                 OnConfirm: value.Submit,
                 OnCancel: close,
-                OnClose: close
+                OnOpenChange: isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }
@@ -1317,8 +1310,8 @@ class SendReview : Cell {
             BorderRadius: expanded ? AppTheme.Radius8: AppTheme.Radius0,
             BackgroundColor: expanded ? AppTheme.Raised: Color.Transparent,
             BorderColor: AppTheme.Rule,
-            Hover: Style{BackgroundColor: AppTheme.Raised},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Raised},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get("Recipient") + " " + (index + 1).ToString(),

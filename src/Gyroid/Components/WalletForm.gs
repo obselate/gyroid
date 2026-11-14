@@ -102,7 +102,7 @@ class WalletForm {
         Controlled = true,
         Password = secret,
         RevealButton = secret,
-        IssueText = issue.Length > 0 ? ui.Strings.Explain(issue): nil,
+        Error = issue.Length > 0 ? ui.Strings.Explain(issue): nil,
         Invalid = issue.Length > 0,
         Disabled = disabled,
         Width = Percent(100),

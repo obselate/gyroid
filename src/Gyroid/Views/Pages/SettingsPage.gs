@@ -152,15 +152,12 @@ class SettingsRegionState {
     let Advanced SettingsAdvancedState = SettingsAdvancedState()
 }
 
-class SettingsPage : Cell, IDisposable {
+class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private var state SettingsCompositionInput
-    private var generalOwner SettingsGeneral?
-    private var walletOwner SettingsWallet?
     private var current SettingsPageInput
     private var dialogs SettingsDialogs?
     private var advancedOwner SettingsAdvanced?
     private var nodeOwner SettingsNode?
-    private var miningOwner SettingsMining?
     private var mountedSection string = ""
     private var generation int32
     private var issue string = ""
@@ -169,62 +166,65 @@ class SettingsPage : Cell, IDisposable {
     private let openDialog Action[string]
     private let openPurge Action[string, string, int32]
     private let refreshNodeData Action
-    private let configureGeneral Action[SettingsGeneral]
-    private let configureNode Action[SettingsNode]
-    private let configureMining Action[SettingsMining]
-    private let configureWallet Action[SettingsWallet]
-    private let configureAdvanced Action[SettingsAdvanced]
-    private let configureDialogs Action[SettingsDialogs]
+
+    private func ReadGeneralInput() SettingsGeneralContext -> SettingsGeneralContext{
+        Input: current,
+        SavePreference: savePreference
+    }
+    private let createNode Func[SettingsNode]
+
+    private func ReadNodeInput() SettingsNodeContext -> SettingsNodeContext{Input: current, Draft: startupDraft}
+
+    private func ReadMiningInput() SettingsPageInput -> current
+
+    private func ReadWalletInput() SettingsWalletContext -> SettingsWalletContext{
+        Input: current,
+        ShowDialog: openDialog
+    }
+    private let createAdvanced Func[SettingsAdvanced]
+
+    private func ReadAdvancedInput() SettingsAdvancedContext -> SettingsAdvancedContext{
+        Input: current,
+        OpenPurge: openPurge,
+        Data: startupDraft.Advanced
+    }
+    private let createDialogs Func[SettingsDialogs]
+
+    private func ReadDialogsInput() SettingsPageInput -> current
 
     init() {
         openDialog = kind -> dialogs?.Open(kind)
         refreshNodeData = RefreshNodeData
         savePreference = SavePreference
         openPurge = (size, unit, wallets) -> dialogs?.OpenPurge(size, unit, wallets, refreshNodeData)
-        configureGeneral = region -> {
-            generalOwner = region
-            region.Accept(current, savePreference)
-        }
-        configureNode = region -> {
+        createNode = () -> {
+            let region = SettingsNode()
             nodeOwner = region
-            region.Accept(current, startupDraft)
+            return region
         }
-        configureMining = region -> {
-            miningOwner = region
-            region.Accept(current)
-        }
-        configureWallet = region -> {
-            walletOwner = region
-            region.Accept(current, openDialog)
-        }
-        configureAdvanced = region -> {
+        createAdvanced = () -> {
+            let region = SettingsAdvanced()
             advancedOwner = region
-            region.Accept(current, openPurge, startupDraft.Advanced)
+            return region
         }
-        configureDialogs = region -> {
+        createDialogs = () -> {
+            let region = SettingsDialogs()
             dialogs = region
-            region.Accept(current)
+            return region
         }
     }
 
-    func Accept(input SettingsPageInput) {
+    protected override func InputChanged(input SettingsPageInput) {
         let section = input.Section == "wallet" && input.Snapshot.State != WalletState.Unlocked ?
         "general": input.Section
         if section != mountedSection {
             mountedSection = section
-            generalOwner = nil
+
             nodeOwner = nil
-            miningOwner = nil
-            walletOwner = nil
+
             advancedOwner = nil
         }
         current = input with{Settings = input.Session.Settings}
-        generalOwner?.Accept(current, savePreference)
-        nodeOwner?.Accept(current, startupDraft)
-        miningOwner?.Accept(current)
-        walletOwner?.Accept(current, openDialog)
-        advancedOwner?.Accept(current, openPurge, startupDraft.Advanced)
-        dialogs?.Accept(current)
         let next = SettingsCompositionInput{
             Section: input.Section,
             Available: input.Available,
@@ -335,12 +335,16 @@ class SettingsPage : Cell, IDisposable {
         }
         pane.Add(
             switch section {
-                case "general": Cell.Mount[SettingsGeneral]("general", configureGeneral)
+                case "general": Cell.Mount[SettingsGeneralContext, SettingsGeneral]("general", ReadGeneralInput())
                 case "security": Security(current)
-                case "node": Cell.Mount[SettingsNode]("node", configureNode)
-                case "mining": Cell.Mount[SettingsMining]("mining", configureMining)
-                case "wallet": Cell.Mount[SettingsWallet]("wallet", configureWallet)
-                default: Cell.Mount[SettingsAdvanced]("advanced", configureAdvanced)
+                case "node": Cell.Mount[SettingsNodeContext, SettingsNode]("node", ReadNodeInput(), createNode)
+                case "mining": Cell.Mount[SettingsPageInput, SettingsMining]("mining", ReadMiningInput())
+                case "wallet": Cell.Mount[SettingsWalletContext, SettingsWallet]("wallet", ReadWalletInput())
+                default: Cell.Mount[SettingsAdvancedContext, SettingsAdvanced](
+                    "advanced",
+                    ReadAdvancedInput(),
+                    createAdvanced
+                )
             }
         )
         if issue.Length > 0 {
@@ -359,7 +363,7 @@ class SettingsPage : Cell, IDisposable {
         if state.Height > 640 {
             root.Height = Math.Clamp(state.Height * 0.65, 480.0, 740.0)
         }
-        root.Add(Cell.Mount[SettingsDialogs]("settings-dialogs", configureDialogs))
+        root.Add(Cell.Mount[SettingsPageInput, SettingsDialogs]("settings-dialogs", ReadDialogsInput(), createDialogs))
         return root
     }
 
@@ -393,7 +397,7 @@ class SettingsPage : Cell, IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if generation != request {
                     return
@@ -496,13 +500,20 @@ class SettingsPage : Cell, IDisposable {
     }
 }
 
-class SettingsGeneral : Cell {
+data struct SettingsGeneralContext {
+    var Input SettingsPageInput
+    var SavePreference Action[Func[CancellationToken, Task]]
+}
+
+class SettingsGeneral : Cell[SettingsGeneralContext] {
     private var state SettingsGeneralInput
     private var context SettingsPageInput
     private var rowHeight float64
     private var savePreference Action[Func[CancellationToken, Task]]
 
-    func Accept(input SettingsPageInput, savePreference Action[Func[CancellationToken, Task]]) {
+    protected override func InputChanged(value SettingsGeneralContext) {
+        let input = value.Input
+        let savePreference = value.SavePreference
         context = input
         this.savePreference = savePreference
         let settings = input.Settings
@@ -631,28 +642,27 @@ class SettingsGeneral : Cell {
     }
 }
 
-class SettingsNode : Cell, IDisposable {
+data struct SettingsNodeContext {
+    var Input SettingsPageInput
+    var Draft SettingsRegionState
+}
+
+class SettingsNode : Cell[SettingsNodeContext], IDisposable {
     private var state SettingsNodeInput
     private var context SettingsPageInput
     private var rowHeight float64
     private var draft SettingsRegionState
-    private var startupOwner SettingsStartup?
     private var directoryRead string = ""
     private var directoryExists bool
     private var generation int32
-    private let configureStartup Action[SettingsStartup]
 
-    init() {
-        configureStartup = region -> {
-            startupOwner = region
-            region.Accept(context, draft)
-        }
-    }
+    private func ReadStartupInput() SettingsStartupContext -> SettingsStartupContext{Input: context, Draft: draft}
 
-    func Accept(input SettingsPageInput, draft SettingsRegionState) {
+    protected override func InputChanged(value SettingsNodeContext) {
+        let input = value.Input
+        let draft = value.Draft
         context = input
         this.draft = draft
-        startupOwner?.Accept(input, draft)
         rowHeight = RowHeight(input.Height)
         let settings = input.Settings
         let status = input.Node
@@ -699,7 +709,7 @@ class SettingsNode : Cell, IDisposable {
         try {
             exists = session.SettingsDirectoryExists(path)
         } catch (failure Exception) { }
-        owner?.TryPost(
+        owner?.Post(
             () -> {
                 if request == generation && directoryExists != exists {
                     directoryExists = exists
@@ -845,7 +855,7 @@ class SettingsNode : Cell, IDisposable {
             FlexShrink: 0,
             BorderWidth: Edges{Top: AppTheme.Border1, Bottom: AppTheme.Border0},
             BorderColor: AppTheme.FaintRule,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get("startup"),
@@ -864,7 +874,7 @@ class SettingsNode : Cell, IDisposable {
         let startupPane = Container{
             Display: draft.Open ? Display.Flex: Display.None,
             MinHeight: 0,
-            Cell.Mount[SettingsStartup]("startup", configureStartup)
+            Cell.Mount[SettingsStartupContext, SettingsStartup]("startup", ReadStartupInput())
         }
         content.Add(startup)
         content.Add(startupPane)
@@ -879,7 +889,12 @@ class SettingsNode : Cell, IDisposable {
     }
 }
 
-class SettingsStartup : Cell, IDisposable {
+data struct SettingsStartupContext {
+    var Input SettingsPageInput
+    var Draft SettingsRegionState
+}
+
+class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
     private var state SettingsStartupInput
     private var context SettingsPageInput
     private var draft SettingsRegionState
@@ -890,7 +905,9 @@ class SettingsStartup : Cell, IDisposable {
     private var applying bool
     private var validating bool
 
-    func Accept(input SettingsPageInput, draft SettingsRegionState) {
+    protected override func InputChanged(value SettingsStartupContext) {
+        let input = value.Input
+        let draft = value.Draft
         context = input
         this.draft = draft
         let settings = input.Settings
@@ -1093,7 +1110,7 @@ class SettingsStartup : Cell, IDisposable {
                     try {
                         await input.Session.ApplySettingsAsync(next, ct)
                     } finally {
-                        owner.TryPost(
+                        owner.Post(
                             () -> {
                                 applying = false
                                 validated = nil
@@ -1134,7 +1151,7 @@ class SettingsStartup : Cell, IDisposable {
         } catch (failure Exception) {
             issue = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 guard let edited = draft.Value else {
                     return
@@ -1202,13 +1219,20 @@ class SettingsStartup : Cell, IDisposable {
                 ConfirmDisabled = state.Busy,
                 OnConfirm = () -> SaveSettings(input),
                 OnCancel = close,
-                OnClose = close
+                OnOpenChange = isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }
 }
 
-class SettingsWallet : Cell, IDisposable {
+data struct SettingsWalletContext {
+    var Input SettingsPageInput
+    var ShowDialog Action[string]
+}
+
+class SettingsWallet : Cell[SettingsWalletContext], IDisposable {
     private var state SettingsWalletInput
     private var context SettingsPageInput
     private var rowHeight float64
@@ -1217,7 +1241,9 @@ class SettingsWallet : Cell, IDisposable {
     private var generation int32
     private var showDialog Action[string]
 
-    func Accept(input SettingsPageInput, showDialog Action[string]) {
+    protected override func InputChanged(value SettingsWalletContext) {
+        let input = value.Input
+        let showDialog = value.ShowDialog
         context = input
         this.showDialog = showDialog
         if state.Wallet != input.Settings.ActiveWallet {
@@ -1277,7 +1303,7 @@ class SettingsWallet : Cell, IDisposable {
             }
             error = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != generation {
                     return
@@ -1430,7 +1456,13 @@ class SettingsAdvancedState {
     var certificate ChainCertificate?
 }
 
-class SettingsAdvanced : Cell, IDisposable {
+data struct SettingsAdvancedContext {
+    var Input SettingsPageInput
+    var OpenPurge Action[string, string, int32]
+    var Data SettingsAdvancedState
+}
+
+class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
     private var data SettingsAdvancedState
     private var context SettingsPageInput
     private var openPurge Action[string, string, int32]
@@ -1440,7 +1472,10 @@ class SettingsAdvanced : Cell, IDisposable {
     private var certifyGeneration int32
     private var certifying bool
 
-    func Accept(input SettingsPageInput, openPurge Action[string, string, int32], data SettingsAdvancedState) {
+    protected override func InputChanged(value SettingsAdvancedContext) {
+        let input = value.Input
+        let openPurge = value.OpenPurge
+        let data = value.Data
         this.data = data
         context = input
         this.openPurge = openPurge
@@ -1529,7 +1564,7 @@ class SettingsAdvanced : Cell, IDisposable {
 
     func Refresh() {
         data.chainLoaded = false
-        Accept(context, openPurge, data)
+        InputChanged(SettingsAdvancedContext{Input: context, OpenPurge: openPurge, Data: data})
     }
 
     private func Advanced(input SettingsPageInput, pane Container) {
@@ -1879,7 +1914,7 @@ class SettingsAdvanced : Cell, IDisposable {
             }
             issue = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != checkpointGeneration {
                     return
@@ -1917,7 +1952,7 @@ class SettingsAdvanced : Cell, IDisposable {
         } catch (failure Exception) {
             issue = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request == certifyGeneration {
                     certifying = false
@@ -1987,7 +2022,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 "0.0",
                 CultureInfo.InvariantCulture
             )
-            owner?.TryPost(
+            owner?.Post(
                 () -> {
                     if request != generation {
                         return
@@ -2006,7 +2041,7 @@ class SettingsAdvanced : Cell, IDisposable {
             )
         } catch (cancelled OperationCanceledException) { } catch (failure Exception) {
             let issue = failure.Message
-            owner?.TryPost(
+            owner?.Post(
                 () -> {
                     if request == generation {
                         data.loadIssue = issue
@@ -2021,7 +2056,7 @@ class SettingsAdvanced : Cell, IDisposable {
     ui.Strings.Get(count == 1 ? "{0} violation": "{0} violations").Replace("{0}", count.ToString())
 }
 
-class SettingsDialogs : Cell, IDisposable {
+class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
     private var state SettingsDialogInput
     private var context SettingsPageInput
     private var kind string = ""
@@ -2050,7 +2085,7 @@ class SettingsDialogs : Cell, IDisposable {
         close = Close
     }
 
-    func Accept(input SettingsPageInput) {
+    protected override func InputChanged(input SettingsPageInput) {
         context = input
         if state.Wallet != input
             .Settings
@@ -2219,7 +2254,7 @@ class SettingsDialogs : Cell, IDisposable {
             Array.Clear(password)
         }
         let cleanup = token.Register(() -> Array.Clear(words))
-        if !owner.TryPost(
+        if !owner.Post(
             () -> {
                 cleanup.Dispose()
                 if request != generation || session.Settings.ActiveWallet != wallet {
@@ -2263,7 +2298,7 @@ class SettingsDialogs : Cell, IDisposable {
         }
         let keys = result
         let cancellation = token.Register(() -> keys?.Dispose())
-        if !owner.TryPost(
+        if !owner.Post(
             () -> {
                 cancellation.Dispose()
                 if request != generation ||
@@ -2409,7 +2444,7 @@ class SettingsDialogs : Cell, IDisposable {
         } finally {
             keys.Dispose()
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != generation {
                     return
@@ -2715,7 +2750,7 @@ class SettingsDialogs : Cell, IDisposable {
             Array.Clear(current)
             Array.Clear(secret)
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != generation ||
                     context
@@ -2907,7 +2942,7 @@ class SettingsDialogs : Cell, IDisposable {
             }
             error = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != generation ||
                     context
@@ -2969,10 +3004,10 @@ class SettingsParts {
         func Toggle(input SettingsPageInput, label string, on bool, changed Action, disabled bool = false) Blob ->
         (
             AppTheme.Switch with{
-                Checked = on,
+                Value = on,
                 Disabled = disabled,
                 AccessibilityName = input.Ui.Strings.Get(label),
-                OnClick = changed
+                OnChange = _ -> changed()
             }
         ).Build()
 

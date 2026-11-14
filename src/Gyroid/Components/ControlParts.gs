@@ -45,19 +45,18 @@ class ControlParts {
                     Items: items,
                     SelectedIds: []string{selected},
                     AccessibilityName: ui.Strings.Get(label),
-                    CreateRoot: (_, root) -> {
+                    ConfigureRoot: (_, root) -> {
                         root.BasedOn = AppTheme.SegmentGroupStyle
                         root.FlexShrink = 0
-                        return root
                     },
-                    CreateItem: (_, item, button) -> {
+                    ConfigureItem: (_, item, button) -> {
                         let active = item.Id == selected
                         button.BasedOn = AppTheme.SegmentStyle
                         button.Height = AppTheme.ControlCompact
                         button.MinHeight = AppTheme.ControlCompact
                         button.BackgroundColor = active ? AppTheme.Rule: Color.Transparent
-                        button.Hover = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
-                        button.Focus = Theme.Read().FocusStyle
+                        button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
+                        button.FocusStyle = Theme.Read().FocusStyle
                         button.BorderWidth = AppTheme.Border0
                         button.BoxShadow = BoxShadow{}
                         button.Opacity = item.Disabled ? 0.4: 1.0
@@ -65,9 +64,8 @@ class ControlParts {
                         button.Add(
                             Label(ui, item.Label ?? item.Id, AppTheme.Type12, active ? AppTheme.Ink: AppTheme.Body, "")
                         )
-                        return button
                     },
-                    OnChange: values -> {
+                    OnSelectionChange: values -> {
                         if values.Length > 0 && values[0] != selected {
                             chosen(values[0])
                         }
@@ -97,21 +95,17 @@ class ControlParts {
                 Height = size,
                 DisabledOpacity = 1,
                 RootStyle = style ?? AppTheme.IconButtonStyle,
-                CreateRoot = (value, content) -> Goo
-                    .Button{
-                    BasedOn: style ?? AppTheme.IconButtonStyle,
-                    Width: size,
-                    Height: size,
-                    FlexShrink: 0,
-                    AlignItems: AlignItems.Center,
-                    JustifyContent: JustifyContent.Center,
-                    Disabled: value.Disabled,
-                    OnClick: value.OnClick,
-                    Hover: Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule},
-                    BorderColor: active ? AppTheme.Lime: AppTheme.Edge,
-                    Focus: Theme.Read().FocusStyle,
-                    Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
-                    content
+                ConfigureRoot = (value, content, button) -> {
+                    button.BasedOn = style ?? AppTheme.IconButtonStyle
+                    button.Width = size
+                    button.Height = size
+                    button.FlexShrink = 0
+                    button.AlignItems = AlignItems.Center
+                    button.JustifyContent = JustifyContent.Center
+                    button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
+                    button.BorderColor = active ? AppTheme.Lime: AppTheme.Edge
+                    button.FocusStyle = Theme.Read().FocusStyle
+                    button.Accessibility = Accessibility{Expanded: expanded}
                 }
             }
         ).Build()
@@ -132,21 +126,19 @@ class ControlParts {
                 SelectedId: selected,
                 AccessibilityName: ui.Strings.Get(label),
                 ItemHeight: AppTheme.ControlCompact,
-                CreateRoot: (_, root) -> {
+                ConfigureRoot: (_, root) -> {
                     root.FlexShrink = 1
                     root.MinWidth = 0
-                    return root
                 },
-                CreateItem: (bar TabBarInput, item NavigationItem, button Button) -> {
+                ConfigureItem: (bar TabBarInput, item NavigationItem, button Button) -> {
                     button.BasedOn = item.Id == bar.SelectedId ? AppTheme.SelectedTabStyle: AppTheme.TabStyle
-                    button.Focus = Theme.Read().FocusStyle
+                    button.FocusStyle = Theme.Read().FocusStyle
                     button.Overflow = Overflow.Hidden
                     if equalWidth {
                         button.FlexGrow = 1
                         button.FlexBasis = 0
                         button.MinWidth = 0
                     }
-                    return button
                 },
                 OnSelect: chosen
             }
@@ -272,8 +264,7 @@ class ControlParts {
                     Height: size,
                     Path: track.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: thickness,
-                    BorderColor: trackColor
+                    Stroke: VectorStroke(thickness, VectorPaint(trackColor))
                 },
                 Shape{
                     Position: PositionType.Absolute,
@@ -281,8 +272,7 @@ class ControlParts {
                     Height: size,
                     Path: arc.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: thickness,
-                    BorderColor: share > 0 ? color: Color.Transparent
+                    Stroke: VectorStroke(thickness, VectorPaint(share > 0 ? color: Color.Transparent))
                 }
             }
         }

@@ -17,8 +17,10 @@ partial class App {
     private var messageOverlay MessageOverlay?
     private var messagesWallet string = ""
     private var messagesAddress string = ""
-    private let configureMessages Action[MessagesPage]
-    private let configureMessageOverlay Action[MessageOverlay]
+    private func ReadMessagesInput() MessagesInput -> MessagesPageInput()
+    private let createMessageOverlay Func[MessageOverlay]
+
+    private func ReadMessageOverlayInput() MessagesOverlayInput -> MessageOverlayInput()
     private let openMessages Action
     private let closeMessageDrawer Action
     private let reloadMessageContacts Action
@@ -74,7 +76,7 @@ partial class App {
         }
     }
 
-    private func MessagesView() Blob -> Cell.Mount[MessagesPage]("messages", configureMessages)
+    private func MessagesView() Blob -> Cell.Mount[MessagesInput, MessagesPage]("messages", ReadMessagesInput())
 }
 
 data struct MessagesOverlayInput {
@@ -83,22 +85,20 @@ data struct MessagesOverlayInput {
     var Width float64
 }
 
-class MessageOverlay : Cell, IDisposable {
+class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
     private var input MessagesOverlayInput
     private let observed HashSet[string] = HashSet[string](StringComparer.Ordinal)
     private var toast Conversation?
     private var drawer bool
     private var timer WindowTimer?
     private var disposed bool
-    private let configureDrawer Action[MessagesPage]
+    private func ReadDrawerInput() MessagesInput -> MessagesInput{
+        ... input.Messages,
+        Width: Math.Min(480.0, input.Width - 112),
+        Drawer: true
+    }
 
     prop IsDrawerOpen bool -> drawer
-
-    init() {
-        configureDrawer = child -> child.Accept(
-            MessagesInput{... input.Messages, Width: Math.Min(480.0, input.Width - 112), Drawer: true}
-        )
-    }
 
     func Dispose() {
         disposed = true
@@ -119,7 +119,7 @@ class MessageOverlay : Cell, IDisposable {
         }
     }
 
-    func Accept(next MessagesOverlayInput) {
+    protected override func InputChanged(next MessagesOverlayInput) {
         if disposed || next == input {
             return
         }
@@ -187,7 +187,7 @@ class MessageOverlay : Cell, IDisposable {
                 Bottom: 20,
                 Width: Math.Min(480.0, input.Width - 112),
                 ZIndex: 20,
-                Cell.Mount[MessagesPage]("message-drawer", configureDrawer)
+                Cell.Mount[MessagesInput, MessagesPage]("message-drawer", ReadDrawerInput())
             }
         }
         let conversation = toast
@@ -206,7 +206,7 @@ class MessageOverlay : Cell, IDisposable {
                 Gap: AppTheme.Space6,
                 MinWidth: 0,
                 AlignItems: AlignItems.Stretch,
-                Focus: Theme.Read().FocusStyle,
+                FocusStyle: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Button,
                     Name: ui.Strings.Get("Reply") + " " + Hidden(ui.Privacy, conversation.Title)

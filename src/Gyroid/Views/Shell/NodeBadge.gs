@@ -100,8 +100,8 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
             BorderColor: nodeOpen ? AppTheme.Edge: AppTheme.Rule,
             BackgroundColor: nodeOpen ? AppTheme.Rule: AppTheme.Black.WithAlpha(0.35),
             Overflow: Overflow.Hidden,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get("node") + " " + height + ", " + detail,
@@ -258,8 +258,8 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
             Padding: Edges{Left: AppTheme.Space14, Right: AppTheme.Space10},
             BorderColor: AppTheme.Lime,
             BackgroundColor: AppTheme.Raised,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Network")},
             OnClick: () -> {
                 nodeOpen = false
@@ -296,7 +296,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 Height: 18,
                 Path: fill,
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Raised
+                Fill: VectorPaint(AppTheme.Raised)
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -305,8 +305,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 Height: 18,
                 Path: edge,
                 Fit: ShapeFit.Fill,
-                BorderWidth: AppTheme.Border1,
-                BorderColor: AppTheme.Edge
+                Stroke: VectorStroke(AppTheme.Border1, VectorPaint(AppTheme.Edge))
             }
         }
         return Cell.Mount[PopoverInput, Popover](
@@ -321,7 +320,13 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 ViewportMargin: 0,
                 Viewport: ElementRect{X: 0, Y: 52, Width: width, Height: Math.Max(1.0, center - 8)},
                 Content: Container{FlexDirection: FlexDirection.Row, caret, card},
-                CreatePanel: (input PopoverInput, bounds ElementRect, content Blob) -> Container{},
+                ConfigurePanel: (input, bounds, content, panel) -> {
+                    panel.Padding = 0
+                    panel.BackgroundColor = Color.Transparent
+                    panel.BorderWidth = 0
+                    panel.BorderRadius = 0
+                    panel.BoxShadow = BoxShadow{}
+                },
                 Role: AccessibilityRole.Dialog,
                 AccessibilityName: ui.Strings.Get("node"),
                 OnDismiss: reason -> {
@@ -409,7 +414,9 @@ partial class App {
                 },
                 Footer = ActionRow([]Blob{Button(ui, "Close", close)}),
                 OnCancel = close,
-                OnClose = close
+                OnOpenChange = isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }

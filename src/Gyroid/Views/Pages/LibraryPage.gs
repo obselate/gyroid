@@ -37,7 +37,7 @@ data struct LibraryInput {
     var OnBackup Action[[]char]
 }
 
-class LibraryPage : Cell, IDisposable {
+class LibraryPage : Cell[LibraryInput], IDisposable {
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var request CancellationTokenSource?
     private var generation int32
@@ -48,7 +48,7 @@ class LibraryPage : Cell, IDisposable {
     private var importPath string = ""
     private let start Action[string]
     private let back Action
-    private let configureList Action[LibraryList]
+    private let readListInput Func[LibraryListInput]
 
     init() {
         start = kind -> {
@@ -59,31 +59,30 @@ class LibraryPage : Cell, IDisposable {
             form = ""
             Rebuild()
         }
-        configureList = cell -> cell.Accept(
-            LibraryListInput{
-                Session: input.Session,
-                Ui: input.Ui,
-                State: input.State,
-                ActiveWallet: input.ActiveWallet,
-                Directory: input.Directory,
-                Network: input.Network,
-                Busy: input.Busy,
-                Language: input.Language,
-                Wallets: wallets,
-                Issue: issue,
-                ChooseFile: input.ChooseFile,
-                OnNavigate: input.OnNavigate,
-                OnBackup: input.OnBackup,
-                OnStart: start,
-                OnImport: path -> {
-                    importPath = path
-                    start("File")
-                }
+        readListInput = () ->
+        LibraryListInput{
+            Session: input.Session,
+            Ui: input.Ui,
+            State: input.State,
+            ActiveWallet: input.ActiveWallet,
+            Directory: input.Directory,
+            Network: input.Network,
+            Busy: input.Busy,
+            Language: input.Language,
+            Wallets: wallets,
+            Issue: issue,
+            ChooseFile: input.ChooseFile,
+            OnNavigate: input.OnNavigate,
+            OnBackup: input.OnBackup,
+            OnStart: start,
+            OnImport: path -> {
+                importPath = path
+                start("File")
             }
-        )
+        }
     }
 
-    func Accept(next LibraryInput) {
+    protected override func InputChanged(next LibraryInput) {
         if EqualityComparer[LibraryInput].Default.Equals(input, next) {
             return
         }
@@ -130,7 +129,7 @@ class LibraryPage : Cell, IDisposable {
         try {
             let result = library.ListWallets(directory, token)
             let rows = result.Rows.SequenceEqual(previous) ? previous: result.Rows
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     if id != generation || directory != input.Directory || network != input.Network {
                         return
@@ -195,7 +194,7 @@ class LibraryPage : Cell, IDisposable {
                 )
             )
         } else {
-            card.Add(Cell.Mount[LibraryList]("list", configureList))
+            card.Add(Cell.Mount[LibraryListInput, LibraryList]("list", readListInput()))
         }
         return card
     }
@@ -226,7 +225,7 @@ data struct LibraryListInput {
     var OnImport Action[string]
 }
 
-class LibraryList : Cell, IDisposable {
+class LibraryList : Cell[LibraryListInput], IDisposable {
     private var input LibraryListInput
     private var generation int32
     private var opened string?
@@ -238,11 +237,13 @@ class LibraryList : Cell, IDisposable {
 
     init() {
         rowKey = row -> row.Filename
-        rowBuilder = row -> Cell.Mount[LibraryWalletRow](
+        rowBuilder = row -> Cell.Mount[LibraryWalletRowInput, LibraryWalletRow](
             row.Filename,
-            cell -> {
-                cell.Accept(this, row)
+            LibraryWalletRowInput{Owner: this, Wallet: row},
+            () -> {
+                let cell = LibraryWalletRow()
                 realized.Add(cell)
+                return cell
             }
         )
     }
@@ -258,7 +259,7 @@ class LibraryList : Cell, IDisposable {
         Rebuild()
     }
 
-    func Accept(next LibraryListInput) {
+    protected override func InputChanged(next LibraryListInput) {
         if EqualityComparer[LibraryListInput].Default.Equals(input, next) {
             return
         }
@@ -371,8 +372,8 @@ class LibraryList : Cell, IDisposable {
             BorderColor: input.Busy ? AppTheme.Edge: primary ? AppTheme.Lime: AppTheme.Rule,
             BackgroundColor: input.Busy ? AppTheme.Raised: AppTheme.Surface,
             Disabled: input.Busy,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
             MaterialIcons.Create(icon, AppTheme.Icon20, input.Busy ? AppTheme.Dim: AppTheme.Lime),
@@ -406,7 +407,7 @@ class LibraryList : Cell, IDisposable {
             Height: 48,
             BorderWidth: AppTheme.Border0,
             Disabled: input.Busy,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
             OnClick: () -> {
                 if input.Busy {
@@ -631,11 +632,18 @@ class LibraryList : Cell, IDisposable {
     }
 }
 
-class LibraryWalletRow : Cell, IDisposable {
+data struct LibraryWalletRowInput {
+    var Owner LibraryList
+    var Wallet LibraryWallet
+}
+
+class LibraryWalletRow : Cell[LibraryWalletRowInput], IDisposable {
     var Owner LibraryList
     var Wallet LibraryWallet
 
-    func Accept(owner LibraryList, wallet LibraryWallet) {
+    protected override func InputChanged(input LibraryWalletRowInput) {
+        let owner = input.Owner
+        let wallet = input.Wallet
         if Owner == owner && Wallet.Equals(wallet) {
             return
         }
@@ -728,8 +736,8 @@ class LibraryMenu : Cell[LibraryMenuInput] {
             JustifyContent: JustifyContent.FlexStart,
             Gap: AppTheme.Space10,
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.MenuItem, Name: ui.Strings.Get(label)},
             OnClick: click,
             MaterialIcons.Create(icon, AppTheme.Icon16, AppTheme.Lime),

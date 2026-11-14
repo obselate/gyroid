@@ -105,7 +105,7 @@ data struct OverviewUpgradeInput {
     var OnUpgrade Action
 }
 
-class OverviewPage : Cell, IDisposable {
+class OverviewPage : Cell[OverviewInput], IDisposable {
     private var current OverviewInput
     private var arrivalSource IReadOnlyList[WalletOutput]? = nil
     private var changeSource IReadOnlyList[WalletOutput]? = nil
@@ -124,11 +124,13 @@ class OverviewPage : Cell, IDisposable {
     private var disposed bool
     private var networkInput OverviewNetworkInput
     private var recentInput OverviewRecentInput
-    private let configureNetwork Action[OverviewNetwork]
-    private let configureRecent Action[OverviewRecent]
+    private func ReadNetworkInput() OverviewNetworkInput -> networkInput
+
+    private func ReadRecentInput() OverviewRecentInput -> recentInput
     private var hovering bool
     private let hover Action[bool]
-    public func Accept(input OverviewInput) {
+
+    protected override func InputChanged(input OverviewInput) {
         let nextArrivals = input.Session.History.Outputs
         let nextChanges = input.Session.History.ChangeOutputs
         let chain = input.Snapshot.Balance?.ChainHeight ?? input.Node.Height
@@ -174,8 +176,6 @@ class OverviewPage : Cell, IDisposable {
     }
 
     init() {
-        configureNetwork = cell -> cell.Accept(networkInput)
-        configureRecent = cell -> cell.Accept(recentInput)
         hover = value -> if hovering != value {
             hovering = value
             Rebuild()
@@ -278,10 +278,10 @@ class OverviewPage : Cell, IDisposable {
                         ConfirmingBlocks: confirmingBlocks
                     }
                 ),
-                Cell.Mount[OverviewNetwork]("network", configureNetwork)
+                Cell.Mount[OverviewNetworkInput, OverviewNetwork]("network", ReadNetworkInput())
             }
         )
-        page.Add(Cell.Mount[OverviewRecent]("recent", configureRecent))
+        page.Add(Cell.Mount[OverviewRecentInput, OverviewRecent]("recent", ReadRecentInput()))
         return page
     }
 
@@ -411,7 +411,7 @@ class OverviewPage : Cell, IDisposable {
                 let nextRows = preparedRows.SequenceEqual(previous) ? previous: preparedRows.ToArray()
                 let issueText = failure
                 previous = nextRows
-                window.TryPost(
+                window.Post(
                     () -> {
                         if id != generation ||
                             (
@@ -434,7 +434,7 @@ class OverviewPage : Cell, IDisposable {
             }
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let message = input.Ui.Strings.Explain(error.Message)
-            window.TryPost(
+            window.Post(
                 () -> if id == generation {
                     issue = message
                     Rebuild()
@@ -509,7 +509,7 @@ class OverviewParts {
                 FlexShrink: 0,
                 BorderRadius: AppTheme.Radius3,
                 BackgroundColor: Color.Transparent,
-                Focus: Theme.Read().FocusStyle,
+                FocusStyle: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get(label)},
                 OnClick: action,
                 Label(ui, ui.Strings.Get(label) + " ›", AppTheme.Type12, AppTheme.Lime, "")
@@ -656,7 +656,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                     BorderColor: peeking ? AppTheme.Lime: AppTheme.Edge,
                     BackgroundColor: peeking ? AppTheme.LimeQuiet: Color.Transparent,
                     Focusable: true,
-                    Focus: Theme.Read().FocusStyle,
+                    FocusStyle: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Show amounts")},
                     OnKeyDown: (event KeyEvent) -> if !peeking && (event.Key == Key.Space || event.Key == Key.Enter) {
                         peeking = true
@@ -904,7 +904,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
     )
 }
 
-class OverviewNetwork : Cell, IDisposable {
+class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
     private var source OverviewNetworkInput
     private var hashrate float64
     private var difficulty uint64
@@ -929,7 +929,7 @@ class OverviewNetwork : Cell, IDisposable {
         }
     }
 
-    func Accept(next OverviewNetworkInput) {
+    protected override func InputChanged(next OverviewNetworkInput) {
         if source == next {
             Read()
             return
@@ -987,7 +987,7 @@ class OverviewNetwork : Cell, IDisposable {
         try {
             result = await session.ReadNetworkSummaryAsync(token)
         } catch (error Exception) { }
-        window.TryPost(
+        window.Post(
             () -> if id == generation {
                 request?.Dispose()
                 request = nil
@@ -1091,7 +1091,7 @@ class OverviewNetwork : Cell, IDisposable {
     }
 }
 
-class OverviewRecent : Cell {
+class OverviewRecent : Cell[OverviewRecentInput] {
     private var source OverviewRecentInput
     private var expanded string = ""
     private var rows[]OverviewRow = []OverviewRow{}
@@ -1103,7 +1103,7 @@ class OverviewRecent : Cell {
         rowBuilder = row -> row.IsArrival ? Arrive(source, row): Activity(source, row.Activity)
     }
 
-    func Accept(next OverviewRecentInput) {
+    protected override func InputChanged(next OverviewRecentInput) {
         if source.Equals(next) {
             return
         }
@@ -1177,7 +1177,7 @@ class OverviewRecent : Cell {
             Padding: Edges{Top: AppTheme.Space12, Bottom: AppTheme.Space12},
             FlexShrink: 0,
             BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: Hidden(input.Privacy, SafeText(item.Source, 512)) + " " + Wait(input.Ui, item.Blocks),

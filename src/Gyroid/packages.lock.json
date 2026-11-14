@@ -4,9 +4,9 @@
     "net10.0": {
       "Goo": {
         "type": "Direct",
-        "requested": "[0.28.4, 0.28.4]",
-        "resolved": "0.28.4",
-        "contentHash": "hxjSuMOLzvBZfUrQfDwoEpnZJZUd+wlzQSArXMegifcjYU6wLUjJgEE8Z3sPh7ZWOmn8rC3OdP4tBo2hlTxy7A==",
+        "requested": "[0.31.0, 0.31.0]",
+        "resolved": "0.31.0",
+        "contentHash": "5fcur7zUXtflLEbrX6KEx8LyD1cXIllspxN29YaIjbaYKcETkMzR5sjrjiN7bwpYwpQZ/HeCPAdqvX0L6up/ZA==",
         "dependencies": {
           "Hexa.NET.SDL3": "1.2.17",
           "Tmds.DBus.Protocol": "0.95.2",
@@ -15,17 +15,17 @@
       },
       "Goo.Accessibility": {
         "type": "Direct",
-        "requested": "[0.28.4, 0.28.4]",
-        "resolved": "0.28.4",
-        "contentHash": "lML8dMHolX4A3l2+4gEGmaqjakEW7SDKwyzhZqZoMQdxP1sxdqX0brYmJciNWGvuHnm63uik5Z6eGDXM020hJg=="
+        "requested": "[0.31.0, 0.31.0]",
+        "resolved": "0.31.0",
+        "contentHash": "ZF3v4SAEXwveYq2GbeOCrQYkHfmjkTDGAEF+RnzjCOktKfiMx/Fk27Y4nRiESm1SAfNtXQcS6Q/6aHJPxJQu1A=="
       },
       "Goo.Widgets": {
         "type": "Direct",
-        "requested": "[0.18.2, 0.18.2]",
-        "resolved": "0.18.2",
-        "contentHash": "s3gVE8Bs6jL1bS+N/H+h28Px3+eVg57cwT/mqdor2kTwtAtG/OUDBTaIB497xByzN1v1RAT7NOGjBPW8OxJSew==",
+        "requested": "[0.22.0, 0.22.0]",
+        "resolved": "0.22.0",
+        "contentHash": "46GBrMmi3fbRQ+cxVN72ZnxqkmzDqm7Ti8nKhY3cBigMzX9zMfF4yi9er4CeX16ke5A32juR7tylETNkBCp1Lw==",
         "dependencies": {
-          "Goo": "0.24.2"
+          "Goo": "0.31.0"
         }
       },
       "Microsoft.DotNet.ILCompiler": {
@@ -87,9 +87,9 @@
     "net10.0/linux-x64": {
       "Goo": {
         "type": "Direct",
-        "requested": "[0.28.4, 0.28.4]",
-        "resolved": "0.28.4",
-        "contentHash": "hxjSuMOLzvBZfUrQfDwoEpnZJZUd+wlzQSArXMegifcjYU6wLUjJgEE8Z3sPh7ZWOmn8rC3OdP4tBo2hlTxy7A==",
+        "requested": "[0.31.0, 0.31.0]",
+        "resolved": "0.31.0",
+        "contentHash": "5fcur7zUXtflLEbrX6KEx8LyD1cXIllspxN29YaIjbaYKcETkMzR5sjrjiN7bwpYwpQZ/HeCPAdqvX0L6up/ZA==",
         "dependencies": {
           "Hexa.NET.SDL3": "1.2.17",
           "Tmds.DBus.Protocol": "0.95.2",
@@ -98,9 +98,9 @@
       },
       "Goo.Accessibility": {
         "type": "Direct",
-        "requested": "[0.28.4, 0.28.4]",
-        "resolved": "0.28.4",
-        "contentHash": "lML8dMHolX4A3l2+4gEGmaqjakEW7SDKwyzhZqZoMQdxP1sxdqX0brYmJciNWGvuHnm63uik5Z6eGDXM020hJg=="
+        "requested": "[0.31.0, 0.31.0]",
+        "resolved": "0.31.0",
+        "contentHash": "ZF3v4SAEXwveYq2GbeOCrQYkHfmjkTDGAEF+RnzjCOktKfiMx/Fk27Y4nRiESm1SAfNtXQcS6Q/6aHJPxJQu1A=="
       },
       "Microsoft.DotNet.ILCompiler": {
         "type": "Direct",

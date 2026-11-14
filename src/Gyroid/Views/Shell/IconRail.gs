@@ -11,28 +11,28 @@ import System
 import System.Linq
 
 partial class App {
-    private func RailItem(input NavigationRailInput, item NavigationItem) Goo.Button {
+    private func ConfigureRailItem(input NavigationRailInput, item NavigationItem, button Goo.Button) {
         let selected = item.Id == input.SelectedId
         let color = item.Disabled ? AppTheme.Dim: selected ? AppTheme.Lime: AppTheme.Body
-        let button = Goo
-            .Button{
-            Width: 60,
-            Height: input.ItemHeight,
-            FlexShrink: 1,
-            FlexDirection: FlexDirection.Column,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center,
-            Gap: AppTheme.Space4,
-            BorderRadius: AppTheme.Radius10,
-            BackgroundColor: selected ? AppTheme.LimeQuiet: Color.Transparent,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle
-        }
+        button.Width = 60
+        button.Height = input.ItemHeight!!
+        button.Padding = AppTheme.Space0
+        button.BorderWidth = AppTheme.Border0
+        button.TransitionMs = 0
+        button.FlexShrink = 1
+        button.FlexDirection = FlexDirection.Column
+        button.AlignItems = AlignItems.Center
+        button.JustifyContent = JustifyContent.Center
+        button.Gap = AppTheme.Space4
+        button.BorderRadius = AppTheme.Radius10
+        button.BackgroundColor = selected ? AppTheme.LimeQuiet: Color.Transparent
+        button.HoverStyle = Style{BackgroundColor: AppTheme.Rule}
+        button.FocusStyle = Theme.Read().FocusStyle
+        button.Children.Clear()
         if let icon = item.Content {
             button.Add(icon)
         }
         button.Add(Label(ui, item.Label ?? "", AppTheme.Type11, color, ""))
-        return button
     }
 
     private func Sidebar(page AppPage) Blob {
@@ -95,7 +95,7 @@ partial class App {
                 AccessibilityName: ui.Strings.Get("Navigation"),
                 ActiveMarker: false,
                 ItemHeight: compact ? 44: 48,
-                CreateItem: RailItem,
+                ConfigureItem: ConfigureRailItem,
                 OnSelect: id -> {
                     if id == "lock" {
                         Lock()

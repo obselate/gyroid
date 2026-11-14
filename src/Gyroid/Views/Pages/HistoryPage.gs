@@ -104,7 +104,7 @@ data struct HistoryExportInput {
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
 }
 
-class HistoryPage : Cell, IDisposable {
+class HistoryPage : Cell[HistoryInput], IDisposable {
     private var current HistoryInput
     private var disposed bool
     private var identity HistoryIdentity
@@ -154,9 +154,13 @@ class HistoryPage : Cell, IDisposable {
     private var listInput HistoryListInput
     private var exportInput HistoryExportInput
     private var ribbon HistoryRibbon?
-    private let configureRibbon Action[HistoryRibbon]
-    private let configureList Action[HistoryTransactions]
-    private let configureExport Action[HistoryExport]
+    private let createRibbon Func[HistoryRibbon]
+
+    private func ReadRibbonInput() HistoryRibbonInput -> ribbonInput
+
+    private func ReadListInput() HistoryListInput -> listInput
+
+    private func ReadExportInput() HistoryExportInput -> exportInput
     private let selectRange Action[uint64, uint64]
     private let markRow Action[uint64]
     private let requestTimes Action[IEnumerable[uint64]]
@@ -173,12 +177,11 @@ class HistoryPage : Cell, IDisposable {
                 PrepareRows()
             }
         }
-        configureRibbon = cell -> {
+        createRibbon = () -> {
+            let cell = HistoryRibbon()
             ribbon = cell
-            cell.Accept(ribbonInput)
+            return cell
         }
-        configureList = cell -> cell.Accept(listInput)
-        configureExport = cell -> cell.Accept(exportInput)
         selectRange = (start, end) -> {
             if from == start && to == end {
                 return
@@ -208,7 +211,7 @@ class HistoryPage : Cell, IDisposable {
         }
     }
 
-    public func Accept(input HistoryInput) {
+    protected override func InputChanged(input HistoryInput) {
         let next = SourceIdentity(input.Session)
         let nextSource = ReadSource(input.Session)
         if disposed || (current.Equals(input) && next.Equals(identity) && nextSource.Equals(source)) {
@@ -372,7 +375,7 @@ class HistoryPage : Cell, IDisposable {
     ) {
         try {
             let result = history.Prepare(request, ct)
-            window.TryPost(
+            window.Post(
                 () -> {
                     if generation != preparationGeneration || !Active(id) {
                         return
@@ -391,7 +394,7 @@ class HistoryPage : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let issue = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if generation == preparationGeneration && Active(id) {
                         paginationIssue = issue
@@ -491,7 +494,7 @@ class HistoryPage : Cell, IDisposable {
             Collect: collectExport,
             ChooseFile: input.ChooseFile
         }
-        bar.Add(Cell.Mount[HistoryExport]("history-export", configureExport))
+        bar.Add(Cell.Mount[HistoryExportInput, HistoryExport]("history-export", ReadExportInput()))
         panel.Add(bar)
         ribbonInput = HistoryRibbonInput{
             Data: prepared.Ribbon,
@@ -510,7 +513,7 @@ class HistoryPage : Cell, IDisposable {
             OnSelect: selectRange,
             RequestTimes: requestTimes
         }
-        panel.Add(Cell.Mount[HistoryRibbon]("history-ribbon", configureRibbon))
+        panel.Add(Cell.Mount[HistoryRibbonInput, HistoryRibbon]("history-ribbon", ReadRibbonInput(), createRibbon))
         if paginationIssue.Length > 0 {
             panel.Add(MessageParts.Problem(ui, paginationIssue))
         }
@@ -545,7 +548,7 @@ class HistoryPage : Cell, IDisposable {
             RequestTimes: requestTimes,
             LoadMore: loadMore
         }
-        panel.Add(Cell.Mount[HistoryTransactions]("history-list", configureList))
+        panel.Add(Cell.Mount[HistoryListInput, HistoryTransactions]("history-list", ReadListInput()))
         return panel
     }
 
@@ -654,7 +657,7 @@ class HistoryPage : Cell, IDisposable {
         for entry in fetched {
             merged[entry.Key] = entry.Value
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if !Active(id) || generation != timesGeneration {
                     return
@@ -707,7 +710,7 @@ class HistoryPage : Cell, IDisposable {
         } catch (error OperationCanceledException) { } catch (error Exception) {
             issue = error.Message
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if !Active(id) || generation != paginationGeneration {
                     return
@@ -737,7 +740,7 @@ class HistoryPage : Cell, IDisposable {
         } catch (error OperationCanceledException) { } catch (error Exception) {
             failed = true
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if !Active(id) || generation != periodGeneration {
                     return
@@ -764,20 +767,27 @@ class HistoryPage : Cell, IDisposable {
     }
 }
 
-class HistoryRibbon : Cell {
+class HistoryRibbon : Cell[HistoryRibbonInput] {
     private var current HistoryRibbonInput
     private var days float64
     private let marks List[uint64] = List[uint64]()
     private var hoverCell HistoryRibbonHover?
     private var plotHeight float64
-    private let configureHover Action[HistoryRibbonHover]
+    private let createHover Func[HistoryRibbonHover]
+
+    private func ReadHoverInput() HistoryRibbonHoverInput -> HistoryRibbonHoverInput{
+        Input: current,
+        Width: plotWidth,
+        Height: plotHeight
+    }
     private var plotWidth float64
     private let plot ElementHandle = ElementHandle()
 
     init() {
-        configureHover = cell -> {
+        createHover = () -> {
+            let cell = HistoryRibbonHover()
             hoverCell = cell
-            cell.Accept(current, plotWidth, plotHeight)
+            return cell
         }
         plot.MetricsChanged += metrics -> {
             if metrics.IsMounted && metrics.BorderBox.Width != plotWidth {
@@ -788,7 +798,7 @@ class HistoryRibbon : Cell {
         }
     }
 
-    public func Accept(input HistoryRibbonInput) {
+    protected override func InputChanged(input HistoryRibbonInput) {
         if current.Equals(input) {
             return
         }
@@ -857,7 +867,7 @@ class HistoryRibbon : Cell {
                 Height: height,
                 Path: up.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Mint
+                Fill: VectorPaint(AppTheme.Mint)
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -865,7 +875,7 @@ class HistoryRibbon : Cell {
                 Height: height,
                 Path: coin.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Lime
+                Fill: VectorPaint(AppTheme.Lime)
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -873,7 +883,7 @@ class HistoryRibbon : Cell {
                 Height: height,
                 Path: down.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Pink
+                Fill: VectorPaint(AppTheme.Pink)
             }
         }
         if to > 0 {
@@ -884,7 +894,13 @@ class HistoryRibbon : Cell {
             area.Add(Handle(left, height))
             area.Add(Handle(right, height))
         }
-        area.Add(Cell.Mount[HistoryRibbonHover]("history-ribbon-hover", configureHover))
+        area.Add(
+            Cell.Mount[HistoryRibbonHoverInput, HistoryRibbonHover](
+                "history-ribbon-hover",
+                ReadHoverInput(),
+                createHover
+            )
+        )
         let axis = Container{
             Height: 18,
             FlexShrink: 0,
@@ -973,7 +989,13 @@ class HistoryRibbon : Cell {
     }
 }
 
-class HistoryRibbonHover : Cell {
+data struct HistoryRibbonHoverInput {
+    var Input HistoryRibbonInput
+    var Width float64
+    var Height float64
+}
+
+class HistoryRibbonHover : Cell[HistoryRibbonHoverInput] {
     private var current HistoryRibbonInput
     private var plotWidth float64
     private var plotHeight float64
@@ -982,7 +1004,10 @@ class HistoryRibbonHover : Cell {
     private var hover int32 = -1
     private var marked uint64
 
-    public func Accept(input HistoryRibbonInput, width float64, height float64) {
+    protected override func InputChanged(value HistoryRibbonHoverInput) {
+        let input = value.Input
+        let width = value.Width
+        let height = value.Height
         if current.Equals(input) && plotWidth == width && plotHeight == height {
             return
         }
@@ -1018,7 +1043,7 @@ class HistoryRibbonHover : Cell {
             Height: plotHeight,
             Focusable: true,
             Accessibility: Accessibility{Name: input.Ui.Strings.Get("block range")},
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             OnPointerDown: (event PointerEvent) -> {
                 event.Capture()
                 dragging = true
@@ -1143,7 +1168,7 @@ class HistoryRibbonHover : Cell {
         .ToString("MM-dd HH:mm", CultureInfo.InvariantCulture)
 }
 
-class HistoryTransactions : Cell, IDisposable {
+class HistoryTransactions : Cell[HistoryListInput], IDisposable {
     private var current HistoryListInput
     private var expanded string = ""
     private var tab string = "details"
@@ -1207,7 +1232,7 @@ class HistoryTransactions : Cell, IDisposable {
         }
     }
 
-    public func Accept(input HistoryListInput) {
+    protected override func InputChanged(input HistoryListInput) {
         if current.Equals(input) {
             return
         }
@@ -1245,12 +1270,12 @@ class HistoryTransactions : Cell, IDisposable {
         RefreshRows()
         if selected.Length > 0 {
             selectionTimer?.Dispose()
-            selectionTimer = input.Window?.SetTimeout(
+            selectionTimer = input.Window?.After(
+                1,
                 () -> {
                     selectionTimer = nil
                     list.ScrollToItem(selected)
-                },
-                1
+                }
             )
         }
     }
@@ -1409,8 +1434,8 @@ class HistoryTransactions : Cell, IDisposable {
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
             BorderColor: row.Open ? Color.Transparent: AppTheme.Rule,
             BackgroundColor: row.Open ? AppTheme.Raised: Color.Transparent,
-            Hover: Style{BackgroundColor: AppTheme.Raised},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Raised},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get(
@@ -1578,7 +1603,7 @@ class HistoryTransactions : Cell, IDisposable {
                                     .ToArray(),
                                 SelectedIds: []string{proofRecipient.ToString()},
                                 AccessibilityName: ui.Strings.Get("recipient"),
-                                OnChange: ids -> {
+                                OnSelectionChange: ids -> {
                                     if ids.Length > 0 {
                                         proofRecipient = Int32.Parse(ids[0], CultureInfo.InvariantCulture)
                                         Prove(row)
@@ -1763,8 +1788,8 @@ class HistoryTransactions : Cell, IDisposable {
                 Padding: AppTheme.Space8,
                 BorderRadius: AppTheme.Radius6,
                 BackgroundColor: AppTheme.Rule,
-                Hover: Style{BackgroundColor: AppTheme.Edge},
-                Focus: Theme.Read().FocusStyle,
+                HoverStyle: Style{BackgroundColor: AppTheme.Edge},
+                FocusStyle: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: preview},
                 OnClick: () -> current.OnMessage(row.TxId),
                 label
@@ -1882,7 +1907,7 @@ class HistoryTransactions : Cell, IDisposable {
         try {
             let key = await proofs.ProveAsync(transaction, ct)
             let valid = await proofs.VerifyProofAsync(transaction, key, recipient, amount, ct)
-            window.TryPost(
+            window.Post(
                 () -> {
                     if !Active(id) || generation != proofGeneration {
                         return
@@ -1895,7 +1920,7 @@ class HistoryTransactions : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let issue = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if !Active(id) || generation != proofGeneration {
                         return
@@ -1965,7 +1990,7 @@ class HistoryTransactions : Cell, IDisposable {
     ) {
         try {
             let result = await checks.ObserveAsync(transaction, ct)
-            window.TryPost(
+            window.Post(
                 () -> {
                     if selected != observeGeneration || !Active(id) {
                         return
@@ -1977,7 +2002,7 @@ class HistoryTransactions : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let issue = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if selected != observeGeneration || !Active(id) {
                         return
@@ -1995,7 +2020,7 @@ class HistoryTransactionRow : Cell[Blob] {
     protected override func Build(input Blob) Blob -> input
 }
 
-class HistoryExport : Cell, IDisposable {
+class HistoryExport : Cell[HistoryExportInput], IDisposable {
     private var current HistoryExportInput
     private var exporting bool
     private var exportRows int32
@@ -2006,7 +2031,7 @@ class HistoryExport : Cell, IDisposable {
     private var issue string = ""
     private var writing bool
 
-    public func Accept(input HistoryExportInput) {
+    protected override func InputChanged(input HistoryExportInput) {
         if current.Equals(input) {
             return
         }
@@ -2085,7 +2110,7 @@ class HistoryExport : Cell, IDisposable {
             },
             (
                 AppTheme.Checkbox with{
-                    State = memos ? AccessibilityChecked.True: AccessibilityChecked.False,
+                    Value = memos ? AccessibilityChecked.True: AccessibilityChecked.False,
                     Label = ui.Strings.Get("memos"),
                     LabelFontSize = AppTheme.Type12,
                     OnChange = state -> {
@@ -2186,7 +2211,7 @@ class HistoryExport : Cell, IDisposable {
             failure = error.Message
         }
         let result = failure
-        input.Window?.TryPost(
+        input.Window?.Post(
             () -> {
                 if run == generation {
                     writing = false

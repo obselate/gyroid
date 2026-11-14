@@ -43,7 +43,7 @@ class ContactDraft {
     public var Issue string = ""
 }
 
-class ContactsPage : Cell, IDisposable {
+class ContactsPage : Cell[ContactsInput], IDisposable {
     private var current ContactsInput
     private var rows[]ContactRow = []ContactRow{}
     private var draft ContactDraft = ContactDraft{}
@@ -59,7 +59,7 @@ class ContactsPage : Cell, IDisposable {
         rowBuilder = row -> Row(row)
     }
 
-    public func Accept(input ContactsInput) {
+    protected override func InputChanged(input ContactsInput) {
         if disposed || current.Equals(input) {
             return
         }
@@ -100,7 +100,7 @@ class ContactsPage : Cell, IDisposable {
                 )
             }
             let result = prepared.SequenceEqual(previous) ? previous: prepared.ToArray()
-            window.TryPost(
+            window.Post(
                 () -> {
                     if id == generation {
                         rows = result
@@ -111,7 +111,7 @@ class ContactsPage : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let message = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if id == generation {
                         issue = message
@@ -320,7 +320,9 @@ class ContactsPage : Cell, IDisposable {
                     )
                 },
                 OnCancel = close,
-                OnClose = close
+                OnOpenChange = isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }

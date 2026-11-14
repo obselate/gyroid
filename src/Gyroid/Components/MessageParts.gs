@@ -182,7 +182,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             BorderColor: invalid ? AppTheme.Pink: AppTheme.Blue,
             BackgroundColor: message.Outgoing ? AppTheme.Lime: AppTheme.Rule,
             Gap: AppTheme.Space4,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: content + " " + time + " " + ui.Strings.Get(verification)
@@ -242,7 +242,7 @@ data struct MessageComposerInput {
     var OnSend Action[string]
 }
 
-class MessageComposer : Cell, IDisposable {
+class MessageComposer : Cell[MessageComposerInput], IDisposable {
     private let arrow Anim[Point]
     private let fill Anim[float64]
     private var ready bool
@@ -253,7 +253,7 @@ class MessageComposer : Cell, IDisposable {
     private var input MessageComposerInput
     private var estimate MessageEstimate = MessageEstimate()
 
-    func Accept(next MessageComposerInput) {
+    protected override func InputChanged(next MessageComposerInput) {
         if next == input {
             return
         }
@@ -379,12 +379,12 @@ class MessageComposer : Cell, IDisposable {
                         Width: Percent(100),
                         Height: rows * 19.0 + 14,
                         MinimumRows: 1,
-                        MinimumHeight: 33,
+                        MinHeight: 33,
                         FontSize: AppTheme.Type13,
                         FontFamily: AppTheme.Font,
                         BackgroundColor: AppTheme.Black,
                         TextColor: AppTheme.Ink,
-                        CreateEditor: (value, editor) -> {
+                        ConfigureEditor: (value, editor) -> {
                             editor.BorderWidth = AppTheme.Border0
                             editor.Padding = Edges{
                                 Left: AppTheme.Space8,
@@ -393,10 +393,9 @@ class MessageComposer : Cell, IDisposable {
                                 Bottom: AppTheme.Space8
                             }
                             editor.KeyBindings = []KeyBinding{
-                                KeyBinding{Key: Key.Enter, Action: send},
-                                KeyBinding{Key: Key.KeypadEnter, Action: send}
+                                KeyBinding{Key: Key.Enter, OnPress: send},
+                                KeyBinding{Key: Key.KeypadEnter, OnPress: send}
                             }
-                            return editor
                         }
                     }
                 )
@@ -410,7 +409,7 @@ class MessageComposer : Cell, IDisposable {
             Overflow: Overflow.Hidden,
             BackgroundColor: AppTheme.Rule,
             Disabled: !enabled || sending,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Send message")},
             OnClick: send,
             Container{

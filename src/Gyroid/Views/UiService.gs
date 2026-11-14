@@ -85,7 +85,7 @@ class UiService : IDisposable {
             let chosen = await pending.WaitAsync(ct)
             if chosen.Status == FileDialogStatus.Success && chosen.Paths.Count > 0 {
                 let path = chosen.Paths[0]
-                transferred = host.TryPost(
+                transferred = host.Post(
                     () -> Run(token -> CompleteSaveWrite(host, path, write, finished, token), secret: secret)
                 )
                 return
@@ -103,7 +103,7 @@ class UiService : IDisposable {
             }
         }
         let result = message
-        host.TryPost(() -> finished(result))
+        host.Post(() -> finished(result))
     }
 
     private async func CompleteSaveWrite(
@@ -120,10 +120,10 @@ class UiService : IDisposable {
             message = failure.Message
         }
         let result = message
-        host.TryPost(() -> finished(result))
+        host.Post(() -> finished(result))
     }
 
-    func Delay(ms float64, action Action) WindowTimer? -> window?.SetTimeout(action, ms)
+    func Delay(ms float64, action Action) WindowTimer? -> window?.After(ms, action)
 
     private var clipboardTimer WindowTimer?
     var ClipboardText[]char = []char{}
@@ -189,7 +189,7 @@ class UiService : IDisposable {
         }
         if let completion = releaseTask {
             readingClipboard = true
-            let pending = host.ReadClipboardDataAsync([]string{"application/x-gyroid-clipboard-owner"})
+            let pending = host.Clipboard.ReadDataAsync([]string{"application/x-gyroid-clipboard-owner"})
             Background(ct -> CompleteRelease(host, pending, completion))
         } else if !disposed {
             if let request = pendingCopy {
@@ -197,7 +197,7 @@ class UiService : IDisposable {
                 activeCopy = request
                 copyGeneration++
                 let generation = copyGeneration
-                let pending = host.WriteClipboardAsync(request.Data)
+                let pending = host.Clipboard.WriteAsync(request.Data)
                 Background(ct -> CompleteCopy(host, pending, request, generation))
             }
         }
@@ -213,7 +213,7 @@ class UiService : IDisposable {
         try {
             succeeded = (await pending.WaitAsync(host.Closed)).Status == DataTransferStatus.Success
         } catch (failure Exception) { }
-        if !host.TryPost(
+        if !host.Post(
             () -> {
                 activeCopy = nil
                 if succeeded && !disposed {
@@ -225,11 +225,11 @@ class UiService : IDisposable {
                         request.Text = []char{}
                         request.Bytes = []uint8{}
                         let owner = ClipboardOwner
-                        clipboardTimer = host.SetTimeout(
+                        clipboardTimer = host.After(
+                            request.ClearAfterMs,
                             () -> {
                                 ReleaseClipboard(owner)
-                            },
-                            request.ClearAfterMs
+                            }
                         )
                     }
                     ClipboardChanged?.Invoke()
@@ -307,13 +307,13 @@ class UiService : IDisposable {
         try {
             result = await pending.WaitAsync(host.Closed)
         } catch (failure Exception) { }
-        if !host.TryPost(
+        if !host.Post(
             () -> {
                 try {
                     if let current = result {
                         for item in current.Data.Representations {
                             if releaseOwners.Any(marker -> item.Bytes.Span.SequenceEqual(marker.Span)) {
-                                host.SetClipboardText("")
+                                host.Clipboard.WriteText("")
                                 break
                             }
                         }

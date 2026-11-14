@@ -60,14 +60,14 @@ class LayoutParts {
             return blob
         }
 
-        func DialogRoot(ui Presentation) Container -> Container{
-            Position: PositionType.Absolute,
-            Left: 0,
-            Right: 0,
-            Top: 0,
-            Bottom: 0,
-            AlignItems: AlignItems.Center,
-            JustifyContent: JustifyContent.Center
+        func ConfigureDialogRoot(root Container) {
+            root.Position = PositionType.Absolute
+            root.Left = 0
+            root.Right = 0
+            root.Top = 0
+            root.Bottom = 0
+            root.AlignItems = AlignItems.Center
+            root.JustifyContent = JustifyContent.Center
         }
 
         func ActionRow(children[]Blob) Blob {
@@ -133,7 +133,7 @@ class LayoutParts {
                         Height: 8,
                         Path: dashes.Build(),
                         Fit: ShapeFit.Fill,
-                        BackgroundColor: AppTheme.Orange
+                        Fill: VectorPaint(AppTheme.Orange)
                     }
                 )
             }
@@ -157,7 +157,7 @@ class LayoutParts {
                         Height: 8,
                         Path: stripes.Build(),
                         Fit: ShapeFit.Fill,
-                        BackgroundColor: AppTheme.Pink
+                        Fill: VectorPaint(AppTheme.Pink)
                     }
                 }
             )

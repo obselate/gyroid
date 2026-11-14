@@ -56,9 +56,9 @@ class NetworkParts {
                             Height: 1,
                             Path: PathBuilder(0, 0, inner, 1).MoveTo(0, 0.5).LineTo(inner, 0.5).Build(),
                             Fit: ShapeFit.Fill,
-                            BorderWidth: AppTheme.Border1,
-                            BorderColor: AppTheme.Dim,
-                            Dashes: DashPattern([]float64{4, 3}, 0)
+                            Stroke: VectorStroke(AppTheme.Border1, VectorPaint(AppTheme.Dim)){
+                                .Dashes: DashPattern([]float64{4, 3}, 0)
+                            }
                         }
                     )
                 } else {

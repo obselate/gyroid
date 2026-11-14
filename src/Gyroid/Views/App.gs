@@ -57,20 +57,130 @@ data struct AppSource {
 
 partial class App : Cell, IDisposable {
     private let sendDone Action
-    private let configureHistory Action[HistoryPage]
-    private let configureOverview Action[OverviewPage]
+    private func ReadHistoryInput() HistoryInput {
+        let snapshot = wallet.Snapshot
+        return HistoryInput{
+            Session: wallet,
+            Ui: ui,
+            Snapshot: snapshot,
+            Window: window,
+            Tip: wallet
+                .Node
+                .Status
+                .Running ? wallet
+                .Node
+                .Status
+                .Height: snapshot
+                .Balance
+                ?.ChainHeight ??
+                wallet
+                .Node
+                .Status
+                .Height,
+            Privacy: ui.Privacy,
+            Language: ui.Strings.Language,
+            Width: width,
+            OnReceive: openReceive,
+            OnMessage: OpenMessage,
+            ChooseFile: chooseFile,
+            SelectionTx: historySelection,
+            SelectionRevision: historySelectionRevision
+        }
+    }
+
+    private func ReadOverviewInput() OverviewInput -> OverviewInput{
+        Ui: ui,
+        Session: wallet,
+        Window: window,
+        Snapshot: wallet.Snapshot,
+        Node: wallet.Node.Status,
+        Contacts: contacts,
+        Privacy: ui.Privacy,
+        Height: height,
+        Width: width,
+        OnNavigate: navigate,
+        OnUpgrade: showUpgrade,
+        OnHistory: selectHistory
+    }
     private var historySelection string = ""
     private var historySelectionRevision int32
     private let selectHistory Action[string]
 
     private let chooseFile Action[FileDialogKind, string, string, Action[string]]
-    private let configureLibrary Action[LibraryPage]
-    private let configureMining Action[MiningPage]
+
+    private func ReadLibraryInput() LibraryInput -> LibraryInput{
+        Session: wallet,
+        Ui: ui,
+        State: wallet.Snapshot.State,
+        ActiveWallet: wallet.Settings.ActiveWallet,
+        Directory: wallet.Settings.WalletDirectory,
+        Network: wallet.Settings.Network,
+        Busy: ui.Working(),
+        Status: wallet.Node.Status.Phase == NodePhase.None ? ui.Strings.Get("Working"): PhaseText(),
+        Language: ui.Strings.Language,
+        ChooseFile: chooseFile,
+        OnNavigate: navigate,
+        OnCreate: createWallet,
+        OnBackup: backupSeed
+    }
+
+    private func ReadMiningInput() MiningPageInput -> MiningPageInput{
+        Ui: ui,
+        Session: wallet,
+        Window: window,
+        History: miningHistory,
+        Wallet: wallet.Settings.ActiveWallet,
+        Network: wallet.Settings.Network,
+        Endpoint: wallet.Settings.Endpoint,
+        Mode: wallet.Settings.MiningMode,
+        Language: ui.Strings.Language,
+        Visible: !hidden &&
+            window?.IsVisible == true &&
+            window?.State != WindowState.Minimized &&
+            window?.Occlusion != WindowOcclusion.Occluded,
+        NodeRunning: wallet.Node.Status.Running,
+        Busy: ui.Working(),
+        Height: height
+    }
 
     private let receiveRequest ReceiveRequest = ReceiveRequest()
-    private let configureReceive Action[ReceivePage]
+
+    private func ReadReceiveInput() ReceivePageInput {
+        let snapshot = wallet.Snapshot
+        return ReceivePageInput{
+            Ui: ui,
+            Address: snapshot.Address,
+            History: snapshot.History,
+            ChainHeight: snapshot.Balance?.ChainHeight ?? uint64(0),
+            Privacy: ui.Privacy,
+            Busy: ui.Working(),
+            Language: ui.Strings.Language,
+            Height: height,
+            Request: receiveRequest
+        }
+    }
     private let sendRows List[SendRow] = List[SendRow]()
-    private let configureSend Action[SendPage]
+
+    private func ReadSendInput() SendPageInput -> SendPageInput{
+        Session: wallet,
+        Wallet: wallet.Settings.ActiveWallet,
+        Rows: sendRows,
+        Display: SendDisplay{
+            Ui: ui,
+            Window: window,
+            Contacts: contacts,
+            Network: wallet.Settings.Network,
+            Privacy: ui.Privacy,
+            Busy: ui.Working(),
+            Language: ui.Strings.Language,
+            Height: height
+        },
+        Spendable: wallet.Snapshot.Balance?.Spendable,
+        Address: wallet.Snapshot.Address,
+        Sends: wallet.Snapshot.Sends,
+        Animate: PlaybackActive(),
+        OnSent: sendDone
+    }
     private var pendingPayment PaymentLink?
     private var confirmPaymentReplacement bool
     private var pendingPage AppPage = AppPage.None
@@ -89,7 +199,14 @@ partial class App : Cell, IDisposable {
     private var publishedSource AppSource
     private let miningHistory MiningHistory = MiningHistory()
     private let toolsState ToolsState = ToolsState()
-    private let configureSync Action[SyncPage]
+
+    private func ReadSyncInput() SyncInput -> SyncInput{
+        Ui: ui,
+        Node: wallet.Node.Status,
+        Language: ui.Strings.Language,
+        Width: width,
+        Height: height
+    }
 
     private let togglePrivacy Action
 
@@ -133,7 +250,34 @@ partial class App : Cell, IDisposable {
     private var backgroundLockTimer WindowTimer?
 
     private let navigate Action[AppPage]
-    private let configureTools Action[ToolsPage]
+
+    private func ReadToolsInput() ToolsInput {
+        let snapshot = wallet.Snapshot
+        return ToolsInput{
+            Region: ToolsRegionInput{
+                Session: wallet,
+                Ui: ui,
+                State: toolsState,
+                Identity: wallet.Settings.Network + ":" + wallet.Settings.ActiveWallet,
+                Busy: ui.Working(),
+                Privacy: ui.Privacy,
+                Language: ui.Strings.Language,
+                Compact: width < 1100
+            },
+            State: toolsState,
+            ViewOnly: snapshot.ViewOnly,
+            Outputs: snapshot.Balance?.Outputs ?? uint64(0),
+            MemoErrors: snapshot.Balance?.MemoErrors ?? uint64(0),
+            Peers: wallet.Node.Status.Peers,
+            Section: screen,
+            AutoLock: wallet.Settings.AutoLockMinutes,
+            Width: width,
+            Height: height,
+            OnNavigate: navigate,
+            OnPrivacy: togglePrivacy,
+            OnNodeSettings: openNodeSettings
+        }
+    }
 
     private var shownHeight string = ""
 
@@ -146,7 +290,19 @@ partial class App : Cell, IDisposable {
     private var seedIssue string = ""
 
     private let retrySeed Action
-    private let configureSeed Action[SeedPage]
+
+    private func ReadSeedInput() SeedPageInput -> SeedPageInput{
+        Session: wallet,
+        Wallet: wallet.Settings.ActiveWallet,
+        Ui: ui,
+        Words: seed ?? Array.Empty[char](),
+        FromWallet: seedFromWallet,
+        Busy: ui.Working(),
+        Language: ui.Strings.Language,
+        OnDone: finishSeed,
+        Issue: seedIssue,
+        OnRetry: retrySeed
+    }
 
     private var contacts SortedDictionary[string, string] = SortedDictionary[string, string](StringComparer.Ordinal)
 
@@ -167,107 +323,78 @@ partial class App : Cell, IDisposable {
     private let backupSeed Action[[]char]
 
     private let closeSettings Action
-    private let configureNetwork Action[NetworkPage]
-    private let configureSettings Action[SettingsPage]
-    private let configureContacts Action[ContactsPage]
-    private var settingsOwner SettingsPage?
+
+    private func ReadNetworkInput() NetworkInput -> NetworkInput{
+        Ui: ui,
+        Session: wallet,
+        Window: window,
+        Node: NetworkStatusInput{
+            Height: wallet.Node.Status.Height,
+            Mempool: wallet.Node.Status.Mempool,
+            MempoolBytes: wallet.Node.Status.MempoolBytes,
+            Peers: wallet.Node.Status.Peers,
+            PeerId: wallet.Node.Status.PeerId,
+            IdentityAge: wallet.Node.Status.IdentityAge,
+            BestHash: wallet.Node.Status.BestHash
+        },
+        History: wallet.Snapshot.History,
+        Sends: wallet.Snapshot.Sends,
+        Source: NetworkSource{
+            Wallet: wallet.Settings.ActiveWallet,
+            Network: wallet.Settings.Network,
+            Endpoint: wallet.Settings.Endpoint,
+            Running: wallet.Node.Status.Running,
+            Start: wallet.Node.Api.verifiedStart
+        },
+        Language: ui.Strings.Language,
+        Width: width,
+        Height: height
+    }
+
+    private func ReadSettingsInput() SettingsPageInput -> SettingsPageInput{
+        Session: wallet,
+        Settings: wallet.Settings,
+        Ui: ui,
+        Tools: toolsState,
+        Window: window,
+        Snapshot: wallet.Snapshot,
+        Node: wallet.Node.Status,
+        Section: settingsSection,
+        Available: WalletAvailable(),
+        Privacy: ui.Privacy,
+        Busy: ui.Working(),
+        Language: ui.Strings.Language,
+        Width: width,
+        Height: height,
+        MaximumScalePercent: maximumScalePercent,
+        ChooseFile: chooseFile,
+        OnSection: selectSection,
+        OnLanguage: setLanguage,
+        OnPreference: preferenceChanged,
+        OnRevealSeed: revealSeed,
+        OnNavigate: navigate,
+        OnClose: closeSettings
+    }
+
+    private func ReadContactsInput() ContactsInput -> ContactsInput{
+        Ui: ui,
+        Window: window,
+        Contacts: contacts,
+        Privacy: ui.Privacy,
+        Busy: ui.Working(),
+        Language: ui.Strings.Language,
+        Network: wallet.Settings.Network,
+        Height: height,
+        OnChange: contactsChanged
+    }
 
     init(wallet WalletSession, scaleOverride bool = false) {
         this.wallet = wallet
         this.scaleOverride = scaleOverride
-        configureContacts = page -> page.Accept(
-            ContactsInput{
-                Ui: ui,
-                Window: window,
-                Contacts: contacts,
-                Privacy: ui.Privacy,
-                Busy: ui.Working(),
-                Language: ui.Strings.Language,
-                Network: wallet.Settings.Network,
-                Height: height,
-                OnChange: contactsChanged
-            }
-        )
-        configureNetwork = region -> region.Accept(
-            NetworkInput{
-                Ui: ui,
-                Session: wallet,
-                Window: window,
-                Node: NetworkStatusInput{
-                    Height: wallet.Node.Status.Height,
-                    Mempool: wallet.Node.Status.Mempool,
-                    MempoolBytes: wallet.Node.Status.MempoolBytes,
-                    Peers: wallet.Node.Status.Peers,
-                    PeerId: wallet.Node.Status.PeerId,
-                    IdentityAge: wallet.Node.Status.IdentityAge,
-                    BestHash: wallet.Node.Status.BestHash
-                },
-                History: wallet.Snapshot.History,
-                Sends: wallet.Snapshot.Sends,
-                Source: NetworkSource{
-                    Wallet: wallet.Settings.ActiveWallet,
-                    Network: wallet.Settings.Network,
-                    Endpoint: wallet.Settings.Endpoint,
-                    Running: wallet.Node.Status.Running,
-                    Start: wallet.Node.Api.verifiedStart
-                },
-                Language: ui.Strings.Language,
-                Width: width,
-                Height: height
-            }
-        )
         selectHistory = tx -> {
             navigate(AppPage.Transactions)
             historySelection = tx
             historySelectionRevision++
-        }
-        configureOverview = cell -> cell.Accept(
-            OverviewInput{
-                Ui: ui,
-                Session: wallet,
-                Window: window,
-                Snapshot: wallet.Snapshot,
-                Node: wallet.Node.Status,
-                Contacts: contacts,
-                Privacy: ui.Privacy,
-                Height: height,
-                Width: width,
-                OnNavigate: navigate,
-                OnUpgrade: showUpgrade,
-                OnHistory: selectHistory
-            }
-        )
-        configureHistory = cell -> {
-            let snapshot = wallet.Snapshot
-            cell.Accept(
-                HistoryInput{
-                    Session: wallet,
-                    Ui: ui,
-                    Snapshot: snapshot,
-                    Window: window,
-                    Tip: wallet
-                        .Node
-                        .Status
-                        .Running ? wallet
-                        .Node
-                        .Status
-                        .Height: snapshot
-                        .Balance
-                        ?.ChainHeight ??
-                        wallet
-                        .Node
-                        .Status
-                        .Height,
-                    Privacy: ui.Privacy,
-                    Language: ui.Strings.Language,
-                    Width: width,
-                    OnReceive: openReceive,
-                    OnMessage: OpenMessage,
-                    ChooseFile: chooseFile,
-                    SelectionTx: historySelection,
-                    SelectionRevision: historySelectionRevision
-                }
-            )
         }
         ui = Presentation(
             wallet.Settings.Language,
@@ -282,16 +409,13 @@ partial class App : Cell, IDisposable {
                 action -> workers.Writer.TryWrite(WindowWork(action))
             )
         )
-        configureSync = page -> page.Accept(
-            SyncInput{Ui: ui, Node: wallet.Node.Status, Language: ui.Strings.Language, Width: width, Height: height}
-        )
         openMessages = () -> Open(AppPage.Messages)
         closeMessageDrawer = () -> messageOverlay?.CloseDrawer()
         reloadMessageContacts = () -> LoadContacts()
-        configureMessages = child -> child.Accept(MessagesPageInput())
-        configureMessageOverlay = child -> {
+        createMessageOverlay = () -> {
+            let child = MessageOverlay()
             messageOverlay = child
-            child.Accept(MessageOverlayInput())
+            return child
         }
         navigate = target -> Navigate(target)
         togglePrivacy = () -> TogglePrivacy()
@@ -299,99 +423,12 @@ partial class App : Cell, IDisposable {
             settingsSection = "node"
             Navigate(AppPage.Settings)
         }
-        configureTools = region -> {
-            let snapshot = wallet.Snapshot
-            region.Accept(
-                ToolsInput{
-                    Region: ToolsRegionInput{
-                        Session: wallet,
-                        Ui: ui,
-                        State: toolsState,
-                        Identity: wallet.Settings.Network + ":" + wallet.Settings.ActiveWallet,
-                        Busy: ui.Working(),
-                        Privacy: ui.Privacy,
-                        Language: ui.Strings.Language,
-                        Compact: width < 1100
-                    },
-                    State: toolsState,
-                    ViewOnly: snapshot.ViewOnly,
-                    Outputs: snapshot.Balance?.Outputs ?? uint64(0),
-                    MemoErrors: snapshot.Balance?.MemoErrors ?? uint64(0),
-                    Peers: wallet.Node.Status.Peers,
-                    Section: screen,
-                    AutoLock: wallet.Settings.AutoLockMinutes,
-                    Width: width,
-                    Height: height,
-                    OnNavigate: navigate,
-                    OnPrivacy: togglePrivacy,
-                    OnNodeSettings: openNodeSettings
-                }
-            )
-        }
         showUpgrade = () -> {
             upgradeShown = true
             Rebuild()
         }
         sendDone = () -> Refresh()
-        configureSend = page -> page.Accept(
-            SendPageInput{
-                Session: wallet,
-                Wallet: wallet.Settings.ActiveWallet,
-                Rows: sendRows,
-                Display: SendDisplay{
-                    Ui: ui,
-                    Window: window,
-                    Contacts: contacts,
-                    Network: wallet.Settings.Network,
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Height: height
-                },
-                Spendable: wallet.Snapshot.Balance?.Spendable,
-                Address: wallet.Snapshot.Address,
-                Sends: wallet.Snapshot.Sends,
-                Animate: PlaybackActive(),
-                OnSent: sendDone
-            }
-        )
         chooseFile = (kind, title, path, chosen) -> ChooseFile(kind, title, path, chosen)
-        configureReceive = cell -> {
-            let snapshot = wallet.Snapshot
-            cell.Accept(
-                ReceivePageInput{
-                    Ui: ui,
-                    Address: snapshot.Address,
-                    History: snapshot.History,
-                    ChainHeight: snapshot.Balance?.ChainHeight ?? uint64(0),
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Height: height,
-                    Request: receiveRequest
-                }
-            )
-        }
-        configureMining = cell -> cell.Accept(
-            MiningPageInput{
-                Ui: ui,
-                Session: wallet,
-                Window: window,
-                History: miningHistory,
-                Wallet: wallet.Settings.ActiveWallet,
-                Network: wallet.Settings.Network,
-                Endpoint: wallet.Settings.Endpoint,
-                Mode: wallet.Settings.MiningMode,
-                Language: ui.Strings.Language,
-                Visible: !hidden &&
-                    window?.IsVisible == true &&
-                    window?.State != WindowState.Minimized &&
-                    window?.Occlusion != WindowOcclusion.Occluded,
-                NodeRunning: wallet.Node.Status.Running,
-                Busy: ui.Working(),
-                Height: height
-            }
-        )
         openReceive = () -> Navigate(AppPage.Receive)
         finishSeed = () -> FinishSeed()
         contactsChanged = next -> {
@@ -415,38 +452,8 @@ partial class App : Cell, IDisposable {
             if motion != reduceMotion || background != backgroundMode || scale != window?.UiScale {
                 Rebuild()
             } else if screen == AppPage.Settings {
-                if let owner = settingsOwner {
-                    configureSettings(owner)
-                }
+                Rebuild()
             }
-        }
-        configureSettings = page -> {
-            settingsOwner = page
-            page.Accept(
-                SettingsPageInput{
-                    Session: wallet,
-                    Ui: ui,
-                    Tools: toolsState,
-                    Window: window,
-                    Snapshot: wallet.Snapshot,
-                    Node: wallet.Node.Status,
-                    Section: settingsSection,
-                    Available: WalletAvailable(),
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Width: width,
-                    Height: height,
-                    MaximumScalePercent: maximumScalePercent,
-                    ChooseFile: chooseFile,
-                    OnSection: selectSection,
-                    OnLanguage: setLanguage,
-                    OnPreference: preferenceChanged,
-                    OnRevealSeed: revealSeed,
-                    OnNavigate: navigate,
-                    OnClose: closeSettings
-                }
-            )
         }
         revealSeed = words -> {
             if closed || wallet.Snapshot.State != WalletState.Unlocked || wallet.LockQueued {
@@ -463,48 +470,17 @@ partial class App : Cell, IDisposable {
                 RevealSeed(buffer.ToArray())
             }
         }
-        configureSeed = cell -> cell.Accept(
-            SeedPageInput{
-                Session: wallet,
-                Wallet: wallet.Settings.ActiveWallet,
-                Ui: ui,
-                Words: seed ?? Array.Empty[char](),
-                FromWallet: seedFromWallet,
-                Busy: ui.Working(),
-                Language: ui.Strings.Language,
-                OnDone: finishSeed,
-                Issue: seedIssue,
-                OnRetry: retrySeed
-            }
-        )
         createWallet = (filename, buffer) -> {
             createGeneration++
             let request = createGeneration
             Run(ct -> CreateWallet(filename, buffer, request, ct), nil, buffer)
         }
         backupSeed = buffer -> {
-            if window?.TryPost(() -> StartSeed(buffer)) != true {
+            if window?.Post(() -> StartSeed(buffer)) != true {
                 Array.Clear(buffer)
             }
         }
         closeSettings = () -> Back()
-        configureLibrary = cell -> cell.Accept(
-            LibraryInput{
-                Session: wallet,
-                Ui: ui,
-                State: wallet.Snapshot.State,
-                ActiveWallet: wallet.Settings.ActiveWallet,
-                Directory: wallet.Settings.WalletDirectory,
-                Network: wallet.Settings.Network,
-                Busy: ui.Working(),
-                Status: wallet.Node.Status.Phase == NodePhase.None ? ui.Strings.Get("Working"): PhaseText(),
-                Language: ui.Strings.Language,
-                ChooseFile: chooseFile,
-                OnNavigate: navigate,
-                OnCreate: createWallet,
-                OnBackup: backupSeed
-            }
-        )
         confirmSend = resume -> {
             if resume {
                 Run(ct -> wallet.Send.ResumeAsync(ct), () -> Refresh())
@@ -598,7 +574,9 @@ partial class App : Cell, IDisposable {
                     Rebuild()
                 },
                 OnCancel: close,
-                OnClose: close
+                OnOpenChange: isOpen -> if !isOpen {
+                    close.Invoke()
+                }
             }
         )
     }
@@ -616,6 +594,7 @@ partial class App : Cell, IDisposable {
             Resize(owner)
             Rebuild()
         }
+
         owner.DisplayChanged += () -> {
             UpdateScale()
             Rebuild()
@@ -643,7 +622,7 @@ partial class App : Cell, IDisposable {
         owner.InputActivity += kind -> Touch()
         wallet.Changed = () -> {
             let issue = wallet.NodeError
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     if !closed {
                         if issue.Length > 0 {
@@ -698,7 +677,7 @@ partial class App : Cell, IDisposable {
         await drain
         workers.Writer.TryComplete()
         if let owner = host {
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     closeReady = true
                     owner.RequestClose()
@@ -727,21 +706,21 @@ partial class App : Cell, IDisposable {
             backgroundLockTimer?.Dispose()
             backgroundLockTimer = nil
         } else {
-            backgroundLockTimer ??= owner.SetTimeout(
+            backgroundLockTimer ??= owner.After(
+                float64(minutes) * 60000,
                 () -> {
                     backgroundLockTimer = nil
                     if wallet.Snapshot.State == WalletState.Unlocked && InBackground(owner) {
                         Lock()
                     }
-                },
-                float64(minutes) * 60000
+                }
             )
         }
     }
 
     private func Resize(owner Window) {
-        width = owner.Width / owner.UiScale
-        height = owner.Height / owner.UiScale
+        width = owner.NativeWidth / owner.UiScale
+        height = owner.NativeHeight / owner.UiScale
     }
 
     func UpdateScale() {
@@ -759,7 +738,7 @@ partial class App : Cell, IDisposable {
             100
         }
         if !scaleOverride {
-            owner.UiScale = float32(Math.Min(wallet.Settings.UiScalePercent, maximumScalePercent)) / 100F
+            owner.UiScale = float64(Math.Min(wallet.Settings.UiScalePercent, maximumScalePercent)) / 100
         }
         Resize(owner)
     }
@@ -804,7 +783,7 @@ partial class App : Cell, IDisposable {
             sendRows.Clear()
         }
         if !node.Running || node.Syncing || node.Peers == 0 || node.Height == 0 || snapshot.ScanBehind(node.Height) {
-            statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
+            statusTimer ??= window?.Every(1000, () -> Refresh(true))
         } else {
             statusTimer?.Dispose()
             statusTimer = nil
@@ -841,7 +820,7 @@ partial class App : Cell, IDisposable {
         await wallet.CreateAsync(filename, buffer, ct)
         let password = buffer.ToArray()
         let cleanup = ct.Register(() -> Array.Clear(password))
-        if window?.TryPost(
+        if window?.Post(
             () -> {
                 cleanup.Dispose()
                 if closed || request != createGeneration || wallet.Settings.ActiveWallet != filename {
@@ -882,7 +861,7 @@ partial class App : Cell, IDisposable {
             words = await wallet.Keys.RevealSeedAsync(buffer, ct)
         } catch (failure WalletException) {
             let message = failure.Message
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if !closed &&
                         request == seedGeneration &&
@@ -898,7 +877,7 @@ partial class App : Cell, IDisposable {
             return
         }
         let cleanup = ct.Register(() -> Array.Clear(words))
-        if window?.TryPost(
+        if window?.Post(
             () -> {
                 cleanup.Dispose()
                 if closed ||
@@ -979,7 +958,7 @@ partial class App : Cell, IDisposable {
         } catch (failure WalletException) {
             message = failure.Message
         }
-        host.TryPost(
+        host.Post(
             () -> {
                 if closed || request != contactsGeneration {
                     return
@@ -1004,7 +983,6 @@ partial class App : Cell, IDisposable {
     }
 
     private func Open(target AppPage) {
-        settingsOwner = nil
         pageGeneration++
         historySelection = ""
         upgradeShown = false
@@ -1045,7 +1023,7 @@ partial class App : Cell, IDisposable {
             }
         } catch (failure OperationCanceledException) when closed { } catch (failure Exception) {
             Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if closed {
                         return
@@ -1064,7 +1042,7 @@ partial class App : Cell, IDisposable {
             throw failure
         } catch (failure Exception) {
             Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if !closed {
                         ui.Actions.Report("Window background task failed")
@@ -1132,7 +1110,7 @@ partial class App : Cell, IDisposable {
                 Array.Clear(buffer)
             }
         }
-        window?.TryPost(
+        window?.Post(
             () -> {
                 if closed || ct.IsCancellationRequested {
                     return
@@ -1209,7 +1187,7 @@ partial class App : Cell, IDisposable {
         } catch (failure Exception) {
             message = "Refresh failed"
         }
-        window?.TryPost(
+        window?.Post(
             () -> {
                 if closed || request != refreshGeneration || identity != wallet.Settings.ActiveWallet {
                     return
@@ -1269,7 +1247,7 @@ partial class App : Cell, IDisposable {
         } catch (failure Exception) {
             message = "File dialog unavailable"
         }
-        host.TryPost(
+        host.Post(
             () -> {
                 if closed ||
                     request != chooserGeneration ||
@@ -1335,7 +1313,7 @@ partial class App : Cell, IDisposable {
         try {
             await task(ct)
         } catch (failure Exception) {
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if !closed && request == preferenceGeneration {
                         error = message
@@ -1383,7 +1361,7 @@ partial class App : Cell, IDisposable {
         }
         let banner = Problem()
         let content = if page == AppPage.Overview {
-            Cell.Mount[OverviewPage]("overview", configureOverview)
+            Cell.Mount[OverviewInput, OverviewPage]("overview", ReadOverviewInput())
         } else if page == AppPage.Send {
             if wallet
                 .Send
@@ -1403,30 +1381,30 @@ partial class App : Cell, IDisposable {
                 .Error != nil {
                 PendingSendCard()
             } else {
-                Cell.Mount[SendPage]("send-" + paymentRevision.ToString(), configureSend)
+                Cell.Mount[SendPageInput, SendPage]("send-" + paymentRevision.ToString(), ReadSendInput())
             }
         } else if page == AppPage.Receive {
-            Cell.Mount[ReceivePage]("receive", configureReceive)
+            Cell.Mount[ReceivePageInput, ReceivePage]("receive", ReadReceiveInput())
         } else if page == AppPage.Mining {
-            Cell.Mount[MiningPage]("mining", configureMining)
+            Cell.Mount[MiningPageInput, MiningPage]("mining", ReadMiningInput())
         } else if page == AppPage.Transactions {
-            Cell.Mount[HistoryPage]("history", configureHistory)
+            Cell.Mount[HistoryInput, HistoryPage]("history", ReadHistoryInput())
         } else if page == AppPage.Messages {
             MessagesView()
         } else if page == AppPage.Network {
-            Cell.Mount[NetworkPage]("network", configureNetwork)
+            Cell.Mount[NetworkInput, NetworkPage]("network", ReadNetworkInput())
         } else if page == AppPage.Sync {
-            Cell.Mount[SyncPage]("sync", configureSync)
+            Cell.Mount[SyncInput, SyncPage]("sync", ReadSyncInput())
         } else if seed != nil {
-            Cell.Mount[SeedPage]("seed", configureSeed)
+            Cell.Mount[SeedPageInput, SeedPage]("seed", ReadSeedInput())
         } else if page == AppPage.Tools || page == AppPage.Privacy {
-            Cell.Mount[ToolsPage]("tools", configureTools)
+            Cell.Mount[ToolsInput, ToolsPage]("tools", ReadToolsInput())
         } else if page == AppPage.Contacts {
-            Cell.Mount[ContactsPage]("contacts", configureContacts)
+            Cell.Mount[ContactsInput, ContactsPage]("contacts", ReadContactsInput())
         } else if page == AppPage.Settings {
-            Cell.Mount[SettingsPage]("settings", configureSettings)
+            Cell.Mount[SettingsPageInput, SettingsPage]("settings", ReadSettingsInput())
         } else {
-            Cell.Mount[LibraryPage]("library", configureLibrary)
+            Cell.Mount[LibraryInput, LibraryPage]("library", ReadLibraryInput())
         }
         let left = if WalletAvailable() {
             102.0
@@ -1580,7 +1558,13 @@ partial class App : Cell, IDisposable {
         )
         root.Add(frame)
         if WalletAvailable() {
-            root.Add(Cell.Mount[MessageOverlay]("message-overlay", configureMessageOverlay))
+            root.Add(
+                Cell.Mount[MessagesOverlayInput, MessageOverlay](
+                    "message-overlay",
+                    ReadMessageOverlayInput(),
+                    createMessageOverlay
+                )
+            )
             if confirmPaymentReplacement {
                 root.Add(ConfirmPaymentReplacement())
             }

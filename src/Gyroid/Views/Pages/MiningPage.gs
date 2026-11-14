@@ -70,7 +70,7 @@ data struct MiningChartInput {
     var Top float64
 }
 
-class MiningPage : Cell, IDisposable {
+class MiningPage : Cell[MiningPageInput], IDisposable {
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private let toggle Action
     private let setThreads Action[int32]
@@ -95,7 +95,7 @@ class MiningPage : Cell, IDisposable {
         setThreads = value -> SetThreads(value)
     }
 
-    func Accept(input MiningPageInput) {
+    protected override func InputChanged(input MiningPageInput) {
         if opened && source == input {
             return
         }
@@ -318,7 +318,7 @@ class MiningPage : Cell, IDisposable {
             }
         } catch (failure OperationCanceledException) when parentContext.IsCancelled { } catch (failure Exception) {
             Console.Error.WriteLine("Mining background task failed: " + failure.GetType().Name)
-            input.Window?.TryPost(
+            input.Window?.Post(
                 () -> {
                     if id == generation {
                         input.Ui.Actions.Report("Mining background task failed")
@@ -340,7 +340,7 @@ class MiningPage : Cell, IDisposable {
             observation = await input.Session.Mining.PollAsync(observation, requests, pageContext.Token)
             let report = observation.Report
             let revision = observation.Request.Revision
-            input.Window?.TryPost(
+            input.Window?.Post(
                 () -> {
                     if id != generation || revision != pollRevision {
                         return
@@ -621,7 +621,7 @@ class MiningChart : Cell[MiningChartInput] {
                     Height: Percent(100),
                     Path: fill.Build(),
                     Fit: ShapeFit.Fill,
-                    BackgroundGradient: LinearGradient(AppTheme.LimeSoft, AppTheme.Surface)
+                    Fill: VectorPaint(LinearGradient(AppTheme.LimeSoft, AppTheme.Surface))
                 }
             )
             area.Add(
@@ -631,11 +631,11 @@ class MiningChart : Cell[MiningChartInput] {
                     Height: Percent(100),
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: Color.Transparent,
-                    BorderWidth: 1.6,
-                    BorderColor: AppTheme.Lime,
-                    StrokeJoin: StrokeJoin.Round,
-                    VectorEffect: VectorEffect.NonScalingStroke
+                    Fill: VectorPaint(Color.Transparent),
+                    Stroke: VectorStroke(1.6, VectorPaint(AppTheme.Lime)){
+                        .Join: StrokeJoin.Round,
+                        .VectorEffect: VectorEffect.NonScalingStroke
+                    }
                 }
             )
             area.Add(ChartParts.Point(Percent(100), Percent(samples[samples.Length - 1].Y * 100), AppTheme.Lime))
