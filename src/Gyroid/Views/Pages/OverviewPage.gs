@@ -614,7 +614,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
         } else {
             AppTheme.Lime
         }
-        let inner = Math.Max(0.0, heroWidth - 40)
+        let inner = Math.Max(0.0, heroWidth - (AppTheme.Space20 + AppTheme.Border1) * 2)
         let size = AppTheme.GetBalanceSize(masked || !known, input.Height, inner, value.Length)
         let card = WalletParts.Card(
             ui,
