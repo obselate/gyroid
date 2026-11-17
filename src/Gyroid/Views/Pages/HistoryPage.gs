@@ -104,7 +104,7 @@ data struct HistoryExportInput {
     var ChooseFile Action[FileDialogKind, string, string, Action[string]]
 }
 
-class HistoryPage : Cell, IDisposable {
+class HistoryPage : Cell[HistoryInput], IDisposable {
     private var current HistoryInput
     private var disposed bool
     private var identity HistoryIdentity
@@ -208,7 +208,7 @@ class HistoryPage : Cell, IDisposable {
         }
     }
 
-    public func Accept(input HistoryInput) {
+    protected override func InputChanged(input HistoryInput) {
         let next = SourceIdentity(input.Session)
         let nextSource = ReadSource(input.Session)
         if disposed || (current.Equals(input) && next.Equals(identity) && nextSource.Equals(source)) {
@@ -402,7 +402,7 @@ class HistoryPage : Cell, IDisposable {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryInput) Blob {
         let input = current
         let ui = input.Ui
         let compact = input.Width < 1000
@@ -764,7 +764,7 @@ class HistoryPage : Cell, IDisposable {
     }
 }
 
-class HistoryRibbon : Cell {
+class HistoryRibbon : Cell[HistoryRibbonInput] {
     private var current HistoryRibbonInput
     private var days float64
     private let marks List[uint64] = List[uint64]()
@@ -788,7 +788,7 @@ class HistoryRibbon : Cell {
         }
     }
 
-    public func Accept(input HistoryRibbonInput) {
+    protected override func InputChanged(input HistoryRibbonInput) {
         if current.Equals(input) {
             return
         }
@@ -807,7 +807,7 @@ class HistoryRibbon : Cell {
 
     public func Mark(height uint64) -> hoverCell?.Mark(height)
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryRibbonInput) Blob {
         let input = current
         let compact = input.Width < 1000
         let from = input.From
@@ -1143,7 +1143,7 @@ class HistoryRibbonHover : Cell {
         .ToString("MM-dd HH:mm", CultureInfo.InvariantCulture)
 }
 
-class HistoryTransactions : Cell, IDisposable {
+class HistoryTransactions : Cell[HistoryListInput], IDisposable {
     private var current HistoryListInput
     private var expanded string = ""
     private var tab string = "details"
@@ -1206,7 +1206,7 @@ class HistoryTransactions : Cell, IDisposable {
         }
     }
 
-    public func Accept(input HistoryListInput) {
+    protected override func InputChanged(input HistoryListInput) {
         if current.Equals(input) {
             return
         }
@@ -1290,7 +1290,7 @@ class HistoryTransactions : Cell, IDisposable {
         HistoryPage
         .ReadSource(current.Session).Equals(current.Source)
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryListInput) Blob {
         let input = current
         let ui = input.Ui
         let panel = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0}
@@ -1986,7 +1986,7 @@ class HistoryTransactionRow : Cell[Blob] {
     protected override func Build(input Blob) Blob -> input
 }
 
-class HistoryExport : Cell, IDisposable {
+class HistoryExport : Cell[HistoryExportInput], IDisposable {
     private var current HistoryExportInput
     private var exporting bool
     private var exportRows int32
@@ -1997,7 +1997,7 @@ class HistoryExport : Cell, IDisposable {
     private var issue string = ""
     private var writing bool
 
-    public func Accept(input HistoryExportInput) {
+    protected override func InputChanged(input HistoryExportInput) {
         if current.Equals(input) {
             return
         }
@@ -2017,7 +2017,7 @@ class HistoryExport : Cell, IDisposable {
         generation++
     }
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryExportInput) Blob {
         let input = current
         let period = input.Period
         let from = input.From

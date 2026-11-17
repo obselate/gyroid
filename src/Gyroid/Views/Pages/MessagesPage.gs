@@ -50,7 +50,7 @@ data struct MessagesInput {
     var Language string
 }
 
-class MessagesPage : Cell, IDisposable {
+class MessagesPage : Cell[MessagesInput], IDisposable {
     private var input MessagesInput
     private var conversation Conversation?
     private var selected string = ""
@@ -147,7 +147,7 @@ class MessagesPage : Cell, IDisposable {
         }
     }
 
-    func Accept(next MessagesInput) {
+    protected override func InputChanged(next MessagesInput) {
         if next == input {
             return
         }
@@ -403,7 +403,7 @@ class MessagesPage : Cell, IDisposable {
         )
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessagesInput) Blob {
         let ui = input.Ui
         let root = Container{
             Width: Percent(100),
@@ -673,7 +673,7 @@ data struct MessagesListInput {
     var OnBegin Action[string]
 }
 
-class MessageConversationList : Cell {
+class MessageConversationList : Cell[MessagesListInput] {
     private var input MessagesListInput
     private let rowKey Func[ConversationView, string]
     private let rowBuilder Func[ConversationView, Blob]
@@ -683,7 +683,7 @@ class MessageConversationList : Cell {
         rowBuilder = row -> Row(row)
     }
 
-    func Accept(next MessagesListInput) {
+    protected override func InputChanged(next MessagesListInput) {
         if input == next {
             return
         }
@@ -691,7 +691,7 @@ class MessageConversationList : Cell {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessagesListInput) Blob {
         let ui = input.Ui
         let panel = WalletParts.Card(ui, AppTheme.Space10, AppTheme.Space8, AppTheme.Radius6)
         panel.Width = input.Width
@@ -834,7 +834,7 @@ data struct MessageDisplayRow {
     var Bubble MessageBubbleInput
 }
 
-class MessageThread : Cell, IDisposable {
+class MessageThread : Cell[MessageThreadInput], IDisposable {
     private var input MessageThreadInput
     private var rows[]MessageDisplayRow = []MessageDisplayRow{}
     private var seen HashSet[string] = HashSet[string](StringComparer.Ordinal)
@@ -868,7 +868,7 @@ class MessageThread : Cell, IDisposable {
         highlightTimer?.Dispose()
     }
 
-    func Accept(next MessageThreadInput) {
+    protected override func InputChanged(next MessageThreadInput) {
         if next == input {
             return
         }
@@ -1014,7 +1014,7 @@ class MessageThread : Cell, IDisposable {
         return Cell.Mount[MessageBubbleInput, MessageBubble](row.Key, row.Bubble with{Animate = animate})
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessageThreadInput) Blob {
         let list = VirtualRows(rows, 64, rowKey, rowBuilder, following, version: 0)
         list.Handle = scroll
         list.MinHeight = 0
@@ -1043,7 +1043,7 @@ data struct MessageDialogInput {
     var OnClose Action
 }
 
-class MessageDialog : Cell, IDisposable {
+class MessageDialog : Cell[MessageDialogInput], IDisposable {
     private var name string = ""
     private var address string = ""
     private var initialized bool
@@ -1081,7 +1081,7 @@ class MessageDialog : Cell, IDisposable {
         )
     }
 
-    func Accept(next MessageDialogInput) {
+    protected override func InputChanged(next MessageDialogInput) {
         if next == input {
             return
         }
@@ -1242,7 +1242,7 @@ class MessageDialog : Cell, IDisposable {
         )
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessageDialogInput) Blob {
         let ui = input.Ui
         let group = input.Kind == "group"
         let remove = input.Kind == "remove"

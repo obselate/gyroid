@@ -43,7 +43,7 @@ data struct SyncState {
     var Network string
 }
 
-class SyncPage : Cell, IDisposable {
+class SyncPage : Cell[SyncInput], IDisposable {
     private let started int64 = Stopwatch.GetTimestamp()
     private let peerSamples List[SyncSample] = List[SyncSample]()
     private let rateSamples List[SyncSample] = List[SyncSample]()
@@ -79,7 +79,7 @@ class SyncPage : Cell, IDisposable {
         )
     }
 
-    func Accept(next SyncInput) {
+    protected override func InputChanged(next SyncInput) {
         if accepted && input == next {
             return
         }
@@ -177,7 +177,7 @@ class SyncPage : Cell, IDisposable {
         updateTimer?.Dispose()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SyncInput) Blob {
         let ui = input.Ui
         let node = state
         let step = node.Step
@@ -464,7 +464,7 @@ data struct SyncChartInput {
     var Fill bool
 }
 
-class SyncChart : Cell {
+class SyncChart : Cell[SyncChartInput] {
     private let spark ElementHandle = ElementHandle()
     private var input SyncChartInput
     private var chart Blob = Container{}
@@ -479,7 +479,7 @@ class SyncChart : Cell {
         }
     }
 
-    func Accept(next SyncChartInput) {
+    protected override func InputChanged(next SyncChartInput) {
         if input != next {
             input = next
             Prepare()
@@ -503,7 +503,7 @@ class SyncChart : Cell {
         Rebuild()
     }
 
-    override func Build() Blob -> chart
+    protected override func Build(_ SyncChartInput) Blob -> chart
 
     private func Spark(
         ui Presentation,

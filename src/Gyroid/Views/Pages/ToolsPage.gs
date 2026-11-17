@@ -90,7 +90,7 @@ data struct ToolsLockInput {
     var AutoLock int32
 }
 
-class ToolsPage : Cell {
+class ToolsPage : Cell[ToolsInput] {
     private let configurePrivacy Action[ToolsPrivacyRegion]
     private let configureHealth Action[ToolsHealthRegion]
     private let reportChanged Action
@@ -109,14 +109,14 @@ class ToolsPage : Cell {
         )
     }
 
-    func Accept(input ToolsInput) {
+    protected override func InputChanged(input ToolsInput) {
         if !current.Equals(input) {
             current = input
             Rebuild()
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ ToolsInput) Blob {
         let input = current
         if input.Section == AppPage.Privacy {
             return Cell.Mount[ToolsPrivacyRegion]("privacy-" + input.Region.Identity, configurePrivacy)
@@ -158,7 +158,7 @@ class ToolsPage : Cell {
     }
 }
 
-class ToolsPrivacyRegion : Cell, IDisposable {
+class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
     private var current ToolsInput
     private var loaded bool
     private var checking bool
@@ -184,7 +184,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
         }
     }
 
-    func Accept(input ToolsInput) {
+    protected override func InputChanged(input ToolsInput) {
         if current.Equals(input) {
             return
         }
@@ -220,7 +220,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
         } catch (failure Exception) { }
     }
 
-    override func Build() Blob -> if checking {
+    protected override func Build(_ ToolsInput) Blob -> if checking {
         Cell.Mount[ToolsPhraseInput, ToolsPhraseRegion](
             "phrase-check",
             ToolsPhraseInput{
@@ -1449,7 +1449,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
     }
 }
 
-class ToolsHealthRegion : Cell, IDisposable {
+class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
     private var current ToolsHealthInput
     private var source OutputReport?
     private var rows[]DataGridRow = []DataGridRow{}
@@ -1459,7 +1459,7 @@ class ToolsHealthRegion : Cell, IDisposable {
     private var auditing bool
     private var auditIssue string = ""
 
-    func Accept(input ToolsHealthInput) {
+    protected override func InputChanged(input ToolsHealthInput) {
         if current.Equals(input) && source == input.State.Report {
             return
         }
@@ -1507,7 +1507,7 @@ class ToolsHealthRegion : Cell, IDisposable {
         lifetime.Dispose()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ ToolsHealthInput) Blob {
         let view = current
         let input = view.Region
         let card = Container{Gap: AppTheme.Space16, FlexGrow: 1, MinHeight: 0}

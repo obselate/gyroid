@@ -60,7 +60,7 @@ data struct SendEditorInput {
     var Maximum Action
 }
 
-class SendPage : Cell, IDisposable {
+class SendPage : Cell[SendPageInput], IDisposable {
     private var input SendPageInput
     private var estimate SendEstimate?
     private var sent SendEstimate?
@@ -135,7 +135,7 @@ class SendPage : Cell, IDisposable {
         editorBuilder = row -> Cell.Mount[SendEditorInput, SendRecipientEditor](row.Row.Id, row)
     }
 
-    public func Accept(next SendPageInput) {
+    protected override func InputChanged(next SendPageInput) {
         if (next with{Sends = sent == nil ? input.Sends: next.Sends}) == input {
             return
         }
@@ -228,7 +228,7 @@ class SendPage : Cell, IDisposable {
         lifetime.Dispose()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SendPageInput) Blob {
         let display = input.Display
         let ui = display.Ui
         let multi = input.Rows.Count > 1
@@ -896,10 +896,10 @@ data struct SendTotalInput {
     var Over bool
 }
 
-class SendTotal : Cell {
+class SendTotal : Cell[SendTotalInput] {
     private var current SendTotalInput
 
-    public func Accept(input SendTotalInput) {
+    protected override func InputChanged(input SendTotalInput) {
         if current == input {
             return
         }
@@ -907,7 +907,7 @@ class SendTotal : Cell {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SendTotalInput) Blob {
         let input = current
         let display = input.Display
         let size = AppTheme.GetTotalSize(display.Height)
@@ -933,10 +933,10 @@ data struct SendActionsInput {
     var Add Action
 }
 
-class SendActions : Cell {
+class SendActions : Cell[SendActionsInput] {
     private var current SendActionsInput
 
-    public func Accept(input SendActionsInput) {
+    protected override func InputChanged(input SendActionsInput) {
         if current == input {
             return
         }
@@ -944,7 +944,7 @@ class SendActions : Cell {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SendActionsInput) Blob {
         let input = current
         let display = input.Display
         let ui = display.Ui
@@ -1106,7 +1106,7 @@ data struct SendReviewItem {
     var Expanded bool
 }
 
-class SendReview : Cell {
+class SendReview : Cell[SendReviewInput] {
     private var current SendReviewInput
     private var openRow string = ""
     private var shown[]SendReviewItem = []SendReviewItem{}
@@ -1119,7 +1119,7 @@ class SendReview : Cell {
         rowBuilder = row -> Recipient(row)
     }
 
-    public func Accept(input SendReviewInput) {
+    protected override func InputChanged(input SendReviewInput) {
         if current == input {
             return
         }
@@ -1154,7 +1154,7 @@ class SendReview : Cell {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SendReviewInput) Blob {
         let value = current
         let input = value.Display
         let pending = value.Estimate

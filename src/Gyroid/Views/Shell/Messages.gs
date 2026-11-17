@@ -17,8 +17,7 @@ partial class App {
     private var messageOverlay MessageOverlay?
     private var messagesWallet string = ""
     private var messagesAddress string = ""
-    private let configureMessages Action[MessagesPage]
-    private let configureMessageOverlay Action[MessageOverlay]
+    private let createMessageOverlay Func[MessageOverlay]
     private let openMessages Action
     private let closeMessageDrawer Action
     private let reloadMessageContacts Action
@@ -74,7 +73,7 @@ partial class App {
         }
     }
 
-    private func MessagesView() Blob -> Cell.Mount[MessagesPage]("messages", configureMessages)
+    private func MessagesView() Blob -> Cell.Mount[MessagesInput, MessagesPage]("messages", MessagesPageInput())
 }
 
 data struct MessagesOverlayInput {
@@ -83,7 +82,7 @@ data struct MessagesOverlayInput {
     var Width float64
 }
 
-class MessageOverlay : Cell, IDisposable {
+class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
     private var input MessagesOverlayInput
     private let observed HashSet[string] = HashSet[string](StringComparer.Ordinal)
     private var toast Conversation?
@@ -119,7 +118,7 @@ class MessageOverlay : Cell, IDisposable {
         }
     }
 
-    func Accept(next MessagesOverlayInput) {
+    protected override func InputChanged(next MessagesOverlayInput) {
         if disposed || next == input {
             return
         }
@@ -174,7 +173,7 @@ class MessageOverlay : Cell, IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessagesOverlayInput) Blob {
         let ui = input.Messages.Ui
         if input.Page == AppPage.Messages {
             return Container{}

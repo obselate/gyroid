@@ -242,7 +242,7 @@ data struct MessageComposerInput {
     var OnSend Action[string]
 }
 
-class MessageComposer : Cell, IDisposable {
+class MessageComposer : Cell[MessageComposerInput], IDisposable {
     private let arrow Anim[Point]
     private let fill Anim[float64]
     private var ready bool
@@ -253,7 +253,7 @@ class MessageComposer : Cell, IDisposable {
     private var input MessageComposerInput
     private var estimate MessageEstimate = MessageEstimate()
 
-    func Accept(next MessageComposerInput) {
+    protected override func InputChanged(next MessageComposerInput) {
         if next == input {
             return
         }
@@ -312,7 +312,7 @@ class MessageComposer : Cell, IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessageComposerInput) Blob {
         let ui = input.Ui
         let recipient = input.Recipients > 0
         if !input.CanSend || !recipient {

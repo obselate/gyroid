@@ -70,7 +70,7 @@ data struct MiningChartInput {
     var Top float64
 }
 
-class MiningPage : Cell, IDisposable {
+class MiningPage : Cell[MiningPageInput], IDisposable {
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private let toggle Action
     private let setThreads Action[int32]
@@ -95,7 +95,7 @@ class MiningPage : Cell, IDisposable {
         setThreads = value -> SetThreads(value)
     }
 
-    func Accept(input MiningPageInput) {
+    protected override func InputChanged(input MiningPageInput) {
         if opened && source == input {
             return
         }
@@ -128,7 +128,7 @@ class MiningPage : Cell, IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MiningPageInput) Blob {
         let input = source
         let ui = input.Ui
         let report = input.History.Report

@@ -53,7 +53,7 @@ data struct NetworkSource {
     var Start int64
 }
 
-class NetworkPage : Cell, IDisposable {
+class NetworkPage : Cell[NetworkInput], IDisposable {
     private var input NetworkInput
     private var report NetworkReport = NetworkReport()
     private var source NetworkSource
@@ -86,7 +86,7 @@ class NetworkPage : Cell, IDisposable {
         )
     }
 
-    public func Accept(next NetworkInput) {
+    protected override func InputChanged(next NetworkInput) {
         if next == input {
             return
         }
@@ -149,7 +149,7 @@ class NetworkPage : Cell, IDisposable {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ NetworkInput) Blob {
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: AppTheme.Space12}
         if loading && !loaded {
             page.Add(ControlParts.Loading(input.Ui, "network-loading"))
@@ -707,7 +707,7 @@ data struct NetworkPeersInput {
     var IdentityAge string
 }
 
-class NetworkPeers : Cell {
+class NetworkPeers : Cell[NetworkPeersInput] {
     private var tab string = "peers"
     private var hovered string = ""
     private var revealed bool
@@ -736,7 +736,7 @@ class NetworkPeers : Cell {
         }
     }
 
-    public func Accept(next NetworkPeersInput) {
+    protected override func InputChanged(next NetworkPeersInput) {
         if next == current {
             return
         }
@@ -772,7 +772,7 @@ class NetworkPeers : Cell {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ NetworkPeersInput) Blob {
         let input = current
         let ui = input.Ui
         let card = WalletParts.Card(
@@ -1032,7 +1032,7 @@ data struct NetworkPeerMapInput {
     var Language string
 }
 
-class NetworkPeerMap : Cell {
+class NetworkPeerMap : Cell[NetworkPeerMapInput] {
     private let peerMap ElementHandle = ElementHandle()
     private var current NetworkPeerMapInput
     private var hovered string = ""
@@ -1048,7 +1048,7 @@ class NetworkPeerMap : Cell {
         }
     }
 
-    func Accept(next NetworkPeerMapInput) {
+    protected override func InputChanged(next NetworkPeerMapInput) {
         if current.Equals(next) {
             return
         }
@@ -1061,7 +1061,7 @@ class NetworkPeerMap : Cell {
         markers?.Hover(id)
     }
 
-    override func Build() Blob {
+    protected override func Build(_ NetworkPeerMapInput) Blob {
         let input = current
         let ui = input.Ui
         let plot = Container{
