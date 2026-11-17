@@ -152,7 +152,7 @@ class SettingsRegionState {
     let Advanced SettingsAdvancedState = SettingsAdvancedState()
 }
 
-class SettingsPage : Cell, IDisposable {
+class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private var state SettingsCompositionInput
     private var generalOwner SettingsGeneral?
     private var walletOwner SettingsWallet?
@@ -207,7 +207,7 @@ class SettingsPage : Cell, IDisposable {
         }
     }
 
-    func Accept(input SettingsPageInput) {
+    protected override func InputChanged(input SettingsPageInput) {
         let section = input.Section == "wallet" && input.Snapshot.State != WalletState.Unlocked ?
         "general": input.Section
         if section != mountedSection {
@@ -250,7 +250,7 @@ class SettingsPage : Cell, IDisposable {
         advancedOwner?.Refresh()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SettingsPageInput) Blob {
         let input = current
         let ui = input.Ui
         let sections = List[string]{"general", "security", "node", "mining"}
@@ -2020,7 +2020,7 @@ class SettingsAdvanced : Cell, IDisposable {
     ui.Strings.Get(count == 1 ? "{0} violation": "{0} violations").Replace("{0}", count.ToString())
 }
 
-class SettingsDialogs : Cell, IDisposable {
+class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
     private var state SettingsDialogInput
     private var context SettingsPageInput
     private var kind string = ""
@@ -2049,7 +2049,7 @@ class SettingsDialogs : Cell, IDisposable {
         close = Close
     }
 
-    func Accept(input SettingsPageInput) {
+    protected override func InputChanged(input SettingsPageInput) {
         context = input
         if state.Wallet != input
             .Settings
@@ -2129,7 +2129,7 @@ class SettingsDialogs : Cell, IDisposable {
 
     func Dispose() -> ResetDialog()
 
-    override func Build() Blob -> switch kind {
+    protected override func Build(_ SettingsPageInput) Blob -> switch kind {
         case "phrase", "view-key": Dialog(context)
         case "view-only": ViewOnly(context)
         case "purge": Purge(context)

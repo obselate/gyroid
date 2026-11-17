@@ -67,7 +67,7 @@ data struct ReceivePresentationInput {
     var Reset Action
 }
 
-class ReceivePage : Cell, IDisposable {
+class ReceivePage : Cell[ReceivePageInput], IDisposable {
     private var input ReceivePageInput
     private var presentation ReceivePresentationInput
     private var status ReceiveStatusInput
@@ -99,7 +99,7 @@ class ReceivePage : Cell, IDisposable {
         }
     }
 
-    public func Accept(next ReceivePageInput) {
+    protected override func InputChanged(next ReceivePageInput) {
         if input == next {
             return
         }
@@ -215,7 +215,7 @@ class ReceivePage : Cell, IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ ReceivePageInput) Blob {
         let card = WalletParts.PageCard(input.Ui, 900, input.Height, fill: true)
         card.Add(
             WalletParts.Header(

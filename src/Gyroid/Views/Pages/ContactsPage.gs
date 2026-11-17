@@ -43,7 +43,7 @@ class ContactDraft {
     public var Issue string = ""
 }
 
-class ContactsPage : Cell, IDisposable {
+class ContactsPage : Cell[ContactsInput], IDisposable {
     private var current ContactsInput
     private var rows[]ContactRow = []ContactRow{}
     private var draft ContactDraft = ContactDraft{}
@@ -59,7 +59,7 @@ class ContactsPage : Cell, IDisposable {
         rowBuilder = row -> Row(row)
     }
 
-    public func Accept(input ContactsInput) {
+    protected override func InputChanged(input ContactsInput) {
         if disposed || current.Equals(input) {
             return
         }
@@ -135,7 +135,7 @@ class ContactsPage : Cell, IDisposable {
 
     private let listHandle ElementHandle = ElementHandle{}
 
-    override func Build() Blob {
+    protected override func Build(_ ContactsInput) Blob {
         let input = current
         let ui = input.Ui
         let card = WalletParts.PageCard(

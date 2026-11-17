@@ -22,7 +22,7 @@ data struct SeedPageInput {
     var OnRetry Action
 }
 
-class SeedPage : Cell, IDisposable {
+class SeedPage : Cell[SeedPageInput], IDisposable {
     private var input SeedPageInput
     private var visible bool
     private var saved bool
@@ -38,7 +38,7 @@ class SeedPage : Cell, IDisposable {
         clipboardChanged = () -> Rebuild()
     }
 
-    func Accept(next SeedPageInput) {
+    protected override func InputChanged(next SeedPageInput) {
         if actions != next.Ui.Actions {
             if let source = actions {
                 source.ClipboardChanged -= clipboardChanged
@@ -64,7 +64,7 @@ class SeedPage : Cell, IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SeedPageInput) Blob {
         let ui = input.Ui
         let card = WalletParts.PageCard(ui, maxWidth: 760, fill: true)
         card.Add(Label(ui, ui.Strings.Get("recovery phrase"), AppTheme.Type17, AppTheme.Ink, ""))

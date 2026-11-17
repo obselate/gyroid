@@ -8,7 +8,7 @@ import Gyroid.Models
 import Gyroid.Services
 import Gyroid.Views.SettingsParts
 
-class SettingsMining : Cell {
+class SettingsMining : Cell[SettingsPageInput] {
     private var context SettingsPageInput
     private var mode string = "solo"
     private var pool string = ""
@@ -17,7 +17,7 @@ class SettingsMining : Cell {
     private var issue string = ""
     private var savedGpu bool = true
 
-    func Accept(input SettingsPageInput) {
+    protected override func InputChanged(input SettingsPageInput) {
         let settings = input.Settings
         let changed = savedMode != settings.MiningMode || savedPool != settings.PoolUrl
         let refresh = changed ||
@@ -38,7 +38,7 @@ class SettingsMining : Cell {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SettingsPageInput) Blob {
         let input = context
         let ui = input.Ui
         let selectedPool = mode == "pool" ? pool: savedPool

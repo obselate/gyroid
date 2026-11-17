@@ -37,7 +37,7 @@ data struct LibraryInput {
     var OnBackup Action[[]char]
 }
 
-class LibraryPage : Cell, IDisposable {
+class LibraryPage : Cell[LibraryInput], IDisposable {
     private let lifetime CancellationTokenSource = CancellationTokenSource()
     private var request CancellationTokenSource?
     private var generation int32
@@ -83,7 +83,7 @@ class LibraryPage : Cell, IDisposable {
         )
     }
 
-    func Accept(next LibraryInput) {
+    protected override func InputChanged(next LibraryInput) {
         if EqualityComparer[LibraryInput].Default.Equals(input, next) {
             return
         }
@@ -146,7 +146,7 @@ class LibraryPage : Cell, IDisposable {
         } catch (failure OperationCanceledException) { }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ LibraryInput) Blob {
         let card = WalletParts.PageCard(input.Ui, maxWidth: 560, fill: true)
         card.Gap = 0
         let status = Label(input.Ui, input.Status, AppTheme.Type13, AppTheme.Dim, "")
@@ -226,7 +226,7 @@ data struct LibraryListInput {
     var OnImport Action[string]
 }
 
-class LibraryList : Cell, IDisposable {
+class LibraryList : Cell[LibraryListInput], IDisposable {
     private var input LibraryListInput
     private var generation int32
     private var opened string?
@@ -258,7 +258,7 @@ class LibraryList : Cell, IDisposable {
         Rebuild()
     }
 
-    func Accept(next LibraryListInput) {
+    protected override func InputChanged(next LibraryListInput) {
         if EqualityComparer[LibraryListInput].Default.Equals(input, next) {
             return
         }
@@ -272,7 +272,7 @@ class LibraryList : Cell, IDisposable {
         RefreshRows()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ LibraryListInput) Blob {
         let ui = input.Ui
         let card = Container{Gap: AppTheme.Space14, MinHeight: 0, FlexShrink: 1}
         let header = WalletParts.Header(

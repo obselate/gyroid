@@ -105,7 +105,7 @@ data struct OverviewUpgradeInput {
     var OnUpgrade Action
 }
 
-class OverviewPage : Cell, IDisposable {
+class OverviewPage : Cell[OverviewInput], IDisposable {
     private var current OverviewInput
     private var arrivalSource IReadOnlyList[WalletOutput]? = nil
     private var changeSource IReadOnlyList[WalletOutput]? = nil
@@ -128,7 +128,7 @@ class OverviewPage : Cell, IDisposable {
     private let configureRecent Action[OverviewRecent]
     private var hovering bool
     private let hover Action[bool]
-    public func Accept(input OverviewInput) {
+    protected override func InputChanged(input OverviewInput) {
         let nextArrivals = input.Session.History.Outputs
         let nextChanges = input.Session.History.ChangeOutputs
         let chain = input.Snapshot.Balance?.ChainHeight ?? input.Node.Height
@@ -182,7 +182,7 @@ class OverviewPage : Cell, IDisposable {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ OverviewInput) Blob {
         let input = current
         let language = input.Ui.Strings.Language
         networkInput = OverviewNetworkInput{
@@ -904,7 +904,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
     )
 }
 
-class OverviewNetwork : Cell, IDisposable {
+class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
     private var source OverviewNetworkInput
     private var hashrate float64
     private var difficulty uint64
@@ -929,7 +929,7 @@ class OverviewNetwork : Cell, IDisposable {
         }
     }
 
-    func Accept(next OverviewNetworkInput) {
+    protected override func InputChanged(next OverviewNetworkInput) {
         if source == next {
             Read()
             return
@@ -1018,7 +1018,7 @@ class OverviewNetwork : Cell, IDisposable {
         lifetime.Dispose()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ OverviewNetworkInput) Blob {
         let input = source
         let ui = input.Ui
         let online = input.Running
@@ -1091,7 +1091,7 @@ class OverviewNetwork : Cell, IDisposable {
     }
 }
 
-class OverviewRecent : Cell {
+class OverviewRecent : Cell[OverviewRecentInput] {
     private var source OverviewRecentInput
     private var expanded string = ""
     private var rows[]OverviewRow = []OverviewRow{}
@@ -1103,7 +1103,7 @@ class OverviewRecent : Cell {
         rowBuilder = row -> row.IsArrival ? Arrive(source, row): Activity(source, row.Activity)
     }
 
-    func Accept(next OverviewRecentInput) {
+    protected override func InputChanged(next OverviewRecentInput) {
         if source.Equals(next) {
             return
         }
@@ -1262,7 +1262,7 @@ class OverviewRecent : Cell {
         return row
     }
 
-    override func Build() Blob {
+    protected override func Build(_ OverviewRecentInput) Blob {
         let input = source
         let ui = input.Ui
         let card = WalletParts.Card(
