@@ -89,15 +89,9 @@ class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
     private var drawer bool
     private var timer WindowTimer?
     private var disposed bool
-    private let configureDrawer Action[MessagesPage]
 
     prop IsDrawerOpen bool -> drawer
 
-    init() {
-        configureDrawer = child -> child.Accept(
-            MessagesInput{... input.Messages, Width: Math.Min(480.0, input.Width - 112), Drawer: true}
-        )
-    }
 
     func Dispose() {
         disposed = true
@@ -186,7 +180,10 @@ class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
                 Bottom: 20,
                 Width: Math.Min(480.0, input.Width - 112),
                 ZIndex: 20,
-                Cell.Mount[MessagesPage]("message-drawer", configureDrawer)
+                Cell.Mount[MessagesInput, MessagesPage](
+                    "message-drawer",
+                    MessagesInput{... input.Messages, Width: Math.Min(480.0, input.Width - 112), Drawer: true}
+                )
             }
         }
         let conversation = toast

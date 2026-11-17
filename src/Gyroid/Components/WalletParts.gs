@@ -119,7 +119,7 @@ class WalletParts {
             header Blob,
             content Blob,
             footer Blob,
-            close Action
+            onClose Action
         ) Blob -> Modal(
             ui,
             key,
@@ -135,8 +135,8 @@ class WalletParts {
                 Header = header,
                 Content = content,
                 Footer = footer,
-                OnCancel = close,
-                OnOpenChange = visible -> if !visible { close() }
+                OnCancel = onClose,
+                OnOpenChange = visible -> if !visible { onClose() }
             }
         )
 

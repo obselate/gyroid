@@ -65,7 +65,7 @@ class ControlParts {
                             Label(ui, item.Label ?? item.Id, AppTheme.Type12, active ? AppTheme.Ink: AppTheme.Body, "")
                         )
                     },
-                    OnChange: values -> {
+                    OnSelectionChange: values -> {
                         if values.Length > 0 && values[0] != selected {
                             chosen(values[0])
                         }

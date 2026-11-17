@@ -119,7 +119,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                 (
                     AppTheme.Checkbox with{
                         Label = ui.Strings.Get("I saved these words"),
-                        State = saved ? AccessibilityChecked.True: AccessibilityChecked.False,
+                        Value = saved ? AccessibilityChecked.True: AccessibilityChecked.False,
                         OnChange = state -> {
                             saved = state == AccessibilityChecked.True
                         }

@@ -134,7 +134,7 @@ class PendingSendRegion : Cell[PendingSendInput] {
     private func ConfirmPendingSend(input PendingSendInput) Blob {
         let ui = input.Ui
         let resume = resumePendingSend && input.Error.Length == 0 && input.Retryable
-        let close Action = () -> {
+        let onClose Action = () -> {
             if input.Busy {
                 return
             }
@@ -176,8 +176,8 @@ class PendingSendRegion : Cell[PendingSendInput] {
                     submitting = true
                     input.OnConfirm(resume)
                 },
-                OnCancel = close,
-                OnClose = close
+                OnCancel = onClose,
+                OnOpenChange = visible -> if !visible { onClose() }
             }
         )
     }

@@ -556,7 +556,7 @@ partial class App : Cell, IDisposable {
     }
 
     private func ConfirmPaymentReplacement() Blob {
-        let close Action = () -> {
+        let onClose Action = () -> {
             confirmPaymentReplacement = false
             pendingPayment = nil
             pendingPage = AppPage.None
@@ -582,8 +582,8 @@ partial class App : Cell, IDisposable {
                     ApplyNavigation(true)
                     Rebuild()
                 },
-                OnCancel: close,
-                OnClose: close
+                OnCancel: onClose,
+                OnOpenChange: visible -> if !visible { onClose() }
             }
         )
     }
@@ -1366,7 +1366,7 @@ partial class App : Cell, IDisposable {
             AppPage.Library
         }
         let banner = Problem()
-        let content = if page == AppPage.Overview {
+        let content Blob = if page == AppPage.Overview {
             Cell.Mount[OverviewInput, OverviewPage]("overview", CreateOverviewInput())
         } else if page == AppPage.Send {
             if wallet

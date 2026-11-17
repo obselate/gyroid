@@ -47,7 +47,6 @@ class SyncPage : Cell[SyncInput], IDisposable {
     private let started int64 = Stopwatch.GetTimestamp()
     private let peerSamples List[SyncSample] = List[SyncSample]()
     private let rateSamples List[SyncSample] = List[SyncSample]()
-    private let configureChart Action[SyncChart]
     private var input SyncInput
     private var state SyncState
     private var pending SyncState
@@ -61,22 +60,18 @@ class SyncPage : Cell[SyncInput], IDisposable {
     private var connectedAt int64
     private var progressAt int64
 
-    init() {
-        configureChart = chart -> chart.Accept(
-            SyncChartInput{
-                Ui: input.Ui,
-                Language: input.Language,
-                Samples: samples,
-                Now: now,
-                Step: state.Step,
-                Peak: peak,
-                Stalled: stalled,
-                Width: (input.Fill ? input.Width: Math.Min(760, input.Width - 48)) -
-                AppTheme.GetPagePadding(input.Width, input.Height) * 2,
-                Height: input.Height,
-                Fill: input.Fill
-            }
-        )
+    private func ChartInput() SyncChartInput -> SyncChartInput{
+        Ui: input.Ui,
+        Language: input.Language,
+        Samples: samples,
+        Now: now,
+        Step: state.Step,
+        Peak: peak,
+        Stalled: stalled,
+        Width: (input.Fill ? input.Width: Math.Min(760, input.Width - 48)) -
+        AppTheme.GetPagePadding(input.Width, input.Height) * 2,
+        Height: input.Height,
+        Fill: input.Fill
     }
 
     protected override func InputChanged(next SyncInput) {
@@ -230,13 +225,13 @@ class SyncPage : Cell[SyncInput], IDisposable {
             card.Add(Track(ui, percent / 100.0, 0, AppTheme.Lime))
         } else if step == 3 {
             let limit = node.Limit
-            card.Add(Cell.Mount[SyncChart]("sync-chart", configureChart))
+            card.Add(Cell.Mount[SyncChartInput, SyncChart]("sync-chart", ChartInput()))
             card.Add(Slots(ui, node.Peers, limit))
         } else if step == 4 {
             let done = node.Progress
             let share = node.ChainHeight > 0 ? Math.Min(1.0, float64(done) / node.ChainHeight): 0.0
             let color = stalled ? AppTheme.Orange: AppTheme.Lime
-            card.Add(Cell.Mount[SyncChart]("sync-chart", configureChart))
+            card.Add(Cell.Mount[SyncChartInput, SyncChart]("sync-chart", ChartInput()))
             let checkpoint = node.ChainHeight > 0 ? Math.Min(
                 1.0,
                 float64(node.CheckpointHeight) / node.ChainHeight

@@ -318,10 +318,17 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 Gap: AppTheme.Space6,
                 Width: 339,
                 MaxHeight: height,
+                Padding: AppTheme.Space0,
+                BackgroundColor: Color.Transparent,
+                BorderColor: Color.Transparent,
                 ViewportMargin: 0,
                 Viewport: ElementRect{X: 0, Y: 52, Width: width, Height: Math.Max(1.0, center - 8)},
                 Content: Container{FlexDirection: FlexDirection.Row, caret, card},
-                CreatePanel: (input PopoverInput, bounds ElementRect, content Blob) -> Container{},
+                ConfigurePanel: (_, _, _, panel) -> {
+                    panel.BasedOn = nil
+                    panel.BorderWidth = AppTheme.Border0
+                    panel.BorderRadius = AppTheme.Radius0
+                },
                 Role: AccessibilityRole.Dialog,
                 AccessibilityName: ui.Strings.Get("node"),
                 OnDismiss: reason -> {
@@ -380,7 +387,7 @@ partial class App {
 
     private func UpgradeDialog() Blob {
         let node = wallet.Node.Status
-        let close Action = () -> {
+        let onClose Action = () -> {
             upgradeShown = false
             Rebuild()
         }
@@ -407,9 +414,9 @@ partial class App {
                         TextWrap: TextWrap.Wrap
                     }
                 },
-                Footer = ActionRow([]Blob{Button(ui, "Close", close)}),
-                OnCancel = close,
-                OnClose = close
+                Footer = ActionRow([]Blob{Button(ui, "Close", onClose)}),
+                OnCancel = onClose,
+                OnOpenChange = visible -> if !visible { onClose() }
             }
         )
     }

@@ -154,9 +154,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
     private var listInput HistoryListInput
     private var exportInput HistoryExportInput
     private var ribbon HistoryRibbon?
-    private let configureRibbon Action[HistoryRibbon]
-    private let configureList Action[HistoryTransactions]
-    private let configureExport Action[HistoryExport]
+    private let createRibbon Func[HistoryRibbon]
     private let selectRange Action[uint64, uint64]
     private let markRow Action[uint64]
     private let requestTimes Action[IEnumerable[uint64]]
@@ -173,12 +171,11 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
                 PrepareRows()
             }
         }
-        configureRibbon = cell -> {
+        createRibbon = () -> {
+            let cell = HistoryRibbon()
             ribbon = cell
-            cell.Accept(ribbonInput)
+            return cell
         }
-        configureList = cell -> cell.Accept(listInput)
-        configureExport = cell -> cell.Accept(exportInput)
         selectRange = (start, end) -> {
             if from == start && to == end {
                 return
@@ -316,8 +313,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         let selected = period
         let generation = periodGeneration
         let id = identity
-        let token = request.Token
-        go ResolvePeriod(window, input, selected, generation, id, token)
+        go ResolvePeriod(window, input, selected, generation, id, request.Token)
     }
 
     private func ContinueLoading() {
@@ -491,7 +487,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             Collect: collectExport,
             ChooseFile: input.ChooseFile
         }
-        bar.Add(Cell.Mount[HistoryExport]("history-export", configureExport))
+        bar.Add(Cell.Mount[HistoryExportInput, HistoryExport]("history-export", exportInput))
         panel.Add(bar)
         ribbonInput = HistoryRibbonInput{
             Data: prepared.Ribbon,
@@ -510,7 +506,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             OnSelect: selectRange,
             RequestTimes: requestTimes
         }
-        panel.Add(Cell.Mount[HistoryRibbon]("history-ribbon", configureRibbon))
+        panel.Add(Cell.Mount[HistoryRibbonInput, HistoryRibbon]("history-ribbon", ribbonInput, createRibbon))
         if paginationIssue.Length > 0 {
             panel.Add(MessageParts.Problem(ui, paginationIssue))
         }
@@ -545,7 +541,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             RequestTimes: requestTimes,
             LoadMore: loadMore
         }
-        panel.Add(Cell.Mount[HistoryTransactions]("history-list", configureList))
+        panel.Add(Cell.Mount[HistoryListInput, HistoryTransactions]("history-list", listInput))
         return panel
     }
 
@@ -628,9 +624,8 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         let snapshot = current.Snapshot
         let generation = timesGeneration
         let id = identity
-        let token = request.Token
         let known = times
-        go FetchTimes(window, history, snapshot, known, missing, generation, id, token)
+        go FetchTimes(window, history, snapshot, known, missing, generation, id, request.Token)
     }
 
     private async func FetchTimes(
@@ -690,8 +685,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         let history = current.Session.History
         let generation = paginationGeneration
         let id = identity
-        let token = request.Token
-        go LoadMoreAsync(window, history, generation, id, token)
+        go LoadMoreAsync(window, history, generation, id, request.Token)
     }
 
     private async func LoadMoreAsync(
@@ -770,14 +764,15 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
     private let marks List[uint64] = List[uint64]()
     private var hoverCell HistoryRibbonHover?
     private var plotHeight float64
-    private let configureHover Action[HistoryRibbonHover]
+    private let createHover Func[HistoryRibbonHover]
     private var plotWidth float64
     private let plot ElementHandle = ElementHandle()
 
     init() {
-        configureHover = cell -> {
+        createHover = () -> {
+            let cell = HistoryRibbonHover()
             hoverCell = cell
-            cell.Accept(current, plotWidth, plotHeight)
+            return cell
         }
         plot.MetricsChanged += metrics -> {
             if metrics.IsMounted && metrics.BorderBox.Width != plotWidth {
@@ -884,7 +879,11 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
             area.Add(Handle(left, height))
             area.Add(Handle(right, height))
         }
-        area.Add(Cell.Mount[HistoryRibbonHover]("history-ribbon-hover", configureHover))
+        area.Add(Cell.Mount[HistoryRibbonHoverInput, HistoryRibbonHover](
+            "history-ribbon-hover",
+            HistoryRibbonHoverInput{Ribbon: current, Width: plotWidth, Height: plotHeight},
+            createHover
+        ))
         let axis = Container{
             Height: 18,
             FlexShrink: 0,
@@ -973,7 +972,13 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
     }
 }
 
-class HistoryRibbonHover : Cell {
+data struct HistoryRibbonHoverInput {
+    var Ribbon HistoryRibbonInput
+    var Width float64
+    var Height float64
+}
+
+class HistoryRibbonHover : Cell[HistoryRibbonHoverInput] {
     private var current HistoryRibbonInput
     private var plotWidth float64
     private var plotHeight float64
@@ -982,13 +987,14 @@ class HistoryRibbonHover : Cell {
     private var hover int32 = -1
     private var marked uint64
 
-    public func Accept(input HistoryRibbonInput, width float64, height float64) {
-        if current.Equals(input) && plotWidth == width && plotHeight == height {
+    protected override func InputChanged(next HistoryRibbonHoverInput) {
+        let input = next.Ribbon
+        if current.Equals(input) && plotWidth == next.Width && plotHeight == next.Height {
             return
         }
         current = input
-        plotWidth = width
-        plotHeight = height
+        plotWidth = next.Width
+        plotHeight = next.Height
         Rebuild()
     }
 
@@ -999,7 +1005,7 @@ class HistoryRibbonHover : Cell {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryRibbonHoverInput) Blob {
         let input = current
         let low = input.Low
         let span = input.Span
@@ -1569,7 +1575,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                                     .ToArray(),
                                 SelectedIds: []string{proofRecipient.ToString()},
                                 AccessibilityName: ui.Strings.Get("recipient"),
-                                OnChange: ids -> {
+                                OnSelectionChange: ids -> {
                                     if ids.Length > 0 {
                                         proofRecipient = Int32.Parse(ids[0], CultureInfo.InvariantCulture)
                                         Prove(row)
@@ -1856,8 +1862,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
         proofValid = false
         let transaction = row.TxId
         let address = recipient.Address
-        let token = request.Token
-        go LoadProof(window, proofs, transaction, address, amount, generation, id, token)
+        go LoadProof(window, proofs, transaction, address, amount, generation, id, request.Token)
     }
 
     private async func LoadProof(
@@ -1940,8 +1945,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
             let selected = observeGeneration
             let checks = current.Session.Checks
             let id = current.Identity
-            let token = request.Token
-            go LoadObserver(window, checks, transaction, id, selected, token)
+            go LoadObserver(window, checks, transaction, id, selected, request.Token)
         }
         Rebuild()
     }
@@ -2076,7 +2080,7 @@ class HistoryExport : Cell[HistoryExportInput], IDisposable {
             },
             (
                 AppTheme.Checkbox with{
-                    State = memos ? AccessibilityChecked.True: AccessibilityChecked.False,
+                    Value = memos ? AccessibilityChecked.True: AccessibilityChecked.False,
                     Label = ui.Strings.Get("memos"),
                     LabelFontSize = AppTheme.Type12,
                     OnChange = state -> {

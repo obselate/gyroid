@@ -122,7 +122,7 @@ class WalletSession : IDisposable {
     }
 
     private func IdleExpired() bool -> settings.AutoLockMinutes > 0 && WalletLockScheduler.Now() - Interlocked.Read(
-        ref lastActivity
+        in lastActivity
     ) >= int64(settings.AutoLockMinutes) * 60000
 
     private async func RunBackgroundAsync(parentContext Context) {
@@ -152,7 +152,7 @@ class WalletSession : IDisposable {
                 continue
             }
             let remaining = int64(settings.AutoLockMinutes) * 60000
-            - (WalletLockScheduler.Now() - Interlocked.Read(ref lastActivity))
+            - (WalletLockScheduler.Now() - Interlocked.Read(in lastActivity))
             if remaining > 0 {
                 select {
                     case <- autoLockChanged { }

@@ -102,7 +102,7 @@ class WalletForm {
         Controlled = true,
         Password = secret,
         RevealButton = secret,
-        IssueText = issue.Length > 0 ? ui.Strings.Explain(issue): nil,
+        Error = issue.Length > 0 ? ui.Strings.Explain(issue): nil,
         Invalid = issue.Length > 0,
         Disabled = disabled,
         Width = Percent(100),
@@ -120,7 +120,7 @@ class WalletForm {
         disabled bool = false
     ) Blob -> FormField{
         Content: Grow(Container{MinWidth: 0, Entry(FieldInput(label, value, changed, secret, issue, disabled))}),
-        ConfigureRoot: (_, root) -> {
+        CreateRoot: (_, root) -> {
             root.FlexDirection = FlexDirection.Row
             root.Gap = AppTheme.Space12
             root.FlexShrink = 0
@@ -134,6 +134,7 @@ class WalletForm {
                     Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, "")
                 }
             )
+            return root
         }
     }
 

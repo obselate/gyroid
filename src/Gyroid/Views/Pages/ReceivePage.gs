@@ -137,8 +137,7 @@ class ReceivePage : Cell[ReceivePageInput], IDisposable {
         let address = input.Address
         let height = input.ChainHeight
         let previous = prepared
-        let token = cancellation.Token
-        go PrepareRequest(owner, request, history, address, height, previous, id, token)
+        go PrepareRequest(owner, request, history, address, height, previous, id, cancellation.Token)
     }
 
     private func PrepareRequest(
@@ -303,7 +302,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                         Password: input.Privacy,
                         Disabled: input.Disabled,
                         Invalid: draft.AmountIssue.Length > 0,
-                        IssueText: if draft.AmountIssue.Length > 0 {
+                        Error: if draft.AmountIssue.Length > 0 {
                             ui.Strings.Explain(draft.AmountIssue)
                         } else {
                             nil
@@ -322,7 +321,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                             ContentDirection: Direction.LeftToRight,
                             OnChange: value -> input.Change.Invoke("memo", value),
                             Invalid: draft.MemoIssue.Length > 0,
-                            IssueText: draft.MemoIssue.Length > 0 ? ui.Strings.Explain(draft.MemoIssue): nil,
+                            Error: draft.MemoIssue.Length > 0 ? ui.Strings.Explain(draft.MemoIssue): nil,
                             Disabled: input.Disabled,
                             Password: input.Privacy,
                             Placeholder: ui.Strings.Get("memo"),

@@ -379,7 +379,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                         Width: Percent(100),
                         Height: rows * 19.0 + 14,
                         MinimumRows: 1,
-                        MinimumHeight: 33,
+                        MinHeight: 33,
                         FontSize: AppTheme.Type13,
                         FontFamily: AppTheme.Font,
                         BackgroundColor: AppTheme.Black,

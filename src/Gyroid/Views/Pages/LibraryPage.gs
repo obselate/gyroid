@@ -48,7 +48,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     private var importPath string = ""
     private let start Action[string]
     private let back Action
-    private let configureList Action[LibraryList]
 
     init() {
         start = kind -> {
@@ -59,28 +58,27 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             form = ""
             Rebuild()
         }
-        configureList = cell -> cell.Accept(
-            LibraryListInput{
-                Session: input.Session,
-                Ui: input.Ui,
-                State: input.State,
-                ActiveWallet: input.ActiveWallet,
-                Directory: input.Directory,
-                Network: input.Network,
-                Busy: input.Busy,
-                Language: input.Language,
-                Wallets: wallets,
-                Issue: issue,
-                ChooseFile: input.ChooseFile,
-                OnNavigate: input.OnNavigate,
-                OnBackup: input.OnBackup,
-                OnStart: start,
-                OnImport: path -> {
-                    importPath = path
-                    start("File")
-                }
-            }
-        )
+    }
+
+    private func ListInput() LibraryListInput -> LibraryListInput{
+        Session: input.Session,
+        Ui: input.Ui,
+        State: input.State,
+        ActiveWallet: input.ActiveWallet,
+        Directory: input.Directory,
+        Network: input.Network,
+        Busy: input.Busy,
+        Language: input.Language,
+        Wallets: wallets,
+        Issue: issue,
+        ChooseFile: input.ChooseFile,
+        OnNavigate: input.OnNavigate,
+        OnBackup: input.OnBackup,
+        OnStart: start,
+        OnImport: path -> {
+            importPath = path
+            start("File")
+        }
     }
 
     protected override func InputChanged(next LibraryInput) {
@@ -113,9 +111,8 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let directory = next.Directory
         let network = next.Network
         let id = generation
-        let token = current.Token
         let previousRows = wallets
-        go Load(library, directory, network, previousRows, owner, id, token)
+        go Load(library, directory, network, previousRows, owner, id, current.Token)
     }
 
     private func Load(
@@ -195,7 +192,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 )
             )
         } else {
-            card.Add(Cell.Mount[LibraryList]("list", configureList))
+            card.Add(Cell.Mount[LibraryListInput, LibraryList]("list", ListInput()))
         }
         return card
     }
@@ -238,11 +235,13 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
 
     init() {
         rowKey = row -> row.Filename
-        rowBuilder = row -> Cell.Mount[LibraryWalletRow](
+        rowBuilder = row -> Cell.Mount[LibraryWalletRowInput, LibraryWalletRow](
             row.Filename,
-            cell -> {
-                cell.Accept(this, row)
+            LibraryWalletRowInput{Owner: this, Wallet: row},
+            () -> {
+                let cell = LibraryWalletRow()
                 realized.Add(cell)
+                return cell
             }
         )
     }
@@ -631,20 +630,25 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
     }
 }
 
-class LibraryWalletRow : Cell, IDisposable {
+data struct LibraryWalletRowInput {
+    var Owner LibraryList
+    var Wallet LibraryWallet
+}
+
+class LibraryWalletRow : Cell[LibraryWalletRowInput], IDisposable {
     var Owner LibraryList
     var Wallet LibraryWallet
 
-    func Accept(owner LibraryList, wallet LibraryWallet) {
-        if Owner == owner && Wallet.Equals(wallet) {
+    protected override func InputChanged(input LibraryWalletRowInput) {
+        if Owner == input.Owner && Wallet.Equals(input.Wallet) {
             return
         }
-        Owner = owner
-        Wallet = wallet
+        Owner = input.Owner
+        Wallet = input.Wallet
         Rebuild()
     }
 
-    override func Build() Blob -> Owner.Row(this)
+    protected override func Build(_ LibraryWalletRowInput) Blob -> Owner.Row(this)
 
     func Dispose() {
         Owner.Release(this)

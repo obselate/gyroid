@@ -76,10 +76,9 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
         if let window = input.Window {
             let source = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
             lifetime = source
-            let token = source.Token
             let id = generation
             let previous = rows
-            go Prepare(input, previous, window, id, token)
+            go Prepare(input, previous, window, id, source.Token)
         }
     }
 
@@ -283,7 +282,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
 
     private func DeleteDialog(input ContactsInput) Blob {
         let ui = input.Ui
-        let close Action = () -> {
+        let onClose Action = () -> {
             if input.Busy {
                 return
             }
@@ -319,8 +318,8 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
                         }
                     )
                 },
-                OnCancel = close,
-                OnClose = close
+                OnCancel = onClose,
+                OnOpenChange = visible -> if !visible { onClose() }
             }
         )
     }

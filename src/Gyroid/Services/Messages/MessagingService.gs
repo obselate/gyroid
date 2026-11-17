@@ -35,7 +35,7 @@ partial class MessagingService {
     var Error string = ""
 
     prop Conversations IReadOnlyList[Conversation] -> conversations
-    prop Revision int64 -> Interlocked.Read(ref viewRevision)
+    prop Revision int64 -> Interlocked.Read(in viewRevision)
     prop OwnAddress string -> ownAddress
     prop Network string -> session.settings.Network
     prop Mode MessengerMode -> if session.State == WalletState.Locked {

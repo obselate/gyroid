@@ -124,8 +124,6 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
     private var disposed bool
     private var networkInput OverviewNetworkInput
     private var recentInput OverviewRecentInput
-    private let configureNetwork Action[OverviewNetwork]
-    private let configureRecent Action[OverviewRecent]
     private var hovering bool
     private let hover Action[bool]
     protected override func InputChanged(input OverviewInput) {
@@ -166,16 +164,13 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
         }
         let pending = CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
         request = pending
-        let token = pending.Token
         let id = generation
         let outputs = input.Snapshot.History
         let previousRows = rows
-        go Prepare(input, nextArrivals, nextChanges, outputs, chain, previousRows, window, id, token)
+        go Prepare(input, nextArrivals, nextChanges, outputs, chain, previousRows, window, id, pending.Token)
     }
 
     init() {
-        configureNetwork = cell -> cell.Accept(networkInput)
-        configureRecent = cell -> cell.Accept(recentInput)
         hover = value -> if hovering != value {
             hovering = value
             Rebuild()
@@ -278,10 +273,10 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
                         ConfirmingBlocks: confirmingBlocks
                     }
                 ),
-                Cell.Mount[OverviewNetwork]("network", configureNetwork)
+                Cell.Mount[OverviewNetworkInput, OverviewNetwork]("network", networkInput)
             }
         )
-        page.Add(Cell.Mount[OverviewRecent]("recent", configureRecent))
+        page.Add(Cell.Mount[OverviewRecentInput, OverviewRecent]("recent", recentInput))
         return page
     }
 
@@ -978,8 +973,7 @@ class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
         loadedHash = source.BestHash
         let session = source.Session
         let id = generation
-        let token = current.Token
-        go Load(session, window, id, token)
+        go Load(session, window, id, current.Token)
     }
 
     private async func Load(session NodeSession, window Window, id int32, token CancellationToken) {

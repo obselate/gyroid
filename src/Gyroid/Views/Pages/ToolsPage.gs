@@ -91,22 +91,11 @@ data struct ToolsLockInput {
 }
 
 class ToolsPage : Cell[ToolsInput] {
-    private let configurePrivacy Action[ToolsPrivacyRegion]
-    private let configureHealth Action[ToolsHealthRegion]
     private let reportChanged Action
     private var current ToolsInput
 
     init() {
         reportChanged = () -> Rebuild()
-        configurePrivacy = region -> region.Accept(current)
-        configureHealth = region -> region.Accept(
-            ToolsHealthInput{
-                Region: current.Region,
-                State: current.State,
-                Outputs: current.Outputs,
-                OnReport: reportChanged
-            }
-        )
     }
 
     protected override func InputChanged(input ToolsInput) {
@@ -119,7 +108,7 @@ class ToolsPage : Cell[ToolsInput] {
     protected override func Build(_ ToolsInput) Blob {
         let input = current
         if input.Section == AppPage.Privacy {
-            return Cell.Mount[ToolsPrivacyRegion]("privacy-" + input.Region.Identity, configurePrivacy)
+            return Cell.Mount[ToolsInput, ToolsPrivacyRegion]("privacy-" + input.Region.Identity, input)
         }
         let region = input.Region
         let ui = region.Ui
@@ -151,7 +140,10 @@ class ToolsPage : Cell[ToolsInput] {
                 case "sign": Cell.Mount[ToolsRegionInput, ToolsSignRegion]("sign-" + region.Identity, region)
                 case "verify": Cell.Mount[ToolsRegionInput, ToolsVerifyRegion]("verify-" + region.Identity, region)
                 case "proof": Cell.Mount[ToolsRegionInput, ToolsProofRegion]("proof-" + region.Identity, region)
-                default: Cell.Mount[ToolsHealthRegion]("health-" + region.Identity, configureHealth)
+                default: Cell.Mount[ToolsHealthInput, ToolsHealthRegion](
+                    "health-" + region.Identity,
+                    ToolsHealthInput{Region: region, State: input.State, Outputs: input.Outputs, OnReport: reportChanged}
+                )
             }
         )
         return card
@@ -295,9 +287,9 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
             Gap: AppTheme.Space10,
             (
                 AppTheme.Switch with{
-                    Checked = context.Privacy,
+                    Value = context.Privacy,
                     AccessibilityName = ui.Strings.Get("hide amounts"),
-                    OnClick = input.OnPrivacy
+                    OnChange = _ -> input.OnPrivacy()
                 }
             ).Build(),
             Label(
@@ -740,8 +732,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         password = ""
         issue = ""
         Rebuild()
-        let token = lifetime.Token
-        go ReadPhrase(session, window, secret, identity, run, token)
+        go ReadPhrase(session, window, secret, identity, run, lifetime.Token)
     }
 
     private async func ReadPhrase(
@@ -1164,8 +1155,7 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         let message = state.SignMessage
         let identity = input.Identity
         let run = generation
-        let token = lifetime.Token
-        go SignMessage(state, session, window, message, identity, run, token)
+        go SignMessage(state, session, window, message, identity, run, lifetime.Token)
     }
 
     private async func SignMessage(
@@ -1272,8 +1262,7 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
         let signature = input.State.VerifySignature
         let identity = input.Identity
         let run = generation
-        let token = lifetime.Token
-        go VerifyMessage(session, window, signer, message, signature, identity, run, token)
+        go VerifyMessage(session, window, signer, message, signature, identity, run, lifetime.Token)
     }
 
     private async func VerifyMessage(
@@ -1405,8 +1394,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
         let amount = input.State.ProofAmount
         let identity = input.Identity
         let run = generation
-        let token = lifetime.Token
-        go VerifyProof(session, window, transaction, proofKey, address, amount, identity, run, token)
+        go VerifyProof(session, window, transaction, proofKey, address, amount, identity, run, lifetime.Token)
     }
 
     private async func VerifyProof(

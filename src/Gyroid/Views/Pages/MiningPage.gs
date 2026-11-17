@@ -632,10 +632,10 @@ class MiningChart : Cell[MiningChartInput] {
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
                     BackgroundColor: Color.Transparent,
-                    BorderWidth: 1.6,
-                    BorderColor: AppTheme.Lime,
-                    StrokeJoin: StrokeJoin.Round,
-                    VectorEffect: VectorEffect.NonScalingStroke
+                    Stroke: VectorStroke(1.6, AppTheme.Lime){
+                        .Join: StrokeJoin.Round,
+                        .VectorEffect: VectorEffect.NonScalingStroke
+                    }
                 }
             )
             area.Add(ChartParts.Point(Percent(100), Percent(samples[samples.Length - 1].Y * 100), AppTheme.Lime))
