@@ -357,7 +357,7 @@ class SendPage : Cell, IDisposable {
         } catch (error Exception) {
             problem = error.Message
         }
-        window?.TryPost(
+        window?.Post(
             () -> {
                 if !Current(id, session, network, wallet) {
                     return
@@ -407,7 +407,7 @@ class SendPage : Cell, IDisposable {
         } catch (error Exception) {
             problem = error.Message
         }
-        window?.TryPost(
+        window?.Post(
             () -> {
                 if !Current(id, session, network, wallet) {
                     return
@@ -445,7 +445,7 @@ class SendPage : Cell, IDisposable {
             .Run(
             async (ct) -> {
                 let outcome = await session.Send.SubmitAsync(pending, ct)
-                window?.TryPost(
+                window?.Post(
                     () -> {
                         if session.Settings.Network != network || session.Settings.ActiveWallet != wallet {
                             return
@@ -819,8 +819,8 @@ class SendRecipientEditor : Cell[SendEditorInput] {
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
             BorderRadius: AppTheme.Radius8,
             BorderWidth: AppTheme.Border0,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.ListItem, Name: suggestion.Name},
             OnClick: () -> {
                 row.Address = suggestion.Name
@@ -1317,8 +1317,8 @@ class SendReview : Cell {
             BorderRadius: expanded ? AppTheme.Radius8: AppTheme.Radius0,
             BackgroundColor: expanded ? AppTheme.Raised: Color.Transparent,
             BorderColor: AppTheme.Rule,
-            Hover: Style{BackgroundColor: AppTheme.Raised},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Raised},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get("Recipient") + " " + (index + 1).ToString(),

@@ -208,7 +208,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             try {
                 mode = session.Checks.WalletFileMode()
             } catch (failure Exception) { }
-            window.TryPost(
+            window.Post(
                 () -> {
                     if run == generation && identity == ReadWalletIdentity(session) {
                         checkedAt = date
@@ -314,7 +314,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space8,
             BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Disabled: context.Busy,
             Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get("Node settings")},
             OnClick: input.OnNodeSettings,
@@ -549,7 +549,7 @@ class ToolsPrivacyRegion : Cell, IDisposable {
             Gap: compact ? AppTheme.Space8: AppTheme.Space10,
             BorderColor: AppTheme.Rule,
             BackgroundColor: AppTheme.Raised,
-            Hover: Style{BorderColor: AppTheme.StrongRule, BackgroundColor: AppTheme.FaintRule},
+            HoverStyle: Style{BorderColor: AppTheme.StrongRule, BackgroundColor: AppTheme.FaintRule},
             top,
             Container{FlexDirection: FlexDirection.Row, AlignItems: AlignItems.Center, MinHeight: 30, value},
             Container{
@@ -617,7 +617,7 @@ class ToolsLockRegion : Cell[ToolsLockInput] {
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space10,
             BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Disabled: context.Busy,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
@@ -757,7 +757,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         try {
             phrase = await session.Keys.PhraseAsync(secret, linked.Token)
             let completed = TaskCompletionSource[bool](TaskCreationOptions.RunContinuationsAsynchronously)
-            if window.TryPost(
+            if window.Post(
                 () -> {
                     try {
                         if run == generation && identity == ReadWalletIdentity(session) {
@@ -774,7 +774,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             }
         } catch (failure OperationCanceledException) { } catch (failure Exception) {
             let message = failure.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if run == generation && identity == ReadWalletIdentity(session) {
                         busy = false
@@ -1187,7 +1187,7 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
@@ -1296,7 +1296,7 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
@@ -1430,7 +1430,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
@@ -1694,7 +1694,7 @@ class ToolsParts {
             } catch (failure Exception) {
                 error = failure.Message
             }
-            window.TryPost(() -> publish(report, error))
+            window.Post(() -> publish(report, error))
         }
 
         func ReadWalletIdentity(session WalletSession) string ->

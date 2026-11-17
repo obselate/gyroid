@@ -232,7 +232,7 @@ class NetworkPage : Cell, IDisposable {
                 if token.IsCancellationRequested {
                     return
                 }
-                window?.TryPost(
+                window?.Post(
                     () -> {
                         if id != generation {
                             return

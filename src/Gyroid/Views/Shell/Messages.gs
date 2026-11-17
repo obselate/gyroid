@@ -206,7 +206,7 @@ class MessageOverlay : Cell, IDisposable {
                 Gap: AppTheme.Space6,
                 MinWidth: 0,
                 AlignItems: AlignItems.Stretch,
-                Focus: Theme.Read().FocusStyle,
+                FocusStyle: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{
                     Role: AccessibilityRole.Button,
                     Name: ui.Strings.Get("Reply") + " " + Hidden(ui.Privacy, conversation.Title)

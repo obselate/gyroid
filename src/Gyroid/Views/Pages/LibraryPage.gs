@@ -130,7 +130,7 @@ class LibraryPage : Cell, IDisposable {
         try {
             let result = library.ListWallets(directory, token)
             let rows = result.Rows.SequenceEqual(previous) ? previous: result.Rows
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     if id != generation || directory != input.Directory || network != input.Network {
                         return
@@ -371,8 +371,8 @@ class LibraryList : Cell, IDisposable {
             BorderColor: input.Busy ? AppTheme.Edge: primary ? AppTheme.Lime: AppTheme.Rule,
             BackgroundColor: input.Busy ? AppTheme.Raised: AppTheme.Surface,
             Disabled: input.Busy,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
             MaterialIcons.Create(icon, AppTheme.Icon20, input.Busy ? AppTheme.Dim: AppTheme.Lime),
@@ -406,7 +406,7 @@ class LibraryList : Cell, IDisposable {
             Height: 48,
             BorderWidth: AppTheme.Border0,
             Disabled: input.Busy,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: label, Expanded: expanded},
             OnClick: () -> {
                 if input.Busy {
@@ -728,8 +728,8 @@ class LibraryMenu : Cell[LibraryMenuInput] {
             JustifyContent: JustifyContent.FlexStart,
             Gap: AppTheme.Space10,
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.MenuItem, Name: ui.Strings.Get(label)},
             OnClick: click,
             MaterialIcons.Create(icon, AppTheme.Icon16, AppTheme.Lime),

@@ -372,7 +372,7 @@ class HistoryPage : Cell, IDisposable {
     ) {
         try {
             let result = history.Prepare(request, ct)
-            window.TryPost(
+            window.Post(
                 () -> {
                     if generation != preparationGeneration || !Active(id) {
                         return
@@ -391,7 +391,7 @@ class HistoryPage : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let issue = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if generation == preparationGeneration && Active(id) {
                         paginationIssue = issue
@@ -654,7 +654,7 @@ class HistoryPage : Cell, IDisposable {
         for entry in fetched {
             merged[entry.Key] = entry.Value
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if !Active(id) || generation != timesGeneration {
                     return
@@ -707,7 +707,7 @@ class HistoryPage : Cell, IDisposable {
         } catch (error OperationCanceledException) { } catch (error Exception) {
             issue = error.Message
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if !Active(id) || generation != paginationGeneration {
                     return
@@ -737,7 +737,7 @@ class HistoryPage : Cell, IDisposable {
         } catch (error OperationCanceledException) { } catch (error Exception) {
             failed = true
         }
-        window.TryPost(
+        window.Post(
             () -> {
                 if !Active(id) || generation != periodGeneration {
                     return
@@ -1018,7 +1018,7 @@ class HistoryRibbonHover : Cell {
             Height: plotHeight,
             Focusable: true,
             Accessibility: Accessibility{Name: input.Ui.Strings.Get("block range")},
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             OnPointerDown: (event PointerEvent) -> {
                 event.Capture()
                 dragging = true
@@ -1160,7 +1160,6 @@ class HistoryTransactions : Cell, IDisposable {
     private var view ObserverView?
     private var viewLoading bool
     private var selectedRevision int32 = -1
-    private var selectionTimer WindowTimer?
     private var viewIssue string = ""
     private let closeObserver Action
     private let proveObserved Action
@@ -1244,14 +1243,7 @@ class HistoryTransactions : Cell, IDisposable {
         input.RequestTimes(input.Rows.Skip(Math.Max(0, firstVisible - 10)).Take(50).Select(row -> row.Height))
         RefreshRows()
         if selected.Length > 0 {
-            selectionTimer?.Dispose()
-            selectionTimer = input.Window?.SetTimeout(
-                () -> {
-                    selectionTimer = nil
-                    list.ScrollToItem(selected)
-                },
-                1
-            )
+            list.ScrollToItem(selected)
         }
     }
 
@@ -1286,7 +1278,6 @@ class HistoryTransactions : Cell, IDisposable {
     }
 
     public func Dispose() {
-        selectionTimer?.Dispose()
         proofGeneration++
         observeGeneration++
         lifetime.Cancel()
@@ -1409,8 +1400,8 @@ class HistoryTransactions : Cell, IDisposable {
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
             BorderColor: row.Open ? Color.Transparent: AppTheme.Rule,
             BackgroundColor: row.Open ? AppTheme.Raised: Color.Transparent,
-            Hover: Style{BackgroundColor: AppTheme.Raised},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Raised},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get(
@@ -1763,8 +1754,8 @@ class HistoryTransactions : Cell, IDisposable {
                 Padding: AppTheme.Space8,
                 BorderRadius: AppTheme.Radius6,
                 BackgroundColor: AppTheme.Rule,
-                Hover: Style{BackgroundColor: AppTheme.Edge},
-                Focus: Theme.Read().FocusStyle,
+                HoverStyle: Style{BackgroundColor: AppTheme.Edge},
+                FocusStyle: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: preview},
                 OnClick: () -> current.OnMessage(row.TxId),
                 label
@@ -1882,7 +1873,7 @@ class HistoryTransactions : Cell, IDisposable {
         try {
             let key = await proofs.ProveAsync(transaction, ct)
             let valid = await proofs.VerifyProofAsync(transaction, key, recipient, amount, ct)
-            window.TryPost(
+            window.Post(
                 () -> {
                     if !Active(id) || generation != proofGeneration {
                         return
@@ -1895,7 +1886,7 @@ class HistoryTransactions : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let issue = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if !Active(id) || generation != proofGeneration {
                         return
@@ -1965,7 +1956,7 @@ class HistoryTransactions : Cell, IDisposable {
     ) {
         try {
             let result = await checks.ObserveAsync(transaction, ct)
-            window.TryPost(
+            window.Post(
                 () -> {
                     if selected != observeGeneration || !Active(id) {
                         return
@@ -1977,7 +1968,7 @@ class HistoryTransactions : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let issue = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if selected != observeGeneration || !Active(id) {
                         return
@@ -2186,7 +2177,7 @@ class HistoryExport : Cell, IDisposable {
             failure = error.Message
         }
         let result = failure
-        input.Window?.TryPost(
+        input.Window?.Post(
             () -> {
                 if run == generation {
                     writing = false

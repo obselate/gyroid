@@ -176,24 +176,16 @@ class AppTheme {
         let IconButton IconButton = IconButton{RootStyle: IconButtonStyle, HoverBackgroundColor: Rule}
         let InfoButton IconButton = IconButton{
             Icon: MaterialIcons.Create("info", Icon14, Ink),
-            CreateRoot: (value, icon) -> Goo
-                .Button{
-                BasedOn: DisclosureStyle,
-                Width: Space22,
-                Height: Space20,
-                FlexShrink: 0,
-                BorderRadius: Radius3,
-                Opacity: value.Active ? 1: float64(Dim.R / Ink.R),
-                Hover: Style{Opacity: 1},
-                Active: Style{Opacity: 1},
-                Focus: Style{Opacity: 1, OutlineWidth: Border1, OutlineColor: Ink, OutlineOffset: Border0},
-                Accessibility: Accessibility{
-                    Role: AccessibilityRole.Button,
-                    Name: value.AccessibilityName!!,
-                    Selected: value.Active
-                },
-                OnClick: value.OnClick,
-                icon
+            ConfigureRoot: (value, icon, button) -> {
+                button.BasedOn = DisclosureStyle
+                button.Width = Space22
+                button.Height = Space20
+                button.FlexShrink = 0
+                button.BorderRadius = Radius3
+                button.Opacity = value.Active ? 1: float64(Dim.R / Ink.R)
+                button.HoverStyle = Style{Opacity: 1}
+                button.ActiveStyle = Style{Opacity: 1}
+                button.FocusStyle = Style{Opacity: 1, OutlineWidth: Border1, OutlineColor: Ink, OutlineOffset: Border0}
             }
         }
         let TabStyle Style = Style{

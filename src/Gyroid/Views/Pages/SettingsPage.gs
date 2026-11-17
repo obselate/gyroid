@@ -393,7 +393,7 @@ class SettingsPage : Cell, IDisposable {
         } catch (failure Exception) {
             error = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if generation != request {
                     return
@@ -699,7 +699,7 @@ class SettingsNode : Cell, IDisposable {
         try {
             exists = session.SettingsDirectoryExists(path)
         } catch (failure Exception) { }
-        owner?.TryPost(
+        owner?.Post(
             () -> {
                 if request == generation && directoryExists != exists {
                     directoryExists = exists
@@ -845,7 +845,7 @@ class SettingsNode : Cell, IDisposable {
             FlexShrink: 0,
             BorderWidth: Edges{Top: AppTheme.Border1, Bottom: AppTheme.Border0},
             BorderColor: AppTheme.FaintRule,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get("startup"),
@@ -1093,7 +1093,7 @@ class SettingsStartup : Cell, IDisposable {
                     try {
                         await input.Session.ApplySettingsAsync(next, ct)
                     } finally {
-                        owner.TryPost(
+                        owner.Post(
                             () -> {
                                 applying = false
                                 validated = nil
@@ -1112,8 +1112,7 @@ class SettingsStartup : Cell, IDisposable {
         let request = generation
         let next = value.Copy()
         let current = input.Settings.Copy()
-        let token = lifetime?.Token ?? CancellationToken.None
-        go ValidateSettings(next, current, owner, request, token)
+        go ValidateSettings(next, current, owner, request, lifetime?.Token ?? CancellationToken.None)
     }
 
     private func ValidateSettings(
@@ -1134,7 +1133,7 @@ class SettingsStartup : Cell, IDisposable {
         } catch (failure Exception) {
             issue = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 guard let edited = draft.Value else {
                     return
@@ -1277,7 +1276,7 @@ class SettingsWallet : Cell, IDisposable {
             }
             error = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != generation {
                     return
@@ -1879,7 +1878,7 @@ class SettingsAdvanced : Cell, IDisposable {
             }
             issue = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != checkpointGeneration {
                     return
@@ -1917,7 +1916,7 @@ class SettingsAdvanced : Cell, IDisposable {
         } catch (failure Exception) {
             issue = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request == certifyGeneration {
                     certifying = false
@@ -1987,7 +1986,7 @@ class SettingsAdvanced : Cell, IDisposable {
                 "0.0",
                 CultureInfo.InvariantCulture
             )
-            owner?.TryPost(
+            owner?.Post(
                 () -> {
                     if request != generation {
                         return
@@ -2006,7 +2005,7 @@ class SettingsAdvanced : Cell, IDisposable {
             )
         } catch (cancelled OperationCanceledException) { } catch (failure Exception) {
             let issue = failure.Message
-            owner?.TryPost(
+            owner?.Post(
                 () -> {
                     if request == generation {
                         data.loadIssue = issue
@@ -2219,7 +2218,7 @@ class SettingsDialogs : Cell, IDisposable {
             Array.Clear(password)
         }
         let cleanup = token.Register(() -> Array.Clear(words))
-        if !owner.TryPost(
+        if !owner.Post(
             () -> {
                 cleanup.Dispose()
                 if request != generation || session.Settings.ActiveWallet != wallet {
@@ -2263,7 +2262,7 @@ class SettingsDialogs : Cell, IDisposable {
         }
         let keys = result
         let cancellation = token.Register(() -> keys?.Dispose())
-        if !owner.TryPost(
+        if !owner.Post(
             () -> {
                 cancellation.Dispose()
                 if request != generation ||
@@ -2409,7 +2408,7 @@ class SettingsDialogs : Cell, IDisposable {
         } finally {
             keys.Dispose()
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != generation {
                     return
@@ -2715,7 +2714,7 @@ class SettingsDialogs : Cell, IDisposable {
             Array.Clear(current)
             Array.Clear(secret)
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != generation ||
                     context
@@ -2907,7 +2906,7 @@ class SettingsDialogs : Cell, IDisposable {
             }
             error = failure.Message
         }
-        owner.TryPost(
+        owner.Post(
             () -> {
                 if request != generation ||
                     context

@@ -100,7 +100,7 @@ class ContactsPage : Cell, IDisposable {
                 )
             }
             let result = prepared.SequenceEqual(previous) ? previous: prepared.ToArray()
-            window.TryPost(
+            window.Post(
                 () -> {
                     if id == generation {
                         rows = result
@@ -111,7 +111,7 @@ class ContactsPage : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let message = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if id == generation {
                         issue = message

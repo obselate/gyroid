@@ -1,4 +1,4 @@
-<Project Sdk="Gsharp.NET.Sdk/0.5.212">
+<Project Sdk="Gsharp.NET.Sdk/0.5.698">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <Version>0.4.1</Version>
@@ -27,9 +27,9 @@
     <None Include="assets/oasst1/LICENSE;assets/oasst1/NOTICE" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/oasst1/%(Filename)%(Extension)" />
     <GooShaderEffect Include="assets/background.slang" SourceIndependent="true" />
     <EmbeddedResource Include="$(GooShaderEffectIntermediateRoot)/$([MSBuild]::StableStringHash($([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', 'assets', 'background.slang')), 'Sha256'))/true/background.goo-effect" LogicalName="Gyroid.Background.goo-effect" />
-    <PackageReference Include="Goo" Version="[0.28.4]" />
-    <PackageReference Include="Goo.Accessibility" Version="[0.28.4]" />
-    <PackageReference Include="Goo.Widgets" Version="[0.18.2]" />
+    <PackageReference Include="Goo" Version="[0.31.0]" />
+    <PackageReference Include="Goo.Accessibility" Version="[0.31.0]" />
+    <PackageReference Include="Goo.Widgets" Version="[0.22.2]" />
     <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="[3.1.0]" />
     <PackageReference Include="NSec.Cryptography" Version="[26.4.0]" />
   </ItemGroup>

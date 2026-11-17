@@ -483,7 +483,7 @@ partial class App : Cell, IDisposable {
             Run(ct -> CreateWallet(filename, buffer, request, ct), nil, buffer)
         }
         backupSeed = buffer -> {
-            if window?.TryPost(() -> StartSeed(buffer)) != true {
+            if window?.Post(() -> StartSeed(buffer)) != true {
                 Array.Clear(buffer)
             }
         }
@@ -643,7 +643,7 @@ partial class App : Cell, IDisposable {
         owner.InputActivity += kind -> Touch()
         wallet.Changed = () -> {
             let issue = wallet.NodeError
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     if !closed {
                         if issue.Length > 0 {
@@ -698,7 +698,7 @@ partial class App : Cell, IDisposable {
         await drain
         workers.Writer.TryComplete()
         if let owner = host {
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     closeReady = true
                     owner.RequestClose()
@@ -727,21 +727,21 @@ partial class App : Cell, IDisposable {
             backgroundLockTimer?.Dispose()
             backgroundLockTimer = nil
         } else {
-            backgroundLockTimer ??= owner.SetTimeout(
+            backgroundLockTimer ??= owner.After(
+                float64(minutes) * 60000,
                 () -> {
                     backgroundLockTimer = nil
                     if wallet.Snapshot.State == WalletState.Unlocked && InBackground(owner) {
                         Lock()
                     }
-                },
-                float64(minutes) * 60000
+                }
             )
         }
     }
 
     private func Resize(owner Window) {
-        width = owner.Width / owner.UiScale
-        height = owner.Height / owner.UiScale
+        width = owner.Size.Width
+        height = owner.Size.Height
     }
 
     func UpdateScale() {
@@ -759,7 +759,7 @@ partial class App : Cell, IDisposable {
             100
         }
         if !scaleOverride {
-            owner.UiScale = float32(Math.Min(wallet.Settings.UiScalePercent, maximumScalePercent)) / 100F
+            owner.UiScale = float64(Math.Min(wallet.Settings.UiScalePercent, maximumScalePercent)) / 100.0
         }
         Resize(owner)
     }
@@ -804,7 +804,7 @@ partial class App : Cell, IDisposable {
             sendRows.Clear()
         }
         if !node.Running || node.Syncing || node.Peers == 0 || node.Height == 0 || snapshot.ScanBehind(node.Height) {
-            statusTimer ??= window?.SetInterval(() -> Refresh(true), 1000)
+            statusTimer ??= window?.Every(1000, () -> Refresh(true))
         } else {
             statusTimer?.Dispose()
             statusTimer = nil
@@ -841,7 +841,7 @@ partial class App : Cell, IDisposable {
         await wallet.CreateAsync(filename, buffer, ct)
         let password = buffer.ToArray()
         let cleanup = ct.Register(() -> Array.Clear(password))
-        if window?.TryPost(
+        if window?.Post(
             () -> {
                 cleanup.Dispose()
                 if closed || request != createGeneration || wallet.Settings.ActiveWallet != filename {
@@ -882,7 +882,7 @@ partial class App : Cell, IDisposable {
             words = await wallet.Keys.RevealSeedAsync(buffer, ct)
         } catch (failure WalletException) {
             let message = failure.Message
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if !closed &&
                         request == seedGeneration &&
@@ -898,7 +898,7 @@ partial class App : Cell, IDisposable {
             return
         }
         let cleanup = ct.Register(() -> Array.Clear(words))
-        if window?.TryPost(
+        if window?.Post(
             () -> {
                 cleanup.Dispose()
                 if closed ||
@@ -979,7 +979,7 @@ partial class App : Cell, IDisposable {
         } catch (failure WalletException) {
             message = failure.Message
         }
-        host.TryPost(
+        host.Post(
             () -> {
                 if closed || request != contactsGeneration {
                     return
@@ -1045,7 +1045,7 @@ partial class App : Cell, IDisposable {
             }
         } catch (failure OperationCanceledException) when closed { } catch (failure Exception) {
             Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if closed {
                         return
@@ -1064,7 +1064,7 @@ partial class App : Cell, IDisposable {
             throw failure
         } catch (failure Exception) {
             Console.Error.WriteLine("Window background task failed: " + failure.GetType().Name)
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if !closed {
                         ui.Actions.Report("Window background task failed")
@@ -1132,7 +1132,7 @@ partial class App : Cell, IDisposable {
                 Array.Clear(buffer)
             }
         }
-        window?.TryPost(
+        window?.Post(
             () -> {
                 if closed || ct.IsCancellationRequested {
                     return
@@ -1209,7 +1209,7 @@ partial class App : Cell, IDisposable {
         } catch (failure Exception) {
             message = "Refresh failed"
         }
-        window?.TryPost(
+        window?.Post(
             () -> {
                 if closed || request != refreshGeneration || identity != wallet.Settings.ActiveWallet {
                     return
@@ -1269,7 +1269,7 @@ partial class App : Cell, IDisposable {
         } catch (failure Exception) {
             message = "File dialog unavailable"
         }
-        host.TryPost(
+        host.Post(
             () -> {
                 if closed ||
                     request != chooserGeneration ||
@@ -1335,7 +1335,7 @@ partial class App : Cell, IDisposable {
         try {
             await task(ct)
         } catch (failure Exception) {
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if !closed && request == preferenceGeneration {
                         error = message

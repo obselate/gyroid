@@ -182,7 +182,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
             BorderColor: invalid ? AppTheme.Pink: AppTheme.Blue,
             BackgroundColor: message.Outgoing ? AppTheme.Lime: AppTheme.Rule,
             Gap: AppTheme.Space4,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: content + " " + time + " " + ui.Strings.Get(verification)
@@ -384,7 +384,7 @@ class MessageComposer : Cell, IDisposable {
                         FontFamily: AppTheme.Font,
                         BackgroundColor: AppTheme.Black,
                         TextColor: AppTheme.Ink,
-                        CreateEditor: (value, editor) -> {
+                        ConfigureEditor: (value, editor) -> {
                             editor.BorderWidth = AppTheme.Border0
                             editor.Padding = Edges{
                                 Left: AppTheme.Space8,
@@ -393,10 +393,9 @@ class MessageComposer : Cell, IDisposable {
                                 Bottom: AppTheme.Space8
                             }
                             editor.KeyBindings = []KeyBinding{
-                                KeyBinding{Key: Key.Enter, Action: send},
-                                KeyBinding{Key: Key.KeypadEnter, Action: send}
+                                KeyBinding{Key: Key.Enter, OnPress: send},
+                                KeyBinding{Key: Key.KeypadEnter, OnPress: send}
                             }
-                            return editor
                         }
                     }
                 )
@@ -410,7 +409,7 @@ class MessageComposer : Cell, IDisposable {
             Overflow: Overflow.Hidden,
             BackgroundColor: AppTheme.Rule,
             Disabled: !enabled || sending,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Send message")},
             OnClick: send,
             Container{

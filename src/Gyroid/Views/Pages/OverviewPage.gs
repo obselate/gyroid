@@ -411,7 +411,7 @@ class OverviewPage : Cell, IDisposable {
                 let nextRows = preparedRows.SequenceEqual(previous) ? previous: preparedRows.ToArray()
                 let issueText = failure
                 previous = nextRows
-                window.TryPost(
+                window.Post(
                     () -> {
                         if id != generation ||
                             (
@@ -434,7 +434,7 @@ class OverviewPage : Cell, IDisposable {
             }
         } catch (error OperationCanceledException) { } catch (error Exception) {
             let message = input.Ui.Strings.Explain(error.Message)
-            window.TryPost(
+            window.Post(
                 () -> if id == generation {
                     issue = message
                     Rebuild()
@@ -509,7 +509,7 @@ class OverviewParts {
                 FlexShrink: 0,
                 BorderRadius: AppTheme.Radius3,
                 BackgroundColor: Color.Transparent,
-                Focus: Theme.Read().FocusStyle,
+                FocusStyle: Theme.Read().FocusStyle,
                 Accessibility: Accessibility{Role: AccessibilityRole.Link, Name: ui.Strings.Get(label)},
                 OnClick: action,
                 Label(ui, ui.Strings.Get(label) + " ›", AppTheme.Type12, AppTheme.Lime, "")
@@ -656,7 +656,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                     BorderColor: peeking ? AppTheme.Lime: AppTheme.Edge,
                     BackgroundColor: peeking ? AppTheme.LimeQuiet: Color.Transparent,
                     Focusable: true,
-                    Focus: Theme.Read().FocusStyle,
+                    FocusStyle: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Show amounts")},
                     OnKeyDown: (event KeyEvent) -> if !peeking && (event.Key == Key.Space || event.Key == Key.Enter) {
                         peeking = true
@@ -987,7 +987,7 @@ class OverviewNetwork : Cell, IDisposable {
         try {
             result = await session.ReadNetworkSummaryAsync(token)
         } catch (error Exception) { }
-        window.TryPost(
+        window.Post(
             () -> if id == generation {
                 request?.Dispose()
                 request = nil
@@ -1177,7 +1177,7 @@ class OverviewRecent : Cell {
             Padding: Edges{Top: AppTheme.Space12, Bottom: AppTheme.Space12},
             FlexShrink: 0,
             BackgroundColor: Color.Transparent,
-            Focus: Theme.Read().FocusStyle,
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: Hidden(input.Privacy, SafeText(item.Source, 512)) + " " + Wait(input.Ui, item.Blocks),

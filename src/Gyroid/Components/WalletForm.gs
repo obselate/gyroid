@@ -120,7 +120,7 @@ class WalletForm {
         disabled bool = false
     ) Blob -> FormField{
         Content: Grow(Container{MinWidth: 0, Entry(FieldInput(label, value, changed, secret, issue, disabled))}),
-        CreateRoot: (_, root) -> {
+        ConfigureRoot: (_, root) -> {
             root.FlexDirection = FlexDirection.Row
             root.Gap = AppTheme.Space12
             root.FlexShrink = 0
@@ -134,9 +134,8 @@ class WalletForm {
                     Label(ui, ui.Strings.Get(label), AppTheme.Type13, AppTheme.Body, "")
                 }
             )
-            return root
         }
-    }.Build()
+    }
 
     func Amount(field TextField) Blob -> Entry(
         field with{

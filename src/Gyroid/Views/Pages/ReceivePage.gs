@@ -153,7 +153,7 @@ class ReceivePage : Cell, IDisposable {
     ) {
         try {
             let result = WalletSession.PrepareReceive(request, address, history, height, previous, token)
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     if id == generation {
                         prepared = result
@@ -165,7 +165,7 @@ class ReceivePage : Cell, IDisposable {
                 }
             )
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
-            owner.TryPost(
+            owner.Post(
                 () -> {
                     if id == generation {
                         error = failure.Message

@@ -221,7 +221,7 @@ class MessagesPage : Cell, IDisposable {
                 source.Contacts,
                 token
             )
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if version != generation || token.IsCancellationRequested {
                         return
@@ -243,7 +243,7 @@ class MessagesPage : Cell, IDisposable {
             )
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
             let error = failure.Message
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if version == generation {
                         SetIssue(error)
@@ -274,7 +274,7 @@ class MessagesPage : Cell, IDisposable {
             await service.Select(current, token)
         } catch (failure OperationCanceledException) when token.IsCancellationRequested { } catch (failure Exception) {
             let error = failure.Message
-            window?.TryPost(
+            window?.Post(
                 () -> {
                     if version == generation &&
                         service.OwnAddress == input.Address &&
@@ -340,7 +340,7 @@ class MessagesPage : Cell, IDisposable {
             .Ui
             .Actions
             .window
-            ?.TryPost(
+            ?.Post(
             () -> {
                 if version != operationGeneration ||
                     input
@@ -752,8 +752,8 @@ class MessageConversationList : Cell {
             MinWidth: 0,
             Gap: AppTheme.Space6,
             BackgroundColor: conversation.Selected ? AppTheme.LimeQuiet: Color.Transparent,
-            Hover: Style{BackgroundColor: AppTheme.Rule},
-            Focus: Theme.Read().FocusStyle,
+            HoverStyle: Style{BackgroundColor: AppTheme.Rule},
+            FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: Hidden(conversation.Privacy, conversation.Title) +
@@ -964,7 +964,7 @@ class MessageThread : Cell, IDisposable {
                 )
             }
             let result = prepared.SequenceEqual(oldRows) ? oldRows: prepared.ToArray()
-            window.TryPost(
+            window.Post(
                 () -> {
                     if version != generation || token.IsCancellationRequested {
                         return
@@ -1137,7 +1137,7 @@ class MessageDialog : Cell, IDisposable {
                 token
             )
             let rows = result.SequenceEqual(previous) ? previous: result
-            window.TryPost(
+            window.Post(
                 () -> {
                     if version == contactGeneration && !token.IsCancellationRequested {
                         contacts = rows
@@ -1147,7 +1147,7 @@ class MessageDialog : Cell, IDisposable {
             )
         } catch (error OperationCanceledException) when token.IsCancellationRequested { } catch (error Exception) {
             let message = error.Message
-            window.TryPost(
+            window.Post(
                 () -> {
                     if version == contactGeneration {
                         issue = message
@@ -1214,7 +1214,7 @@ class MessageDialog : Cell, IDisposable {
             .Ui
             .Actions
             .window
-            ?.TryPost(
+            ?.Post(
             () -> {
                 if version != generation ||
                     service.OwnAddress != identity ||

@@ -318,7 +318,7 @@ class MiningPage : Cell, IDisposable {
             }
         } catch (failure OperationCanceledException) when parentContext.IsCancelled { } catch (failure Exception) {
             Console.Error.WriteLine("Mining background task failed: " + failure.GetType().Name)
-            input.Window?.TryPost(
+            input.Window?.Post(
                 () -> {
                     if id == generation {
                         input.Ui.Actions.Report("Mining background task failed")
@@ -340,7 +340,7 @@ class MiningPage : Cell, IDisposable {
             observation = await input.Session.Mining.PollAsync(observation, requests, pageContext.Token)
             let report = observation.Report
             let revision = observation.Request.Revision
-            input.Window?.TryPost(
+            input.Window?.Post(
                 () -> {
                     if id != generation || revision != pollRevision {
                         return
