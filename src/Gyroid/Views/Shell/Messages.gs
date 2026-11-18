@@ -17,7 +17,8 @@ partial class App {
     private var messageOverlay MessageOverlay?
     private var messagesWallet string = ""
     private var messagesAddress string = ""
-    private let createMessageOverlay Func[MessageOverlay]
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createMessageOverlay() -> MessageOverlay
     private let openMessages Action
     private let closeMessageDrawer Action
     private let reloadMessageContacts Action

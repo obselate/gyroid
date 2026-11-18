@@ -166,9 +166,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private let openDialog Action[string]
     private let openPurge Action[string, string, int32]
     private let refreshNodeData Action
-    private let createNode Func[SettingsNode]
-    private let createAdvanced Func[SettingsAdvanced]
-    private let createDialogs Func[SettingsDialogs]
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createNode() -> SettingsNode
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createAdvanced() -> SettingsAdvanced
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createDialogs() -> SettingsDialogs
 
     init() {
         openDialog = kind -> dialogs?.Open(kind)

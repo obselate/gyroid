@@ -231,18 +231,21 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
     private var issue string = ""
     private let rowKey Func[LibraryWallet, string]
     private let rowBuilder Func[LibraryWallet, Blob]
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createRow() -> LibraryWalletRow
     private let realized HashSet[LibraryWalletRow] = HashSet[LibraryWalletRow]()
 
     init() {
         rowKey = row -> row.Filename
+        createRow = () -> {
+            let cell = LibraryWalletRow()
+            realized.Add(cell)
+            return cell
+        }
         rowBuilder = row -> Cell.Mount[LibraryWalletRowInput, LibraryWalletRow](
             row.Filename,
             LibraryWalletRowInput{Owner: this, Wallet: row},
-            () -> {
-                let cell = LibraryWalletRow()
-                realized.Add(cell)
-                return cell
-            }
+            createRow
         )
     }
 

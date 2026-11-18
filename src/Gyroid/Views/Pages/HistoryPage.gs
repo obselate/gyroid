@@ -154,7 +154,8 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
     private var listInput HistoryListInput
     private var exportInput HistoryExportInput
     private var ribbon HistoryRibbon?
-    private let createRibbon Func[HistoryRibbon]
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createRibbon() -> HistoryRibbon
     private let selectRange Action[uint64, uint64]
     private let markRow Action[uint64]
     private let requestTimes Action[IEnumerable[uint64]]
@@ -771,7 +772,8 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
     private let marks List[uint64] = List[uint64]()
     private var hoverCell HistoryRibbonHover?
     private var plotHeight float64
-    private let createHover Func[HistoryRibbonHover]
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createHover() -> HistoryRibbonHover
     private var plotWidth float64
     private let plot ElementHandle = ElementHandle()
 

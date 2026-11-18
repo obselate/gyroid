@@ -716,8 +716,10 @@ class NetworkPeers : Cell[NetworkPeersInput] {
     private let rowBuilder Func[NetworkRow, Blob]
     private let realized HashSet[NetworkPeerRow] = HashSet[NetworkPeerRow]()
     private var peerMapCell NetworkPeerMap?
-    private let createRow Func[NetworkPeerRow]
-    private let createMap Func[NetworkPeerMap]
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createRow() -> NetworkPeerRow
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createMap() -> NetworkPeerMap
 
     init() {
         hoverPeer = Hover
@@ -1050,7 +1052,8 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
     private var markers NetworkPeerMarkers?
     private var mapWidth float64
     private var mapHeight float64
-    private let createMarkers Func[NetworkPeerMarkers]
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createMarkers() -> NetworkPeerMarkers
 
     init() {
         createMarkers = () -> {
