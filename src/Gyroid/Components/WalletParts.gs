@@ -45,8 +45,8 @@ class WalletParts {
             fill bool = false
         ) Container {
             let card = Card(ui, AppTheme.GetPagePadding(width, height), AppTheme.GetPageGap(height), AppTheme.Radius14)
-            card.Width = fill ? Percent(100): maxWidth
-            card.MaxWidth = fill ? maxWidth: Percent(100)
+            card.Width = fill ? Percent(100) : maxWidth
+            card.MaxWidth = fill ? maxWidth : Percent(100)
             card.MaxHeight = Percent(100)
             return card
         }
@@ -136,7 +136,9 @@ class WalletParts {
                 Content = content,
                 Footer = footer,
                 OnCancel = onClose,
-                OnOpenChange = visible -> if !visible { onClose() }
+                OnOpenChange = visible -> if !visible {
+                    onClose()
+                }
             }
         )
 

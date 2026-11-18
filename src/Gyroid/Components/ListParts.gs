@@ -8,8 +8,8 @@ class ListParts {
     shared {
         func Viewport(content Blob, style Style? = nil, grow bool = true) Container -> Container{
             BasedOn: style,
-            FlexGrow: grow ? 1: 0,
-            FlexBasis: grow ? 0: Length.Auto,
+            FlexGrow: grow ? 1 : 0,
+            FlexBasis: grow ? 0 : Length.Auto,
             MinWidth: 0,
             MinHeight: 0,
             Overflow: Overflow.Hidden,

@@ -386,7 +386,7 @@ partial class MessagingService {
                     Convert.ToHexStringLower(envelope.Signature),
                     ct
                 )
-                verification = valid ? Verification.Verified: Verification.Invalid
+                verification = valid ? Verification.Verified : Verification.Invalid
                 local.RecordVerification(cacheKey, verification)
             }
         }
@@ -437,8 +437,8 @@ partial class MessagingService {
                 Id: id,
                 Title: saved?.Title ??
                     (
-                    outgoing ? WalletText.Short(recipient):
-                    sender.Length > 0 ? WalletText.Short(sender): "Unknown sender"
+                    outgoing ? WalletText.Short(recipient) :
+                    sender.Length > 0 ? WalletText.Short(sender) : "Unknown sender"
                 ),
                 Handle: saved?.Handle ?? "",
                 IsGroup: envelope.Kind >= 2

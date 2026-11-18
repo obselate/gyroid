@@ -39,7 +39,7 @@ partial class App {
             Tone: Tone.Danger,
             Content: ui.Strings.Explain(message),
             FontFamily: AppTheme.Font,
-            Title: wallet.NodeRestartStopped ? ui.Strings.Get("Automatic node restart stopped"): nil,
+            Title: wallet.NodeRestartStopped ? ui.Strings.Get("Automatic node restart stopped") : nil,
             Actions: wallet
                 .NodeError
                 .Length > 0 ? ActionRow(
@@ -55,8 +55,8 @@ partial class App {
                         busy: ui.Working()
                     )
                 }
-            ): nil,
-            OnDismiss: wallet.NodeError.Length > 0 ? nil: () -> {
+            ) : nil,
+            OnDismiss: wallet.NodeError.Length > 0 ? nil : () -> {
                 error = ""
                 refreshError = ""
                 wallet.BackgroundError = ""

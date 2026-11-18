@@ -98,13 +98,13 @@ class LayoutParts {
                 return Container{}
             }
             let end = float64(CoreRelease.UpgradeHeight) + (deadline - date).TotalDays * 288
-            let now = syncing ? 0.0: Math.Min(span, span * height / end)
+            let now = syncing ? 0.0 : Math.Min(span, span * height / end)
             let upgrade = span * CoreRelease.UpgradeHeight / end
             let bar = Container{
                 Width: span,
                 Height: 8,
                 Accessibility: Accessibility{
-                    Name: (syncing ? "": Count(height) + " / ") +
+                    Name: (syncing ? "" : Count(height) + " / ") +
                         Count(CoreRelease.UpgradeHeight) +
                         " · " +
                         upgradeDeadline

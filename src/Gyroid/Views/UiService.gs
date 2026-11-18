@@ -392,7 +392,7 @@ class ClipboardPublication : IDisposable {
         System.Runtime.InteropServices.MemoryMarshal.TryGetArray[uint8](text.Bytes, out let segment)
         Bytes = segment.Array ?? throw InvalidOperationException("Clipboard buffer unavailable")
         Marker = Guid.NewGuid().ToByteArray()
-        Text = feedback ? content: []char{}
+        Text = feedback ? content : []char{}
         ClearAfterMs = clearAfterMs
         Data = TransferData(
             []TransferRepresentation{

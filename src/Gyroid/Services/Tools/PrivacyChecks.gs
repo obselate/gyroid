@@ -205,7 +205,7 @@ class PrivacyChecks {
                     index++
                 }
                 size = index
-                rings.Add(matches == 1 ? real: -1)
+                rings.Add(matches == 1 ? real : -1)
             }
             let keys = List[string]()
             var commitment = ""

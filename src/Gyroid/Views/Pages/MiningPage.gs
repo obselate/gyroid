@@ -135,7 +135,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         let status = report.Status
         let samples = report.Samples
         let running = status.Running && input.NodeRunning && report.Available
-        let card = WalletParts.PageCard(ui, height: input.Height, maxWidth: running ? 1180.0: 620.0, fill: true)
+        let card = WalletParts.PageCard(ui, height: input.Height, maxWidth: running ? 1180.0 : 620.0, fill: true)
         let head = WalletParts.Header(
             Label(ui, ui.Strings.Get("mining"), AppTheme.Type17, AppTheme.Ink, ""),
             AppTheme.Space10,
@@ -144,7 +144,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                 InfoTipInput{
                     Ui: ui,
                     Topic: "About mining",
-                    Lines: input.Mode == "pool" ? poolAbout: about,
+                    Lines: input.Mode == "pool" ? poolAbout : about,
                     Language: input.Language,
                     Width: 300
                 }
@@ -171,7 +171,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
         card.Add(
             Label(
                 ui,
-                ui.Strings.Get(input.Mode == "pool" ? "Pool (Seine)": "Solo (built-in)"),
+                ui.Strings.Get(input.Mode == "pool" ? "Pool (Seine)" : "Solo (built-in)"),
                 AppTheme.Type13,
                 AppTheme.Dim,
                 ""
@@ -194,7 +194,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
                     ui,
                     ui.Strings.Get(status.Connection),
                     AppTheme.Type13,
-                    status.Connection == "Pool connected" ? AppTheme.Mint: AppTheme.Orange,
+                    status.Connection == "Pool connected" ? AppTheme.Mint : AppTheme.Orange,
                     ""
                 )
             )
@@ -219,9 +219,9 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             )
         } else {
             card.FlexGrow = 1
-            let rate = status.Pool ? status.Hashrate: samples.Length > 0 ? samples[
+            let rate = status.Pool ? status.Hashrate : samples.Length > 0 ? samples[
                 samples.Length - 1
-            ].Rate: status.Hashrate
+            ].Rate : status.Hashrate
             card.Add(
                 Cell.Mount[MiningRateInput, MiningRate](
                     "rate",
@@ -251,7 +251,7 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
             FlexGrow: 1,
             MinHeight: 0,
             AlignItems: AlignItems.Center,
-            JustifyContent: running ? JustifyContent.FlexStart: JustifyContent.Center,
+            JustifyContent: running ? JustifyContent.FlexStart : JustifyContent.Center,
             card
         }
     }
@@ -357,18 +357,18 @@ class MiningPage : Cell[MiningPageInput], IDisposable {
 
 class MiningCommand : Cell[MiningCommandInput] {
     protected override func Build(input MiningCommandInput) Blob {
-        let color = input.Running ? AppTheme.Ink: AppTheme.Lime
+        let color = input.Running ? AppTheme.Ink : AppTheme.Lime
         return ControlParts.Button(
             input.Ui,
-            input.Running ? "Stop": "Start mining",
+            input.Running ? "Stop" : "Start mining",
             input.Toggle,
             disabled: !input.Available || input.Busy,
             appearance: AppTheme.Button with{
                 FontSize = AppTheme.Type13,
-                BorderColor = input.Running ? AppTheme.Edge: AppTheme.Lime,
+                BorderColor = input.Running ? AppTheme.Edge : AppTheme.Lime,
                 TextColor = color,
                 HoverBackgroundColor = AppTheme.Rule,
-                Leading = MaterialIcons.Create(input.Running ? "stop": "play_arrow", AppTheme.Icon14, color)
+                Leading = MaterialIcons.Create(input.Running ? "stop" : "play_arrow", AppTheme.Icon14, color)
             }
         )
     }
@@ -384,7 +384,7 @@ class MiningSetup : Cell[MiningSetupInput] {
         let wide = input.Height >= 700
         let fewerButton = ControlParts.Icon(
             ui,
-            MaterialIcons.Create("chevron_left", AppTheme.Icon14, threads > 1 ? AppTheme.Ink: AppTheme.Dim),
+            MaterialIcons.Create("chevron_left", AppTheme.Icon14, threads > 1 ? AppTheme.Ink : AppTheme.Dim),
             ui.Strings.Get("Fewer threads"),
             () -> input.SetThreads(threads - 1),
             disabled: input.Busy || threads <= 1,
@@ -395,7 +395,7 @@ class MiningSetup : Cell[MiningSetupInput] {
             MaterialIcons.Create(
                 "chevron_right",
                 AppTheme.Icon14,
-                threads > 0 && threads < cores ? AppTheme.Ink: AppTheme.Dim
+                threads > 0 && threads < cores ? AppTheme.Ink : AppTheme.Dim
             ),
             ui.Strings.Get("More threads"),
             () -> input.SetThreads(threads + 1),
@@ -473,7 +473,7 @@ class MiningSetup : Cell[MiningSetupInput] {
                                 Container{
                                     Width: Percent(share * 100),
                                     Height: Percent(100),
-                                    BackgroundColor: share > 0.75 ? AppTheme.Orange: AppTheme.Lime
+                                    BackgroundColor: share > 0.75 ? AppTheme.Orange : AppTheme.Lime
                                 }
                             }
                         ),
@@ -491,7 +491,7 @@ class MiningSetup : Cell[MiningSetupInput] {
     }
 
     private func Row(ui Presentation, wide bool, label string, value Blob) Blob ->
-    TextParts.KeyValue(ui, ui.Strings.Get(label), value, labelWidth: wide ? 110.0: 90.0)
+    TextParts.KeyValue(ui, ui.Strings.Get(label), value, labelWidth: wide ? 110.0 : 90.0)
 }
 
 class MiningRate : Cell[MiningRateInput] {
@@ -526,13 +526,13 @@ class MiningReadings : Cell[MiningReadingsInput] {
         let compact = input.Height < 700
         let stats = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: compact ? AppTheme.Space8: AppTheme.Space12,
+            Gap: compact ? AppTheme.Space8 : AppTheme.Space12,
             Padding: Edges{Top: AppTheme.Space12},
             BorderWidth: Edges{Top: AppTheme.Border1},
             BorderColor: AppTheme.Rule,
             FlexShrink: 0
         }
-        let size = compact ? AppTheme.Type14: AppTheme.Type16
+        let size = compact ? AppTheme.Type14 : AppTheme.Type16
         stats.Add(TextParts.Figure(ui, "threads", status.Threads.ToString(), "", size, AppTheme.Ink))
         if status.Pool {
             stats.Add(TextParts.Figure(ui, "accepted shares", Count(status.Accepted), "", size, AppTheme.Ink))
@@ -581,7 +581,7 @@ class MiningChart : Cell[MiningChartInput] {
                     Left: 0,
                     Right: 0,
                     Top: Percent(step * 25),
-                    Margin: Edges{Top: step == 4 ? -1.0: AppTheme.Space0},
+                    Margin: Edges{Top: step == 4 ? -1.0 : AppTheme.Space0},
                     Height: 1,
                     BackgroundColor: AppTheme.Rule
                 }
@@ -596,7 +596,7 @@ class MiningChart : Cell[MiningChartInput] {
         if samples.Length > 1 {
             let first = samples[0].Time
             let span = Math.Max(1.0, (samples[samples.Length - 1].Time - first).TotalSeconds)
-            let format = span >= 300 ? "HH:mm": "HH:mm:ss"
+            let format = span >= 300 ? "HH:mm" : "HH:mm:ss"
             let line = PathBuilder(0, 0, 1000, 1000)
             let fill = PathBuilder(0, 0, 1000, 1000)
             for index in 0 ... samples.Length {
@@ -669,7 +669,7 @@ class MiningChart : Cell[MiningChartInput] {
                             AppTheme.Ink,
                             ""
                         ),
-                        right: x > 0.75 ? Percent((1 - x) * 100): nil,
+                        right: x > 0.75 ? Percent((1 - x) * 100) : nil,
                         margin: x > 0.75
                         ? Edges{Top: -44, Right: AppTheme.Space12}
                         : Edges{Top: -44, Left: AppTheme.Space12}

@@ -149,7 +149,7 @@ class PendingSendRegion : Cell[PendingSendInput] {
                 Preset = ModalDialogPreset.Confirm,
                 AccessibilityName = ui.Strings.Get("Pending send"),
                 Width = Math.Min(input.Width - 48, 600),
-                Content = input.Busy ? Loading(ui, "pending-loading"): Text{
+                Content = input.Busy ? Loading(ui, "pending-loading") : Text{
                     Content: ui.Strings.Get(
                         if resume {
                             "Resubmitting an unknown send can pay twice if the node forgot its record"
@@ -177,7 +177,9 @@ class PendingSendRegion : Cell[PendingSendInput] {
                     input.OnConfirm(resume)
                 },
                 OnCancel = onClose,
-                OnOpenChange = visible -> if !visible { onClose() }
+                OnOpenChange = visible -> if !visible {
+                    onClose()
+                }
             }
         )
     }

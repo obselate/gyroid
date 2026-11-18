@@ -191,7 +191,7 @@ class ReceivePage : Cell[ReceivePageInput], IDisposable {
             } else {
                 uint64(0)
             },
-            Reference: result?.Possible != nil ? result?.Draft.Reference ?? "": "",
+            Reference: result?.Possible != nil ? result?.Draft.Reference ?? "" : "",
             Privacy: input.Privacy,
             Language: input.Language
         }
@@ -220,7 +220,7 @@ class ReceivePage : Cell[ReceivePageInput], IDisposable {
             WalletParts.Header(
                 Label(input.Ui, input.Ui.Strings.Get("receive"), AppTheme.Type17, AppTheme.Ink, ""),
                 AppTheme.Space12,
-                prepared != nil ? Cell.Mount[ReceiveStatusInput, ReceiveStatus]("payment-status", status): Container{}
+                prepared != nil ? Cell.Mount[ReceiveStatusInput, ReceiveStatus]("payment-status", status) : Container{}
             )
         )
         card.Add(Cell.Mount[ReceivePresentationInput, ReceivePresentation]("request-presentation", presentation))
@@ -321,7 +321,7 @@ class ReceiveForm : Cell[ReceiveFormInput] {
                             ContentDirection: Direction.LeftToRight,
                             OnChange: value -> input.Change.Invoke("memo", value),
                             Invalid: draft.MemoIssue.Length > 0,
-                            Error: draft.MemoIssue.Length > 0 ? ui.Strings.Explain(draft.MemoIssue): nil,
+                            Error: draft.MemoIssue.Length > 0 ? ui.Strings.Explain(draft.MemoIssue) : nil,
                             Disabled: input.Disabled,
                             Password: input.Privacy,
                             Placeholder: ui.Strings.Get("memo"),
@@ -352,7 +352,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
         let prepared = input.Prepared
         let paid = prepared?.Paid != nil
         let empty = input.Request.Amount.Length == 0 && input.Request.Memo.Length == 0
-        let shown = prepared?.Shown ?? (empty ? "address": input.Request.Format)
+        let shown = prepared?.Shown ?? (empty ? "address" : input.Request.Format)
         let link = prepared?.Link ?? ""
         let payload = prepared?.Payload ?? input.Address
         let ranges = List[TextStyleRange]()
@@ -373,12 +373,12 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
             Height: side,
             BorderRadius: AppTheme.Radius10,
             Overflow: Overflow.Hidden,
-            BackgroundColor: input.Privacy || paid ? AppTheme.Surface: AppTheme.Ink,
+            BackgroundColor: input.Privacy || paid ? AppTheme.Surface : AppTheme.Ink,
             AlignItems: AlignItems.Center,
             JustifyContent: JustifyContent.Center,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Image,
-                Name: ui.Strings.Get(input.Privacy ? "Address QR code hidden": "Payment request QR code")
+                Name: ui.Strings.Get(input.Privacy ? "Address QR code hidden" : "Payment request QR code")
             }
         }
         if input.Privacy {
@@ -406,11 +406,11 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                 }
             )
         }
-        let options = [empty ? 2: 3]NavigationItem
+        let options = [empty ? 2 : 3]NavigationItem
         if !empty {
             options[0] = NavigationItem{Id: "link", Label: ui.Strings.Get("Link")}
         }
-        let offset = empty ? 0: 1
+        let offset = empty ? 0 : 1
         options[offset] = NavigationItem{Id: "address", Label: ui.Strings.Get("Address")}
         options[offset + 1] = NavigationItem{Id: "qr", Label: ui.Strings.Get("QR")}
         let tabs = Tabs(ui, "share-as", "Share as", options, shown, input.Select, true)
@@ -476,13 +476,13 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                 }
             )
         } else {
-            TextParts.Copy(ui, payload, shown == "link" ? "Copy link": "Copy address", disabled: disabled, text: true)
+            TextParts.Copy(ui, payload, shown == "link" ? "Copy link" : "Copy address", disabled: disabled, text: true)
         }
         let actions = Container{Gap: AppTheme.Space12, FlexShrink: 0, tabs, field, action}
         if input.Busy {
             actions.Add(Loading(ui, "receive-loading"))
         }
-        let message = exportResult.Length > 0 && exportPayload == payload ? exportResult: input.Error
+        let message = exportResult.Length > 0 && exportPayload == payload ? exportResult : input.Error
         if message.Length > 0 {
             actions.Add(Label(ui, ui.Strings.Get(message), AppTheme.Type13, AppTheme.Body, ""))
         }
@@ -496,7 +496,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                 Padding: AppTheme.Space4,
                 BorderWidth: AppTheme.Border2,
                 BorderRadius: AppTheme.Radius14,
-                BorderColor: shown == "qr" && !paid ? AppTheme.Lime: Color.Transparent,
+                BorderColor: shown == "qr" && !paid ? AppTheme.Lime : Color.Transparent,
                 Margin: -AppTheme.Space6,
                 code
             },
@@ -541,7 +541,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
             BorderColor = border,
             BackgroundColor = fill,
             TextColor = color,
-            Leading = MaterialIcons.Create(icon, AppTheme.Icon16, disabled ? AppTheme.Dim: color)
+            Leading = MaterialIcons.Create(icon, AppTheme.Icon16, disabled ? AppTheme.Dim : color)
         }
     )
 

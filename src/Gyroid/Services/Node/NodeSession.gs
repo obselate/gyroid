@@ -123,8 +123,8 @@ class NodeSession : IDisposable {
                 Source: Supervisor.Source,
                 Owned: Supervisor.Owned,
                 Running: true,
-                Version: version.Length > 0 ? version: Supervisor.Owned &&
-                    versionExecutable == Supervisor.Executable ? coreVersion: "",
+                Version: version.Length > 0 ? version : Supervisor.Owned &&
+                    versionExecutable == Supervisor.Executable ? coreVersion : "",
                 Network: Settings.Network,
                 Height: NodeJson.Number(root, "chain_height"),
                 ChainHeight: NodeJson.OptionalNumber(root, "sync_target") ?? NodeJson.Number(root, "chain_height"),
@@ -137,7 +137,7 @@ class NodeSession : IDisposable {
                 IdentityAge: NodeJson.Text(root, "identity_age"),
                 BestHash: NodeJson.Text(root, "best_hash"),
                 Listen: listen,
-                MaxOutbound: maxOutbound > 0 ? maxOutbound: 16,
+                MaxOutbound: maxOutbound > 0 ? maxOutbound : 16,
                 CheckpointHeight: Supervisor.CheckpointHeight,
                 Endpoint: Settings.Endpoint,
                 DataDirectory: Settings.DataDirectory,
@@ -291,7 +291,7 @@ class NodeSession : IDisposable {
                     } else {
                         ""
                     },
-                    Family: parts.Length > 1 ? parts[1]: ""
+                    Family: parts.Length > 1 ? parts[1] : ""
                 }
             )
         }
@@ -320,8 +320,8 @@ class NodeSession : IDisposable {
         Network = NetworkReport{
             ... Network,
             Status: Status,
-            Peers: Enumerable.SequenceEqual(Network.Peers, peerRows) ? Network.Peers: peerRows,
-            Banned: Enumerable.SequenceEqual(Network.Banned, banRows) ? Network.Banned: banRows,
+            Peers: Enumerable.SequenceEqual(Network.Peers, peerRows) ? Network.Peers : peerRows,
+            Banned: Enumerable.SequenceEqual(Network.Banned, banRows) ? Network.Banned : banRows,
             Tcp: Enumerable.Count(peerRows, peer -> peer.Transport != "quic")
         }
         return Network
@@ -335,7 +335,7 @@ class NodeSession : IDisposable {
     ) NetworkReport {
         let own = Dictionary[uint64, int32]()
         let blocks = report.Blocks
-        let tip = blocks.Length > 0 ? blocks[blocks.Length - 1].Height: 0
+        let tip = blocks.Length > 0 ? blocks[blocks.Length - 1].Height : 0
         for send in sends {
             token.ThrowIfCancellationRequested()
             if send.Confirmations > 0 && send.Confirmations <= tip + 1 {
@@ -352,7 +352,7 @@ class NodeSession : IDisposable {
             token.ThrowIfCancellationRequested()
             let block = blocks[index]
             let elapsed = blocks[blocks.Length - 1].Timestamp - block.Timestamp
-            prepared[index] = NetworkBlock{... block, Own: own.TryGetValue(block.Height, out let kind) ? kind: 0}
+            prepared[index] = NetworkBlock{... block, Own: own.TryGetValue(block.Height, out let kind) ? kind : 0}
             if elapsed < 7200 {
                 maximum = Math.Max(maximum, float64(block.Transactions))
             }

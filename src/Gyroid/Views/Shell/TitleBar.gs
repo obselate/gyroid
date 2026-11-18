@@ -28,12 +28,12 @@ partial class App {
             Label(ui, "gyroid", AppTheme.Type14, AppTheme.Ink, ""),
             Label(
                 ui,
-                WalletAvailable() ? WalletName(wallet.Settings.ActiveWallet): "",
+                WalletAvailable() ? WalletName(wallet.Settings.ActiveWallet) : "",
                 AppTheme.Type14,
                 AppTheme.Ink,
                 ""
             ),
-            Label(ui, wallet.Snapshot.ViewOnly ? ui.Strings.Get("view only"): "", AppTheme.Type12, AppTheme.Orange, "")
+            Label(ui, wallet.Snapshot.ViewOnly ? ui.Strings.Get("view only") : "", AppTheme.Type12, AppTheme.Orange, "")
         }
     }.Build()
 
@@ -60,7 +60,7 @@ partial class App {
             Outline(path, x, y, []float64{0, 0, edge, 0, size, size - edge, size, size, size - edge, size, 0, edge})
             Outline(path, x, y, []float64{size, edge, edge, size, 0, size, 0, size - edge, size - edge, 0, size, 0})
         } else {
-            let offset = command == WindowChromeAction.Restore ? Math.Round(2 * pixelScale): 0.0
+            let offset = command == WindowChromeAction.Restore ? Math.Round(2 * pixelScale) : 0.0
             let front = size - offset
             let inner = front - line
             Outline(path, x, y + offset, []float64{0, 0, front, 0, front, front, 0, front})

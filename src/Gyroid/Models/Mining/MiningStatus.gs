@@ -47,7 +47,7 @@ data struct MiningReport {
     var Top float64 = 0.16
 
     func Record(status MiningStatus, waiting bool, continuous bool, now DateTimeOffset) MiningReport {
-        let history = status.Started == Status.Started && status.Pool == Status.Pool ? Samples: []MiningSample{}
+        let history = status.Started == Status.Started && status.Pool == Status.Pool ? Samples : []MiningSample{}
         let result = MiningReport{... this, Status: status, Available: true, Waiting: waiting, Samples: history}
         if !status.Running || waiting || status.Hashes == 0 {
             return result

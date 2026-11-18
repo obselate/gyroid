@@ -148,7 +148,7 @@ class SeineMiner : IDisposable {
                     Started = started,
                     Connection = (
                         DateTimeOffset.Now - started
-                    ).TotalSeconds >= 30 ? "Pool disconnected": "Connecting to pool"
+                    ).TotalSeconds >= 30 ? "Pool disconnected" : "Connecting to pool"
                 }
             }
             let state = NodeJson.Text(mining, "state")
@@ -161,7 +161,7 @@ class SeineMiner : IDisposable {
                 Accepted: NodeJson.OptionalNumber(mining, "accepted") ?? uint64(0),
                 Rejected: NodeJson.OptionalNumber(mining, "rejected") ?? uint64(0),
                 Started: started,
-                Connection: state == "working" ? "Pool connected": "Pool disconnected"
+                Connection: state == "working" ? "Pool connected" : "Pool disconnected"
             }
         } catch (error HttpRequestException) {
             return idle with{Running = true, Started = started, Connection = "Seine control API unavailable"}

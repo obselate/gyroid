@@ -13,13 +13,13 @@ data class WalletOutput {
     var OutputIndices[]int32 = System.Array.Empty[int32]()
 
     func Maturity(tip uint64) WalletMaturity -> WalletMaturity(
-        BlockHeight > 0 && tip >= BlockHeight ? tip + 1 - BlockHeight: uint64(0),
-        Coinbase ? uint64(60): uint64(10)
+        BlockHeight > 0 && tip >= BlockHeight ? tip + 1 - BlockHeight : uint64(0),
+        Coinbase ? uint64(60) : uint64(10)
     )
 }
 
 data struct WalletMaturity(Confirmations uint64, Required uint64) {
-    prop Depth uint64 -> Confirmations > 0 ? Confirmations - 1: uint64(0)
+    prop Depth uint64 -> Confirmations > 0 ? Confirmations - 1 : uint64(0)
     prop Count uint64 -> System.Math.Min(Depth, Required)
     prop Ready bool -> Confirmations > Required
     prop Remaining uint64 -> Required - Count

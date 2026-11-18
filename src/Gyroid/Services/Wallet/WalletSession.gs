@@ -350,7 +350,7 @@ class WalletSession : IDisposable {
             if state == WalletState.Unloaded {
                 managed = false
             } else {
-                let filename = managed ? settings.ActiveWallet: Path.GetFileName(walletFile)
+                let filename = managed ? settings.ActiveWallet : Path.GetFileName(walletFile)
                 Library.WalletPath(filename)
                 if settings.ActiveWallet != filename {
                     settings.ActiveWallet = filename
@@ -396,7 +396,7 @@ class WalletSession : IDisposable {
 
     func OpenSettingsDirectoryAsync(path string, ct CancellationToken) Task {
         let start = System.Diagnostics.ProcessStartInfo(
-            OperatingSystem.IsWindows() ? "explorer.exe": OperatingSystem.IsMacOS() ? "open": "xdg-open"
+            OperatingSystem.IsWindows() ? "explorer.exe" : OperatingSystem.IsMacOS() ? "open" : "xdg-open"
         )
         start.ArgumentList.Add(path)
         System.Diagnostics.Process.Start(start)?.Dispose()
@@ -431,11 +431,11 @@ class WalletSession : IDisposable {
             }
         }
         let free = DriveInfo(
-            OperatingSystem.IsWindows() ? Path.GetPathRoot(data.FullName) ?? data.FullName:
-            data.Exists ? data.FullName: data.Parent?.FullName ?? "/"
+            OperatingSystem.IsWindows() ? Path.GetPathRoot(data.FullName) ?? data.FullName :
+            data.Exists ? data.FullName : data.Parent?.FullName ?? "/"
         ).AvailableFreeSpace
         let trusted = value.Network == "mainnet" ?
-        Checkpoints.Height(Checkpoints.Parse(Resources.Resource("Gyroid.Checkpoints.Mainnet"))): uint64(0)
+        Checkpoints.Height(Checkpoints.Parse(Resources.Resource("Gyroid.Checkpoints.Mainnet"))) : uint64(0)
         var autoSave bool?
         try {
             autoSave = await CheckpointAutoSaveAsync(nil, ct)
@@ -723,7 +723,7 @@ class WalletSession : IDisposable {
                 "settings",
                 body,
                 ct,
-                method: enabled != nil ? HttpMethod.Patch: nil
+                method: enabled != nil ? HttpMethod.Patch : nil
             )
             return result.RootElement.TryGetProperty("settings", out let current) && NodeJson.Flag(
                 current,
@@ -1281,7 +1281,7 @@ class WalletSession : IDisposable {
                     request.ExistingOutputs.Add(output.TxId + ":" + output.OutputIndex.ToString())
                 }
             }
-            let full = request.Memo.Length > 0 ? request.Memo + " " + request.Reference: request.Reference
+            let full = request.Memo.Length > 0 ? request.Memo + " " + request.Reference : request.Reference
             let draft = ReceiveDraft{
                 Amount: request.Amount,
                 Memo: request.Memo,
@@ -1297,13 +1297,13 @@ class WalletSession : IDisposable {
             if full.Length > 0 && draft.MemoIssue.Length == 0 {
                 query.Add("memo=" + Uri.EscapeDataString(full))
             }
-            let link = "blocknet://" + address + (query.Count > 0 ? "?" + String.Join("&", query): "")
-            let shown = empty && request.Format == "link" ? "address": request.Format
-            let payload = shown == "address" ? address: link
+            let link = "blocknet://" + address + (query.Count > 0 ? "?" + String.Join("&", query) : "")
+            let shown = empty && request.Format == "link" ? "address" : request.Format
+            let payload = shown == "address" ? address : link
             let result = ReceivePrepared{Draft: draft, Link: link, Shown: shown, Payload: payload}
             let atoms = draft.Amount.Length > 0 && draft.AmountIssue.Length == 0 ? WalletAmount.Parse(
                 draft.Amount
-            ): uint64(0)
+            ) : uint64(0)
             if request.Reference.Length > 0 && (draft.Amount.Length == 0 || atoms > 0) {
                 for output in history {
                     ct.ThrowIfCancellationRequested()

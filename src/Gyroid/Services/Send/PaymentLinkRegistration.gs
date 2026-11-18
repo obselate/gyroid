@@ -22,7 +22,7 @@ class PaymentLinkRegistration {
                         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                         ".local",
                         "share"
-                    ): data
+                    ) : data
                     let applications = Path.Combine(home, "applications")
                     let icons = Path.Combine(home, "icons", "hicolor", "512x512", "apps")
                     let icon = Path.Combine(icons, "dev.gyroid.wallet.png")
@@ -38,7 +38,7 @@ class PaymentLinkRegistration {
                         .Replace("`", "\\`")
                         .Replace("$", "\\$")
                         .Replace("%", "%%")
-                    let command = executable.IndexOfAny(" \t\n\"'\\><~|&;$*?#()`".ToCharArray()) < 0 ? escaped: "\"" +
+                    let command = executable.IndexOfAny(" \t\n\"'\\><~|&;$*?#()`".ToCharArray()) < 0 ? escaped : "\"" +
                         escaped +
                         "\""
                     let content = "[Desktop Entry]\nType=Application\nName=Gyroid\nExec=" +
@@ -64,11 +64,11 @@ class PaymentLinkRegistration {
                         let end = value.StartsWith("\"", StringComparison.Ordinal) ? value.IndexOf(
                             '"',
                             1
-                        ): value.IndexOf(' ')
+                        ) : value.IndexOf(' ')
                         let path = value.StartsWith("\"", StringComparison.Ordinal) && end > 0 ? value.Substring(
                             1,
                             end - 1
-                        ): end > 0 ? value.Substring(0, end): value
+                        ) : end > 0 ? value.Substring(0, end) : value
                         if !String.Equals(Path.GetFileName(path), "Gyroid.exe", StringComparison.OrdinalIgnoreCase) {
                             return
                         }
@@ -114,7 +114,7 @@ class PaymentLinkRegistration {
                     return nil
                 }
                 errors.GetAwaiter().GetResult()
-                return process.ExitCode == 0 ? output.GetAwaiter().GetResult().Trim(): nil
+                return process.ExitCode == 0 ? output.GetAwaiter().GetResult().Trim() : nil
             } catch (error Win32Exception) {
                 return nil
             }

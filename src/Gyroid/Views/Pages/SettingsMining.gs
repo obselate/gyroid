@@ -31,7 +31,7 @@ class SettingsMining : Cell[SettingsPageInput] {
             pool = settings.PoolUrl
             savedMode = mode
             savedPool = pool
-            issue = pool.Length == 0 ? "": SettingsValidation.PoolUrlError(pool)
+            issue = pool.Length == 0 ? "" : SettingsValidation.PoolUrlError(pool)
         }
         if refresh {
             Rebuild()
@@ -41,7 +41,7 @@ class SettingsMining : Cell[SettingsPageInput] {
     protected override func Build(_ SettingsPageInput) Blob {
         let input = context
         let ui = input.Ui
-        let selectedPool = mode == "pool" ? pool: savedPool
+        let selectedPool = mode == "pool" ? pool : savedPool
         let form = WalletForm(
             ui,
             !input.Busy &&

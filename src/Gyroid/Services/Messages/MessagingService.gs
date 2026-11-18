@@ -86,7 +86,7 @@ partial class MessagingService {
             let rows = List[ConversationView](conversations.Count)
             let current Conversation? = conversations.FirstOrDefault(item -> item.Id == id) ??
                 fallback ??
-                (first ? conversations.FirstOrDefault(): nil)
+                (first ? conversations.FirstOrDefault() : nil)
             for source in conversations {
                 ct.ThrowIfCancellationRequested()
                 let latest = source.Messages.LastOrDefault()
@@ -119,8 +119,8 @@ partial class MessagingService {
                 for index in 0 ... messages.Count {
                     ct.ThrowIfCancellationRequested()
                     let message = messages[index]
-                    let before = index > 0 ? messages[index - 1]: nil
-                    let after = index + 1 < messages.Count ? messages[index + 1]: nil
+                    let before = index > 0 ? messages[index - 1] : nil
+                    let after = index + 1 < messages.Count ? messages[index + 1] : nil
                     thread.Add(
                         MessageThreadRow{
                             Key: keys.GetValueOrDefault(message.Txid, message.Key),
@@ -140,7 +140,7 @@ partial class MessagingService {
                                 Verification: message.Verification
                             },
                             Header: before == nil || (message.SentAt - before.SentAt).TotalMinutes > 15 ?
-                            message.SentAt.ToLocalTime().ToString("HH:mm"): "",
+                            message.SentAt.ToLocalTime().ToString("HH:mm") : "",
                             First: before == nil ||
                                 before.SenderAddress != message.SenderAddress ||
                                 (message.SentAt - before.SentAt).TotalMinutes > 5,
@@ -154,9 +154,9 @@ partial class MessagingService {
             let values = rows.ToArray()
             let messages = thread.ToArray()
             return MessagesProjection{
-                Conversations: values.SequenceEqual(previous.Conversations) ? previous.Conversations: values,
+                Conversations: values.SequenceEqual(previous.Conversations) ? previous.Conversations : values,
                 Conversation: current,
-                Thread: messages.SequenceEqual(previous.Thread) ? previous.Thread: messages,
+                Thread: messages.SequenceEqual(previous.Thread) ? previous.Thread : messages,
                 Recipients: current?.Members.Count(member -> member != ownAddress) ?? 0,
                 Contacts: contacts
                     .Values
@@ -403,7 +403,7 @@ partial class MessagingService {
             address = NodeJson.Text(recipients[0], "resolved_address")
             let canonical = NodeJson.Text(recipients[0], "resolved_handle")
             if canonical.Length > 0 {
-                handle = canonical.StartsWith("$", StringComparison.Ordinal) ? canonical: "$" + canonical
+                handle = canonical.StartsWith("$", StringComparison.Ordinal) ? canonical : "$" + canonical
             }
         }
         Address.Decode(address, Network)
@@ -412,7 +412,7 @@ partial class MessagingService {
         }
         let conversation = Conversation{
             Id: address,
-            Title: name.Trim().Length > 0 ? name.Trim(): handle.Length > 0 ? handle: WalletText.Short(address),
+            Title: name.Trim().Length > 0 ? name.Trim() : handle.Length > 0 ? handle : WalletText.Short(address),
             Handle: handle
         }
         conversation.Members.Add(address)

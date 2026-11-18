@@ -37,7 +37,7 @@ class AddressBook {
             if let payment = PaymentLink.Parse(text) {
                 return payment.Address
             }
-            return !IsDestination(text) && contacts.TryGetValue(text, out let destination) ? destination: text
+            return !IsDestination(text) && contacts.TryGetValue(text, out let destination) ? destination : text
         }
 
         private func ContactsPath() string {
@@ -56,7 +56,7 @@ class AddressBook {
                 using let json = JsonDocument.Parse(PrivateFiles.ReadText(path, 1048576))
                 for entry in json.RootElement.EnumerateObject() {
                     contacts[entry.Name] = entry.Value.ValueKind == JsonValueKind.String ?
-                    entry.Value.GetString() ?? "": entry.Value.GetRawText()
+                    entry.Value.GetString() ?? "" : entry.Value.GetRawText()
                     try {
                         contacts[entry.Name] = WalletValidation.ValidateDestination(contacts[entry.Name])
                     } catch (error Exception) {

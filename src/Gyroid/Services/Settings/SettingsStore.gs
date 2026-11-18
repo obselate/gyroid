@@ -65,7 +65,7 @@ class SettingsStore {
                     settings.NodeMode = NodeJson.Text(root, "node_mode", "automatic")
                     settings.DownloadCheckpoints = !root.TryGetProperty("download_checkpoints", out let checkpoints) ||
                         checkpoints.ValueKind != JsonValueKind.False
-                    settings.MiningMode = NodeJson.Text(root, "mining_mode") == "pool" ? "pool": "solo"
+                    settings.MiningMode = NodeJson.Text(root, "mining_mode") == "pool" ? "pool" : "solo"
                     settings.PoolUrl = NodeJson.Text(root, "pool_url")
                     settings.UseGpu = !root.TryGetProperty("use_gpu", out let gpu) ||
                         gpu.ValueKind != JsonValueKind.False

@@ -24,8 +24,8 @@ open class AppSettings {
     var LoadError string = ""
     shared {
         func WalletBasename(filename string) string {
-            let suffix = filename.EndsWith(".wallet.dat", System.StringComparison.Ordinal) ? 11:
-            filename.EndsWith(".dat", System.StringComparison.Ordinal) ? 4: 0
+            let suffix = filename.EndsWith(".wallet.dat", System.StringComparison.Ordinal) ? 11 :
+            filename.EndsWith(".dat", System.StringComparison.Ordinal) ? 4 : 0
             return filename.Substring(0, filename.Length - suffix)
         }
     }

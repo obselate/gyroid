@@ -37,7 +37,7 @@ class ObserverLens : Cell[ObserverLensInput] {
         let ui = input.Ui
         let view = input.View
         let compact = input.Width < 1100
-        let side = compact ? 72.0: 96.0
+        let side = compact ? 72.0 : 96.0
         let size = view?.RingSize ?? 16
         let content = Container{
             Gap: AppTheme.Space0,
@@ -75,7 +75,7 @@ class ObserverLens : Cell[ObserverLensInput] {
         yours.Add(
             Label(
                 ui,
-                ui.Strings.Get(rings.Any((index int32) -> index < 0) ? "unknown": "yours"),
+                ui.Strings.Get(rings.Any((index int32) -> index < 0) ? "unknown" : "yours"),
                 AppTheme.Type13,
                 AppTheme.Lime,
                 ""
@@ -135,7 +135,7 @@ class ObserverLens : Cell[ObserverLensInput] {
                 "memo",
                 Label(
                     ui,
-                    memo.Length > 0 ? WalletText.Hidden(ui.Privacy, memo): "—",
+                    memo.Length > 0 ? WalletText.Hidden(ui.Privacy, memo) : "—",
                     AppTheme.Type14,
                     AppTheme.Ink,
                     ""
@@ -165,8 +165,8 @@ class ObserverLens : Cell[ObserverLensInput] {
                 input,
                 side,
                 "block",
-                Label(ui, height > 0 ? Count(height): "—", AppTheme.Type14, AppTheme.Ink, ""),
-                height > 0 ? Public(ui, Count(height), AppTheme.Type14): Container{}
+                Label(ui, height > 0 ? Count(height) : "—", AppTheme.Type14, AppTheme.Ink, ""),
+                height > 0 ? Public(ui, Count(height), AppTheme.Type14) : Container{}
             )
         )
         if input.Error.Length > 0 {
@@ -188,8 +188,8 @@ class ObserverLens : Cell[ObserverLensInput] {
                     Status(
                         ui,
                         ChainState(ui, input.State, input.Confirmations),
-                        confirmed ? AppTheme.Mint: AppTheme.Orange,
-                        confirmed ? "check": "schedule"
+                        confirmed ? AppTheme.Mint : AppTheme.Orange,
+                        confirmed ? "check" : "schedule"
                     ),
                     Container{FlexGrow: 1},
                     Cell.Mount[InfoTipInput, InfoTip](
@@ -214,13 +214,15 @@ class ObserverLens : Cell[ObserverLensInput] {
                 Content = content,
                 Footer = ActionRow(
                     []Blob{
-                        input.Loading ? Loading(ui, "observer-loading", "checking"): Container{Display: Display.None},
+                        input.Loading ? Loading(ui, "observer-loading", "checking") : Container{Display: Display.None},
                         Button(ui, "Prove", input.OnProve, input.Loading || !confirmed),
                         Button(ui, "Close", input.OnClose)
                     }
                 ),
                 OnCancel = input.OnClose,
-                OnOpenChange = visible -> if !visible { input.OnClose() }
+                OnOpenChange = visible -> if !visible {
+                    input.OnClose()
+                }
             }
         )
     }
@@ -286,19 +288,19 @@ class ObserverLens : Cell[ObserverLensInput] {
             you,
             chain
         )
-        row.MinHeight = input.Width < 1100 ? 36.0: 42.0
+        row.MinHeight = input.Width < 1100 ? 36.0 : 42.0
         row.BorderWidth = Edges{Bottom: AppTheme.Border1}
         row.BorderColor = AppTheme.FaintRule
         return row
     }
 
     private func Ring(size int32, real int32, chain bool, compact bool) Blob {
-        let box = compact ? 58.0: 72.0
+        let box = compact ? 58.0 : 72.0
         let radius = box * 28 / 72
         let ring = Container{Width: box, Height: box, FlexShrink: 0}
         for index in 0 ... size {
             let angle = index / float64(size) * Math.PI * 2 - Math.PI / 2
-            let dot = !chain && index == real ? 4.5: 3.2
+            let dot = !chain && index == real ? 4.5 : 3.2
             ring.Add(
                 Container{
                     Position: PositionType.Absolute,

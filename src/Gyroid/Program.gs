@@ -85,7 +85,7 @@ func Main() {
             !Double.TryParse(arguments[index + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out let value) ||
             !Double.IsFinite(value) ||
             value <= 0 ||
-            (name == "--scale" ? value > float32.MaxValue: value > int32.MaxValue) {
+            (name == "--scale" ? value > float32.MaxValue : value > int32.MaxValue) {
             Console.Error.WriteLine("Invalid " + name + " value: number is outside the supported range")
             Environment.ExitCode = Cli.Usage(Console.Error)
             return
@@ -96,11 +96,7 @@ func Main() {
         FreeConsole()
     }
     let version = Assembly.GetExecutingAssembly().GetCustomAttribute[AssemblyInformationalVersionAttribute]()
-    Application.Configure(
-        "Gyroid",
-        (version?.InformationalVersion ?? "unknown").Split('+')[0],
-        "dev.gyroid.wallet"
-    )
+    Application.Configure("Gyroid", (version?.InformationalVersion ?? "unknown").Split('+')[0], "dev.gyroid.wallet")
     PaymentLinkRegistration.Register()
     var activationTarget App? = nil
     Application.Activated += request -> {

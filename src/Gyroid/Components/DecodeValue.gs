@@ -48,7 +48,7 @@ class DecodeValue : Cell[DecodeValueInput] {
         }
         for rank in int32(changed.Count * progress.Value) ... changed.Count {
             let index = changed[rank]
-            let old = index < shift ? ' ': from[index - shift]
+            let old = index < shift ? ' ' : from[index - shift]
             while chars[index] == target[index] || chars[index] == old {
                 chars[index] = "0123456789" [Random.Shared.Next(10)]
             }

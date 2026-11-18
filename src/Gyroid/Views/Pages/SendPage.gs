@@ -121,7 +121,7 @@ class SendPage : Cell[SendPageInput], IDisposable {
     }
 
     protected override func InputChanged(next SendPageInput) {
-        if (next with{Sends = sent == nil ? input.Sends: next.Sends}) == input {
+        if (next with{Sends = sent == nil ? input.Sends : next.Sends}) == input {
             return
         }
         if next.Rows.Count == 0 {
@@ -167,7 +167,7 @@ class SendPage : Cell[SendPageInput], IDisposable {
                 Suggest: row.Suggest,
                 Index: index,
                 Count: input.Rows.Count,
-                Spendable: input.Rows.Count == 1 ? spendable: uint64(0),
+                Spendable: input.Rows.Count == 1 ? spendable : uint64(0),
                 Submit: submit,
                 Changed: changed,
                 Remove: remove,
@@ -210,7 +210,7 @@ class SendPage : Cell[SendPageInput], IDisposable {
         let display = input.Display
         let ui = display.Ui
         let multi = input.Rows.Count > 1
-        let maxWidth = Math.Clamp((multi ? 780.0: 600.0) + Math.Max(0, display.Height - 640) * 0.6, 600.0, 900.0)
+        let maxWidth = Math.Clamp((multi ? 780.0 : 600.0) + Math.Max(0, display.Height - 640) * 0.6, 600.0, 900.0)
         let card = WalletParts.PageCard(ui, maxWidth, display.Height, maxWidth, true)
         card.Add(
             Cell.Mount[SendSummaryInput, SendSummary](
@@ -225,10 +225,12 @@ class SendPage : Cell[SendPageInput], IDisposable {
         )
         if multi {
             card.Height = Percent(100)
-            card.Add(Cell.Mount[SendTotalInput, SendTotal](
-                "amount-total",
-                SendTotalInput{Display: input.Display, Amount: model.Total, Over: model.Over}
-            ))
+            card.Add(
+                Cell.Mount[SendTotalInput, SendTotal](
+                    "amount-total",
+                    SendTotalInput{Display: input.Display, Amount: model.Total, Over: model.Over}
+                )
+            )
             let list = VirtualRows(
                 editorRows,
                 AppTheme.ControlRegular + AppTheme.Space8,
@@ -356,7 +358,7 @@ class SendPage : Cell[SendPageInput], IDisposable {
     private func Maximum() {
         let window = input.Display.Window
         let row = input.Rows[0]
-        let address = row.Kind.Length > 0 ? row.Destination: input.Address
+        let address = row.Kind.Length > 0 ? row.Destination : input.Address
         let memo = row.Memo
         let session = input.Session
         let network = input.Display.Network
@@ -567,7 +569,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
                 Password = input.Privacy,
                 Disabled = input.Busy,
                 FontSize = size,
-                TextColor = (row.Atoms ?? uint64(0)) > editor.Spendable ? AppTheme.Pink: AppTheme.Lime,
+                TextColor = (row.Atoms ?? uint64(0)) > editor.Spendable ? AppTheme.Pink : AppTheme.Lime,
                 BackgroundColor = Color.Transparent,
                 BorderWidth = AppTheme.Border0,
                 FocusRingWidth = AppTheme.Border0,
@@ -726,7 +728,7 @@ class SendRecipientEditor : Cell[SendEditorInput] {
                     } else {
                         nil
                     },
-                    TextColor: kind == "handle" ? AppTheme.Blue: AppTheme.Ink,
+                    TextColor: kind == "handle" ? AppTheme.Blue : AppTheme.Ink,
                     Leading: switch kind {
                         case "contact": MaterialIcons.Create("person", AppTheme.Icon14, AppTheme.Dim)
                         case "handle": MaterialIcons.Create("alternate_email", AppTheme.Icon14, AppTheme.Blue)
@@ -900,7 +902,7 @@ class SendTotal : Cell[SendTotalInput] {
         let sum = Hidden(display.Privacy, WalletAmount.Format(input.Amount))
         return SendRecipientEditor.Hero(
             display,
-            Label(display.Ui, sum, size, input.Over ? AppTheme.Pink: AppTheme.Lime, ""),
+            Label(display.Ui, sum, size, input.Over ? AppTheme.Pink : AppTheme.Lime, ""),
             sum.Length,
             size,
             nil
@@ -947,7 +949,7 @@ class SendActions : Cell[SendActionsInput] {
                 BackgroundColor = Color.Transparent,
                 BorderWidth = AppTheme.Border0,
                 TextColor = AppTheme.Lime,
-                Leading = MaterialIcons.Create("add", AppTheme.Icon16, addDisabled ? AppTheme.Dim: AppTheme.Lime),
+                Leading = MaterialIcons.Create("add", AppTheme.Icon16, addDisabled ? AppTheme.Dim : AppTheme.Lime),
                 AccessibilityName = ui.Strings.Get("Add recipient")
             }
         )
@@ -961,7 +963,7 @@ class SendActions : Cell[SendActionsInput] {
                 JustifyContent: JustifyContent.SpaceBetween,
                 Gap: AppTheme.Space12,
                 add,
-                input.Loading ? Loading(ui, "prepare-loading"): Container{Display: Display.None},
+                input.Loading ? Loading(ui, "prepare-loading") : Container{Display: Display.None},
                 review
             }
         }
@@ -987,7 +989,7 @@ class SendBalance : Cell[SendBalanceInput] {
         let content = Container{Gap: AppTheme.GetPageGap(input.Display.Height), FlexShrink: 0}
         content.Add(Bar(input))
         if input.Remaining {
-            let remaining = over ? input.Total - input.Spendable: input.Spendable - input.Total
+            let remaining = over ? input.Total - input.Spendable : input.Spendable - input.Total
             content.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
@@ -996,8 +998,8 @@ class SendBalance : Cell[SendBalanceInput] {
                     Figure(
                         ui,
                         "Remaining",
-                        (over ? "−": "") + WalletText.Amount(ui.Privacy, remaining),
-                        over ? AppTheme.Pink: AppTheme.Ink,
+                        (over ? "−" : "") + WalletText.Amount(ui.Privacy, remaining),
+                        over ? AppTheme.Pink : AppTheme.Ink,
                         AppTheme.Type14,
                         ""
                     )
@@ -1044,7 +1046,7 @@ class SendBalance : Cell[SendBalanceInput] {
                 continue
             }
             segment.HitTestSelf = true
-            let name = row.Kind == "contact" || row.Kind == "handle" ? row.Address.Trim(): Short(row.Address)
+            let name = row.Kind == "contact" || row.Kind == "handle" ? row.Address.Trim() : Short(row.Address)
             let lines = Container{
                 FlexDirection: FlexDirection.Row,
                 Gap: AppTheme.Space24,
@@ -1128,13 +1130,13 @@ class SendReview : Cell[SendReviewInput] {
         if !shown.SequenceEqual(rows) {
             shown = rows
             rowsHeight = rows.Sum(
-                (row SendReviewItem) -> (AppTheme.ControlRegular + AppTheme.Space12) * (row.Expanded ? 2: 1) +
+                (row SendReviewItem) -> (AppTheme.ControlRegular + AppTheme.Space12) * (row.Expanded ? 2 : 1) +
                     (
                     row.Row.Memo.Length > 0 ?
-                    (row.Expanded ? AppTheme.ControlRegular + AppTheme.Space12: AppTheme.Type13 + AppTheme.Space12):
+                    (row.Expanded ? AppTheme.ControlRegular + AppTheme.Space12 : AppTheme.Type13 + AppTheme.Space12) :
                     0
                 ) +
-                    (row.Expanded && row.Row.Handle.Length > 0 ? AppTheme.Type13 + AppTheme.Space6: 0)
+                    (row.Expanded && row.Row.Handle.Length > 0 ? AppTheme.Type13 + AppTheme.Space6 : 0)
             )
         }
         Rebuild()
@@ -1160,7 +1162,7 @@ class SendReview : Cell[SendReviewInput] {
         list.BorderColor = AppTheme.Rule
         let remaining = spendable - Math.Min(spendable, pending.Total)
         let content = Container{
-            Gap: compact ? AppTheme.Space14: AppTheme.Space16,
+            Gap: compact ? AppTheme.Space14 : AppTheme.Space16,
             MinHeight: 0,
             FlexShrink: 1,
             WalletParts.Header(
@@ -1232,7 +1234,7 @@ class SendReview : Cell[SendReviewInput] {
                 AccessibilityName: ui.Strings.Get("Confirm send"),
                 Width: 640,
                 MaxHeight: Percent(100),
-                Padding: compact ? AppTheme.Space20: AppTheme.Space22,
+                Padding: compact ? AppTheme.Space20 : AppTheme.Space22,
                 Content: content,
                 Footer: ActionRow(
                     []Blob{
@@ -1245,7 +1247,9 @@ class SendReview : Cell[SendReviewInput] {
                 ConfirmDisabled: input.Busy,
                 OnConfirm: value.Submit,
                 OnCancel: onClose,
-                OnOpenChange: visible -> if !visible { onClose() }
+                OnOpenChange: visible -> if !visible {
+                    onClose()
+                }
             }
         )
     }
@@ -1280,13 +1284,13 @@ class SendReview : Cell[SendReviewInput] {
                     ui,
                     Hidden(ui.Privacy, Short(recipient.Destination)),
                     AppTheme.Type14,
-                    head.Children.Count > 0 ? AppTheme.Dim: AppTheme.Ink,
+                    head.Children.Count > 0 ? AppTheme.Dim : AppTheme.Ink,
                     ""
                 )
             )
         )
         head.Add(Label(ui, WalletText.Amount(ui.Privacy, recipient.Amount), AppTheme.Type14, AppTheme.Ink, ""))
-        head.Add(MaterialIcons.Create(expanded ? "expand_less": "expand_more", AppTheme.Icon14, AppTheme.Dim))
+        head.Add(MaterialIcons.Create(expanded ? "expand_less" : "expand_more", AppTheme.Icon14, AppTheme.Dim))
         let entry = Goo
             .Button{
             BasedOn: AppTheme.ListRowStyle,
@@ -1297,11 +1301,11 @@ class SendReview : Cell[SendReviewInput] {
             Padding: Edges{
                 Top: AppTheme.Space12,
                 Bottom: AppTheme.Space12,
-                Left: expanded ? AppTheme.Space10: AppTheme.Space4,
-                Right: expanded ? AppTheme.Space10: AppTheme.Space4
+                Left: expanded ? AppTheme.Space10 : AppTheme.Space4,
+                Right: expanded ? AppTheme.Space10 : AppTheme.Space4
             },
-            BorderRadius: expanded ? AppTheme.Radius8: AppTheme.Radius0,
-            BackgroundColor: expanded ? AppTheme.Raised: Color.Transparent,
+            BorderRadius: expanded ? AppTheme.Radius8 : AppTheme.Radius0,
+            BackgroundColor: expanded ? AppTheme.Raised : Color.Transparent,
             BorderColor: AppTheme.Rule,
             HoverStyle: Style{BackgroundColor: AppTheme.Raised},
             FocusStyle: Theme.Read().FocusStyle,
@@ -1311,7 +1315,7 @@ class SendReview : Cell[SendReviewInput] {
                 Expanded: expanded
             },
             OnClick: () -> {
-                openRow = expanded ? "": id
+                openRow = expanded ? "" : id
                 RefreshRows()
             },
             head
@@ -1321,7 +1325,7 @@ class SendReview : Cell[SendReviewInput] {
             entry.Add(
                 Container{
                     FlexDirection: FlexDirection.Row,
-                    AlignItems: expanded ? AlignItems.FlexStart: AlignItems.Center,
+                    AlignItems: expanded ? AlignItems.FlexStart : AlignItems.Center,
                     Gap: AppTheme.Space8,
                     MinWidth: 0,
                     MaterialIcons.Create("notes", AppTheme.Icon16, AppTheme.Dim),
@@ -1331,7 +1335,7 @@ class SendReview : Cell[SendReviewInput] {
                             FontFamily: AppTheme.Font,
                             FontSize: AppTheme.Type13,
                             Color: AppTheme.Dim,
-                            TextWrap: expanded ? TextWrap.Wrap: TextWrap.NoWrap,
+                            TextWrap: expanded ? TextWrap.Wrap : TextWrap.NoWrap,
                             TextTrimming: TextTrimming.Ellipsis
                         }
                     )

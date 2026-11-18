@@ -150,16 +150,16 @@ class TextParts {
         ) Blob -> Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
-            Gap: compact ? AppTheme.Space8: AppTheme.Space10,
+            Gap: compact ? AppTheme.Space8 : AppTheme.Space10,
             MinWidth: 0,
-            FlexShrink: compact ? 0: 1,
+            FlexShrink: compact ? 0 : 1,
             Accessibility: Accessibility{Name: ui.Strings.Get(label) + " " + value},
             TextParts.Label(
                 ui,
                 ui.Strings.Get(label),
                 AppTheme.Type12,
-                compact ? AppTheme.Dim: AppTheme.Body,
-                compact ? "": "page"
+                compact ? AppTheme.Dim : AppTheme.Body,
+                compact ? "" : "page"
             ),
             TextParts.Label(ui, value, size, color, channel)
         }
@@ -208,7 +208,7 @@ class TextParts {
                 AlignItems: AlignItems.Baseline,
                 Gap: AppTheme.Space6,
                 Overflow: Overflow.Hidden,
-                Value(ui, key.Length > 0 ? key: label, ui.Strings.Get(label) + " " + value, value, size, color),
+                Value(ui, key.Length > 0 ? key : label, ui.Strings.Get(label) + " " + value, value, size, color),
                 Label(ui, unit, AppTheme.Type11, color, "")
             }
         }
@@ -357,21 +357,21 @@ class CopyControl : Cell[CopyControlInput], IDisposable {
         wasCopied = copied
         let copy = () -> ui.Actions.Copy(input.Value, input.ClearAfterMs)
         if input.Text {
-            let color = copied ? AppTheme.Mint: AppTheme.Lime
+            let color = copied ? AppTheme.Mint : AppTheme.Lime
             return ControlParts.Button(
                 ui,
-                copied ? "Copied": input.Label,
+                copied ? "Copied" : input.Label,
                 copy,
                 input.Disabled,
                 busy: false,
                 appearance: AppTheme.Button with{
                     BorderColor = color,
-                    BackgroundColor = copied ? AppTheme.MintQuiet: AppTheme.LimeQuiet,
+                    BackgroundColor = copied ? AppTheme.MintQuiet : AppTheme.LimeQuiet,
                     TextColor = color,
                     Leading = MaterialIcons.Create(
-                        copied ? "check": "content_copy",
+                        copied ? "check" : "content_copy",
                         input.IconSize,
-                        input.Disabled ? AppTheme.Dim: color
+                        input.Disabled ? AppTheme.Dim : color
                     )
                 }
             )
@@ -379,9 +379,9 @@ class CopyControl : Cell[CopyControlInput], IDisposable {
         return ControlParts.Icon(
             ui,
             MaterialIcons.Create(
-                copied ? "check": "content_copy",
+                copied ? "check" : "content_copy",
                 input.IconSize,
-                input.Disabled ? AppTheme.Dim: copied ? AppTheme.Lime: input.Color
+                input.Disabled ? AppTheme.Dim : copied ? AppTheme.Lime : input.Color
             ),
             input.Label,
             copy,

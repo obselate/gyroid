@@ -40,7 +40,7 @@ class ControlParts {
                 }
             }
             return Cell.Mount[ToggleGroupInput, ToggleGroup](
-                key.Length > 0 ? key: "segment-" + label,
+                key.Length > 0 ? key : "segment-" + label,
                 ToggleGroupInput{
                     Items: items,
                     SelectedIds: []string{selected},
@@ -54,15 +54,15 @@ class ControlParts {
                         button.BasedOn = AppTheme.SegmentStyle
                         button.Height = AppTheme.ControlCompact
                         button.MinHeight = AppTheme.ControlCompact
-                        button.BackgroundColor = active ? AppTheme.Rule: Color.Transparent
-                        button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
+                        button.BackgroundColor = active ? AppTheme.Rule : Color.Transparent
+                        button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule : AppTheme.Rule}
                         button.FocusStyle = Theme.Read().FocusStyle
                         button.BorderWidth = AppTheme.Border0
                         button.BoxShadow = BoxShadow{}
-                        button.Opacity = item.Disabled ? 0.4: 1.0
+                        button.Opacity = item.Disabled ? 0.4 : 1.0
                         button.Children.Clear()
                         button.Add(
-                            Label(ui, item.Label ?? item.Id, AppTheme.Type12, active ? AppTheme.Ink: AppTheme.Body, "")
+                            Label(ui, item.Label ?? item.Id, AppTheme.Type12, active ? AppTheme.Ink : AppTheme.Body, "")
                         )
                     },
                     OnSelectionChange: values -> {
@@ -97,8 +97,8 @@ class ControlParts {
                 RootStyle = style ?? AppTheme.IconButtonStyle,
                 ConfigureRoot = (value, content, button) -> {
                     button.FlexShrink = 0
-                    button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
-                    button.BorderColor = active ? AppTheme.Lime: AppTheme.Edge
+                    button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule : AppTheme.Rule}
+                    button.BorderColor = active ? AppTheme.Lime : AppTheme.Edge
                     button.FocusStyle = Theme.Read().FocusStyle
                     let accessibility = button.Accessibility ?? Accessibility{}
                     accessibility.Expanded = expanded
@@ -128,7 +128,7 @@ class ControlParts {
                     root.MinWidth = 0
                 },
                 ConfigureItem: (bar TabBarInput, item NavigationItem, button Button) -> {
-                    button.BasedOn = item.Id == bar.SelectedId ? AppTheme.SelectedTabStyle: AppTheme.TabStyle
+                    button.BasedOn = item.Id == bar.SelectedId ? AppTheme.SelectedTabStyle : AppTheme.TabStyle
                     button.FocusStyle = Theme.Read().FocusStyle
                     button.Overflow = Overflow.Hidden
                     if equalWidth {
@@ -153,7 +153,7 @@ class ControlParts {
             hasPopup bool? = nil,
             expanded bool? = nil
         ) Blob {
-            let style = appearance ?? (primary ? AppTheme.PrimaryButton: AppTheme.Button)
+            let style = appearance ?? (primary ? AppTheme.PrimaryButton : AppTheme.Button)
             let loading = busy ?? (primary && ui.Working())
             let button = (
                 style with{
@@ -161,7 +161,7 @@ class ControlParts {
                     OnClick = action,
                     Loading = loading,
                     Disabled = disabled,
-                    DisabledBackgroundColor = loading ? style.BackgroundColor: style.DisabledBackgroundColor,
+                    DisabledBackgroundColor = loading ? style.BackgroundColor : style.DisabledBackgroundColor,
                     DisabledTextColor = AppTheme.Dim,
                     FontFamily = AppTheme.Font
                 }
@@ -271,7 +271,7 @@ class ControlParts {
                     Path: arc.Build(),
                     Fit: ShapeFit.Fill,
                     BorderWidth: thickness,
-                    BorderColor: share > 0 ? color: Color.Transparent
+                    BorderColor: share > 0 ? color : Color.Transparent
                 }
             }
         }

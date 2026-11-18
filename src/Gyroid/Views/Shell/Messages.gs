@@ -92,7 +92,6 @@ class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
 
     prop IsDrawerOpen bool -> drawer
 
-
     func Dispose() {
         disposed = true
         timer?.Dispose()

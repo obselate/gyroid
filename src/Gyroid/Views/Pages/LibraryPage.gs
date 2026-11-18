@@ -126,7 +126,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     ) {
         try {
             let result = library.ListWallets(directory, token)
-            let rows = result.Rows.SequenceEqual(previous) ? previous: result.Rows
+            let rows = result.Rows.SequenceEqual(previous) ? previous : result.Rows
             owner.Post(
                 () -> {
                     if id != generation || directory != input.Directory || network != input.Network {
@@ -150,11 +150,11 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         status.LineHeight = 1
         card.Add(
             Container{
-                Height: input.Busy ? AppTheme.Icon14 + AppTheme.GetPageGap(0): 0,
+                Height: input.Busy ? AppTheme.Icon14 + AppTheme.GetPageGap(0) : 0,
                 MinHeight: 0,
                 FlexShrink: 0,
                 Overflow: Overflow.Hidden,
-                TransitionMs: input.Session.Settings.ReduceMotion ? 0: 180,
+                TransitionMs: input.Session.Settings.ReduceMotion ? 0 : 180,
                 TransitionEasing: Easing.Linear,
                 TransitionProperties: []TransitionProperty{TransitionProperty.Height},
                 Container{
@@ -278,7 +278,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
             Label(ui, ui.Strings.Get("wallets"), AppTheme.Type17, AppTheme.Ink, ""),
             trailing: Icon(
                 ui,
-                MaterialIcons.Create("settings", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Body),
+                MaterialIcons.Create("settings", AppTheme.Icon16, input.Busy ? AppTheme.Dim : AppTheme.Body),
                 ui.Strings.Get("Settings"),
                 () -> input.OnNavigate(AppPage.Settings),
                 input.Busy
@@ -320,9 +320,9 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
             )
             let list = VirtualRows(input.Wallets, 48 + AppTheme.Space8, rowKey, rowBuilder, false, version: 0)
             let expandedHeight = (opened ?? input.ActiveWallet).Length > 0 ? AppTheme.ControlRegular +
-                AppTheme.Space12: 0
+                AppTheme.Space12 : 0
             let issueHeight = issue.Length > 0 && expandedHeight > 0 ?
-            AppTheme.ControlRegular + AppTheme.Space16 + AppTheme.Space10: 0
+            AppTheme.ControlRegular + AppTheme.Space16 + AppTheme.Space10 : 0
             list.Height = input.Wallets.Count * (48 + AppTheme.Space8) + expandedHeight + issueHeight
             list.MinHeight = 0
             list.MaxHeight = Percent(100)
@@ -367,15 +367,15 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 Top: AppTheme.Space0,
                 Bottom: AppTheme.Space0
             },
-            BorderColor: input.Busy ? AppTheme.Edge: primary ? AppTheme.Lime: AppTheme.Rule,
-            BackgroundColor: input.Busy ? AppTheme.Raised: AppTheme.Surface,
+            BorderColor: input.Busy ? AppTheme.Edge : primary ? AppTheme.Lime : AppTheme.Rule,
+            BackgroundColor: input.Busy ? AppTheme.Raised : AppTheme.Surface,
             Disabled: input.Busy,
             HoverStyle: Style{BackgroundColor: AppTheme.Rule},
             FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
-            MaterialIcons.Create(icon, AppTheme.Icon20, input.Busy ? AppTheme.Dim: AppTheme.Lime),
-            Label(ui, ui.Strings.Get(label), AppTheme.Type14, input.Busy ? AppTheme.Dim: AppTheme.Ink, "")
+            MaterialIcons.Create(icon, AppTheme.Icon20, input.Busy ? AppTheme.Dim : AppTheme.Lime),
+            Label(ui, ui.Strings.Get(label), AppTheme.Type14, input.Busy ? AppTheme.Dim : AppTheme.Ink, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -411,7 +411,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 if input.Busy {
                     return
                 }
-                opened = expanded ? "": filename
+                opened = expanded ? "" : filename
                 password = ""
                 issue = ""
                 if loaded && !active {
@@ -445,7 +445,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
             } else {
                 Container{
                     FlexShrink: 0,
-                    MaterialIcons.Create(expanded ? "expand_more": "chevron_right", AppTheme.Icon16, AppTheme.Dim)
+                    MaterialIcons.Create(expanded ? "expand_more" : "chevron_right", AppTheme.Icon16, AppTheme.Dim)
                 }
             }
         }
@@ -462,7 +462,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
             head.Add(
                 Icon(
                     ui,
-                    MaterialIcons.Create("download", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Body),
+                    MaterialIcons.Create("download", AppTheme.Icon16, input.Busy ? AppTheme.Dim : AppTheme.Body),
                     ui.Strings.Get("Unload"),
                     () -> Run(ct -> input.Session.UnloadAsync(ct)),
                     input.Busy
@@ -480,8 +480,8 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 Top: AppTheme.Space0,
                 Bottom: AppTheme.Space0
             },
-            BorderColor: expanded ? AppTheme.Edge: AppTheme.Rule,
-            BackgroundColor: expanded ? AppTheme.Raised: AppTheme.Surface,
+            BorderColor: expanded ? AppTheme.Edge : AppTheme.Rule,
+            BackgroundColor: expanded ? AppTheme.Raised : AppTheme.Surface,
             FlexShrink: 0,
             Margin: Edges{Bottom: AppTheme.Space8},
             head
@@ -495,7 +495,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 Gap: AppTheme.Space10,
-                Padding: Edges{Bottom: issue.Length > 0 ? AppTheme.Space8: AppTheme.Space12},
+                Padding: Edges{Bottom: issue.Length > 0 ? AppTheme.Space8 : AppTheme.Space12},
                 Grow(
                     Container{
                         MinWidth: 0,
@@ -676,7 +676,7 @@ class LibraryMenu : Cell[LibraryMenuInput] {
             MaterialIcons.Create(
                 "add",
                 AppTheme.Icon16,
-                menu ? AppTheme.Lime: input.Busy ? AppTheme.Dim: AppTheme.Body
+                menu ? AppTheme.Lime : input.Busy ? AppTheme.Dim : AppTheme.Body
             ),
             input.Ui.Strings.Get("Add wallet"),
             () -> menu = !menu,
@@ -798,7 +798,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                 ),
                 leading: Icon(
                     ui,
-                    MaterialIcons.Create("arrow_back", AppTheme.Icon16, disabled ? AppTheme.Dim: AppTheme.Body),
+                    MaterialIcons.Create("arrow_back", AppTheme.Icon16, disabled ? AppTheme.Dim : AppTheme.Body),
                     ui.Strings.Get("Back"),
                     input.OnBack,
                     input.Busy
@@ -892,7 +892,9 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
             )
         }
         card.Add(
-            ActionRow([]Blob{Button(ui, form == "Create" ? "Create": "Import", fields.Submit, !fields.CanSubmit, true)})
+            ActionRow(
+                []Blob{Button(ui, form == "Create" ? "Create" : "Import", fields.Submit, !fields.CanSubmit, true)}
+            )
         )
         return card
     }
@@ -906,7 +908,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
             input.OnCreate(filename, secret)
             return
         }
-        let extra = (input.Kind == "Phrase" ? phrase: viewKey).ToCharArray()
+        let extra = (input.Kind == "Phrase" ? phrase : viewKey).ToCharArray()
         let publicKey = spendKey.ToCharArray()
         issue = ""
         generation++

@@ -153,8 +153,8 @@ class PrivateFiles {
                         switch error {
                             case 2, 20: "File does not exist"
                             case 1, 13: "File access was denied"
-                            default: error == (OperatingSystem.IsMacOS() ? 62: 40) ?
-                            "File must be a regular no-follow file": "File could not be opened"
+                            default: error == (OperatingSystem.IsMacOS() ? 62 : 40) ?
+                            "File must be a regular no-follow file" : "File could not be opened"
                         }
                     )
                 }
