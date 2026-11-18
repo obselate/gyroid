@@ -56,6 +56,9 @@ class ControlParts {
                         button.MinHeight = AppTheme.ControlCompact
                         button.BackgroundColor = active ? AppTheme.Rule : Color.Transparent
                         button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule : AppTheme.Rule}
+                        if active {
+                            button.DisabledStyle = Style{BasedOn: button.DisabledStyle, BackgroundColor: AppTheme.Rule}
+                        }
                         button.FocusStyle = Theme.Read().FocusStyle
                         button.BorderWidth = AppTheme.Border0
                         button.BoxShadow = BoxShadow{}
