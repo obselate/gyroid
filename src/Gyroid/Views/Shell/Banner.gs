@@ -40,21 +40,15 @@ partial class App {
             Content: ui.Strings.Explain(message),
             FontFamily: AppTheme.Font,
             Title: wallet.NodeRestartStopped ? ui.Strings.Get("Automatic node restart stopped") : nil,
-            Actions: wallet
-                .NodeError
-                .Length > 0 ? ActionRow(
-                []Blob{
-                    ControlParts.Button(
-                        ui,
-                        "Retry",
-                        () -> {
-                            refreshError = ""
-                            Run(ct -> wallet.ConnectAsync(ct))
-                        },
-                        ui.Working() || wallet.Busy || Preparing(),
-                        busy: ui.Working()
-                    )
-                }
+            Action: wallet.NodeError.Length > 0 ? ControlParts.Button(
+                ui,
+                "Retry",
+                () -> {
+                    refreshError = ""
+                    Run(ct -> wallet.ConnectAsync(ct))
+                },
+                ui.Working() || wallet.Busy || Preparing(),
+                busy: ui.Working()
             ) : nil,
             OnDismiss: wallet.NodeError.Length > 0 ? nil : () -> {
                 error = ""
