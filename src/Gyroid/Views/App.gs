@@ -220,7 +220,10 @@ partial class App : Cell, IDisposable {
             backgroundLockTimer = nil
             UpdateBackgroundLock()
             UpdatePlayback()
-            if motion != reduceMotion || background != backgroundMode || scale != window?.UiScale || screen == AppPage.Settings {
+            if motion != reduceMotion ||
+                background != backgroundMode ||
+                scale != window?.UiScale ||
+                screen == AppPage.Settings {
                 Rebuild()
             }
         }
@@ -261,95 +264,96 @@ partial class App : Cell, IDisposable {
         background = ShaderEffect(ShaderEffectProgram(Resources.Resource("Gyroid.Background.goo-effect")))
         appIcon = ImageSource.Decode(Resources.Resource("Gyroid.Icon.png"))
     }
+
     private func CreateContactsInput() ContactsInput {
         return ContactsInput{
-                Ui: ui,
-                Window: window,
-                Contacts: contacts,
-                Privacy: ui.Privacy,
-                Busy: ui.Working(),
-                Language: ui.Strings.Language,
-                Network: wallet.Settings.Network,
-                Height: height,
-                OnChange: contactsChanged
-            }
+            Ui: ui,
+            Window: window,
+            Contacts: contacts,
+            Privacy: ui.Privacy,
+            Busy: ui.Working(),
+            Language: ui.Strings.Language,
+            Network: wallet.Settings.Network,
+            Height: height,
+            OnChange: contactsChanged
+        }
     }
 
     private func CreateNetworkInput() NetworkInput {
         return NetworkInput{
-                Ui: ui,
-                Session: wallet,
-                Window: window,
-                Node: NetworkStatusInput{
-                    Height: wallet.Node.Status.Height,
-                    Mempool: wallet.Node.Status.Mempool,
-                    MempoolBytes: wallet.Node.Status.MempoolBytes,
-                    Peers: wallet.Node.Status.Peers,
-                    PeerId: wallet.Node.Status.PeerId,
-                    IdentityAge: wallet.Node.Status.IdentityAge,
-                    BestHash: wallet.Node.Status.BestHash
-                },
-                History: wallet.Snapshot.History,
-                Sends: wallet.Snapshot.Sends,
-                Source: NetworkSource{
-                    Wallet: wallet.Settings.ActiveWallet,
-                    Network: wallet.Settings.Network,
-                    Endpoint: wallet.Settings.Endpoint,
-                    Running: wallet.Node.Status.Running,
-                    Start: wallet.Node.Api.verifiedStart
-                },
-                Language: ui.Strings.Language,
-                Width: width,
-                Height: height
-            }
+            Ui: ui,
+            Session: wallet,
+            Window: window,
+            Node: NetworkStatusInput{
+                Height: wallet.Node.Status.Height,
+                Mempool: wallet.Node.Status.Mempool,
+                MempoolBytes: wallet.Node.Status.MempoolBytes,
+                Peers: wallet.Node.Status.Peers,
+                PeerId: wallet.Node.Status.PeerId,
+                IdentityAge: wallet.Node.Status.IdentityAge,
+                BestHash: wallet.Node.Status.BestHash
+            },
+            History: wallet.Snapshot.History,
+            Sends: wallet.Snapshot.Sends,
+            Source: NetworkSource{
+                Wallet: wallet.Settings.ActiveWallet,
+                Network: wallet.Settings.Network,
+                Endpoint: wallet.Settings.Endpoint,
+                Running: wallet.Node.Status.Running,
+                Start: wallet.Node.Api.verifiedStart
+            },
+            Language: ui.Strings.Language,
+            Width: width,
+            Height: height
+        }
     }
 
     private func CreateOverviewInput() OverviewInput {
         return OverviewInput{
-                Ui: ui,
-                Session: wallet,
-                Window: window,
-                Snapshot: wallet.Snapshot,
-                Node: wallet.Node.Status,
-                Contacts: contacts,
-                Privacy: ui.Privacy,
-                Height: height,
-                Width: width,
-                OnNavigate: navigate,
-                OnUpgrade: showUpgrade,
-                OnHistory: selectHistory
-            }
+            Ui: ui,
+            Session: wallet,
+            Window: window,
+            Snapshot: wallet.Snapshot,
+            Node: wallet.Node.Status,
+            Contacts: contacts,
+            Privacy: ui.Privacy,
+            Height: height,
+            Width: width,
+            OnNavigate: navigate,
+            OnUpgrade: showUpgrade,
+            OnHistory: selectHistory
+        }
     }
 
     private func CreateHistoryInput() HistoryInput {
-            let snapshot = wallet.Snapshot
+        let snapshot = wallet.Snapshot
         return HistoryInput{
-                    Session: wallet,
-                    Ui: ui,
-                    Snapshot: snapshot,
-                    Window: window,
-                    Tip: wallet
-                        .Node
-                        .Status
-                        .Running ? wallet
-                        .Node
-                        .Status
-                        .Height: snapshot
-                        .Balance
-                        ?.ChainHeight ??
-                        wallet
-                        .Node
-                        .Status
-                        .Height,
-                    Privacy: ui.Privacy,
-                    Language: ui.Strings.Language,
-                    Width: width,
-                    OnReceive: openReceive,
-                    OnMessage: OpenMessage,
-                    ChooseFile: chooseFile,
-                    SelectionTx: historySelection,
-                    SelectionRevision: historySelectionRevision
-                }
+            Session: wallet,
+            Ui: ui,
+            Snapshot: snapshot,
+            Window: window,
+            Tip: wallet
+                .Node
+                .Status
+                .Running ? wallet
+                .Node
+                .Status
+                .Height : snapshot
+                .Balance
+                ?.ChainHeight ??
+                wallet
+                .Node
+                .Status
+                .Height,
+            Privacy: ui.Privacy,
+            Language: ui.Strings.Language,
+            Width: width,
+            OnReceive: openReceive,
+            OnMessage: OpenMessage,
+            ChooseFile: chooseFile,
+            SelectionTx: historySelection,
+            SelectionRevision: historySelectionRevision
+        }
     }
 
     private func CreateSyncInput() SyncInput {
@@ -357,149 +361,149 @@ partial class App : Cell, IDisposable {
     }
 
     private func CreateToolsInput() ToolsInput {
-            let snapshot = wallet.Snapshot
+        let snapshot = wallet.Snapshot
         return ToolsInput{
-                    Region: ToolsRegionInput{
-                        Session: wallet,
-                        Ui: ui,
-                        State: toolsState,
-                        Identity: wallet.Settings.Network + ":" + wallet.Settings.ActiveWallet,
-                        Busy: ui.Working(),
-                        Privacy: ui.Privacy,
-                        Language: ui.Strings.Language,
-                        Compact: width < 1100
-                    },
-                    State: toolsState,
-                    ViewOnly: snapshot.ViewOnly,
-                    Outputs: snapshot.Balance?.Outputs ?? uint64(0),
-                    MemoErrors: snapshot.Balance?.MemoErrors ?? uint64(0),
-                    Peers: wallet.Node.Status.Peers,
-                    Section: screen,
-                    AutoLock: wallet.Settings.AutoLockMinutes,
-                    Width: width,
-                    Height: height,
-                    OnNavigate: navigate,
-                    OnPrivacy: togglePrivacy,
-                    OnNodeSettings: openNodeSettings
-                }
+            Region: ToolsRegionInput{
+                Session: wallet,
+                Ui: ui,
+                State: toolsState,
+                Identity: wallet.Settings.Network + ":" + wallet.Settings.ActiveWallet,
+                Busy: ui.Working(),
+                Privacy: ui.Privacy,
+                Language: ui.Strings.Language,
+                Compact: width < 1100
+            },
+            State: toolsState,
+            ViewOnly: snapshot.ViewOnly,
+            Outputs: snapshot.Balance?.Outputs ?? uint64(0),
+            MemoErrors: snapshot.Balance?.MemoErrors ?? uint64(0),
+            Peers: wallet.Node.Status.Peers,
+            Section: screen,
+            AutoLock: wallet.Settings.AutoLockMinutes,
+            Width: width,
+            Height: height,
+            OnNavigate: navigate,
+            OnPrivacy: togglePrivacy,
+            OnNodeSettings: openNodeSettings
+        }
     }
 
     private func CreateSendInput() SendPageInput {
         return SendPageInput{
-                Session: wallet,
-                Wallet: wallet.Settings.ActiveWallet,
-                Rows: sendRows,
-                Display: SendDisplay{
-                    Ui: ui,
-                    Window: window,
-                    Contacts: contacts,
-                    Network: wallet.Settings.Network,
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Height: height
-                },
-                Spendable: wallet.Snapshot.Balance?.Spendable,
-                Address: wallet.Snapshot.Address,
-                Sends: wallet.Snapshot.Sends,
-                Animate: PlaybackActive(),
-                OnSent: sendDone
-            }
+            Session: wallet,
+            Wallet: wallet.Settings.ActiveWallet,
+            Rows: sendRows,
+            Display: SendDisplay{
+                Ui: ui,
+                Window: window,
+                Contacts: contacts,
+                Network: wallet.Settings.Network,
+                Privacy: ui.Privacy,
+                Busy: ui.Working(),
+                Language: ui.Strings.Language,
+                Height: height
+            },
+            Spendable: wallet.Snapshot.Balance?.Spendable,
+            Address: wallet.Snapshot.Address,
+            Sends: wallet.Snapshot.Sends,
+            Animate: PlaybackActive(),
+            OnSent: sendDone
+        }
     }
 
     private func CreateReceiveInput() ReceivePageInput {
-            let snapshot = wallet.Snapshot
+        let snapshot = wallet.Snapshot
         return ReceivePageInput{
-                    Ui: ui,
-                    Address: snapshot.Address,
-                    History: snapshot.History,
-                    ChainHeight: snapshot.Balance?.ChainHeight ?? uint64(0),
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Height: height,
-                    Request: receiveRequest
-                }
+            Ui: ui,
+            Address: snapshot.Address,
+            History: snapshot.History,
+            ChainHeight: snapshot.Balance?.ChainHeight ?? uint64(0),
+            Privacy: ui.Privacy,
+            Busy: ui.Working(),
+            Language: ui.Strings.Language,
+            Height: height,
+            Request: receiveRequest
+        }
     }
 
     private func CreateMiningInput() MiningPageInput {
         return MiningPageInput{
-                Ui: ui,
-                Session: wallet,
-                Window: window,
-                History: miningHistory,
-                Wallet: wallet.Settings.ActiveWallet,
-                Network: wallet.Settings.Network,
-                Endpoint: wallet.Settings.Endpoint,
-                Mode: wallet.Settings.MiningMode,
-                Language: ui.Strings.Language,
-                Visible: !hidden &&
-                    window?.IsVisible == true &&
-                    window?.State != WindowState.Minimized &&
-                    window?.Occlusion != WindowOcclusion.Occluded,
-                NodeRunning: wallet.Node.Status.Running,
-                Busy: ui.Working(),
-                Height: height
-            }
+            Ui: ui,
+            Session: wallet,
+            Window: window,
+            History: miningHistory,
+            Wallet: wallet.Settings.ActiveWallet,
+            Network: wallet.Settings.Network,
+            Endpoint: wallet.Settings.Endpoint,
+            Mode: wallet.Settings.MiningMode,
+            Language: ui.Strings.Language,
+            Visible: !hidden &&
+                window?.IsVisible == true &&
+                window?.State != WindowState.Minimized &&
+                window?.Occlusion != WindowOcclusion.Occluded,
+            NodeRunning: wallet.Node.Status.Running,
+            Busy: ui.Working(),
+            Height: height
+        }
     }
 
     private func CreateSettingsInput() SettingsPageInput {
         return SettingsPageInput{
-                    Session: wallet,
-                    Ui: ui,
-                    Tools: toolsState,
-                    Window: window,
-                    Snapshot: wallet.Snapshot,
-                    Node: wallet.Node.Status,
-                    Section: settingsSection,
-                    Available: WalletAvailable(),
-                    Privacy: ui.Privacy,
-                    Busy: ui.Working(),
-                    Language: ui.Strings.Language,
-                    Width: width,
-                    Height: height,
-                    MaximumScalePercent: maximumScalePercent,
-                    ChooseFile: chooseFile,
-                    OnSection: selectSection,
-                    OnLanguage: setLanguage,
-                    OnPreference: preferenceChanged,
-                    OnRevealSeed: revealSeed,
-                    OnNavigate: navigate,
-                    OnClose: closeSettings
-                }
+            Session: wallet,
+            Ui: ui,
+            Tools: toolsState,
+            Window: window,
+            Snapshot: wallet.Snapshot,
+            Node: wallet.Node.Status,
+            Section: settingsSection,
+            Available: WalletAvailable(),
+            Privacy: ui.Privacy,
+            Busy: ui.Working(),
+            Language: ui.Strings.Language,
+            Width: width,
+            Height: height,
+            MaximumScalePercent: maximumScalePercent,
+            ChooseFile: chooseFile,
+            OnSection: selectSection,
+            OnLanguage: setLanguage,
+            OnPreference: preferenceChanged,
+            OnRevealSeed: revealSeed,
+            OnNavigate: navigate,
+            OnClose: closeSettings
+        }
     }
 
     private func CreateSeedInput() SeedPageInput {
         return SeedPageInput{
-                Session: wallet,
-                Wallet: wallet.Settings.ActiveWallet,
-                Ui: ui,
-                Words: seed ?? Array.Empty[char](),
-                FromWallet: seedFromWallet,
-                Busy: ui.Working(),
-                Language: ui.Strings.Language,
-                OnDone: finishSeed,
-                Issue: seedIssue,
-                OnRetry: retrySeed
-            }
+            Session: wallet,
+            Wallet: wallet.Settings.ActiveWallet,
+            Ui: ui,
+            Words: seed ?? Array.Empty[char](),
+            FromWallet: seedFromWallet,
+            Busy: ui.Working(),
+            Language: ui.Strings.Language,
+            OnDone: finishSeed,
+            Issue: seedIssue,
+            OnRetry: retrySeed
+        }
     }
 
     private func CreateLibraryInput() LibraryInput {
         return LibraryInput{
-                Session: wallet,
-                Ui: ui,
-                State: wallet.Snapshot.State,
-                ActiveWallet: wallet.Settings.ActiveWallet,
-                Directory: wallet.Settings.WalletDirectory,
-                Network: wallet.Settings.Network,
-                Busy: ui.Working(),
-                Status: wallet.Node.Status.Phase == NodePhase.None ? ui.Strings.Get("Working"): PhaseText(),
-                Language: ui.Strings.Language,
-                ChooseFile: chooseFile,
-                OnNavigate: navigate,
-                OnCreate: createWallet,
-                OnBackup: backupSeed
-            }
+            Session: wallet,
+            Ui: ui,
+            State: wallet.Snapshot.State,
+            ActiveWallet: wallet.Settings.ActiveWallet,
+            Directory: wallet.Settings.WalletDirectory,
+            Network: wallet.Settings.Network,
+            Busy: ui.Working(),
+            Status: wallet.Node.Status.Phase == NodePhase.None ? ui.Strings.Get("Working") : PhaseText(),
+            Language: ui.Strings.Language,
+            ChooseFile: chooseFile,
+            OnNavigate: navigate,
+            OnCreate: createWallet,
+            OnBackup: backupSeed
+        }
     }
 
     func Activate(request ApplicationActivation) {
@@ -583,7 +587,9 @@ partial class App : Cell, IDisposable {
                     Rebuild()
                 },
                 OnCancel: onClose,
-                OnOpenChange: visible -> if !visible { onClose() }
+                OnOpenChange: visible -> if !visible {
+                    onClose()
+                }
             }
         )
     }
@@ -923,13 +929,13 @@ partial class App : Cell, IDisposable {
         seed = nil
         if screen == AppPage.Seed {
             pageGeneration++
-            screen = seedFromWallet ? AppPage.Settings: AppPage.Overview
+            screen = seedFromWallet ? AppPage.Settings : AppPage.Overview
         }
         seedFromWallet = false
     }
 
     private func FinishSeed() {
-        let target = seedFromWallet ? AppPage.Settings: AppPage.Overview
+        let target = seedFromWallet ? AppPage.Settings : AppPage.Overview
         if seedFromWallet {
             ClearSeed()
             Open(target)
@@ -1136,7 +1142,7 @@ partial class App : Cell, IDisposable {
                     }
                     Refresh()
                 } else if current {
-                    error = connectionFailure || message == observedConnectionError ? "": message
+                    error = connectionFailure || message == observedConnectionError ? "" : message
                 }
                 let now = wallet.Snapshot.State
                 let same = identity == wallet.Settings.ActiveWallet
@@ -1199,7 +1205,7 @@ partial class App : Cell, IDisposable {
                     return
                 }
                 refreshing = false
-                let problem = connectionFailure || message == observedConnectionError ? "": message
+                let problem = connectionFailure || message == observedConnectionError ? "" : message
                 if problem != refreshError {
                     refreshError = problem
                     Rebuild()
@@ -1351,8 +1357,8 @@ partial class App : Cell, IDisposable {
                 Top: 0,
                 Right: 0,
                 Bottom: 0,
-                BackgroundColor: backgroundMode == "off" ? AppTheme.Black: Color.Transparent,
-                ShaderEffect: backgroundMode == "off" ? nil: background
+                BackgroundColor: backgroundMode == "off" ? AppTheme.Black : Color.Transparent,
+                ShaderEffect: backgroundMode == "off" ? nil : background
             },
             Chrome()
         }
@@ -1564,7 +1570,13 @@ partial class App : Cell, IDisposable {
         )
         root.Add(frame)
         if WalletAvailable() {
-            root.Add(Cell.Mount[MessagesOverlayInput, MessageOverlay]("message-overlay", MessageOverlayInput(), createMessageOverlay))
+            root.Add(
+                Cell.Mount[MessagesOverlayInput, MessageOverlay](
+                    "message-overlay",
+                    MessageOverlayInput(),
+                    createMessageOverlay
+                )
+            )
             if confirmPaymentReplacement {
                 root.Add(ConfirmPaymentReplacement())
             }
