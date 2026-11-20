@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories: ["/", "/src/Gyroid"]
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: Goo
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: Goo.Widgets
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: Goo.Widgets.Markdown
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: Goo.Animations
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: Gsharp.NET.Sdk
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
