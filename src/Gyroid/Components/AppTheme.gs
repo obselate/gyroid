@@ -343,7 +343,11 @@ class AppTheme {
         func GetBalanceSize(masked bool, height float64, inner float64, length int32) float64 -> if masked {
             34.0
         } else {
-            Math.Clamp(Math.Min(height * 0.12, inner * 1.53 / length), 34, 150)
+            Math.Clamp(
+                Math.Min(height * 0.12, Math.Max(0.0, inner - Type16 * 2 - Space12) * 1.53 / length),
+                Type16,
+                150
+            )
         }
 
         func GetLegendFigureSize(wide bool, height float64) float64 -> wide ? Math.Clamp(height * 0.024, 16, 26) : 16

@@ -63,6 +63,7 @@ class InfoTip : Cell[InfoTipInput] {
                         panel.BasedOn = AppTheme.InformationCardStyle
                         panel.BorderWidth = AppTheme.Border1
                         panel.BorderRadius = AppTheme.Radius8
+                        panel.BoxShadow = BoxShadow{}
                     },
                     Content: lines,
                     AccessibilityName: ui.Strings.Get(input.Topic),
