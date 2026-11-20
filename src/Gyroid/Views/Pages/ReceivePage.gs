@@ -391,7 +391,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                     Height: side,
                     Path: prepared?.Path ?? VectorPath.Empty,
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: AppTheme.Rule
+                    Fill: VectorPaint(AppTheme.Rule)
                 }
             )
             code.Add(MaterialIcons.Create("check", 56, AppTheme.Mint))
@@ -402,7 +402,7 @@ class ReceivePresentation : Cell[ReceivePresentationInput], IDisposable {
                     Height: side,
                     Path: prepared?.Path ?? VectorPath.Empty,
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: AppTheme.Black
+                    Fill: VectorPaint(AppTheme.Black)
                 }
             )
         }

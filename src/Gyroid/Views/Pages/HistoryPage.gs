@@ -861,7 +861,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
                 Height: height,
                 Path: up.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Mint
+                Fill: VectorPaint(AppTheme.Mint)
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -869,7 +869,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
                 Height: height,
                 Path: coin.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Lime
+                Fill: VectorPaint(AppTheme.Lime)
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -877,7 +877,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
                 Height: height,
                 Path: down.Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Pink
+                Fill: VectorPaint(AppTheme.Pink)
             }
         }
         if to > 0 {

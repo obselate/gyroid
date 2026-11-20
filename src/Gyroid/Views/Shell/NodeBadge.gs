@@ -302,7 +302,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 Height: 18,
                 Path: fill,
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Raised
+                Fill: VectorPaint(AppTheme.Raised)
             },
             Shape{
                 Position: PositionType.Absolute,
@@ -311,8 +311,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 Height: 18,
                 Path: edge,
                 Fit: ShapeFit.Fill,
-                BorderWidth: AppTheme.Border1,
-                BorderColor: AppTheme.Edge
+                Stroke: VectorStroke(AppTheme.Border1, AppTheme.Edge)
             }
         }
         return Cell.Mount[PopoverInput, Popover](

@@ -264,8 +264,7 @@ class ControlParts {
                     Height: size,
                     Path: track.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: thickness,
-                    BorderColor: trackColor
+                    Stroke: VectorStroke(thickness, trackColor)
                 },
                 Shape{
                     Position: PositionType.Absolute,
@@ -273,8 +272,7 @@ class ControlParts {
                     Height: size,
                     Path: arc.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: thickness,
-                    BorderColor: share > 0 ? color : Color.Transparent
+                    Stroke: VectorStroke(thickness, share > 0 ? color : Color.Transparent)
                 }
             }
         }

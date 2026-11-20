@@ -621,7 +621,7 @@ class MiningChart : Cell[MiningChartInput] {
                     Height: Percent(100),
                     Path: fill.Build(),
                     Fit: ShapeFit.Fill,
-                    BackgroundGradient: LinearGradient(AppTheme.LimeSoft, AppTheme.Surface)
+                    Fill: VectorPaint(LinearGradient(AppTheme.LimeSoft, AppTheme.Surface))
                 }
             )
             area.Add(
@@ -631,7 +631,6 @@ class MiningChart : Cell[MiningChartInput] {
                     Height: Percent(100),
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: Color.Transparent,
                     Stroke: VectorStroke(1.6, AppTheme.Lime){
                         .Join: StrokeJoin.Round,
                         .VectorEffect: VectorEffect.NonScalingStroke

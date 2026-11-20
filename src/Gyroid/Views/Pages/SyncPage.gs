@@ -568,7 +568,7 @@ class SyncChart : Cell[SyncChartInput] {
                     Height: height,
                     Path: area.Build(),
                     Fit: ShapeFit.Fill,
-                    BackgroundColor: fill
+                    Fill: VectorPaint(fill)
                 }
             )
             chart.Add(
@@ -578,8 +578,7 @@ class SyncChart : Cell[SyncChartInput] {
                     Height: height,
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
-                    BorderWidth: 1.6,
-                    BorderColor: color
+                    Stroke: VectorStroke(1.6, color)
                 }
             )
             chart.Add(

@@ -566,11 +566,13 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                             .Build(),
                         Fit: ShapeFit.Fill,
                         CornerRadius: 2,
-                        BackgroundColor: if chosen {
-                            pending ? AppTheme.OrangeMuted : AppTheme.LimeMuted
-                        } else {
-                            pending ? AppTheme.OrangeQuiet : AppTheme.LimeQuiet
-                        },
+                        Fill: VectorPaint(
+                            if chosen {
+                                pending ? AppTheme.OrangeMuted : AppTheme.LimeMuted
+                            } else {
+                                pending ? AppTheme.OrangeQuiet : AppTheme.LimeQuiet
+                            }
+                        ),
                         Stroke: VectorStroke(
                             chosen ? 1.4 : AppTheme.Border1,
                             if chosen {
@@ -1137,9 +1139,8 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
                 Height: 28,
                 Path: hexagon.Close().Build(),
                 Fit: ShapeFit.Fill,
-                BackgroundColor: AppTheme.Surface,
-                BorderWidth: 1.5,
-                BorderColor: input.Online ? AppTheme.Lime : AppTheme.Dim
+                Fill: VectorPaint(AppTheme.Surface),
+                Stroke: VectorStroke(1.5, input.Online ? AppTheme.Lime : AppTheme.Dim)
             }
         )
         plot.Add(Dot(x, y, 3, input.Online ? AppTheme.Lime : AppTheme.Dim))
@@ -1228,8 +1229,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
         Height: height,
         Path: path.Build(),
         Fit: ShapeFit.Fill,
-        BorderWidth: AppTheme.Border1,
-        BorderColor: color
+        Stroke: VectorStroke(AppTheme.Border1, color)
     }
 
     private func Dot(x float64, y float64, radius float64, color Color) Container {
