@@ -127,7 +127,7 @@ class WalletValidation {
             if decoded.Length != 68 || !SHA3_256.IsSupported {
                 return ""
             }
-            let other = network == "testnet" ? "mainnet": "testnet"
+            let other = network == "testnet" ? "mainnet" : "testnet"
             return if Address.Checksummed(decoded, network) {
                 ""
             } else if !Address.Checksummed(decoded, other) {

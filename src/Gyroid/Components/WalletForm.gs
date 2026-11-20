@@ -79,12 +79,12 @@ class WalletForm {
             issue,
             disabled || ui.Working()
         ) with{
-            Label = labelled ? ui.Strings.Get(label): nil,
+            Label = labelled ? ui.Strings.Get(label) : nil,
             Password = secret || hidden,
             Leading = leading,
             Trailing = trailing,
             Placeholder = placeholder,
-            ContentDirection = inheritDirection ? nil: Direction.LeftToRight,
+            ContentDirection = inheritDirection ? nil : Direction.LeftToRight,
             Invalid = invalid || issue.Length > 0
         }
     ).Build()
@@ -102,7 +102,7 @@ class WalletForm {
         Controlled = true,
         Password = secret,
         RevealButton = secret,
-        Error = issue.Length > 0 ? ui.Strings.Explain(issue): nil,
+        Error = issue.Length > 0 ? ui.Strings.Explain(issue) : nil,
         Invalid = issue.Length > 0,
         Disabled = disabled,
         Width = Percent(100),
@@ -136,7 +136,7 @@ class WalletForm {
             )
             return root
         }
-    }.Build()
+    }
 
     func Amount(field TextField) Blob -> Entry(
         field with{
@@ -195,7 +195,7 @@ class WalletForm {
         Container{
             Width: AppTheme.LabelColumn,
             FlexShrink: 0,
-            Label(ui, label.Length > 0 ? ui.Strings.Get(label): "", AppTheme.Type13, AppTheme.Body, "")
+            Label(ui, label.Length > 0 ? ui.Strings.Get(label) : "", AppTheme.Type13, AppTheme.Body, "")
         },
         Grow(Container{MinWidth: 0, field})
     }
@@ -230,7 +230,7 @@ class WalletForm {
                 () -> choose.Invoke(
                     kind,
                     label,
-                    Path.IsPathFullyQualified(current) ? current: Environment.GetFolderPath(
+                    Path.IsPathFullyQualified(current) ? current : Environment.GetFolderPath(
                         Environment.SpecialFolder.UserProfile
                     ),
                     value -> {

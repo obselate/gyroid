@@ -39,7 +39,7 @@ class NodeSupervisor : IDisposable {
     prop ExitError string {
         get {
             lock ownership {
-                return output.Length > 0 ? "Configured core exited before its API became ready: " + output:
+                return output.Length > 0 ? "Configured core exited before its API became ready: " + output :
                 "Configured core exited before its API became ready"
             }
         }
@@ -255,7 +255,7 @@ class NodeSupervisor : IDisposable {
             if error is WalletException {
                 throw error
             }
-            throw WalletException(output.Length > 0 ? failure: "Could not start the configured core executable")
+            throw WalletException(output.Length > 0 ? failure : "Could not start the configured core executable")
         }
     }
 

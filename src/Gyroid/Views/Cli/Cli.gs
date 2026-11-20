@@ -22,7 +22,7 @@ class Cli {
                     Usage(
                         Console.Out,
                         index > 2 && (command == "node" || command == "settings" || command == "view-only")
-                        ? command + " " + arguments[2]: command
+                        ? command + " " + arguments[2] : command
                     )
                     return 0
                 }
@@ -281,7 +281,7 @@ class Cli {
                                             message
                                                 .InvitationName
                                                 .Length > 0 ? "Group invitation: " +
-                                                message.InvitationName: message.Text
+                                                message.InvitationName : message.Text
                                         )
                                     )
                                 )
@@ -380,7 +380,7 @@ class Cli {
                                     .Recipients
                                     .Select(
                                     recipient -> recipient.InvitationName.Length > 0 ?
-                                    "Group invitation: " + recipient.InvitationName: recipient.Memo
+                                    "Group invitation: " + recipient.InvitationName : recipient.Memo
                                 )
                                     .Where(value -> value.Length > 0)
                                     .Distinct(StringComparer.Ordinal)
@@ -392,7 +392,7 @@ class Cli {
                                     (
                                     memoText.Length > 0 ? " " + WalletText.SafeText(
                                         WalletText.Hidden(privacy, memoText)
-                                    ): ""
+                                    ) : ""
                                 )
                             )
                             count = count + 1
@@ -402,7 +402,7 @@ class Cli {
                                 break
                             }
                             let memo = output.InvitationName.Length > 0 ?
-                            "Group invitation: " + output.InvitationName: output.Memo
+                            "Group invitation: " + output.InvitationName : output.Memo
                             Console.WriteLine(
                                 "Received " + output.TxId + ":" + output.OutputIndex.ToString(
                                     CultureInfo.InvariantCulture
@@ -411,7 +411,7 @@ class Cli {
                                     WalletAmount.Format(output.Amount) + " BNT height " + output.BlockHeight.ToString(
                                     CultureInfo.InvariantCulture
                                 ) +
-                                    (memo.Length > 0 ? " " + WalletText.SafeText(WalletText.Hidden(privacy, memo)): "")
+                                    (memo.Length > 0 ? " " + WalletText.SafeText(WalletText.Hidden(privacy, memo)) : "")
                             )
                             count = count + 1
                         }

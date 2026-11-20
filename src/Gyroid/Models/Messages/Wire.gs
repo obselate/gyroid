@@ -17,8 +17,8 @@ class Envelope {
     var GroupName string = ""
     var Members List[string] = List[string]()
 
-    prop InvitationName string -> Kind == 3 ? GroupName: ""
-    prop HeaderLength int32 -> 9 + (Kind >= 2 ? 8: 0) + (Kind == 1 || Kind == 3 ? 68: 0)
+    prop InvitationName string -> Kind == 3 ? GroupName : ""
+    prop HeaderLength int32 -> 9 + (Kind >= 2 ? 8 : 0) + (Kind == 1 || Kind == 3 ? 68 : 0)
     prop EncodedLength int32 -> HeaderLength + 64 + Body.Length
 
     func Header()[]uint8 {

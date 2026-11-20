@@ -40,7 +40,7 @@ class ControlParts {
                 }
             }
             return Cell.Mount[ToggleGroupInput, ToggleGroup](
-                key.Length > 0 ? key: "segment-" + label,
+                key.Length > 0 ? key : "segment-" + label,
                 ToggleGroupInput{
                     Items: items,
                     SelectedIds: []string{selected},
@@ -54,15 +54,18 @@ class ControlParts {
                         button.BasedOn = AppTheme.SegmentStyle
                         button.Height = AppTheme.ControlCompact
                         button.MinHeight = AppTheme.ControlCompact
-                        button.BackgroundColor = active ? AppTheme.Rule: Color.Transparent
-                        button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
+                        button.BackgroundColor = active ? AppTheme.Rule : Color.Transparent
+                        button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule : AppTheme.Rule}
+                        if active {
+                            button.DisabledStyle = Style{BasedOn: button.DisabledStyle, BackgroundColor: AppTheme.Rule}
+                        }
                         button.FocusStyle = Theme.Read().FocusStyle
                         button.BorderWidth = AppTheme.Border0
                         button.BoxShadow = BoxShadow{}
-                        button.Opacity = item.Disabled ? 0.4: 1.0
+                        button.Opacity = item.Disabled ? 0.4 : 1.0
                         button.Children.Clear()
                         button.Add(
-                            Label(ui, item.Label ?? item.Id, AppTheme.Type12, active ? AppTheme.Ink: AppTheme.Body, "")
+                            Label(ui, item.Label ?? item.Id, AppTheme.Type12, active ? AppTheme.Ink : AppTheme.Body, "")
                         )
                     },
                     OnSelectionChange: values -> {
@@ -96,19 +99,16 @@ class ControlParts {
                 DisabledOpacity = 1,
                 RootStyle = style ?? AppTheme.IconButtonStyle,
                 ConfigureRoot = (value, content, button) -> {
-                    button.BasedOn = style ?? AppTheme.IconButtonStyle
-                    button.Width = size
-                    button.Height = size
                     button.FlexShrink = 0
-                    button.AlignItems = AlignItems.Center
-                    button.JustifyContent = JustifyContent.Center
-                    button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule: AppTheme.Rule}
-                    button.BorderColor = active ? AppTheme.Lime: AppTheme.Edge
+                    button.HoverStyle = Style{BackgroundColor: active ? AppTheme.StrongRule : AppTheme.Rule}
+                    button.BorderColor = active ? AppTheme.Lime : AppTheme.Edge
                     button.FocusStyle = Theme.Read().FocusStyle
-                    button.Accessibility = Accessibility{Expanded: expanded}
+                    let accessibility = button.Accessibility ?? Accessibility{}
+                    accessibility.Expanded = expanded
+                    button.Accessibility = accessibility
                 }
             }
-        ).Build()
+        )
 
         func Tabs(
             ui Presentation,
@@ -131,7 +131,7 @@ class ControlParts {
                     root.MinWidth = 0
                 },
                 ConfigureItem: (bar TabBarInput, item NavigationItem, button Button) -> {
-                    button.BasedOn = item.Id == bar.SelectedId ? AppTheme.SelectedTabStyle: AppTheme.TabStyle
+                    button.BasedOn = item.Id == bar.SelectedId ? AppTheme.SelectedTabStyle : AppTheme.TabStyle
                     button.FocusStyle = Theme.Read().FocusStyle
                     button.Overflow = Overflow.Hidden
                     if equalWidth {
@@ -156,7 +156,7 @@ class ControlParts {
             hasPopup bool? = nil,
             expanded bool? = nil
         ) Blob {
-            let style = appearance ?? (primary ? AppTheme.PrimaryButton: AppTheme.Button)
+            let style = appearance ?? (primary ? AppTheme.PrimaryButton : AppTheme.Button)
             let loading = busy ?? (primary && ui.Working())
             let button = (
                 style with{
@@ -164,7 +164,7 @@ class ControlParts {
                     OnClick = action,
                     Loading = loading,
                     Disabled = disabled,
-                    DisabledBackgroundColor = loading ? style.BackgroundColor: style.DisabledBackgroundColor,
+                    DisabledBackgroundColor = loading ? style.BackgroundColor : style.DisabledBackgroundColor,
                     DisabledTextColor = AppTheme.Dim,
                     FontFamily = AppTheme.Font
                 }
@@ -264,7 +264,7 @@ class ControlParts {
                     Height: size,
                     Path: track.Build(),
                     Fit: ShapeFit.Fill,
-                    Stroke: VectorStroke(thickness, VectorPaint(trackColor))
+                    Stroke: VectorStroke(thickness, trackColor)
                 },
                 Shape{
                     Position: PositionType.Absolute,
@@ -272,7 +272,7 @@ class ControlParts {
                     Height: size,
                     Path: arc.Build(),
                     Fit: ShapeFit.Fill,
-                    Stroke: VectorStroke(thickness, VectorPaint(share > 0 ? color: Color.Transparent))
+                    Stroke: VectorStroke(thickness, share > 0 ? color : Color.Transparent)
                 }
             }
         }

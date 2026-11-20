@@ -136,7 +136,7 @@ partial class App {
         items.Add(NativeMenuItem{Id: "history", Text: ui.Strings.Get("History")})
         items.Add(NativeMenuItem{Separator: true})
         items.Add(
-            NativeMenuItem{Id: trayLockable ? "lock": "unlock", Text: ui.Strings.Get(trayLockable ? "Lock": "Unlock")}
+            NativeMenuItem{Id: trayLockable ? "lock" : "unlock", Text: ui.Strings.Get(trayLockable ? "Lock" : "Unlock")}
         )
         items.Add(NativeMenuItem{Separator: true})
         items.Add(NativeMenuItem{Id: "quit", Text: ui.Strings.Get("Quit")})
@@ -153,7 +153,7 @@ partial class App {
         }
         if status.Syncing {
             let percent = PhasePercent()
-            return ui.Strings.Get("syncing") + (percent == nil ? "": " " + percent.ToString() + "%")
+            return ui.Strings.Get("syncing") + (percent == nil ? "" : " " + percent.ToString() + "%")
         }
         return ui.Strings.Get("Synced") + " · " + ui.Strings.Get("block") +
             " " +
@@ -161,7 +161,7 @@ partial class App {
             " · " +
             status
             .Peers
-            .ToString() + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers")
+            .ToString() + " " + ui.Strings.Get(status.Peers == 1 ? "peer" : "peers")
     }
 
     private func UpdateTray() {

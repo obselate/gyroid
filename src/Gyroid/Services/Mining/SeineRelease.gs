@@ -38,7 +38,7 @@ class SeineRelease {
                 "seine",
                 Version
             )
-            let executable = OperatingSystem.IsWindows() ? "seine.exe": "seine"
+            let executable = OperatingSystem.IsWindows() ? "seine.exe" : "seine"
             let path = Path.Combine(directory, executable)
             if File.Exists(path) {
                 return path
@@ -57,7 +57,7 @@ class SeineRelease {
             try {
                 try {
                     using let http = HttpClient(SocketsHttpHandler{UseProxy: false})
-                    let suffix = OperatingSystem.IsWindows() ? ".zip": ".tar.gz"
+                    let suffix = OperatingSystem.IsWindows() ? ".zip" : ".tar.gz"
                     using let response = await http.GetAsync(
                         "https://github.com/zpalmtree/seine/releases/download/v" +
                             Version +
@@ -87,7 +87,7 @@ class SeineRelease {
                             throw WalletException("Seine archive exceeds the size limit")
                         }
                         await output.WriteAsync(buffer, 0, count, ct)
-                        let value = length > 0 ? int32(Math.Min(100L, output.Length * 100 / length)): 0
+                        let value = length > 0 ? int32(Math.Min(100L, output.Length * 100 / length)) : 0
                         if percent != value {
                             percent = value
                             progress(value)

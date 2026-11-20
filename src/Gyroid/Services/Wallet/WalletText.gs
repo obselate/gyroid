@@ -23,7 +23,7 @@ class WalletText {
         }
 
         func SafeText(value string, limit int32 = 0) string {
-            let count = limit > 0 ? Math.Min(value.Length, limit): value.Length
+            let count = limit > 0 ? Math.Min(value.Length, limit) : value.Length
             let result = StringBuilder(count + 1)
             for index in 0 ... count {
                 let character = value[index]
@@ -35,7 +35,7 @@ class WalletText {
                         character == '\u200e' ||
                         character == '\u200f' ||
                         (character >= '\u202a' && character <= '\u202e') ||
-                        (character >= '\u2066' && character <= '\u2069') ? ' ': character
+                        (character >= '\u2066' && character <= '\u2069') ? ' ' : character
                 )
             }
             if count < value.Length {

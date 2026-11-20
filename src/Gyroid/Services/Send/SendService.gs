@@ -328,10 +328,7 @@ class SendService {
             if txid.Length == 0 || NodeJson.Flag(root, "dry_run") {
                 throw WalletException("Invalid send response", 0, true)
             }
-            var inputCount int32
-            if let count = NodeJson.OptionalNumber(root, "input_count") {
-                inputCount = int32(count)
-            }
+            let inputCount = int32(NodeJson.OptionalNumber(root, "input_count") ?? 0)
             let result = SendResult(txid, NodeJson.Number(root, "fee"), NodeJson.Number(root, "change"), inputCount)
             store.Clear()
             if result.InputCount > 0 {

@@ -47,19 +47,6 @@ class SyncPage : Cell[SyncInput], IDisposable {
     private let started int64 = Stopwatch.GetTimestamp()
     private let peerSamples List[SyncSample] = List[SyncSample]()
     private let rateSamples List[SyncSample] = List[SyncSample]()
-    private func ReadChartInput() SyncChartInput -> SyncChartInput{
-        Ui: input.Ui,
-        Language: input.Language,
-        Samples: samples,
-        Now: now,
-        Step: state.Step,
-        Peak: peak,
-        Stalled: stalled,
-        Width: (input.Fill ? input.Width: Math.Min(760, input.Width - 48)) -
-        AppTheme.GetPagePadding(input.Width, input.Height) * 2,
-        Height: input.Height,
-        Fill: input.Fill
-    }
     private var input SyncInput
     private var state SyncState
     private var pending SyncState
@@ -72,6 +59,20 @@ class SyncPage : Cell[SyncInput], IDisposable {
     private var peak float64 = 1
     private var connectedAt int64
     private var progressAt int64
+
+    private func ChartInput() SyncChartInput -> SyncChartInput{
+        Ui: input.Ui,
+        Language: input.Language,
+        Samples: samples,
+        Now: now,
+        Step: state.Step,
+        Peak: peak,
+        Stalled: stalled,
+        Width: (input.Fill ? input.Width : Math.Min(760, input.Width - 48)) -
+        AppTheme.GetPagePadding(input.Width, input.Height) * 2,
+        Height: input.Height,
+        Fill: input.Fill
+    }
 
     protected override func InputChanged(next SyncInput) {
         if accepted && input == next {
@@ -153,11 +154,11 @@ class SyncPage : Cell[SyncInput], IDisposable {
         peerSamples.Add(SyncSample{Seconds: now, Value: float64(state.Peers)})
         peerSamples.RemoveAll(sample -> sample.Seconds < now - 15)
         if state.Step == 4 {
-            rateSamples.Add(SyncSample{Seconds: now, Value: stalled ? 0.0: state.Rate})
+            rateSamples.Add(SyncSample{Seconds: now, Value: stalled ? 0.0 : state.Rate})
             rateSamples.RemoveAll(sample -> sample.Seconds < now - 120)
         }
-        samples = (state.Step == 3 ? peerSamples: rateSamples).ToArray()
-        peak = state.Step == 3 ? float64(state.Limit): 1.0
+        samples = (state.Step == 3 ? peerSamples : rateSamples).ToArray()
+        peak = state.Step == 3 ? float64(state.Limit) : 1.0
         if state.Step == 4 {
             for sample in samples {
                 peak = Math.Max(peak, sample.Value * 1.25)
@@ -171,13 +172,13 @@ class SyncPage : Cell[SyncInput], IDisposable {
         updateTimer?.Dispose()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SyncInput) Blob {
         let ui = input.Ui
         let node = state
         let step = node.Step
-        let width = input.Fill ? input.Width: Math.Min(760, input.Width - 48)
+        let width = input.Fill ? input.Width : Math.Min(760, input.Width - 48)
         let card = WalletParts.PageCard(ui, input.Width, input.Height, width, input.Fill)
-        card.MinHeight = input.Fill ? 0.0: Math.Min(420, input.Height - 100)
+        card.MinHeight = input.Fill ? 0.0 : Math.Min(420, input.Height - 100)
         if input.Fill {
             card.FlexGrow = 1
             card.FlexBasis = 0
@@ -224,17 +225,17 @@ class SyncPage : Cell[SyncInput], IDisposable {
             card.Add(Track(ui, percent / 100.0, 0, AppTheme.Lime))
         } else if step == 3 {
             let limit = node.Limit
-            card.Add(Cell.Mount[SyncChartInput, SyncChart]("sync-chart", ReadChartInput()))
+            card.Add(Cell.Mount[SyncChartInput, SyncChart]("sync-chart", ChartInput()))
             card.Add(Slots(ui, node.Peers, limit))
         } else if step == 4 {
             let done = node.Progress
-            let share = node.ChainHeight > 0 ? Math.Min(1.0, float64(done) / node.ChainHeight): 0.0
-            let color = stalled ? AppTheme.Orange: AppTheme.Lime
-            card.Add(Cell.Mount[SyncChartInput, SyncChart]("sync-chart", ReadChartInput()))
+            let share = node.ChainHeight > 0 ? Math.Min(1.0, float64(done) / node.ChainHeight) : 0.0
+            let color = stalled ? AppTheme.Orange : AppTheme.Lime
+            card.Add(Cell.Mount[SyncChartInput, SyncChart]("sync-chart", ChartInput()))
             let checkpoint = node.ChainHeight > 0 ? Math.Min(
                 1.0,
                 float64(node.CheckpointHeight) / node.ChainHeight
-            ): 0.0
+            ) : 0.0
             let track = Track(ui, share, checkpoint, color)
             track.Padding = Edges{Bottom: AppTheme.Space22}
             track.Add(
@@ -299,7 +300,7 @@ class SyncPage : Cell[SyncInput], IDisposable {
         case NodePhase.Checkpoints: 1
         case NodePhase.Starting, NodePhase.Detecting: 2
         case NodePhase.None, NodePhase.Connecting, NodePhase.ChainSync:
-        node.Syncing && node.ChainHeight > node.Height + 2 ? 4: node.Peers == 0 ? 3: 4
+        node.Syncing && node.ChainHeight > node.Height + 2 ? 4 : node.Peers == 0 ? 3 : 4
     }
 
     private func Track(ui Presentation, share float64, checkpoint float64, color Color) Container {
@@ -349,7 +350,7 @@ class SyncPage : Cell[SyncInput], IDisposable {
                 FlexGrow: 1,
                 FlexBasis: 0,
                 BorderRadius: AppTheme.Radius3,
-                BackgroundColor: uint64(index) < peers ? AppTheme.Lime: AppTheme.FaintRule
+                BackgroundColor: uint64(index) < peers ? AppTheme.Lime : AppTheme.FaintRule
             },
             minHeight: AppTheme.Track10,
             maxHeight: AppTheme.Track10
@@ -416,23 +417,23 @@ class SyncSteps : Cell[SyncStepsInput] {
                 } else {
                     ""
                 }
-                label.Color = current ? AppTheme.Lime: done ? AppTheme.Ink: AppTheme.Dim
+                label.Color = current ? AppTheme.Lime : done ? AppTheme.Ink : AppTheme.Dim
                 return Container{
                     MinWidth: 0,
                     Gap: AppTheme.Space6,
                     Accessibility: Accessibility{
                         Role: AccessibilityRole.ListItem,
                         Name: ui.Strings.Get(StepName(index)) + " " + ui.Strings.Get(
-                            done ? "completed": current ? "current": skipped ? "skipped": "upcoming"
+                            done ? "completed" : current ? "current" : skipped ? "skipped" : "upcoming"
                         ) +
-                            (detail.Length > 0 ? " " + detail: "")
+                            (detail.Length > 0 ? " " + detail : "")
                     },
                     Container{
                         Height: AppTheme.ControlCompact,
                         AlignItems: AlignItems.Center,
                         JustifyContent: JustifyContent.Center,
                         BorderRadius: AppTheme.Radius8,
-                        BackgroundColor: current ? AppTheme.LimeQuiet: done ? AppTheme.Rule: Color.Transparent,
+                        BackgroundColor: current ? AppTheme.LimeQuiet : done ? AppTheme.Rule : Color.Transparent,
                         label
                     },
                     Container{
@@ -485,11 +486,11 @@ class SyncChart : Cell[SyncChartInput] {
             input.Ui,
             input.Samples,
             input.Now,
-            input.Step == 3 ? 15.0: 120.0,
+            input.Step == 3 ? 15.0 : 120.0,
             input.Peak,
-            input.Stalled ? AppTheme.Orange: AppTheme.Lime,
-            input.Stalled ? AppTheme.OrangeQuiet: AppTheme.LimeQuiet,
-            input.Step == 3 ? "peers · 15 s": "blk/s · 2 min",
+            input.Stalled ? AppTheme.Orange : AppTheme.Lime,
+            input.Stalled ? AppTheme.OrangeQuiet : AppTheme.LimeQuiet,
+            input.Step == 3 ? "peers · 15 s" : "blk/s · 2 min",
             input.Width,
             input.Height,
             input.Fill
@@ -497,7 +498,7 @@ class SyncChart : Cell[SyncChartInput] {
         Rebuild()
     }
 
-    override func Build() Blob -> chart
+    protected override func Build(_ SyncChartInput) Blob -> chart
 
     private func Spark(
         ui Presentation,
@@ -512,7 +513,7 @@ class SyncChart : Cell[SyncChartInput] {
         windowHeight float64,
         stretch bool
     ) Blob {
-        let height = stretch ? Math.Max(1.0, spark.BorderBox.Height): Math.Clamp(windowHeight * 0.08, 44, 70)
+        let height = stretch ? Math.Max(1.0, spark.BorderBox.Height) : Math.Clamp(windowHeight * 0.08, 44, 70)
         let plot = Math.Max(1.0, width - 40)
         let line = PathBuilder(0, 0, plot, height)
         let area = PathBuilder(0, 0, plot, height)
@@ -577,7 +578,7 @@ class SyncChart : Cell[SyncChartInput] {
                     Height: height,
                     Path: line.Build(),
                     Fit: ShapeFit.Fill,
-                    Stroke: VectorStroke(1.6, VectorPaint(color))
+                    Stroke: VectorStroke(1.6, color)
                 }
             )
             chart.Add(
@@ -625,7 +626,7 @@ class SyncReadings : Cell[SyncReadingsInput] {
         let stalled = node.Stalled
         let size = AppTheme.GetStatusFigureSize(node.Height, node.Fill)
         let mid = Container{
-            FlexGrow: node.Fill ? 0.0: 1.0,
+            FlexGrow: node.Fill ? 0.0 : 1.0,
             FlexDirection: FlexDirection.Row,
             FlexWrap: FlexWrap.Wrap,
             AlignItems: AlignItems.Center,
@@ -638,7 +639,7 @@ class SyncReadings : Cell[SyncReadingsInput] {
                     ui,
                     percent.ToString(),
                     "%",
-                    ui.Strings.Get(step == 0 ? "core download": "checkpoints") + " " + percent.ToString() + "%",
+                    ui.Strings.Get(step == 0 ? "core download" : "checkpoints") + " " + percent.ToString() + "%",
                     AppTheme.Lime,
                     size
                 )
@@ -677,7 +678,7 @@ class SyncReadings : Cell[SyncReadingsInput] {
             )
         } else {
             let done = node.Progress
-            let share = node.ChainHeight > 0 ? Math.Min(1.0, float64(done) / node.ChainHeight): 0.0
+            let share = node.ChainHeight > 0 ? Math.Min(1.0, float64(done) / node.ChainHeight) : 0.0
             let percent = (Math.Floor(share * 1000) / 10).ToString("0.0", CultureInfo.InvariantCulture)
             mid.Add(
                 Figure(
@@ -685,11 +686,11 @@ class SyncReadings : Cell[SyncReadingsInput] {
                     percent,
                     "%",
                     ui.Strings.Get("syncing") + " " + percent + "%",
-                    stalled ? AppTheme.Ink: AppTheme.Lime,
+                    stalled ? AppTheme.Ink : AppTheme.Lime,
                     size
                 )
             )
-            let rate = stalled ? 0.0: node.Rate
+            let rate = stalled ? 0.0 : node.Rate
             mid.Add(
                 Readings(
                     ui,
@@ -758,7 +759,7 @@ class SyncReadings : Cell[SyncReadingsInput] {
                         ui,
                         ui.Strings.Get(label),
                         value,
-                        valueColor: stalled && label == "Speed" ? AppTheme.Orange: AppTheme.Ink,
+                        valueColor: stalled && label == "Speed" ? AppTheme.Orange : AppTheme.Ink,
                         labelWidth: 100
                     )
                 )

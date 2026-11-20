@@ -57,7 +57,20 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
     private var selection CancellationTokenSource?
     private var generation int64
     private var operationGeneration int64
-    private func ReadThreadInput() MessageThreadInput -> MessageThreadInput{
+    private let measureDraft Func[string, MessageEstimate]
+    private var threadWidth float64
+    private var listWidth float64
+    private var projection MessagesProjection
+
+    init() {
+        projection = MessagesProjection{Conversations: []ConversationView{}, Thread: []MessageThreadRow{}}
+        measureDraft = text -> input
+            .Session
+            .Messages
+            .Measure(conversation ?? throw InvalidOperationException("No conversation selected"), text)
+    }
+
+    private func ThreadInput() MessageThreadInput -> MessageThreadInput{
         Ui: input.Ui,
         Conversation: conversation,
         Rows: projection.Thread,
@@ -83,7 +96,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         }
     }
 
-    private func ReadListInput() MessagesListInput -> MessagesListInput{
+    private func ListInput() MessagesListInput -> MessagesListInput{
         Ui: input.Ui,
         Conversations: projection.Conversations,
         Width: listWidth,
@@ -93,39 +106,24 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         OnBegin: kind -> Begin(kind)
     }
 
-    private func ReadComposerInput() MessageComposerInput {
-        let current = conversation!!
-        return MessageComposerInput{
-            Ui: input.Ui,
-            Recipients: projection.Recipients,
-            CanSend: input.Mode == MessengerMode.Send,
-            Busy: busy || input.Working,
-            Unavailable: input.Locked ? "Wallet is locked":
-            input.ViewOnly ? "View-only wallet": "Node not connected",
-            Measure: measureDraft,
-            Language: input.Language,
-            Draft: input.State.Drafts.GetValueOrDefault(current.Id, ""),
-            Width: threadWidth,
-            OnDraft: value -> input.State.Drafts[selected] = value,
-            OnSend: text -> {
-                if let current = conversation {
-                    let service = input.Session.Messages
-                    Run(input, ct -> service.Send(current, text, ct), () -> input.State.Drafts[current.Id] = "")
-                }
+    private func ComposerInput(current Conversation) MessageComposerInput -> MessageComposerInput{
+        Ui: input.Ui,
+        Recipients: projection.Recipients,
+        CanSend: input.Mode == MessengerMode.Send,
+        Busy: busy || input.Working,
+        Unavailable: input.Locked ? "Wallet is locked" :
+        input.ViewOnly ? "View-only wallet" : "Node not connected",
+        Measure: measureDraft,
+        Language: input.Language,
+        Draft: input.State.Drafts.GetValueOrDefault(current.Id, ""),
+        Width: threadWidth,
+        OnDraft: value -> input.State.Drafts[selected] = value,
+        OnSend: text -> {
+            if let current = conversation {
+                let service = input.Session.Messages
+                Run(input, ct -> service.Send(current, text, ct), () -> input.State.Drafts[current.Id] = "")
             }
         }
-    }
-    private let measureDraft Func[string, MessageEstimate]
-    private var threadWidth float64
-    private var listWidth float64
-    private var projection MessagesProjection
-
-    init() {
-        projection = MessagesProjection{Conversations: []ConversationView{}, Thread: []MessageThreadRow{}}
-        measureDraft = text -> input
-            .Session
-            .Messages
-            .Measure(conversation ?? throw InvalidOperationException("No conversation selected"), text)
     }
 
     protected override func InputChanged(next MessagesInput) {
@@ -134,7 +132,6 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         }
         if MessagesInput{... next, Error: input.Error} == input {
             input = next
-
             Rebuild()
             return
         }
@@ -160,7 +157,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         }
         input = next
         listWidth = Math.Clamp(next.Width * 0.25, 200.0, 300.0)
-        threadWidth = next.Drawer ? next.Width: next.Width - listWidth - AppTheme.Space12
+        threadWidth = next.Drawer ? next.Width : next.Width - listWidth - AppTheme.Space12
         if prepare {
             selection?.Cancel()
             selection?.Dispose()
@@ -170,12 +167,11 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             selection = active
             generation++
             let version = generation
-            let token = active.Token
             let window = next.Ui.Actions.window
             let id = next.State.ConversationId
             let fallback = next.State.NewConversation
             let previous = projection
-            go PrepareView(next, id, fallback, previous, version, token, window)
+            go PrepareView(next, id, fallback, previous, version, active.Token, window)
         }
         Rebuild()
     }
@@ -288,7 +284,6 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
 
     private func SetIssue(message string) {
         issue = message
-
         Rebuild()
     }
 
@@ -385,7 +380,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         )
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessagesInput) Blob {
         let ui = input.Ui
         let root = Container{
             Width: Percent(100),
@@ -396,7 +391,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
             Gap: AppTheme.Space12
         }
         if !input.Drawer && input.Address.Length > 0 {
-            root.Add(Cell.Mount[MessagesListInput, MessageConversationList]("conversations", ReadListInput()))
+            root.Add(Cell.Mount[MessagesListInput, MessageConversationList]("conversations", ListInput()))
         }
         let thread = WalletParts.Card(ui, AppTheme.Space0, AppTheme.Space0, AppTheme.Radius6)
         thread.FlexGrow = 1
@@ -424,14 +419,16 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                         labelled: false,
                         invalid: issue.Length > 0
                     ),
-                    input.Working ? Loading(ui, "messages-unlock-loading"): Container{Display: Display.None},
+                    input.Working ? Loading(ui, "messages-unlock-loading") : Container{Display: Display.None},
                     Button(ui, "Unlock", unlock.Submit, !unlock.CanSubmit, true)
                 }
             )
         } else if let current = conversation {
             thread.Add(Header(input, current))
-            thread.Add(Cell.Mount[MessageThreadInput, MessageThread]("thread:" + current.Id, ReadThreadInput()))
-            thread.Add(Cell.Mount[MessageComposerInput, MessageComposer]("composer:" + current.Id, ReadComposerInput()))
+            thread.Add(Cell.Mount[MessageThreadInput, MessageThread]("thread:" + current.Id, ThreadInput()))
+            thread.Add(
+                Cell.Mount[MessageComposerInput, MessageComposer]("composer:" + current.Id, ComposerInput(current))
+            )
             if busy {
                 thread.Add(Loading(ui, "message-loading"))
             }
@@ -454,7 +451,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         root.Add(
             Cell.Mount[MessageIssueInput, MessageIssue](
                 "issue",
-                MessageIssueInput{Next: input.Ui, Error: issue.Length > 0 ? issue: input.Error}
+                MessageIssueInput{Ui: input.Ui, Message: issue.Length > 0 ? issue : input.Error}
             )
         )
         root.Add(thread)
@@ -541,7 +538,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
                             ui.Privacy,
                             conversation.IsGroup ? (projection.Recipients + 1).ToString() + " " + ui.Strings.Get(
                                 "members"
-                            ): conversation.Handle
+                            ) : conversation.Handle
                         ),
                         AppTheme.Type11,
                         AppTheme.Dim,
@@ -573,7 +570,7 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
         header.Add(
             Icon(
                 ui,
-                MaterialIcons.Create("delete", AppTheme.Icon16, busy ? AppTheme.Dim: AppTheme.Body),
+                MaterialIcons.Create("delete", AppTheme.Icon16, busy ? AppTheme.Dim : AppTheme.Body),
                 ui.Strings.Get("Remove conversation"),
                 () -> Begin("remove"),
                 busy,
@@ -612,26 +609,14 @@ class MessagesPage : Cell[MessagesInput], IDisposable {
 }
 
 data struct MessageIssueInput {
-    var Next Presentation
-    var Error string
+    var Ui Presentation
+    var Message string
 }
 
 class MessageIssue : Cell[MessageIssueInput] {
-    private var ui Presentation
-    private var message string = ""
-
-    protected override func InputChanged(value MessageIssueInput) {
-        let next = value.Next
-        let error = value.Error
-        if ui == next && message == error {
-            return
-        }
-        ui = next
-        message = error
-        Rebuild()
-    }
-
-    override func Build() Blob {
+    protected override func Build(input MessageIssueInput) Blob {
+        let ui = input.Ui
+        let message = input.Message
         if message.Length == 0 {
             return Container{}
         }
@@ -675,7 +660,7 @@ class MessageConversationList : Cell[MessagesListInput] {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessagesListInput) Blob {
         let ui = input.Ui
         let panel = WalletParts.Card(ui, AppTheme.Space10, AppTheme.Space8, AppTheme.Radius6)
         panel.Width = input.Width
@@ -735,13 +720,13 @@ class MessageConversationList : Cell[MessagesListInput] {
             FlexShrink: 0,
             MinWidth: 0,
             Gap: AppTheme.Space6,
-            BackgroundColor: conversation.Selected ? AppTheme.LimeQuiet: Color.Transparent,
+            BackgroundColor: conversation.Selected ? AppTheme.LimeQuiet : Color.Transparent,
             HoverStyle: Style{BackgroundColor: AppTheme.Rule},
             FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: Hidden(conversation.Privacy, conversation.Title) +
-                    (conversation.Unread > 0 ? " " + conversation.Unread.ToString(): ""),
+                    (conversation.Unread > 0 ? " " + conversation.Unread.ToString() : ""),
                 Selected: conversation.Selected
             },
             OnClick: () -> input.OnSelect(conversation.Id),
@@ -750,16 +735,16 @@ class MessageConversationList : Cell[MessagesListInput] {
                 AlignItems: AlignItems.Center,
                 Gap: AppTheme.Space8,
                 MaterialIcons.Create(
-                    conversation.IsGroup ? "group": "person",
+                    conversation.IsGroup ? "group" : "person",
                     AppTheme.Icon16,
-                    conversation.Unread > 0 ? AppTheme.Lime: AppTheme.Dim
+                    conversation.Unread > 0 ? AppTheme.Lime : AppTheme.Dim
                 ),
                 Grow(
                     Label(
                         ui,
                         Hidden(conversation.Privacy, conversation.Title),
                         AppTheme.Type13,
-                        conversation.Selected ? AppTheme.Lime: AppTheme.Ink,
+                        conversation.Selected ? AppTheme.Lime : AppTheme.Ink,
                         ""
                     )
                 ),
@@ -786,7 +771,7 @@ class MessageConversationList : Cell[MessagesListInput] {
                 ),
                 Label(
                     ui,
-                    conversation.Unread > 0 ? conversation.Unread.ToString(): "",
+                    conversation.Unread > 0 ? conversation.Unread.ToString() : "",
                     AppTheme.Type11,
                     AppTheme.Lime,
                     ""
@@ -890,12 +875,11 @@ class MessageThread : Cell[MessageThreadInput], IDisposable {
             generation++
             let source = input
             let version = generation
-            let token = active.Token
             let previous = seen
             let oldRows = rows
             let follow = following
             let selected = highlight
-            go PrepareRows(source, previous, oldRows, follow, selected, version, token, window)
+            go PrepareRows(source, previous, oldRows, follow, selected, version, active.Token, window)
         }
     }
 
@@ -947,7 +931,7 @@ class MessageThread : Cell[MessageThreadInput], IDisposable {
                     }
                 )
             }
-            let result = prepared.SequenceEqual(oldRows) ? oldRows: prepared.ToArray()
+            let result = prepared.SequenceEqual(oldRows) ? oldRows : prepared.ToArray()
             window.Post(
                 () -> {
                     if version != generation || token.IsCancellationRequested {
@@ -998,7 +982,7 @@ class MessageThread : Cell[MessageThreadInput], IDisposable {
         return Cell.Mount[MessageBubbleInput, MessageBubble](row.Key, row.Bubble with{Animate = animate})
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessageThreadInput) Blob {
         let list = VirtualRows(rows, 64, rowKey, rowBuilder, following, version: 0)
         list.Handle = scroll
         list.MinHeight = 0
@@ -1046,7 +1030,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
         rowKey = row -> row.Name
         rowBuilder = row -> Button(
             input.Ui,
-            (input.Kind == "group" && row.Chosen ? "✓ ": "") + Hidden(row.Privacy, row.Name),
+            (input.Kind == "group" && row.Chosen ? "✓ " : "") + Hidden(row.Privacy, row.Name),
             () -> {
                 if input.Kind == "group" {
                     if members.Contains(row.Destination) {
@@ -1090,9 +1074,8 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
             let cap = Math.Max(0, Wire.MaxMembers(name) - 1)
             let working = busy
             let version = contactGeneration
-            let token = active.Token
             let previous = contacts
-            go PrepareContacts(source, selected, cap, working, version, token, window, previous)
+            go PrepareContacts(source, selected, cap, working, version, active.Token, window, previous)
         }
     }
 
@@ -1120,7 +1103,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
                 source.Language,
                 token
             )
-            let rows = result.SequenceEqual(previous) ? previous: result
+            let rows = result.SequenceEqual(previous) ? previous : result
             window.Post(
                 () -> {
                     if version == contactGeneration && !token.IsCancellationRequested {
@@ -1226,17 +1209,17 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
         )
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessageDialogInput) Blob {
         let ui = input.Ui
         let group = input.Kind == "group"
         let remove = input.Kind == "remove"
         let contact = input.Kind == "contact"
         let maximum = Math.Max(0, Wire.MaxMembers(name))
         let cap = Math.Max(0, maximum - 1)
-        let title = group ? "New group": remove ? "Remove conversation": contact ? "Add contact": "New conversation"
+        let title = group ? "New group" : remove ? "Remove conversation" : contact ? "Add contact" : "New conversation"
         let content = Container{Gap: AppTheme.Space12, MinHeight: 0}
         let form = WalletForm(ui, !busy, nil, []string{}, () -> Rebuild())
-        let close Action = () -> {
+        let onClose Action = () -> {
             if busy {
                 return
             }
@@ -1288,7 +1271,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
                         ui,
                         (members.Count + 1).ToString() + "/" + maximum.ToString() + " " + ui.Strings.Get("members"),
                         AppTheme.Type12,
-                        members.Count + 1 > maximum ? AppTheme.Pink: AppTheme.Dim,
+                        members.Count + 1 > maximum ? AppTheme.Pink : AppTheme.Dim,
                         ""
                     )
                 )
@@ -1309,7 +1292,7 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
                 AccessibilityName: ui.Strings.Get(title),
                 Width: 440,
                 Content: content,
-                ConfirmText: ui.Strings.Get(remove ? "Remove": group ? "Create": contact ? "Save": "Open"),
+                ConfirmText: ui.Strings.Get(remove ? "Remove" : group ? "Create" : contact ? "Save" : "Open"),
                 CancelText: ui.Strings.Get("Cancel"),
                 ConfirmDisabled: busy ||
                     (
@@ -1318,16 +1301,16 @@ class MessageDialog : Cell[MessageDialogInput], IDisposable {
                         group ? name.Trim()
                             .Length == 0 ||
                             members.Count == 0 ||
-                            members.Count > cap: address.Length == 0 ||
+                            members.Count > cap : address.Length == 0 ||
                             contact &&
                             name
                             .Trim().Length == 0
                     )
                 ),
                 OnConfirm: () -> Submit(input),
-                OnCancel: close,
-                OnOpenChange: isOpen -> if !isOpen {
-                    close.Invoke()
+                OnCancel: onClose,
+                OnOpenChange: visible -> if !visible {
+                    onClose()
                 }
             }
         )
@@ -1349,7 +1332,7 @@ class MessageDetails : Cell[MessageDetailsInput] {
     protected override func Build(input MessageDetailsInput) Blob {
         let message = input.Message
         let ui = input.Ui
-        let close = input.OnClose
+        let onClose = input.OnClose
         let verification = message.Verification.ToString()
         let content = Container{
             Gap: AppTheme.Space12,
@@ -1361,7 +1344,7 @@ class MessageDetails : Cell[MessageDetailsInput] {
                 ui,
                 ui.Strings.Get(verification),
                 AppTheme.Type12,
-                message.Verification == Verification.Invalid ? AppTheme.Pink: AppTheme.Dim,
+                message.Verification == Verification.Invalid ? AppTheme.Pink : AppTheme.Dim,
                 ""
             ),
             Copyable(ui, "transaction", message.Txid, Hidden(ui.Privacy, Short(message.Txid)))
@@ -1377,10 +1360,10 @@ class MessageDetails : Cell[MessageDetailsInput] {
                 AccessibilityName: ui.Strings.Get("Message details"),
                 Width: 460,
                 Content: content,
-                Footer: Button(ui, "Close", close),
-                OnCancel: close,
-                OnOpenChange: isOpen -> if !isOpen {
-                    close.Invoke()
+                Footer: Button(ui, "Close", onClose),
+                OnCancel: onClose,
+                OnOpenChange: visible -> if !visible {
+                    onClose()
                 }
             }
         )

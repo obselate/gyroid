@@ -96,8 +96,8 @@ class HistoryService {
                 OutputIndices: DecodedReceived.TryGetValue(txid, out let decoded) && decoded.OutputIndices.Contains(
                     index
                 ) ?
-                decoded.OutputIndices: Array.Empty[int32](),
-                Memo: hex.Length > 0 && binaryMemos.Contains(txid) ? "[non-text memo]": NodeJson.Memo(hex)
+                decoded.OutputIndices : Array.Empty[int32](),
+                Memo: hex.Length > 0 && binaryMemos.Contains(txid) ? "[non-text memo]" : NodeJson.Memo(hex)
             }
             if output.IsChange {
                 changes.Add(output)
@@ -297,7 +297,7 @@ class HistoryService {
                         WalletRecipient{
                             Address: address,
                             Amount: NodeJson.Number(recipient, "amount"),
-                            Memo: hex.Length > 0 && binary.Contains(address) ? "[non-text memo]": NodeJson.Memo(hex)
+                            Memo: hex.Length > 0 && binary.Contains(address) ? "[non-text memo]" : NodeJson.Memo(hex)
                         }
                     )
                 }
@@ -405,7 +405,7 @@ class HistoryService {
             if !output.Spent && output.BlockHeight > 0 && !maturity.Ready && snapshot.Balance != nil {
                 arrivals.Add(
                     HistoryArrival{
-                        Kind: output.IsChange ? "change": output.Coinbase ? "mined": "in",
+                        Kind: output.IsChange ? "change" : output.Coinbase ? "mined" : "in",
                         Amount: output.Amount,
                         Source: output.Memo,
                         InvitationName: output.InvitationName,
@@ -430,13 +430,13 @@ class HistoryService {
             }
             activity.Add(
                 HistoryActivity{
-                    Kind: output.Coinbase ? "mined": "in",
+                    Kind: output.Coinbase ? "mined" : "in",
                     Amount: output.Amount,
                     Label: output.Memo,
                     InvitationName: output.InvitationName,
-                    Status: output.BlockHeight == 0 ? "mempool": "confirmed",
+                    Status: output.BlockHeight == 0 ? "mempool" : "confirmed",
                     Ready: output.BlockHeight > 0 && maturity.Ready,
-                    Order: output.BlockHeight == 0 ? uint64.MaxValue: output.BlockHeight,
+                    Order: output.BlockHeight == 0 ? uint64.MaxValue : output.BlockHeight,
                     Timestamp: times.GetValueOrDefault(output.BlockHeight),
                     TxId: output.TxId,
                     OutputIndex: output.OutputIndex,
@@ -469,17 +469,17 @@ class HistoryService {
             let maturity = WalletMaturity(send.Confirmations, 10)
             activity.Add(
                 HistoryActivity{
-                    Kind: self ? "self": "out",
-                    Amount: self ? send.Fee: send.Amount,
+                    Kind: self ? "self" : "out",
+                    Amount: self ? send.Fee : send.Amount,
                     Label: "",
                     Status: send.Status,
                     Ready: send.Status == "confirmed" && maturity.Ready,
-                    Order: send.Status == "mempool" ? uint64.MaxValue: tip + 1 - Math.Min(tip, send.Confirmations),
+                    Order: send.Status == "mempool" ? uint64.MaxValue : tip + 1 - Math.Min(tip, send.Confirmations),
                     Timestamp: send.Timestamp,
                     TxId: send.TxId,
                     OutputIndex: -1,
                     Height: send.Status == "confirmed" && send.Confirmations > 0 && tip + 1 >= send.Confirmations ?
-                    tip + 1 - send.Confirmations: 0,
+                    tip + 1 - send.Confirmations : 0,
                     Confirmations: maturity.Count,
                     Required: 10
                 }
@@ -492,14 +492,14 @@ class HistoryService {
     }
 
     func Prepare(input HistoryPreparation, ct CancellationToken) HistoryPrepared {
-        let rows = input.ReuseRows ? input.Previous.Rows: PrepareRows(input, input.Previous.Rows, ct)
+        let rows = input.ReuseRows ? input.Previous.Rows : PrepareRows(input, input.Previous.Rows, ct)
         let tip = input.Tip
-        let oldest = rows.Length > 0 && rows[rows.Length - 1].Height > 0 ? rows[rows.Length - 1].Height: tip
-        let low = input.Cutoff == 0 ? oldest > 0 ? oldest - 1: 0UL: Math.Min(tip, input.Cutoff - 1)
-        let first = input.To > 0 ? Math.Max(input.From, input.Cutoff): input.Cutoff
-        let last = input.To > 0 ? input.To: tip
+        let oldest = rows.Length > 0 && rows[rows.Length - 1].Height > 0 ? rows[rows.Length - 1].Height : tip
+        let low = input.Cutoff == 0 ? oldest > 0 ? oldest - 1 : 0UL : Math.Min(tip, input.Cutoff - 1)
+        let first = input.To > 0 ? Math.Max(input.From, input.Cutoff) : input.Cutoff
+        let last = input.To > 0 ? input.To : tip
         let shown = rows.Where(
-            (row HistoryRow) -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last
+            (row HistoryRow) -> row.Height == 0 ? last >= tip : row.Height >= first && row.Height <= last
         )
             .ToArray()
         var summary = HistorySummary{}
@@ -509,23 +509,23 @@ class HistoryService {
             } else if row.Kind == HistoryRowKind.Mined {
                 summary.Mined += row.Amount
             } else {
-                summary.Sent += row.Self ? 0UL: row.Amount
+                summary.Sent += row.Self ? 0UL : row.Amount
                 summary.Fees += row.Fee
             }
         }
         let export = input.ReuseExport ? input
             .Previous
-            .Export: input.Complete ? rows: PrepareRows(input with{Complete = true}, input.Previous.Export, ct)
+            .Export : input.Complete ? rows : PrepareRows(input with{Complete = true}, input.Previous.Export, ct)
         let span = Math.Max(1UL, tip - low)
         let columns = int32(Math.Max(40.0, Math.Min(float64(span), Math.Floor(input.PlotWidth / 3))))
         let ribbon = PrepareRibbon(rows, low, span, tip, columns, ct)
         return HistoryPrepared{
             SelectionKey: input.SelectionTx.Length > 0 ?
-            rows.FirstOrDefault(row -> row.TxId == input.SelectionTx).Key ?? "": "",
-            Rows: input.ReuseRows || rows.SequenceEqual(input.Previous.Rows) ? input.Previous.Rows: rows,
-            Shown: shown.SequenceEqual(input.Previous.Shown) ? input.Previous.Shown: shown,
-            Export: input.ReuseExport || export.SequenceEqual(input.Previous.Export) ? input.Previous.Export: export,
-            ExportCount: export.Count(row -> row.Height == 0 ? last >= tip: row.Height >= first && row.Height <= last),
+            rows.FirstOrDefault(row -> row.TxId == input.SelectionTx).Key ?? "" : "",
+            Rows: input.ReuseRows || rows.SequenceEqual(input.Previous.Rows) ? input.Previous.Rows : rows,
+            Shown: shown.SequenceEqual(input.Previous.Shown) ? input.Previous.Shown : shown,
+            Export: input.ReuseExport || export.SequenceEqual(input.Previous.Export) ? input.Previous.Export : export,
+            ExportCount: export.Count(row -> row.Height == 0 ? last >= tip : row.Height >= first && row.Height <= last),
             Summary: summary,
             Low: low,
             Span: span,
@@ -538,7 +538,7 @@ class HistoryService {
                 input.Previous.Ribbon.Sent
             ) ? input
                 .Previous
-                .Ribbon: ribbon
+                .Ribbon : ribbon
         }
     }
 
@@ -548,17 +548,17 @@ class HistoryService {
         let previous = previousRows.ToDictionary(row -> row.Key, StringComparer.Ordinal)
         let rows = List[HistoryRow]()
         let selfSends = SelfSends(snapshot)
-        for output in input.Complete ? input.ExportOutputs: input.Snapshot.History {
+        for output in input.Complete ? input.ExportOutputs : input.Snapshot.History {
             ct.ThrowIfCancellationRequested()
             if selfSends.Contains(output.TxId) {
                 continue
             }
             let key = "r:" + output.TxId + ":" + output.OutputIndex.ToString()
             let indices = previous.TryGetValue(key, out let old) && old.Indices.SequenceEqual(output.OutputIndices) ?
-            old.Indices: output.OutputIndices
+            old.Indices : output.OutputIndices
             rows.Add(
                 Item(key) with{
-                    Kind = output.Coinbase ? HistoryRowKind.Mined: HistoryRowKind.Received,
+                    Kind = output.Coinbase ? HistoryRowKind.Mined : HistoryRowKind.Received,
                     TxId = output.TxId,
                     Index = output.OutputIndex,
                     Indices = indices,
@@ -594,15 +594,15 @@ class HistoryService {
                 entries = old.Recipients
             }
             let confirmed = send.Status == "confirmed" && send.Confirmations > 0 && tip + 1 >= send.Confirmations
-            let height = confirmed ? tip + 1 - send.Confirmations: 0
+            let height = confirmed ? tip + 1 - send.Confirmations : 0
             if confirmed && height < lowest {
                 continue
             }
             rows.Add(
                 Item("s:" + send.TxId) with{
-                    Kind = confirmed ? HistoryRowKind.Sent: HistoryRowKind.Pending,
+                    Kind = confirmed ? HistoryRowKind.Sent : HistoryRowKind.Pending,
                     TxId = send.TxId,
-                    Amount = selfSends.Contains(send.TxId) ? send.Fee: send.Amount,
+                    Amount = selfSends.Contains(send.TxId) ? send.Fee : send.Amount,
                     SentAmount = send.Amount,
                     Self = selfSends.Contains(send.TxId),
                     Fee = send.Fee,
@@ -618,8 +618,8 @@ class HistoryService {
                     ) ??
                         "",
                     Height = height,
-                    Maturity = WalletMaturity(confirmed ? send.Confirmations: uint64(0), 10),
-                    Time = confirmed ? input.Times.GetValueOrDefault(height): send.Timestamp,
+                    Maturity = WalletMaturity(confirmed ? send.Confirmations : uint64(0), 10),
+                    Time = confirmed ? input.Times.GetValueOrDefault(height) : send.Timestamp,
                     State = send.Status,
                     Recipients = entries
                 }
@@ -627,7 +627,7 @@ class HistoryService {
         }
         rows.Sort(
             (left HistoryRow, right HistoryRow) -> if (left.Height == 0) != (right.Height == 0) {
-                left.Height == 0 ? -1: 1
+                left.Height == 0 ? -1 : 1
             } else if left.Height != right.Height {
                 right.Height.CompareTo(left.Height)
             } else {
@@ -666,7 +666,7 @@ class HistoryService {
             (row.Height == 0 || row.Height >= cutoff) &&
                 (
                 selectedTo == 0 ||
-                    (row.Height == 0 ? selectedTo >= tip: row.Height >= selectedFrom && row.Height <= selectedTo)
+                    (row.Height == 0 ? selectedTo >= tip : row.Height >= selectedFrom && row.Height <= selectedTo)
             )
         )
             .ToArray()
@@ -695,18 +695,18 @@ class HistoryService {
         json bool,
         ct CancellationToken
     ) Task {
-        using let writer Utf8JsonWriter? = json ? Utf8JsonWriter(stream, JsonWriterOptions{Indented: true}): nil
-        using let text StreamWriter? = json ? nil: StreamWriter(stream, UTF8Encoding(false), 65536, true)
-        text?.Write(withMemos ? "type,amount,fee,height,time,txid,memo\n": "type,amount,fee,height,time,txid\n")
+        using let writer Utf8JsonWriter? = json ? Utf8JsonWriter(stream, JsonWriterOptions{Indented: true}) : nil
+        using let text StreamWriter? = json ? nil : StreamWriter(stream, UTF8Encoding(false), 65536, true)
+        text?.Write(withMemos ? "type,amount,fee,height,time,txid,memo\n" : "type,amount,fee,height,time,txid\n")
         writer?.WriteStartArray()
         for row in rows {
             ct.ThrowIfCancellationRequested()
-            let seconds = row.Time > 0 ? row.Time: known.GetValueOrDefault(row.Height)
+            let seconds = row.Time > 0 ? row.Time : known.GetValueOrDefault(row.Height)
             let time = seconds > 0 ? DateTimeOffset.FromUnixTimeSeconds(seconds).ToString(
                 "yyyy-MM-ddTHH:mm:ssZ",
                 CultureInfo.InvariantCulture
-            ): ""
-            let amount = (row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "": "-") +
+            ) : ""
+            let amount = (row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "" : "-") +
                 WalletAmount.Format(row.Amount)
             let fee = WalletAmount.Format(row.Fee)
             let kind = switch row.Kind {
@@ -715,7 +715,7 @@ class HistoryService {
                 case HistoryRowKind.Sent: "out"
                 case HistoryRowKind.Pending: "pending"
             }
-            let content = row.InvitationName.Length > 0 ? "Group invitation: " + row.InvitationName: row.Memo
+            let content = row.InvitationName.Length > 0 ? "Group invitation: " + row.InvitationName : row.Memo
             if let output = writer {
                 output.WriteStartObject()
                 output.WriteString("type", kind)
@@ -744,7 +744,7 @@ class HistoryService {
                 csv.Write(',')
                 csv.Write(row.TxId)
                 if withMemos {
-                    let memo = "=+-@\t\r".Contains(content.FirstOrDefault()) ? "'" + content: content
+                    let memo = "=+-@\t\r".Contains(content.FirstOrDefault()) ? "'" + content : content
                     csv.Write(",\"")
                     csv.Write(memo.Replace("\"", "\"\""))
                     csv.Write('"')

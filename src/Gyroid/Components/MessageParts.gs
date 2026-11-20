@@ -18,7 +18,7 @@ import System.Linq
 class MessageParts {
     shared {
         func Content(ui Presentation, text string, invitation string) string ->
-        invitation.Length > 0 ? ui.Strings.Get("Group invitation: {name}").Replace("{name}", invitation): text
+        invitation.Length > 0 ? ui.Strings.Get("Group invitation: {name}").Replace("{name}", invitation) : text
 
         func Problem(ui Presentation, issue string) Blob -> Banner{
             Content: ui.Strings.Explain(issue),
@@ -90,11 +90,11 @@ class MessageBubble : Cell[MessageBubbleInput] {
         if !started {
             started = true
             if input.Animate {
-                let from = message.Outgoing ? input.Width: -input.Width
+                let from = message.Outgoing ? input.Width : -input.Width
                 shift.Snap(Point{X: from, Y: 0})
                 shift.To(
                     Point{X: 0, Y: 0},
-                    (start, end, velocity) -> MessageSlide(start, message.Outgoing ? 0.16: 0.0),
+                    (start, end, velocity) -> MessageSlide(start, message.Outgoing ? 0.16 : 0.0),
                     Motion.Tween(0, Easing.Linear)
                 )
             }
@@ -104,13 +104,13 @@ class MessageBubble : Cell[MessageBubbleInput] {
         }
         let invalid = message.Verification == Verification.Invalid
         let verification = message.Verification.ToString()
-        let color = invalid ? AppTheme.Pink: message.Verification == Verification.Unverified ? AppTheme.Orange: AppTheme.Dim
+        let color = invalid ? AppTheme.Pink : message.Verification == Verification.Unverified ? AppTheme.Orange : AppTheme.Dim
         let content = Hidden(ui.Privacy, MessageParts.Content(ui, message.Text, message.InvitationName))
-        let time = (message.Outgoing ? message.SentAt: message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString(
+        let time = (message.Outgoing ? message.SentAt : message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString(
             "HH:mm"
         )
         let delivered = message.State == MessageState.Confirmed && message.Confirmations > 0
-        let statusColor = message.Outgoing ? AppTheme.Black.WithAlpha(0.9): AppTheme.Body
+        let statusColor = message.Outgoing ? AppTheme.Black.WithAlpha(0.9) : AppTheme.Body
         let metadata = Container{
             FlexDirection: FlexDirection.Row,
             JustifyContent: JustifyContent.FlexEnd,
@@ -129,7 +129,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
                 .Strings
                 .Get("Delivered {time}, block {height}")
                 .Replace("{time}", (message.ArrivedAt ?? message.SentAt).ToLocalTime().ToString("HH:mm"))
-                .Replace("{height}", message.Height.ToString()): ui
+                .Replace("{height}", message.Height.ToString()) : ui
                 .Strings
                 .Get("Waiting for the next block. Usually about 5 min, sometimes longer")
             metadata.Add(
@@ -143,7 +143,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
                             HitTestSelf: true,
                             Accessibility: Accessibility{Role: AccessibilityRole.Text, Name: tip},
                             MaterialIcons.Create(
-                                delivered ? "done_all": message.State == MessageState.InProgress ? "schedule": "done",
+                                delivered ? "done_all" : message.State == MessageState.InProgress ? "schedule" : "done",
                                 AppTheme.Icon16,
                                 statusColor
                             )
@@ -164,8 +164,8 @@ class MessageBubble : Cell[MessageBubbleInput] {
             FlexShrink: 0,
             MinWidth: 0,
             Gap: AppTheme.Space4,
-            Margin: Edges{Top: input.First ? AppTheme.Space12: AppTheme.Space2},
-            AlignItems: message.Outgoing ? AlignItems.FlexEnd: AlignItems.FlexStart,
+            Margin: Edges{Top: input.First ? AppTheme.Space12 : AppTheme.Space2},
+            AlignItems: message.Outgoing ? AlignItems.FlexEnd : AlignItems.FlexStart,
             TranslateAnim: shift
         }
         if input.Group && input.First && !message.Outgoing {
@@ -176,11 +176,11 @@ class MessageBubble : Cell[MessageBubbleInput] {
             BasedOn: AppTheme.BubbleStyle,
             MaxWidth: Math.Max(0, (input.Width - 2 * AppTheme.Space16) * 0.7),
             MinWidth: 0,
-            BorderBottomLeftRadius: input.Last && !message.Outgoing ? 4.0: 18.0,
-            BorderBottomRightRadius: input.Last && message.Outgoing ? 4.0: 18.0,
-            BorderWidth: invalid || input.Highlight ? AppTheme.Border2: AppTheme.Border0,
-            BorderColor: invalid ? AppTheme.Pink: AppTheme.Blue,
-            BackgroundColor: message.Outgoing ? AppTheme.Lime: AppTheme.Rule,
+            BorderBottomLeftRadius: input.Last && !message.Outgoing ? 4.0 : 18.0,
+            BorderBottomRightRadius: input.Last && message.Outgoing ? 4.0 : 18.0,
+            BorderWidth: invalid || input.Highlight ? AppTheme.Border2 : AppTheme.Border0,
+            BorderColor: invalid ? AppTheme.Pink : AppTheme.Blue,
+            BackgroundColor: message.Outgoing ? AppTheme.Lime : AppTheme.Rule,
             Gap: AppTheme.Space4,
             FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
@@ -192,7 +192,7 @@ class MessageBubble : Cell[MessageBubbleInput] {
                 Content: content,
                 FontFamily: AppTheme.Font,
                 FontSize: AppTheme.Type13,
-                Color: message.Outgoing ? AppTheme.Black: AppTheme.Ink,
+                Color: message.Outgoing ? AppTheme.Black : AppTheme.Ink,
                 TextWrap: TextWrap.Wrap,
                 MinWidth: 0
             },
@@ -296,7 +296,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
             .Ui
             .Actions
             .Delay(
-            animate ? 160.0: 0.0,
+            animate ? 160.0 : 0.0,
             () -> {
                 sending = false
                 ready = false
@@ -312,7 +312,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessageComposerInput) Blob {
         let ui = input.Ui
         let recipient = input.Recipients > 0
         if !input.CanSend || !recipient {
@@ -321,7 +321,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 FlexShrink: 0,
                 Label(
                     ui,
-                    ui.Strings.Get(!recipient ? "No recipient": input.Unavailable),
+                    ui.Strings.Get(!recipient ? "No recipient" : input.Unavailable),
                     AppTheme.Type12,
                     AppTheme.Dim,
                     ""
@@ -336,16 +336,16 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
             initialized = true
             ready = hasText
             if !sending {
-                arrow.Snap(Point{X: 0, Y: hasText ? 0.0: 36.0})
-                fill.Snap(hasText ? 1.0: 0.0)
+                arrow.Snap(Point{X: 0, Y: hasText ? 0.0 : 36.0})
+                fill.Snap(hasText ? 1.0 : 0.0)
             }
         } else if !sending && hasText != ready {
             ready = hasText
             arrow.To(
-                Point{X: 0, Y: hasText ? 0.0: 36.0},
-                Motion.Tween(hasText ? 180.0: 140.0, hasText ? Easing.EaseOut: Easing.EaseIn)
+                Point{X: 0, Y: hasText ? 0.0 : 36.0},
+                Motion.Tween(hasText ? 180.0 : 140.0, hasText ? Easing.EaseOut : Easing.EaseIn)
             )
-            fill.To(hasText ? 1.0: 0.0, Motion.Tween(hasText ? 180.0: 140.0, Easing.Linear))
+            fill.To(hasText ? 1.0 : 0.0, Motion.Tween(hasText ? 180.0 : 140.0, Easing.Linear))
         }
         let send Action = () -> Send(input, enabled)
         let rows = Math.Clamp(
@@ -356,7 +356,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         )
         let field = Container{
             BasedOn: AppTheme.ComposerStyle,
-            BorderColor: estimate.Fits ? AppTheme.Edge: AppTheme.Pink,
+            BorderColor: estimate.Fits ? AppTheme.Edge : AppTheme.Pink,
             BackgroundColor: AppTheme.Black,
             Container{
                 FlexGrow: 1,
@@ -418,7 +418,7 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
                 Right: 0,
                 Top: 0,
                 Bottom: 0,
-                BackgroundColor: estimate.Fits ? AppTheme.Lime: AppTheme.Pink,
+                BackgroundColor: estimate.Fits ? AppTheme.Lime : AppTheme.Pink,
                 OpacityAnim: fill
             },
             Container{
@@ -450,8 +450,8 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
         }
         let ring = Ring(
             (bytes - lap * 124) / 124.0,
-            estimate.Fits ? color: AppTheme.Pink,
-            estimate.Fits ? track: AppTheme.Pink
+            estimate.Fits ? color : AppTheme.Pink,
+            estimate.Fits ? track : AppTheme.Pink
         )
         let details = Container{
             FlexDirection: FlexDirection.Row,
@@ -460,9 +460,9 @@ class MessageComposer : Cell[MessageComposerInput], IDisposable {
             ring,
             Label(
                 ui,
-                estimate.Outputs.ToString() + " " + ui.Strings.Get(estimate.Outputs == 1 ? "memo": "memos"),
+                estimate.Outputs.ToString() + " " + ui.Strings.Get(estimate.Outputs == 1 ? "memo" : "memos"),
                 AppTheme.Type11,
-                estimate.Fits ? AppTheme.Dim: AppTheme.Pink,
+                estimate.Fits ? AppTheme.Dim : AppTheme.Pink,
                 ""
             )
         }

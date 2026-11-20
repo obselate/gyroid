@@ -98,7 +98,7 @@ class CoreProcess {
             }
             let executable = ProcessExecutable(pid)
             let actual = Path.GetFullPath(File.ResolveLinkTarget(executable, true)?.FullName ?? executable)
-            let comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase: StringComparison.Ordinal
+            let comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
             for path in[]string{configured, discovered} {
                 if path.Length > 0 && actual.Equals(
                     Path.GetFullPath(File.ResolveLinkTarget(path, true)?.FullName ?? path),

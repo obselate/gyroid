@@ -76,10 +76,9 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
         if let window = input.Window {
             let source = lifetime ?? CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
             lifetime = source
-            let token = source.Token
             let id = generation
             let previous = rows
-            go Prepare(input, previous, window, id, token)
+            go Prepare(input, previous, window, id, source.Token)
         }
     }
 
@@ -99,7 +98,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
                     }
                 )
             }
-            let result = prepared.SequenceEqual(previous) ? previous: prepared.ToArray()
+            let result = prepared.SequenceEqual(previous) ? previous : prepared.ToArray()
             window.Post(
                 () -> {
                     if id == generation {
@@ -135,7 +134,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
 
     private let listHandle ElementHandle = ElementHandle{}
 
-    override func Build() Blob {
+    protected override func Build(_ ContactsInput) Blob {
         let input = current
         let ui = input.Ui
         let card = WalletParts.PageCard(
@@ -148,7 +147,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
                 Label(ui, ui.Strings.Get("contacts"), AppTheme.Type17, AppTheme.Ink, ""),
                 trailing: Icon(
                     ui,
-                    MaterialIcons.Create("person_add", AppTheme.Icon16, editing == "" ? AppTheme.Lime: AppTheme.Body),
+                    MaterialIcons.Create("person_add", AppTheme.Icon16, editing == "" ? AppTheme.Lime : AppTheme.Body),
                     ui.Strings.Get("Add contact"),
                     () -> Edit(input, ""),
                     input.Busy,
@@ -159,7 +158,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
         )
         if editing != nil || input.Contacts.Count == 0 {
             let key = editing ?? ""
-            let destination = input.Contacts.TryGetValue(key, out let address) ? address: ""
+            let destination = input.Contacts.TryGetValue(key, out let address) ? address : ""
             card.Add(Editor(input, key, destination))
         }
         let list = VirtualRows(rows, 48 + AppTheme.Space8, rowKey, rowBuilder, false, version: 0)
@@ -214,7 +213,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
                 MinWidth: 0,
                 Label(
                     ui,
-                    row.Valid ? Hidden(row.Privacy, Short(row.Destination)): ui.Strings.Get("Invalid"),
+                    row.Valid ? Hidden(row.Privacy, Short(row.Destination)) : ui.Strings.Get("Invalid"),
                     AppTheme.Type13,
                     AppTheme.Dim,
                     ""
@@ -283,7 +282,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
 
     private func DeleteDialog(input ContactsInput) Blob {
         let ui = input.Ui
-        let close Action = () -> {
+        let onClose Action = () -> {
             if input.Busy {
                 return
             }
@@ -298,7 +297,7 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
                 Preset = ModalDialogPreset.Confirm,
                 AccessibilityName = ui.Strings.Get("Delete"),
                 Width = 420,
-                Content = input.Busy ? Loading(ui, "contact-delete-loading"):
+                Content = input.Busy ? Loading(ui, "contact-delete-loading") :
                 Label(ui, deleting, AppTheme.Type16, AppTheme.Ink, ""),
                 ConfirmText = ui.Strings.Get("Delete"),
                 CancelText = ui.Strings.Get("Cancel"),
@@ -319,9 +318,9 @@ class ContactsPage : Cell[ContactsInput], IDisposable {
                         }
                     )
                 },
-                OnCancel = close,
-                OnOpenChange = isOpen -> if !isOpen {
-                    close.Invoke()
+                OnCancel = onClose,
+                OnOpenChange = visible -> if !visible {
+                    onClose()
                 }
             }
         )
@@ -408,7 +407,7 @@ class ContactEditor : Cell[ContactEditorInput] {
             FlexShrink: 0,
             BackgroundColor: AppTheme.Raised,
             fields,
-            input.Busy ? Loading(ui, "contact-save-loading"): Container{Display: Display.None},
+            input.Busy ? Loading(ui, "contact-save-loading") : Container{Display: Display.None},
             ActionRow(
                 []Blob{
                     Button(ui, "Cancel", input.OnCancel, input.Busy || input.Contacts.Count == 0),

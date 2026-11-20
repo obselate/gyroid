@@ -141,7 +141,7 @@ class WalletLibrary {
         let header = [magic.Length]byte
         let data = Path.GetFullPath(session.settings.DataDirectory)
         let checkpoint = Path.Combine(data, "checkpoints.dat")
-        let comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase: StringComparison.Ordinal
+        let comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
         for path in Directory.EnumerateFiles(
             data,
             "*",

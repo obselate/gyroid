@@ -124,12 +124,8 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
     private var disposed bool
     private var networkInput OverviewNetworkInput
     private var recentInput OverviewRecentInput
-    private func ReadNetworkInput() OverviewNetworkInput -> networkInput
-
-    private func ReadRecentInput() OverviewRecentInput -> recentInput
     private var hovering bool
     private let hover Action[bool]
-
     protected override func InputChanged(input OverviewInput) {
         let nextArrivals = input.Session.History.Outputs
         let nextChanges = input.Session.History.ChangeOutputs
@@ -168,11 +164,10 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
         }
         let pending = CancellationTokenSource.CreateLinkedTokenSource(window.Closed)
         request = pending
-        let token = pending.Token
         let id = generation
         let outputs = input.Snapshot.History
         let previousRows = rows
-        go Prepare(input, nextArrivals, nextChanges, outputs, chain, previousRows, window, id, token)
+        go Prepare(input, nextArrivals, nextChanges, outputs, chain, previousRows, window, id, pending.Token)
     }
 
     init() {
@@ -182,7 +177,7 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ OverviewInput) Blob {
         let input = current
         let language = input.Ui.Strings.Language
         networkInput = OverviewNetworkInput{
@@ -193,7 +188,7 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
             Running: input.Node.Running,
             Syncing: input.Node.Syncing,
             Height: input.Node.Height,
-            ChainHeight: input.Node.Syncing ? input.Node.ChainHeight: 0,
+            ChainHeight: input.Node.Syncing ? input.Node.ChainHeight : 0,
             Peers: input.Node.Peers,
             Mempool: input.Node.Mempool,
             MempoolBytes: input.Node.MempoolBytes,
@@ -243,8 +238,8 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
                         Date: input.Node.UpgradeDate,
                         Deadline: input.Node.UpgradeDeadline,
                         Syncing: input.Node.Syncing,
-                        Height: input.Node.Syncing ? 0: input.Node.Height,
-                        BlocksLeft: input.Node.Syncing ? 0: input.Node.UpgradeBlocksLeft,
+                        Height: input.Node.Syncing ? 0 : input.Node.Height,
+                        BlocksLeft: input.Node.Syncing ? 0 : input.Node.UpgradeBlocksLeft,
                         Language: language,
                         OnUpgrade: input.OnUpgrade
                     }
@@ -278,10 +273,10 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
                         ConfirmingBlocks: confirmingBlocks
                     }
                 ),
-                Cell.Mount[OverviewNetworkInput, OverviewNetwork]("network", ReadNetworkInput())
+                Cell.Mount[OverviewNetworkInput, OverviewNetwork]("network", networkInput)
             }
         )
-        page.Add(Cell.Mount[OverviewRecentInput, OverviewRecent]("recent", ReadRecentInput()))
+        page.Add(Cell.Mount[OverviewRecentInput, OverviewRecent]("recent", recentInput))
         return page
     }
 
@@ -338,16 +333,16 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
                     let send = item.Kind == "pool" ? input
                         .Snapshot
                         .Sends
-                        .FirstOrDefault(value -> value.Status == "mempool"):
+                        .FirstOrDefault(value -> value.Status == "mempool") :
                     sends.GetValueOrDefault(item.TxId)
                     let name = Contact(input.Ui, input.Contacts, input.Session.Messages, send)
                     let content = MessageParts.Content(input.Ui, item.Source, item.InvitationName)
                     let label = if item.Kind == "change" || item.Kind == "pool" {
-                        input.Ui.Strings.Get("change") + (name.Length > 0 ? " · " + name: "")
+                        input.Ui.Strings.Get("change") + (name.Length > 0 ? " · " + name : "")
                     } else if item.Kind == "mined" {
                         input.Ui.Strings.Get("mined") + " · " + input.Ui.Strings.Get("block") + " " + Count(item.Height)
                     } else {
-                        content.Length > 0 ? content: OverviewParts.Short(item.TxId)
+                        content.Length > 0 ? content : OverviewParts.Short(item.TxId)
                     }
                     if item.Kind != "pool" {
                         count++
@@ -358,7 +353,7 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
                         incomingWait = Math.Max(incomingWait, item.Blocks)
                         preparedRows.Add(
                             OverviewRow{
-                                Key: item.Kind == "pool" ? "overview-pending": "overview-output-" +
+                                Key: item.Kind == "pool" ? "overview-pending" : "overview-output-" +
                                     item.TxId +
                                     ":" +
                                     item
@@ -376,9 +371,9 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
                         input.Contacts,
                         input.Session.Messages,
                         sends.GetValueOrDefault(item.TxId)
-                    ): MessageParts.Content(input.Ui, item.Label, item.InvitationName)
+                    ) : MessageParts.Content(input.Ui, item.Label, item.InvitationName)
                     let label = if item.Kind == "self" {
-                        input.Ui.Strings.Get("To self") + (name.Length > 0 ? " · " + name: "")
+                        input.Ui.Strings.Get("To self") + (name.Length > 0 ? " · " + name : "")
                     } else if name.Length > 0 {
                         name
                     } else if item.Kind == "mined" {
@@ -386,12 +381,16 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
                     } else {
                         OverviewParts.Short(item.TxId)
                     }
-                    let status = item.Status == "not_found" ? input.Ui.Strings.Get("not found"):
-                    item.Status == "mempool" ? "mempool": item.Confirmations.ToString() + "/" + item.Required.ToString()
+                    let status = item.Status == "not_found" ? input.Ui.Strings.Get("not found") :
+                    item.Status == "mempool" ? "mempool" : item.Confirmations.ToString() +
+                        "/" +
+                        item
+                        .Required
+                        .ToString()
                     preparedRows.Add(
                         OverviewRow{
                             Key: item.OutputIndex < 0 ? "overview-send-" +
-                                item.TxId: "overview-output-" +
+                                item.TxId : "overview-output-" +
                                 item.TxId +
                                 ":" +
                                 item
@@ -403,12 +402,12 @@ class OverviewPage : Cell[OverviewInput], IDisposable {
                                 Order = 0,
                                 Confirmations = 0,
                                 Required = 0,
-                                Height = item.OutputIndex < 0 ? uint64(0): item.Height
+                                Height = item.OutputIndex < 0 ? uint64(0) : item.Height
                             }
                         }
                     )
                 }
-                let nextRows = preparedRows.SequenceEqual(previous) ? previous: preparedRows.ToArray()
+                let nextRows = preparedRows.SequenceEqual(previous) ? previous : preparedRows.ToArray()
                 let issueText = failure
                 previous = nextRows
                 window.Post(
@@ -621,7 +620,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
             Edges{Top: AppTheme.Space16, Bottom: AppTheme.Space16, Left: AppTheme.Space20, Right: AppTheme.Space20},
             AppTheme.Space14
         )
-        card.Width = input.Width < 1200 ? 400.0: Percent(39)
+        card.Width = input.Width < 1200 ? 400.0 : Percent(39)
         card.FlexShrink = 0
         card.Handle = hero
         card.FlexGrow = 0
@@ -641,7 +640,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
             header.Add(
                 Label(
                     ui,
-                    ui.Strings.Get(peeking ? "release to hide": "hold to show"),
+                    ui.Strings.Get(peeking ? "release to hide" : "hold to show"),
                     AppTheme.Type12,
                     AppTheme.Dim,
                     ""
@@ -653,8 +652,8 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                     Width: AppTheme.ControlCompact,
                     Height: AppTheme.ControlCompact,
                     BorderRadius: AppTheme.Radius6,
-                    BorderColor: peeking ? AppTheme.Lime: AppTheme.Edge,
-                    BackgroundColor: peeking ? AppTheme.LimeQuiet: Color.Transparent,
+                    BorderColor: peeking ? AppTheme.Lime : AppTheme.Edge,
+                    BackgroundColor: peeking ? AppTheme.LimeQuiet : Color.Transparent,
                     Focusable: true,
                     FocusStyle: Theme.Read().FocusStyle,
                     Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get("Show amounts")},
@@ -662,11 +661,11 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                         peeking = true
                     },
                     OnKeyUp: (event KeyEvent) -> Hide(),
-                    OnBlur: peeking ? ((event FocusEvent) -> Hide()): nil,
+                    OnBlur: peeking ? ((event FocusEvent) -> Hide()) : nil,
                     OnPointerDown: press,
                     OnPointerUp: (event PointerEvent) -> Hide(),
                     OnPointerCancel: (event PointerEvent) -> Hide(),
-                    MaterialIcons.Create("visibility_off", AppTheme.Icon16, peeking ? AppTheme.Lime: AppTheme.Body)
+                    MaterialIcons.Create("visibility_off", AppTheme.Icon16, peeking ? AppTheme.Lime : AppTheme.Body)
                 }
             )
             card.OnPointerDown = press
@@ -691,7 +690,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                 value,
                 size,
                 color,
-                color == AppTheme.Lime ? AppTheme.LimeMuted: AppTheme.StrongRule,
+                color == AppTheme.Lime ? AppTheme.LimeMuted : AppTheme.StrongRule,
                 AccessibilityLive.Polite
             )
         }
@@ -773,7 +772,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                 let segment = BarSegment(
                     float64(confirming) / 100000000,
                     AppTheme.Orange,
-                    input.Hovering ? height + 6: height,
+                    input.Hovering ? height + 6 : height,
                     14
                 )
                 segment.OnPointerEnter = (event PointerEvent) -> input.OnHover(true)
@@ -820,7 +819,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
         let ui = input.Ui
         let wide = heroWidth - 40 >= 470
         let legend = Container{
-            FlexDirection: wide ? FlexDirection.Row: FlexDirection.Column,
+            FlexDirection: wide ? FlexDirection.Row : FlexDirection.Column,
             Gap: AppTheme.Space8,
             FlexShrink: 0
         }
@@ -847,7 +846,7 @@ class OverviewBalance : Cell[OverviewBalanceInput] {
                     Label(ui, ui.Strings.Get(label), AppTheme.Type12, AppTheme.Body, "")
                 }
             }
-            let text = masked ? "••••••••": Fixed(units)
+            let text = masked ? "••••••••" : Fixed(units)
             let color = if masked || empty {
                 AppTheme.Dim
             } else if label == "ready" {
@@ -978,8 +977,7 @@ class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
         loadedHash = source.BestHash
         let session = source.Session
         let id = generation
-        let token = current.Token
-        go Load(session, window, id, token)
+        go Load(session, window, id, current.Token)
     }
 
     private async func Load(session NodeSession, window Window, id int32, token CancellationToken) {
@@ -1018,12 +1016,12 @@ class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
         lifetime.Dispose()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ OverviewNetworkInput) Blob {
         let input = source
         let ui = input.Ui
         let online = input.Running
-        let size = input.Width < 1200 ? AppTheme.Type20: AppTheme.Type24
-        let color = online ? AppTheme.Ink: AppTheme.Dim
+        let size = input.Width < 1200 ? AppTheme.Type20 : AppTheme.Type24
+        let color = online ? AppTheme.Ink : AppTheme.Dim
         let card = WalletParts.Card(ui, AppTheme.Space16, AppTheme.Space10)
         card.FlexGrow = 1
         card.FlexBasis = 0
@@ -1033,12 +1031,12 @@ class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
         card.OnPointerDown = (event PointerEvent) -> if !event.IsFromInteractiveChild {
             input.OnNavigate(AppPage.Network)
         }
-        let height = !online ? ui.Strings.Get("offline"): Count(input.Height)
-        let sync = !online ? "": input.Syncing ? "/ " + Count(input.ChainHeight): ui.Strings.Get("synced")
+        let height = !online ? ui.Strings.Get("offline") : Count(input.Height)
+        let sync = !online ? "" : input.Syncing ? "/ " + Count(input.ChainHeight) : ui.Strings.Get("synced")
         let age = Math.Max(0L, DateTimeOffset.Now.ToUnixTimeSeconds() - input.LastBlockTime)
-        let last = input.LastBlockTime == 0 ? "-": String.Format(
-            ui.Strings.Get(age < 3600 ? "{0}m ago": age < 86400 ? "{0}h ago": "{0} days"),
-            age < 3600 ? age / 60: age < 86400 ? age / 3600: age / 86400
+        let last = input.LastBlockTime == 0 ? "-" : String.Format(
+            ui.Strings.Get(age < 3600 ? "{0}m ago" : age < 86400 ? "{0}h ago" : "{0} days"),
+            age < 3600 ? age / 60 : age < 86400 ? age / 3600 : age / 86400
         )
         let first = Container{
             FlexDirection: FlexDirection.Row,
@@ -1049,11 +1047,11 @@ class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
                 height,
                 sync,
                 size,
-                !online ? AppTheme.Pink: input.Syncing ? AppTheme.Orange: AppTheme.Lime,
+                !online ? AppTheme.Pink : input.Syncing ? AppTheme.Orange : AppTheme.Lime,
                 1.85
             ),
             TextParts.Figure(ui, "peers", Count(input.Peers), "", size, color),
-            TextParts.Figure(ui, "last block", last, "", size, online && age > 900 ? AppTheme.Orange: color)
+            TextParts.Figure(ui, "last block", last, "", size, online && age > 900 ? AppTheme.Orange : color)
         }
         card.Add(first)
         let second = Container{
@@ -1079,7 +1077,7 @@ class OverviewNetwork : Cell[OverviewNetworkInput], IDisposable {
         let count = blocks.Length - 1
         let average = count > 0 ? Duration(
             (blocks[blocks.Length - 1].Timestamp - blocks[blocks.Length - count - 1].Timestamp) / count
-        ): "-"
+        ) : "-"
         card.Add(
             WalletParts.Header(
                 Label(ui, ui.Strings.Get("block time") + " " + average, AppTheme.Type12, color, ""),
@@ -1100,7 +1098,7 @@ class OverviewRecent : Cell[OverviewRecentInput] {
 
     init() {
         rowKey = row -> row.Key
-        rowBuilder = row -> row.IsArrival ? Arrive(source, row): Activity(source, row.Activity)
+        rowBuilder = row -> row.IsArrival ? Arrive(source, row) : Activity(source, row.Activity)
     }
 
     protected override func InputChanged(next OverviewRecentInput) {
@@ -1181,11 +1179,11 @@ class OverviewRecent : Cell[OverviewRecentInput] {
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: Hidden(input.Privacy, SafeText(item.Source, 512)) + " " + Wait(input.Ui, item.Blocks),
-                Expanded: item.TxId.Length > 0 ? unfolded: nil
+                Expanded: item.TxId.Length > 0 ? unfolded : nil
             },
             OnClick: () -> {
                 if item.TxId.Length > 0 {
-                    expanded = unfolded ? "": value.Key
+                    expanded = unfolded ? "" : value.Key
                     PrepareRows()
                 }
             },
@@ -1208,18 +1206,18 @@ class OverviewRecent : Cell[OverviewRecentInput] {
                     )
                 ),
                 Container{
-                    Width: input.Width < 1200 ? 110.0: 160.0,
+                    Width: input.Width < 1200 ? 110.0 : 160.0,
                     Gap: AppTheme.Space6,
                     AlignItems: AlignItems.FlexEnd,
                     Label(
                         ui,
-                        item.Kind == "pool" ? ui.Strings.Get("mempool"): item.Confirmations.ToString() +
+                        item.Kind == "pool" ? ui.Strings.Get("mempool") : item.Confirmations.ToString() +
                             "/" +
                             item
                             .Required
                             .ToString(),
                         AppTheme.Type11,
-                        Fade(item.Kind == "pool" ? AppTheme.Blue: AppTheme.Orange, faded),
+                        Fade(item.Kind == "pool" ? AppTheme.Blue : AppTheme.Orange, faded),
                         ""
                     ),
                     Container{
@@ -1262,7 +1260,7 @@ class OverviewRecent : Cell[OverviewRecentInput] {
         return row
     }
 
-    override func Build() Blob {
+    protected override func Build(_ OverviewRecentInput) Blob {
         let input = source
         let ui = input.Ui
         let card = WalletParts.Card(
@@ -1320,15 +1318,15 @@ class OverviewRecent : Cell[OverviewRecentInput] {
     private func Activity(input OverviewRecentInput, item HistoryActivity) Blob {
         let ui = input.Ui
         let outgoing = item.Kind == "out" || item.Kind == "self"
-        let shown = input.Privacy ? ui.Strings.Get("Amounts hidden"): WalletAmount.Format(item.Amount)
+        let shown = input.Privacy ? ui.Strings.Get("Amounts hidden") : WalletAmount.Format(item.Amount)
         let glyph Blob = if item.Kind == "self" {
             MaterialIcons.Create("sync", AppTheme.Icon14, AppTheme.Pink)
         } else {
             Label(
                 ui,
-                outgoing ? "↑": item.Kind == "mined" ? "◆": "↓",
+                outgoing ? "↑" : item.Kind == "mined" ? "◆" : "↓",
                 AppTheme.Type14,
-                outgoing ? AppTheme.Pink: item.Kind == "mined" ? AppTheme.Lime: AppTheme.Mint,
+                outgoing ? AppTheme.Pink : item.Kind == "mined" ? AppTheme.Lime : AppTheme.Mint,
                 ""
             )
         }
@@ -1340,7 +1338,7 @@ class OverviewRecent : Cell[OverviewRecentInput] {
             MinWidth: 0,
             Overflow: Overflow.Hidden,
             Accessibility: Accessibility{
-                Name: ui.Strings.Get(item.Kind == "self" ? "To self": outgoing ? "sent": "received") +
+                Name: ui.Strings.Get(item.Kind == "self" ? "To self" : outgoing ? "sent" : "received") +
                     " " +
                     shown +
                     " " +
@@ -1352,21 +1350,21 @@ class OverviewRecent : Cell[OverviewRecentInput] {
                 Number(
                     ui,
                     input.Privacy,
-                    (outgoing ? "-": "+") +
-                        (item.Kind == "self" ? WalletAmount.Format(item.Amount): Fixed(item.Amount)),
-                    outgoing ? AppTheme.Pink: AppTheme.Mint,
+                    (outgoing ? "-" : "+") +
+                        (item.Kind == "self" ? WalletAmount.Format(item.Amount) : Fixed(item.Amount)),
+                    outgoing ? AppTheme.Pink : AppTheme.Mint,
                     AppTheme.Dim
                 )
             },
             Grow(Label(ui, Hidden(input.Privacy, SafeText(item.Label, 512)), AppTheme.Type13, AppTheme.Dim, "")),
             Container{
-                Width: input.Width < 1200 ? 110.0: 160.0,
+                Width: input.Width < 1200 ? 110.0 : 160.0,
                 AlignItems: AlignItems.FlexEnd,
                 Label(
                     ui,
-                    item.Status == "mempool" ? ui.Strings.Get("mempool"): item.Status,
+                    item.Status == "mempool" ? ui.Strings.Get("mempool") : item.Status,
                     AppTheme.Type11,
-                    item.Status == "mempool" ? AppTheme.Blue: item.Ready ? AppTheme.Lime: AppTheme.Orange,
+                    item.Status == "mempool" ? AppTheme.Blue : item.Ready ? AppTheme.Lime : AppTheme.Orange,
                     ""
                 )
             },
@@ -1383,6 +1381,6 @@ class OverviewRecent : Cell[OverviewRecentInput] {
             return "-"
         }
         let local = DateTimeOffset.FromUnixTimeSeconds(timestamp).LocalDateTime
-        return local.ToString(local.Date == DateTime.Today ? "HH:mm": "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
+        return local.ToString(local.Date == DateTime.Today ? "HH:mm" : "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
     }
 }

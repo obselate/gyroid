@@ -78,13 +78,13 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
         let ui = status.Ui
         let state = NodeState(status.Running, status.Syncing, status.Peers)
         let percent = status.Percent
-        let height = status.Height > 0 ? Count(status.Height): "-"
+        let height = status.Height > 0 ? Count(status.Height) : "-"
         let detail = if state == NodeConnectionState.Offline {
             ui.Strings.Get("offline")
         } else if state == NodeConnectionState.Syncing && percent != nil {
-            percent!!.ToString() + "%"
+            percent.ToString() + "%"
         } else {
-            status.Peers.ToString() + " " + ui.Strings.Get(status.Peers == 1 ? "peer": "peers")
+            status.Peers.ToString() + " " + ui.Strings.Get(status.Peers == 1 ? "peer" : "peers")
         }
         let badge = Goo
             .Button{
@@ -97,8 +97,8 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
             Padding: Edges{Top: AppTheme.Space6, Bottom: AppTheme.Space6},
             BorderWidth: AppTheme.Border1,
             BorderRadius: AppTheme.Radius4,
-            BorderColor: nodeOpen ? AppTheme.Edge: AppTheme.Rule,
-            BackgroundColor: nodeOpen ? AppTheme.Rule: AppTheme.Black.WithAlpha(0.35),
+            BorderColor: nodeOpen ? AppTheme.Edge : AppTheme.Rule,
+            BackgroundColor: nodeOpen ? AppTheme.Rule : AppTheme.Black.WithAlpha(0.35),
             Overflow: Overflow.Hidden,
             HoverStyle: Style{BackgroundColor: AppTheme.Rule},
             FocusStyle: Theme.Read().FocusStyle,
@@ -111,8 +111,14 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
             OnClick: () -> {
                 nodeOpen = !nodeOpen
             },
-            Label(ui, height, AppTheme.Type11, state == NodeConnectionState.Offline ? AppTheme.Dim: AppTheme.Ink, ""),
-            Label(ui, detail, AppTheme.Type11, state == NodeConnectionState.Synced ? AppTheme.Dim: NodeColor(state), "")
+            Label(ui, height, AppTheme.Type11, state == NodeConnectionState.Offline ? AppTheme.Dim : AppTheme.Ink, ""),
+            Label(
+                ui,
+                detail,
+                AppTheme.Type11,
+                state == NodeConnectionState.Synced ? AppTheme.Dim : NodeColor(state),
+                ""
+            )
         }
         WidgetKeyBindings.BindActivation(badge)
         if state == NodeConnectionState.Syncing && percent != nil {
@@ -141,7 +147,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
         let height = status.WindowHeight
         let box = nodeAnchor.BorderBox
         let center = box.Y + box.Height / 2
-        let version = status.Version.Length > 0 ? " · v" + status.Version: ""
+        let version = status.Version.Length > 0 ? " · v" + status.Version : ""
         let card = Container{
             BasedOn: AppTheme.InformationCardStyle,
             Width: 330,
@@ -174,7 +180,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
             let readings = Container{Gap: AppTheme.Space10}
             let syncing = state == NodeConnectionState.Syncing
             readings.Add(
-                NodeReading(ui, "Height", Count(status.Height), syncing ? " / " + Count(status.ChainHeight): "")
+                NodeReading(ui, "Height", Count(status.Height), syncing ? " / " + Count(status.ChainHeight) : "")
             )
             if syncing && status.SyncRate > 0 {
                 let minutes = Math.Max(
@@ -197,7 +203,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                         ui,
                         "Last block",
                         Count(status.Height) + " · " + time.ToString(
-                            time.Date == DateTime.Today ? "HH:mm": "yyyy-MM-dd HH:mm",
+                            time.Date == DateTime.Today ? "HH:mm" : "yyyy-MM-dd HH:mm",
                             CultureInfo.InvariantCulture
                         )
                     )
@@ -305,7 +311,7 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 Height: 18,
                 Path: edge,
                 Fit: ShapeFit.Fill,
-                Stroke: VectorStroke(AppTheme.Border1, VectorPaint(AppTheme.Edge))
+                Stroke: VectorStroke(AppTheme.Border1, AppTheme.Edge)
             }
         }
         return Cell.Mount[PopoverInput, Popover](
@@ -317,15 +323,16 @@ class NodeBadgeRegion : Cell[NodeBadgeInput] {
                 Gap: AppTheme.Space6,
                 Width: 339,
                 MaxHeight: height,
+                Padding: AppTheme.Space0,
+                BackgroundColor: Color.Transparent,
+                BorderColor: Color.Transparent,
                 ViewportMargin: 0,
                 Viewport: ElementRect{X: 0, Y: 52, Width: width, Height: Math.Max(1.0, center - 8)},
                 Content: Container{FlexDirection: FlexDirection.Row, caret, card},
-                ConfigurePanel: (input, bounds, content, panel) -> {
-                    panel.Padding = 0
-                    panel.BackgroundColor = Color.Transparent
-                    panel.BorderWidth = 0
-                    panel.BorderRadius = 0
-                    panel.BoxShadow = BoxShadow{}
+                ConfigurePanel: (_, _, _, panel) -> {
+                    panel.BasedOn = nil
+                    panel.BorderWidth = AppTheme.Border0
+                    panel.BorderRadius = AppTheme.Radius0
                 },
                 Role: AccessibilityRole.Dialog,
                 AccessibilityName: ui.Strings.Get("node"),
@@ -385,7 +392,7 @@ partial class App {
 
     private func UpgradeDialog() Blob {
         let node = wallet.Node.Status
-        let close Action = () -> {
+        let onClose Action = () -> {
             upgradeShown = false
             Rebuild()
         }
@@ -412,10 +419,10 @@ partial class App {
                         TextWrap: TextWrap.Wrap
                     }
                 },
-                Footer = ActionRow([]Blob{Button(ui, "Close", close)}),
-                OnCancel = close,
-                OnOpenChange = isOpen -> if !isOpen {
-                    close.Invoke()
+                Footer = ActionRow([]Blob{Button(ui, "Close", onClose)}),
+                OnCancel = onClose,
+                OnOpenChange = visible -> if !visible {
+                    onClose()
                 }
             }
         )

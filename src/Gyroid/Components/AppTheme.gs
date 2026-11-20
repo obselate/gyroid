@@ -182,7 +182,7 @@ class AppTheme {
                 button.Height = Space20
                 button.FlexShrink = 0
                 button.BorderRadius = Radius3
-                button.Opacity = value.Active ? 1: float64(Dim.R / Ink.R)
+                button.Opacity = value.Active ? 1 : float64(Dim.R / Ink.R)
                 button.HoverStyle = Style{Opacity: 1}
                 button.ActiveStyle = Style{Opacity: 1}
                 button.FocusStyle = Style{Opacity: 1, OutlineWidth: Border1, OutlineColor: Ink, OutlineOffset: Border0}
@@ -328,11 +328,11 @@ class AppTheme {
         }
 
         func GetPagePadding(width float64, height float64) float64 ->
-        width < 1100 ? 16.0: Math.Clamp(height * 0.025, 20.0, 32.0)
+        width < 1100 ? 16.0 : Math.Clamp(height * 0.025, 20.0, 32.0)
 
         func GetPageGap(height float64) float64 -> Math.Clamp(14 + Math.Max(0, height - 640) * 0.025, 14.0, 24.0)
 
-        func GetColumnPadding(width float64) float64 -> width < 1100 ? 10.0: 14.0
+        func GetColumnPadding(width float64) float64 -> width < 1100 ? 10.0 : 14.0
 
         func GetMajorFigureSize(height float64) float64 -> Math.Clamp(height * 0.08, 40.0, 72.0)
 
@@ -350,7 +350,7 @@ class AppTheme {
             )
         }
 
-        func GetLegendFigureSize(wide bool, height float64) float64 -> wide ? Math.Clamp(height * 0.024, 16, 26): 16
+        func GetLegendFigureSize(wide bool, height float64) float64 -> wide ? Math.Clamp(height * 0.024, 16, 26) : 16
 
         func GetTotalSize(height float64) float64 -> Math.Clamp(height * 0.05, 28.0, 64.0)
 
@@ -369,9 +369,9 @@ class AppTheme {
         func GetDetailGap(height float64) float64 -> Math.Clamp(height * 0.01, 4.0, 8.0)
 
         func GetStatusFigureSize(height float64, fill bool) float64 -> Math.Clamp(
-            height * (fill ? 0.18: 0.11),
+            height * (fill ? 0.18 : 0.11),
             48,
-            fill ? 240: 92
+            fill ? 240 : 92
         )
 
         func GetFigureGap(width float64) float64 -> Math.Clamp(width * 0.04, 20, 52)

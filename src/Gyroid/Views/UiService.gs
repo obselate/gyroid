@@ -313,7 +313,10 @@ class UiService : IDisposable {
                     if let current = result {
                         for item in current.Data.Representations {
                             if releaseOwners.Any(marker -> item.Bytes.Span.SequenceEqual(marker.Span)) {
-                                host.Clipboard.WriteText("")
+                                let result = host.Clipboard.WriteText("")
+                                if result.Status != DataTransferStatus.Success {
+                                    throw InvalidOperationException(result.Error)
+                                }
                                 break
                             }
                         }
@@ -389,7 +392,7 @@ class ClipboardPublication : IDisposable {
         System.Runtime.InteropServices.MemoryMarshal.TryGetArray[uint8](text.Bytes, out let segment)
         Bytes = segment.Array ?? throw InvalidOperationException("Clipboard buffer unavailable")
         Marker = Guid.NewGuid().ToByteArray()
-        Text = feedback ? content: []char{}
+        Text = feedback ? content : []char{}
         ClearAfterMs = clearAfterMs
         Data = TransferData(
             []TransferRepresentation{

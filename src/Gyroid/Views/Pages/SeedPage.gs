@@ -64,7 +64,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SeedPageInput) Blob {
         let ui = input.Ui
         let card = WalletParts.PageCard(ui, maxWidth: 760, fill: true)
         card.Add(Label(ui, ui.Strings.Get("recovery phrase"), AppTheme.Type17, AppTheme.Ink, ""))
@@ -93,7 +93,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         actions.Add(
             Button(
                 ui,
-                visible ? "Hide": "Reveal",
+                visible ? "Hide" : "Reveal",
                 () -> {
                     visible = !visible
                     if !visible {
@@ -106,7 +106,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         actions.Add(
             Button(
                 ui,
-                copied ? "Copied": "Copy",
+                copied ? "Copied" : "Copy",
                 () -> {
                     copiedOwner = ui.Actions.Copy(input.Words, 30000)
                 }
@@ -119,7 +119,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
                 (
                     AppTheme.Checkbox with{
                         Label = ui.Strings.Get("I saved these words"),
-                        Value = saved ? AccessibilityChecked.True: AccessibilityChecked.False,
+                        Value = saved ? AccessibilityChecked.True : AccessibilityChecked.False,
                         OnChange = state -> {
                             saved = state == AccessibilityChecked.True
                         }
@@ -130,7 +130,7 @@ class SeedPage : Cell[SeedPageInput], IDisposable {
         actions.Add(
             Button(
                 ui,
-                input.FromWallet ? "Done": "Continue",
+                input.FromWallet ? "Done" : "Continue",
                 input.OnDone,
                 input.Busy || !input.FromWallet && !saved,
                 true
@@ -216,7 +216,7 @@ class SeedPhrase : Cell[SeedPhraseInput] {
 
     private func Word(input SeedPhraseInput, index int32, wordIndex int32) Blob {
         let ui = input.Ui
-        let word = input.Visible && wordIndex >= 0 ? Bip39Wordlist.Words[wordIndex]: ""
+        let word = input.Visible && wordIndex >= 0 ? Bip39Wordlist.Words[wordIndex] : ""
         return Container{
             BasedOn: AppTheme.FieldStyle,
             FlexGrow: 1,

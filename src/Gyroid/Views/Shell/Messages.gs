@@ -17,10 +17,8 @@ partial class App {
     private var messageOverlay MessageOverlay?
     private var messagesWallet string = ""
     private var messagesAddress string = ""
-    private func ReadMessagesInput() MessagesInput -> MessagesPageInput()
-    private let createMessageOverlay Func[MessageOverlay]
-
-    private func ReadMessageOverlayInput() MessagesOverlayInput -> MessageOverlayInput()
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createMessageOverlay() -> MessageOverlay
     private let openMessages Action
     private let closeMessageDrawer Action
     private let reloadMessageContacts Action
@@ -76,7 +74,7 @@ partial class App {
         }
     }
 
-    private func MessagesView() Blob -> Cell.Mount[MessagesInput, MessagesPage]("messages", ReadMessagesInput())
+    private func MessagesView() Blob -> Cell.Mount[MessagesInput, MessagesPage]("messages", MessagesPageInput())
 }
 
 data struct MessagesOverlayInput {
@@ -92,11 +90,6 @@ class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
     private var drawer bool
     private var timer WindowTimer?
     private var disposed bool
-    private func ReadDrawerInput() MessagesInput -> MessagesInput{
-        ... input.Messages,
-        Width: Math.Min(480.0, input.Width - 112),
-        Drawer: true
-    }
 
     prop IsDrawerOpen bool -> drawer
 
@@ -174,7 +167,7 @@ class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ MessagesOverlayInput) Blob {
         let ui = input.Messages.Ui
         if input.Page == AppPage.Messages {
             return Container{}
@@ -187,7 +180,10 @@ class MessageOverlay : Cell[MessagesOverlayInput], IDisposable {
                 Bottom: 20,
                 Width: Math.Min(480.0, input.Width - 112),
                 ZIndex: 20,
-                Cell.Mount[MessagesInput, MessagesPage]("message-drawer", ReadDrawerInput())
+                Cell.Mount[MessagesInput, MessagesPage](
+                    "message-drawer",
+                    MessagesInput{... input.Messages, Width: Math.Min(480.0, input.Width - 112), Drawer: true}
+                )
             }
         }
         let conversation = toast

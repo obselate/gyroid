@@ -134,7 +134,7 @@ class PendingSendRegion : Cell[PendingSendInput] {
     private func ConfirmPendingSend(input PendingSendInput) Blob {
         let ui = input.Ui
         let resume = resumePendingSend && input.Error.Length == 0 && input.Retryable
-        let close Action = () -> {
+        let onClose Action = () -> {
             if input.Busy {
                 return
             }
@@ -149,7 +149,7 @@ class PendingSendRegion : Cell[PendingSendInput] {
                 Preset = ModalDialogPreset.Confirm,
                 AccessibilityName = ui.Strings.Get("Pending send"),
                 Width = Math.Min(input.Width - 48, 600),
-                Content = input.Busy ? Loading(ui, "pending-loading"): Text{
+                Content = input.Busy ? Loading(ui, "pending-loading") : Text{
                     Content: ui.Strings.Get(
                         if resume {
                             "Resubmitting an unknown send can pay twice if the node forgot its record"
@@ -176,9 +176,9 @@ class PendingSendRegion : Cell[PendingSendInput] {
                     submitting = true
                     input.OnConfirm(resume)
                 },
-                OnCancel = close,
-                OnOpenChange = isOpen -> if !isOpen {
-                    close.Invoke()
+                OnCancel = onClose,
+                OnOpenChange = visible -> if !visible {
+                    onClose()
                 }
             }
         )

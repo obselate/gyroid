@@ -166,31 +166,12 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
     private let openDialog Action[string]
     private let openPurge Action[string, string, int32]
     private let refreshNodeData Action
-
-    private func ReadGeneralInput() SettingsGeneralContext -> SettingsGeneralContext{
-        Input: current,
-        SavePreference: savePreference
-    }
-    private let createNode Func[SettingsNode]
-
-    private func ReadNodeInput() SettingsNodeContext -> SettingsNodeContext{Input: current, Draft: startupDraft}
-
-    private func ReadMiningInput() SettingsPageInput -> current
-
-    private func ReadWalletInput() SettingsWalletContext -> SettingsWalletContext{
-        Input: current,
-        ShowDialog: openDialog
-    }
-    private let createAdvanced Func[SettingsAdvanced]
-
-    private func ReadAdvancedInput() SettingsAdvancedContext -> SettingsAdvancedContext{
-        Input: current,
-        OpenPurge: openPurge,
-        Data: startupDraft.Advanced
-    }
-    private let createDialogs Func[SettingsDialogs]
-
-    private func ReadDialogsInput() SettingsPageInput -> current
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createNode() -> SettingsNode
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createAdvanced() -> SettingsAdvanced
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createDialogs() -> SettingsDialogs
 
     init() {
         openDialog = kind -> dialogs?.Open(kind)
@@ -216,12 +197,10 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 
     protected override func InputChanged(input SettingsPageInput) {
         let section = input.Section == "wallet" && input.Snapshot.State != WalletState.Unlocked ?
-        "general": input.Section
+        "general" : input.Section
         if section != mountedSection {
             mountedSection = section
-
             nodeOwner = nil
-
             advancedOwner = nil
         }
         current = input with{Settings = input.Session.Settings}
@@ -250,7 +229,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         advancedOwner?.Refresh()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SettingsPageInput) Blob {
         let input = current
         let ui = input.Ui
         let sections = List[string]{"general", "security", "node", "mining"}
@@ -258,8 +237,8 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             sections.Add("wallet")
         }
         sections.Add("advanced")
-        let section = sections.Contains(state.Section) ? state.Section: "general"
-        let navWidth = state.Width < 1100 ? 132.0: 168.0
+        let section = sections.Contains(state.Section) ? state.Section : "general"
+        let navWidth = state.Width < 1100 ? 132.0 : 168.0
         let nav = WalletParts.Card(ui, AppTheme.Space8, AppTheme.Space2, AppTheme.Radius14)
         nav.Width = navWidth
         nav.FlexShrink = 0
@@ -279,7 +258,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
                         default: "notes"
                     },
                     AppTheme.Icon18,
-                    id == section ? AppTheme.Lime: AppTheme.Body
+                    id == section ? AppTheme.Lime : AppTheme.Body
                 )
             }
         }
@@ -308,9 +287,9 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
             Label(
                 ui,
                 ui.Strings.Get(section) +
-                    (section == "wallet" && state.ViewOnly ? " " + ui.Strings.Get("view-only"): ""),
+                    (section == "wallet" && state.ViewOnly ? " " + ui.Strings.Get("view-only") : ""),
                 AppTheme.Type17,
-                section == "wallet" && state.ViewOnly ? AppTheme.Blue: AppTheme.Ink,
+                section == "wallet" && state.ViewOnly ? AppTheme.Blue : AppTheme.Ink,
                 ""
             ),
             AppTheme.Space10
@@ -335,14 +314,24 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         }
         pane.Add(
             switch section {
-                case "general": Cell.Mount[SettingsGeneralContext, SettingsGeneral]("general", ReadGeneralInput())
+                case "general": Cell.Mount[SettingsGeneralContext, SettingsGeneral](
+                    "general",
+                    SettingsGeneralContext{Page: current, SavePreference: savePreference}
+                )
                 case "security": Security(current)
-                case "node": Cell.Mount[SettingsNodeContext, SettingsNode]("node", ReadNodeInput(), createNode)
-                case "mining": Cell.Mount[SettingsPageInput, SettingsMining]("mining", ReadMiningInput())
-                case "wallet": Cell.Mount[SettingsWalletContext, SettingsWallet]("wallet", ReadWalletInput())
+                case "node": Cell.Mount[SettingsStartupContext, SettingsNode](
+                    "node",
+                    SettingsStartupContext{Page: current, Draft: startupDraft},
+                    createNode
+                )
+                case "mining": Cell.Mount[SettingsPageInput, SettingsMining]("mining", current)
+                case "wallet": Cell.Mount[SettingsWalletContext, SettingsWallet](
+                    "wallet",
+                    SettingsWalletContext{Page: current, ShowDialog: openDialog}
+                )
                 default: Cell.Mount[SettingsAdvancedContext, SettingsAdvanced](
                     "advanced",
-                    ReadAdvancedInput(),
+                    SettingsAdvancedContext{Page: current, OpenPurge: openPurge, Data: startupDraft.Advanced},
                     createAdvanced
                 )
             }
@@ -363,7 +352,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
         if state.Height > 640 {
             root.Height = Math.Clamp(state.Height * 0.65, 480.0, 740.0)
         }
-        root.Add(Cell.Mount[SettingsPageInput, SettingsDialogs]("settings-dialogs", ReadDialogsInput(), createDialogs))
+        root.Add(Cell.Mount[SettingsPageInput, SettingsDialogs]("settings-dialogs", current, createDialogs))
         return root
     }
 
@@ -501,7 +490,7 @@ class SettingsPage : Cell[SettingsPageInput], IDisposable {
 }
 
 data struct SettingsGeneralContext {
-    var Input SettingsPageInput
+    var Page SettingsPageInput
     var SavePreference Action[Func[CancellationToken, Task]]
 }
 
@@ -512,10 +501,9 @@ class SettingsGeneral : Cell[SettingsGeneralContext] {
     private var savePreference Action[Func[CancellationToken, Task]]
 
     protected override func InputChanged(value SettingsGeneralContext) {
-        let input = value.Input
-        let savePreference = value.SavePreference
+        let input = value.Page
         context = input
-        this.savePreference = savePreference
+        savePreference = value.SavePreference
         let settings = input.Settings
         rowHeight = RowHeight(input.Height)
         let next = SettingsGeneralInput{
@@ -534,7 +522,7 @@ class SettingsGeneral : Cell[SettingsGeneralContext] {
         Rebuild()
     }
 
-    override func Build() Blob -> General(context)
+    protected override func Build(_ SettingsGeneralContext) Blob -> General(context)
 
     private func Prefer(input SettingsPageInput, change Action[WalletSettings]) {
         input.Session.ApplyPreference(change)
@@ -642,12 +630,12 @@ class SettingsGeneral : Cell[SettingsGeneralContext] {
     }
 }
 
-data struct SettingsNodeContext {
-    var Input SettingsPageInput
+data struct SettingsStartupContext {
+    var Page SettingsPageInput
     var Draft SettingsRegionState
 }
 
-class SettingsNode : Cell[SettingsNodeContext], IDisposable {
+class SettingsNode : Cell[SettingsStartupContext], IDisposable {
     private var state SettingsNodeInput
     private var context SettingsPageInput
     private var rowHeight float64
@@ -656,13 +644,10 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
     private var directoryExists bool
     private var generation int32
 
-    private func ReadStartupInput() SettingsStartupContext -> SettingsStartupContext{Input: context, Draft: draft}
-
-    protected override func InputChanged(value SettingsNodeContext) {
-        let input = value.Input
-        let draft = value.Draft
+    protected override func InputChanged(value SettingsStartupContext) {
+        let input = value.Page
         context = input
-        this.draft = draft
+        draft = value.Draft
         rowHeight = RowHeight(input.Height)
         let settings = input.Settings
         let status = input.Node
@@ -670,7 +655,7 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
             Language: input.Language,
             Mode: settings.NodeMode,
             DownloadCheckpoints: settings.DownloadCheckpoints,
-            Directory: status.DataDirectory.Length > 0 ? status.DataDirectory: settings.DataDirectory,
+            Directory: status.DataDirectory.Length > 0 ? status.DataDirectory : settings.DataDirectory,
             Height: status.Height,
             ChainHeight: status.ChainHeight,
             Peers: status.Peers,
@@ -702,7 +687,7 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob -> NodeSection(context)
+    protected override func Build(_ SettingsStartupContext) Blob -> NodeSection(context)
 
     private func ReadDirectory(session WalletSession, path string, owner Window?, request int32) {
         var exists = false
@@ -743,7 +728,7 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
             height.Add(
                 Label(
                     ui,
-                    Count(state.Peers) + " " + ui.Strings.Get(state.Peers == 1 ? "peer": "peers"),
+                    Count(state.Peers) + " " + ui.Strings.Get(state.Peers == 1 ? "peer" : "peers"),
                     AppTheme.Type14,
                     AppTheme.Dim,
                     ""
@@ -865,16 +850,19 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
                 draft.Open = !draft.Open
             },
             Grow(Label(ui, ui.Strings.Get("startup"), AppTheme.Type14, AppTheme.Body, "")),
-            MaterialIcons.Create(draft.Open ? "expand_less": "expand_more", AppTheme.Icon18, AppTheme.Dim)
+            MaterialIcons.Create(draft.Open ? "expand_less" : "expand_more", AppTheme.Icon18, AppTheme.Dim)
         }
         WidgetKeyBindings.BindActivation(startup)
         let content = Container{MinHeight: 0, Gap: AppTheme.Space8}
-        list.Display = draft.Open ? Display.None: Display.Flex
+        list.Display = draft.Open ? Display.None : Display.Flex
         content.Add(list)
         let startupPane = Container{
-            Display: draft.Open ? Display.Flex: Display.None,
+            Display: draft.Open ? Display.Flex : Display.None,
             MinHeight: 0,
-            Cell.Mount[SettingsStartupContext, SettingsStartup]("startup", ReadStartupInput())
+            Cell.Mount[SettingsStartupContext, SettingsStartup](
+                "startup",
+                SettingsStartupContext{Page: context, Draft: draft}
+            )
         }
         content.Add(startup)
         content.Add(startupPane)
@@ -889,11 +877,6 @@ class SettingsNode : Cell[SettingsNodeContext], IDisposable {
     }
 }
 
-data struct SettingsStartupContext {
-    var Input SettingsPageInput
-    var Draft SettingsRegionState
-}
-
 class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
     private var state SettingsStartupInput
     private var context SettingsPageInput
@@ -906,10 +889,9 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
     private var validating bool
 
     protected override func InputChanged(value SettingsStartupContext) {
-        let input = value.Input
-        let draft = value.Draft
+        let input = value.Page
         context = input
-        this.draft = draft
+        draft = value.Draft
         let settings = input.Settings
         if lifetime == nil {
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
@@ -946,7 +928,7 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SettingsStartupContext) Blob {
         guard let value = draft.Value else {
             return Container{}
         }
@@ -1083,7 +1065,7 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
             () -> input.ChooseFile.Invoke(
                 kind,
                 label,
-                Path.IsPathFullyQualified(value) ? value: Home(),
+                Path.IsPathFullyQualified(value) ? value : Home(),
                 text -> {
                     changed.Invoke(text)
                     Rebuild()
@@ -1129,8 +1111,7 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
         let request = generation
         let next = value.Copy()
         let current = input.Settings.Copy()
-        let token = lifetime?.Token ?? CancellationToken.None
-        go ValidateSettings(next, current, owner, request, token)
+        go ValidateSettings(next, current, owner, request, lifetime?.Token ?? CancellationToken.None)
     }
 
     private func ValidateSettings(
@@ -1182,7 +1163,7 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
 
     private func ConfirmApply(input SettingsPageInput) Blob {
         let ui = input.Ui
-        let close Action = () -> {
+        let onClose Action = () -> {
             if applying {
                 return
             }
@@ -1197,7 +1178,7 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
                 Preset = ModalDialogPreset.Confirm,
                 AccessibilityName = ui.Strings.Get("Apply settings"),
                 Width = Math.Min(state.Width - 48, 440),
-                Content = applying ? Loading(ui, "apply-loading"): Container{
+                Content = applying ? Loading(ui, "apply-loading") : Container{
                     Gap: AppTheme.Space10,
                     Label(ui, ui.Strings.Get("Apply settings"), AppTheme.Type17, AppTheme.Ink, ""),
                     Label(
@@ -1218,9 +1199,9 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
                 CancelText = ui.Strings.Get("Cancel"),
                 ConfirmDisabled = state.Busy,
                 OnConfirm = () -> SaveSettings(input),
-                OnCancel = close,
-                OnOpenChange = isOpen -> if !isOpen {
-                    close.Invoke()
+                OnCancel = onClose,
+                OnOpenChange = visible -> if !visible {
+                    onClose()
                 }
             }
         )
@@ -1228,7 +1209,7 @@ class SettingsStartup : Cell[SettingsStartupContext], IDisposable {
 }
 
 data struct SettingsWalletContext {
-    var Input SettingsPageInput
+    var Page SettingsPageInput
     var ShowDialog Action[string]
 }
 
@@ -1242,10 +1223,9 @@ class SettingsWallet : Cell[SettingsWalletContext], IDisposable {
     private var showDialog Action[string]
 
     protected override func InputChanged(value SettingsWalletContext) {
-        let input = value.Input
-        let showDialog = value.ShowDialog
+        let input = value.Page
         context = input
-        this.showDialog = showDialog
+        showDialog = value.ShowDialog
         if state.Wallet != input.Settings.ActiveWallet {
             generation++
             syncing = false
@@ -1269,7 +1249,7 @@ class SettingsWallet : Cell[SettingsWalletContext], IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SettingsWalletContext) Blob {
         let pane = Container{MinHeight: 0, Gap: AppTheme.Space12}
         WalletSection(context, pane)
         if issue.Length > 0 {
@@ -1457,7 +1437,7 @@ class SettingsAdvancedState {
 }
 
 data struct SettingsAdvancedContext {
-    var Input SettingsPageInput
+    var Page SettingsPageInput
     var OpenPurge Action[string, string, int32]
     var Data SettingsAdvancedState
 }
@@ -1473,12 +1453,10 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
     private var certifying bool
 
     protected override func InputChanged(value SettingsAdvancedContext) {
-        let input = value.Input
-        let openPurge = value.OpenPurge
-        let data = value.Data
-        this.data = data
+        let input = value.Page
+        data = value.Data
         context = input
-        this.openPurge = openPurge
+        openPurge = value.OpenPurge
         let settings = input.Settings
         if lifetime == nil {
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(input.Window?.Closed ?? CancellationToken.None)
@@ -1542,7 +1520,7 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
         Rebuild()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ SettingsAdvancedContext) Blob {
         let pane = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Gap: AppTheme.Space12}
         Advanced(context, pane)
         if data.loadIssue.Length > 0 {
@@ -1564,7 +1542,7 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
 
     func Refresh() {
         data.chainLoaded = false
-        InputChanged(SettingsAdvancedContext{Input: context, OpenPurge: openPurge, Data: data})
+        InputChanged(SettingsAdvancedContext{Page: context, OpenPurge: openPurge, Data: data})
     }
 
     private func Advanced(input SettingsPageInput, pane Container) {
@@ -1613,7 +1591,7 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
                 ui.Strings.Get("chain data") + " " + data.sizeText + " " + data.sizeUnit,
                 4,
                 nil,
-                index -> Slot(ui, index < used ? AppTheme.Blue: AppTheme.Rule, 1)
+                index -> Slot(ui, index < used ? AppTheme.Blue : AppTheme.Rule, 1)
             )
         )
         let purgeRow = Container{
@@ -1628,7 +1606,7 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
                     ui,
                     ui
                         .Strings
-                        .Get(data.dataWallets == 1 ? "{0} wallet inside": "{0} wallets inside")
+                        .Get(data.dataWallets == 1 ? "{0} wallet inside" : "{0} wallets inside")
                         .Replace("{0}", data.dataWallets.ToString()),
                     AppTheme.Orange,
                     "warning"
@@ -1674,9 +1652,9 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
             verdict.Add(
                 Label(
                     ui,
-                    clean ? ui.Strings.Get("clean"): Violations(ui, result.Violations.Length),
+                    clean ? ui.Strings.Get("clean") : Violations(ui, result.Violations.Length),
                     wide,
-                    clean ? AppTheme.Mint: AppTheme.Pink,
+                    clean ? AppTheme.Mint : AppTheme.Pink,
                     ""
                 )
             )
@@ -1725,7 +1703,7 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
                 FlexShrink: 0,
                 Label(ui, note, AppTheme.Type13, AppTheme.Dim, ""),
                 Container{FlexGrow: 1},
-                certifying ? Loading(ui, "certify-loading", "checking"): Container{Display: Display.None},
+                certifying ? Loading(ui, "certify-loading", "checking") : Container{Display: Display.None},
                 Button(ui, "Certify", () -> Certify(input), data.state.Busy || certifying)
             }
         )
@@ -1937,9 +1915,8 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
         certifying = true
         Rebuild()
         let request = certifyGeneration
-        let token = lifetime.Token
         let session = input.Session
-        go ReadCertificate(session, owner, request, token)
+        go ReadCertificate(session, owner, request, lifetime.Token)
     }
 
     private async func ReadCertificate(session WalletSession, owner Window, request int32, token CancellationToken) {
@@ -2017,8 +1994,8 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
     ) {
         try {
             let result = await session.ReadSettingsChainAsync(settings, ct)
-            let unit = result.Size >= 1000000000 ? "GB": "MB"
-            let text = (float64(result.Size) / (result.Size >= 1000000000 ? 1e9: 1e6)).ToString(
+            let unit = result.Size >= 1000000000 ? "GB" : "MB"
+            let text = (float64(result.Size) / (result.Size >= 1000000000 ? 1e9 : 1e6)).ToString(
                 "0.0",
                 CultureInfo.InvariantCulture
             )
@@ -2053,7 +2030,7 @@ class SettingsAdvanced : Cell[SettingsAdvancedContext], IDisposable {
     }
 
     private func Violations(ui Presentation, count int) string ->
-    ui.Strings.Get(count == 1 ? "{0} violation": "{0} violations").Replace("{0}", count.ToString())
+    ui.Strings.Get(count == 1 ? "{0} violation" : "{0} violations").Replace("{0}", count.ToString())
 }
 
 class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
@@ -2165,7 +2142,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
 
     func Dispose() -> ResetDialog()
 
-    override func Build() Blob -> switch kind {
+    protected override func Build(_ SettingsPageInput) Blob -> switch kind {
         case "phrase", "view-key": Dialog(context)
         case "view-only": ViewOnly(context)
         case "purge": Purge(context)
@@ -2178,7 +2155,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
             return Keys(input, keys)
         }
         let form = WalletForm(ui, !state.Busy && !loading, () -> Reveal(input), []string{password}, () -> Rebuild())
-        let title = kind == "phrase" ? "recovery phrase": "view keys"
+        let title = kind == "phrase" ? "recovery phrase" : "view keys"
         return WalletParts.Modal(
             ui,
             input.Window,
@@ -2199,7 +2176,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
             ),
             ActionRow(
                 []Blob{
-                    loading ? Loading(ui, "keys-loading"): Container{Display: Display.None},
+                    loading ? Loading(ui, "keys-loading") : Container{Display: Display.None},
                     Button(ui, "Cancel", close, loading),
                     ControlParts.Button(ui, "Show", form.Submit, !form.CanSubmit, true, busy: false)
                 }
@@ -2222,14 +2199,13 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
         generation++
         Rebuild()
         let request = generation
-        let token = lifetime.Token
         let wallet = state.Wallet
         let session = input.Session
         if kind == "phrase" {
             let publish = input.OnRevealSeed
-            go LoadPhrase(session, wallet, owner, buffer, publish, request, token)
+            go LoadPhrase(session, wallet, owner, buffer, publish, request, lifetime.Token)
         } else {
-            go LoadKeys(session, wallet, owner, buffer, request, token)
+            go LoadKeys(session, wallet, owner, buffer, request, lifetime.Token)
         }
     }
 
@@ -2356,7 +2332,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
                     ui,
                     ui.Strings.Explain(fileIssue),
                     AppTheme.Type13,
-                    fileIssue == "Saved" ? AppTheme.Body: AppTheme.Pink,
+                    fileIssue == "Saved" ? AppTheme.Body : AppTheme.Pink,
                     ""
                 )
             )
@@ -2372,7 +2348,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
             content,
             ActionRow(
                 []Blob{
-                    state.Busy ? Loading(ui, "keys-export-loading"): Container{Display: Display.None},
+                    state.Busy ? Loading(ui, "keys-export-loading") : Container{Display: Display.None},
                     Button(
                         ui,
                         "Copy all",
@@ -2449,7 +2425,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
                 if request != generation {
                     return
                 }
-                fileIssue = issue.Length == 0 ? "Saved": issue
+                fileIssue = issue.Length == 0 ? "Saved" : issue
                 Rebuild()
             }
         )
@@ -2480,7 +2456,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
                     text
                 },
                 AppTheme.Type13,
-                masked ? AppTheme.Dim: AppTheme.Body,
+                masked ? AppTheme.Dim : AppTheme.Body,
                 ""
             ),
             Edges{Left: AppTheme.Space12, Right: AppTheme.Space12}
@@ -2500,11 +2476,11 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
                 Icon(
                     ui,
                     MaterialIcons.Create(
-                        viewPrivateShown ? "visibility": "visibility_off",
+                        viewPrivateShown ? "visibility" : "visibility_off",
                         AppTheme.Icon14,
-                        viewPrivateShown ? AppTheme.Body: AppTheme.Lime
+                        viewPrivateShown ? AppTheme.Body : AppTheme.Lime
                     ),
-                    ui.Strings.Get(viewPrivateShown ? "Hide": "Reveal"),
+                    ui.Strings.Get(viewPrivateShown ? "Hide" : "Reveal"),
                     () -> {
                         viewPrivateShown = !viewPrivateShown
                         Rebuild()
@@ -2678,7 +2654,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
         }
         for item in items {
             box.Add(
-                Status(ui, ui.Strings.Get(item), allowed ? AppTheme.Mint: AppTheme.Pink, allowed ? "check": "close")
+                Status(ui, ui.Strings.Get(item), allowed ? AppTheme.Mint : AppTheme.Pink, allowed ? "check" : "close")
             )
         }
         return box
@@ -2820,7 +2796,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
                     true,
                     ui
                         .Strings
-                        .Get(purge.Wallets == 1 ? "{0} wallet": "{0} wallets")
+                        .Get(purge.Wallets == 1 ? "{0} wallet" : "{0} wallets")
                         .Replace("{0}", purge.Wallets.ToString()),
                     "moved out first"
                 )
@@ -2991,7 +2967,7 @@ class SettingsDialogs : Cell[SettingsPageInput], IDisposable {
             trailing = Label(ui, ui.Strings.Get(note), AppTheme.Type12, AppTheme.Dim, "")
         }
         return WalletParts.Header(
-            Status(ui, ui.Strings.Get(label), kept ? AppTheme.Mint: AppTheme.Pink, kept ? "check": "close"),
+            Status(ui, ui.Strings.Get(label), kept ? AppTheme.Mint : AppTheme.Pink, kept ? "check" : "close"),
             trailing: trailing
         )
     }

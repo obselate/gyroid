@@ -222,6 +222,6 @@ class NodeDiscovery {
             }
         }
 
-        func ProgramError(path string) string -> File.Exists(path) ? "": "Node program not found"
+        func ProgramError(path string) string -> File.Exists(path) ? "" : "Node program not found"
     }
 }

@@ -6,7 +6,7 @@ import System.Globalization
 class NodeText {
     shared {
         func FixedPoint(value float64, places int32) string -> value.ToString(
-            "F" + (value > 0 ? Math.Max(places, 1 - int32(Math.Floor(Math.Log10(value)))): places).ToString(),
+            "F" + (value > 0 ? Math.Max(places, 1 - int32(Math.Floor(Math.Log10(value)))) : places).ToString(),
             CultureInfo.InvariantCulture
         )
 

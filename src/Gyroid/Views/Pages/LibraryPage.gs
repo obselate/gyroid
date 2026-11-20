@@ -48,7 +48,6 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     private var importPath string = ""
     private let start Action[string]
     private let back Action
-    private let readListInput Func[LibraryListInput]
 
     init() {
         start = kind -> {
@@ -59,26 +58,26 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
             form = ""
             Rebuild()
         }
-        readListInput = () ->
-        LibraryListInput{
-            Session: input.Session,
-            Ui: input.Ui,
-            State: input.State,
-            ActiveWallet: input.ActiveWallet,
-            Directory: input.Directory,
-            Network: input.Network,
-            Busy: input.Busy,
-            Language: input.Language,
-            Wallets: wallets,
-            Issue: issue,
-            ChooseFile: input.ChooseFile,
-            OnNavigate: input.OnNavigate,
-            OnBackup: input.OnBackup,
-            OnStart: start,
-            OnImport: path -> {
-                importPath = path
-                start("File")
-            }
+    }
+
+    private func ListInput() LibraryListInput -> LibraryListInput{
+        Session: input.Session,
+        Ui: input.Ui,
+        State: input.State,
+        ActiveWallet: input.ActiveWallet,
+        Directory: input.Directory,
+        Network: input.Network,
+        Busy: input.Busy,
+        Language: input.Language,
+        Wallets: wallets,
+        Issue: issue,
+        ChooseFile: input.ChooseFile,
+        OnNavigate: input.OnNavigate,
+        OnBackup: input.OnBackup,
+        OnStart: start,
+        OnImport: path -> {
+            importPath = path
+            start("File")
         }
     }
 
@@ -112,9 +111,8 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         let directory = next.Directory
         let network = next.Network
         let id = generation
-        let token = current.Token
         let previousRows = wallets
-        go Load(library, directory, network, previousRows, owner, id, token)
+        go Load(library, directory, network, previousRows, owner, id, current.Token)
     }
 
     private func Load(
@@ -128,7 +126,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
     ) {
         try {
             let result = library.ListWallets(directory, token)
-            let rows = result.Rows.SequenceEqual(previous) ? previous: result.Rows
+            let rows = result.Rows.SequenceEqual(previous) ? previous : result.Rows
             owner.Post(
                 () -> {
                     if id != generation || directory != input.Directory || network != input.Network {
@@ -145,18 +143,18 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
         } catch (failure OperationCanceledException) { }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ LibraryInput) Blob {
         let card = WalletParts.PageCard(input.Ui, maxWidth: 560, fill: true)
         card.Gap = 0
         let status = Label(input.Ui, input.Status, AppTheme.Type13, AppTheme.Dim, "")
         status.LineHeight = 1
         card.Add(
             Container{
-                Height: input.Busy ? AppTheme.Icon14 + AppTheme.GetPageGap(0): 0,
+                Height: input.Busy ? AppTheme.Icon14 + AppTheme.GetPageGap(0) : 0,
                 MinHeight: 0,
                 FlexShrink: 0,
                 Overflow: Overflow.Hidden,
-                TransitionMs: input.Session.Settings.ReduceMotion ? 0: 180,
+                TransitionMs: input.Session.Settings.ReduceMotion ? 0 : 180,
                 TransitionEasing: Easing.Linear,
                 TransitionProperties: []TransitionProperty{TransitionProperty.Height},
                 Container{
@@ -194,7 +192,7 @@ class LibraryPage : Cell[LibraryInput], IDisposable {
                 )
             )
         } else {
-            card.Add(Cell.Mount[LibraryListInput, LibraryList]("list", readListInput()))
+            card.Add(Cell.Mount[LibraryListInput, LibraryList]("list", ListInput()))
         }
         return card
     }
@@ -233,18 +231,21 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
     private var issue string = ""
     private let rowKey Func[LibraryWallet, string]
     private let rowBuilder Func[LibraryWallet, Blob]
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createRow() -> LibraryWalletRow
     private let realized HashSet[LibraryWalletRow] = HashSet[LibraryWalletRow]()
 
     init() {
         rowKey = row -> row.Filename
+        createRow = () -> {
+            let cell = LibraryWalletRow()
+            realized.Add(cell)
+            return cell
+        }
         rowBuilder = row -> Cell.Mount[LibraryWalletRowInput, LibraryWalletRow](
             row.Filename,
             LibraryWalletRowInput{Owner: this, Wallet: row},
-            () -> {
-                let cell = LibraryWalletRow()
-                realized.Add(cell)
-                return cell
-            }
+            createRow
         )
     }
 
@@ -273,14 +274,14 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
         RefreshRows()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ LibraryListInput) Blob {
         let ui = input.Ui
         let card = Container{Gap: AppTheme.Space14, MinHeight: 0, FlexShrink: 1}
         let header = WalletParts.Header(
             Label(ui, ui.Strings.Get("wallets"), AppTheme.Type17, AppTheme.Ink, ""),
             trailing: Icon(
                 ui,
-                MaterialIcons.Create("settings", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Body),
+                MaterialIcons.Create("settings", AppTheme.Icon16, input.Busy ? AppTheme.Dim : AppTheme.Body),
                 ui.Strings.Get("Settings"),
                 () -> input.OnNavigate(AppPage.Settings),
                 input.Busy
@@ -322,9 +323,9 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
             )
             let list = VirtualRows(input.Wallets, 48 + AppTheme.Space8, rowKey, rowBuilder, false, version: 0)
             let expandedHeight = (opened ?? input.ActiveWallet).Length > 0 ? AppTheme.ControlRegular +
-                AppTheme.Space12: 0
+                AppTheme.Space12 : 0
             let issueHeight = issue.Length > 0 && expandedHeight > 0 ?
-            AppTheme.ControlRegular + AppTheme.Space16 + AppTheme.Space10: 0
+            AppTheme.ControlRegular + AppTheme.Space16 + AppTheme.Space10 : 0
             list.Height = input.Wallets.Count * (48 + AppTheme.Space8) + expandedHeight + issueHeight
             list.MinHeight = 0
             list.MaxHeight = Percent(100)
@@ -369,15 +370,15 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 Top: AppTheme.Space0,
                 Bottom: AppTheme.Space0
             },
-            BorderColor: input.Busy ? AppTheme.Edge: primary ? AppTheme.Lime: AppTheme.Rule,
-            BackgroundColor: input.Busy ? AppTheme.Raised: AppTheme.Surface,
+            BorderColor: input.Busy ? AppTheme.Edge : primary ? AppTheme.Lime : AppTheme.Rule,
+            BackgroundColor: input.Busy ? AppTheme.Raised : AppTheme.Surface,
             Disabled: input.Busy,
             HoverStyle: Style{BackgroundColor: AppTheme.Rule},
             FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{Role: AccessibilityRole.Button, Name: ui.Strings.Get(label)},
             OnClick: click,
-            MaterialIcons.Create(icon, AppTheme.Icon20, input.Busy ? AppTheme.Dim: AppTheme.Lime),
-            Label(ui, ui.Strings.Get(label), AppTheme.Type14, input.Busy ? AppTheme.Dim: AppTheme.Ink, "")
+            MaterialIcons.Create(icon, AppTheme.Icon20, input.Busy ? AppTheme.Dim : AppTheme.Lime),
+            Label(ui, ui.Strings.Get(label), AppTheme.Type14, input.Busy ? AppTheme.Dim : AppTheme.Ink, "")
         }
         WidgetKeyBindings.BindActivation(button)
         return button
@@ -413,7 +414,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 if input.Busy {
                     return
                 }
-                opened = expanded ? "": filename
+                opened = expanded ? "" : filename
                 password = ""
                 issue = ""
                 if loaded && !active {
@@ -447,7 +448,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
             } else {
                 Container{
                     FlexShrink: 0,
-                    MaterialIcons.Create(expanded ? "expand_more": "chevron_right", AppTheme.Icon16, AppTheme.Dim)
+                    MaterialIcons.Create(expanded ? "expand_more" : "chevron_right", AppTheme.Icon16, AppTheme.Dim)
                 }
             }
         }
@@ -464,7 +465,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
             head.Add(
                 Icon(
                     ui,
-                    MaterialIcons.Create("download", AppTheme.Icon16, input.Busy ? AppTheme.Dim: AppTheme.Body),
+                    MaterialIcons.Create("download", AppTheme.Icon16, input.Busy ? AppTheme.Dim : AppTheme.Body),
                     ui.Strings.Get("Unload"),
                     () -> Run(ct -> input.Session.UnloadAsync(ct)),
                     input.Busy
@@ -482,8 +483,8 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 Top: AppTheme.Space0,
                 Bottom: AppTheme.Space0
             },
-            BorderColor: expanded ? AppTheme.Edge: AppTheme.Rule,
-            BackgroundColor: expanded ? AppTheme.Raised: AppTheme.Surface,
+            BorderColor: expanded ? AppTheme.Edge : AppTheme.Rule,
+            BackgroundColor: expanded ? AppTheme.Raised : AppTheme.Surface,
             FlexShrink: 0,
             Margin: Edges{Bottom: AppTheme.Space8},
             head
@@ -497,7 +498,7 @@ class LibraryList : Cell[LibraryListInput], IDisposable {
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 Gap: AppTheme.Space10,
-                Padding: Edges{Bottom: issue.Length > 0 ? AppTheme.Space8: AppTheme.Space12},
+                Padding: Edges{Bottom: issue.Length > 0 ? AppTheme.Space8 : AppTheme.Space12},
                 Grow(
                     Container{
                         MinWidth: 0,
@@ -642,17 +643,15 @@ class LibraryWalletRow : Cell[LibraryWalletRowInput], IDisposable {
     var Wallet LibraryWallet
 
     protected override func InputChanged(input LibraryWalletRowInput) {
-        let owner = input.Owner
-        let wallet = input.Wallet
-        if Owner == owner && Wallet.Equals(wallet) {
+        if Owner == input.Owner && Wallet.Equals(input.Wallet) {
             return
         }
-        Owner = owner
-        Wallet = wallet
+        Owner = input.Owner
+        Wallet = input.Wallet
         Rebuild()
     }
 
-    override func Build() Blob -> Owner.Row(this)
+    protected override func Build(_ LibraryWalletRowInput) Blob -> Owner.Row(this)
 
     func Dispose() {
         Owner.Release(this)
@@ -680,7 +679,7 @@ class LibraryMenu : Cell[LibraryMenuInput] {
             MaterialIcons.Create(
                 "add",
                 AppTheme.Icon16,
-                menu ? AppTheme.Lime: input.Busy ? AppTheme.Dim: AppTheme.Body
+                menu ? AppTheme.Lime : input.Busy ? AppTheme.Dim : AppTheme.Body
             ),
             input.Ui.Strings.Get("Add wallet"),
             () -> menu = !menu,
@@ -802,7 +801,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
                 ),
                 leading: Icon(
                     ui,
-                    MaterialIcons.Create("arrow_back", AppTheme.Icon16, disabled ? AppTheme.Dim: AppTheme.Body),
+                    MaterialIcons.Create("arrow_back", AppTheme.Icon16, disabled ? AppTheme.Dim : AppTheme.Body),
                     ui.Strings.Get("Back"),
                     input.OnBack,
                     input.Busy
@@ -896,7 +895,9 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
             )
         }
         card.Add(
-            ActionRow([]Blob{Button(ui, form == "Create" ? "Create": "Import", fields.Submit, !fields.CanSubmit, true)})
+            ActionRow(
+                []Blob{Button(ui, form == "Create" ? "Create" : "Import", fields.Submit, !fields.CanSubmit, true)}
+            )
         )
         return card
     }
@@ -910,7 +911,7 @@ class LibraryForm : Cell[LibraryFormInput], IDisposable {
             input.OnCreate(filename, secret)
             return
         }
-        let extra = (input.Kind == "Phrase" ? phrase: viewKey).ToCharArray()
+        let extra = (input.Kind == "Phrase" ? phrase : viewKey).ToCharArray()
         let publicKey = spendKey.ToCharArray()
         issue = ""
         generation++

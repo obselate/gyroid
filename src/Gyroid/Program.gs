@@ -85,7 +85,7 @@ func Main() {
             !Double.TryParse(arguments[index + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out let value) ||
             !Double.IsFinite(value) ||
             value <= 0 ||
-            (name == "--scale" ? value > float32.MaxValue: value > int32.MaxValue) {
+            (name == "--scale" ? value > float32.MaxValue : value > int32.MaxValue) {
             Console.Error.WriteLine("Invalid " + name + " value: number is outside the supported range")
             Environment.ExitCode = Cli.Usage(Console.Error)
             return
@@ -95,7 +95,8 @@ func Main() {
     if OperatingSystem.IsWindows() && GetConsoleProcessList([2]uint32, 2) == 1 {
         FreeConsole()
     }
-    Application.Configure(Assembly.GetExecutingAssembly())
+    let version = Assembly.GetExecutingAssembly().GetCustomAttribute[AssemblyInformationalVersionAttribute]()
+    Application.Configure("Gyroid", (version?.InformationalVersion ?? "unknown").Split('+')[0], "dev.gyroid.wallet")
     PaymentLinkRegistration.Register()
     var activationTarget App? = nil
     Application.Activated += request -> {
@@ -116,7 +117,7 @@ func Main() {
     let window = Window{
         Title: "Gyroid",
         AccessibilityAdapter: NativeAccessibilityAdapter(),
-        Size: LayoutSize(Option(arguments, "--width", 1280), Option(arguments, "--height", 800)),
+        Size: LayoutSize(int32(Option(arguments, "--width", 1280)), int32(Option(arguments, "--height", 800))),
         MinSize: LayoutSize(960, 640),
         Resizable: true,
         ResizeBand: 6,

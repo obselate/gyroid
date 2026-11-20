@@ -77,7 +77,7 @@ partial class MessagingService {
                 envelope.GroupId = Convert.FromHexString(conversation.Id)
             }
             let headerBytes = envelope.HeaderLength
-            if headerBytes + body.Length + (kind < 2 ? 68: 0) > 512 {
+            if headerBytes + body.Length + (kind < 2 ? 68 : 0) > 512 {
                 prepared.Estimate.Fits = false
                 if enforce {
                     throw ArgumentException("Message exceeds the core signing limit")

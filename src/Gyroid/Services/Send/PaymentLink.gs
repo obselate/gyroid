@@ -10,7 +10,7 @@ data class PaymentLink(Address string, Amount string, Memo string, HasAmount boo
                 return nil
             }
             let query = text.IndexOf('?')
-            var address = query < 0 ? text.Substring(11): text.Substring(11, query - 11)
+            var address = query < 0 ? text.Substring(11) : text.Substring(11, query - 11)
             if address.EndsWith("/", StringComparison.Ordinal) {
                 address = address.Substring(0, address.Length - 1)
             }

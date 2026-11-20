@@ -154,13 +154,8 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
     private var listInput HistoryListInput
     private var exportInput HistoryExportInput
     private var ribbon HistoryRibbon?
-    private let createRibbon Func[HistoryRibbon]
-
-    private func ReadRibbonInput() HistoryRibbonInput -> ribbonInput
-
-    private func ReadListInput() HistoryListInput -> listInput
-
-    private func ReadExportInput() HistoryExportInput -> exportInput
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createRibbon() -> HistoryRibbon
     private let selectRange Action[uint64, uint64]
     private let markRow Action[uint64]
     private let requestTimes Action[IEnumerable[uint64]]
@@ -223,7 +218,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             current.SelectionRevision != input.SelectionRevision ||
             !next.Equals(identity) || !nextSource.Equals(source)
         let resumePagination = loading && !nextSource.Equals(source)
-        let pendingTimes = nextSource.Equals(source) ? Array.Empty[uint64](): requested.Except(times.Keys).ToArray()
+        let pendingTimes = nextSource.Equals(source) ? Array.Empty[uint64]() : requested.Except(times.Keys).ToArray()
         if !nextSource.Equals(source) {
             CancelRequests()
             requested.IntersectWith(times.Keys)
@@ -319,8 +314,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         let selected = period
         let generation = periodGeneration
         let id = identity
-        let token = request.Token
-        go ResolvePeriod(window, input, selected, generation, id, token)
+        go ResolvePeriod(window, input, selected, generation, id, request.Token)
     }
 
     private func ContinueLoading() {
@@ -349,7 +343,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             Snapshot: current.Snapshot,
             Previous: prepared,
             PlotWidth: ribbonWidth,
-            Cutoff: period == "all" ? 0UL: resolvedPeriod == period ? periodStart: current.Tip + 1,
+            Cutoff: period == "all" ? 0UL : resolvedPeriod == period ? periodStart : current.Tip + 1,
             From: from,
             To: to,
             ExportOutputs: current.Session.History.Outputs,
@@ -405,7 +399,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryInput) Blob {
         let input = current
         let ui = input.Ui
         let compact = input.Width < 1000
@@ -414,7 +408,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         let panel = WalletParts.Card(
             ui,
             Edges{Top: AppTheme.Space12, Bottom: AppTheme.Space12, Left: AppTheme.Space20, Right: AppTheme.Space20},
-            compact ? AppTheme.Space8: AppTheme.Space10
+            compact ? AppTheme.Space8 : AppTheme.Space10
         )
         panel.FlexGrow = 1
         panel.AlignSelf = AlignSelf.Stretch
@@ -494,7 +488,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             Collect: collectExport,
             ChooseFile: input.ChooseFile
         }
-        bar.Add(Cell.Mount[HistoryExportInput, HistoryExport]("history-export", ReadExportInput()))
+        bar.Add(Cell.Mount[HistoryExportInput, HistoryExport]("history-export", exportInput))
         panel.Add(bar)
         ribbonInput = HistoryRibbonInput{
             Data: prepared.Ribbon,
@@ -513,7 +507,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             OnSelect: selectRange,
             RequestTimes: requestTimes
         }
-        panel.Add(Cell.Mount[HistoryRibbonInput, HistoryRibbon]("history-ribbon", ReadRibbonInput(), createRibbon))
+        panel.Add(Cell.Mount[HistoryRibbonInput, HistoryRibbon]("history-ribbon", ribbonInput, createRibbon))
         if paginationIssue.Length > 0 {
             panel.Add(MessageParts.Problem(ui, paginationIssue))
         }
@@ -548,7 +542,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             RequestTimes: requestTimes,
             LoadMore: loadMore
         }
-        panel.Add(Cell.Mount[HistoryListInput, HistoryTransactions]("history-list", ReadListInput()))
+        panel.Add(Cell.Mount[HistoryListInput, HistoryTransactions]("history-list", listInput))
         return panel
     }
 
@@ -560,17 +554,17 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         let mined = prepared.Summary.Mined
         let gain = received + mined
         let loss = sent + fees
-        let net = (gain >= loss ? "+": "−") + Amount(ui.Privacy, gain >= loss ? gain - loss: loss - gain)
+        let net = (gain >= loss ? "+" : "−") + Amount(ui.Privacy, gain >= loss ? gain - loss : loss - gain)
         return Container{
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Baseline,
-            Gap: input.Width < 1000 ? AppTheme.Space14: AppTheme.Space22,
+            Gap: input.Width < 1000 ? AppTheme.Space14 : AppTheme.Space22,
             FlexShrink: 0,
             Padding: Edges{Top: AppTheme.Space2, Left: AppTheme.Space2, Right: AppTheme.Space2},
             Figure(
                 ui,
                 "in",
-                received > 0 ? "+" + Amount(ui.Privacy, received): "0",
+                received > 0 ? "+" + Amount(ui.Privacy, received) : "0",
                 AppTheme.Mint,
                 AppTheme.Type14,
                 compact: true
@@ -578,21 +572,28 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
             Figure(
                 ui,
                 "out",
-                sent > 0 ? "−" + Amount(ui.Privacy, sent): "0",
+                sent > 0 ? "−" + Amount(ui.Privacy, sent) : "0",
                 AppTheme.Pink,
                 AppTheme.Type14,
                 compact: true
             ),
-            Figure(ui, "fees", fees > 0 ? Amount(ui.Privacy, fees): "0", AppTheme.Body, AppTheme.Type14, compact: true),
+            Figure(
+                ui,
+                "fees",
+                fees > 0 ? Amount(ui.Privacy, fees) : "0",
+                AppTheme.Body,
+                AppTheme.Type14,
+                compact: true
+            ),
             Figure(
                 ui,
                 "mined",
-                mined > 0 ? "+" + Amount(ui.Privacy, mined): "0",
+                mined > 0 ? "+" + Amount(ui.Privacy, mined) : "0",
                 AppTheme.Lime,
                 AppTheme.Type14,
                 compact: true
             ),
-            Figure(ui, "net", net, AppTheme.Ink, input.Width < 1000 ? AppTheme.Type16: AppTheme.Type18, compact: true)
+            Figure(ui, "net", net, AppTheme.Ink, input.Width < 1000 ? AppTheme.Type16 : AppTheme.Type18, compact: true)
         }
     }
 
@@ -631,9 +632,8 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         let snapshot = current.Snapshot
         let generation = timesGeneration
         let id = identity
-        let token = request.Token
         let known = times
-        go FetchTimes(window, history, snapshot, known, missing, generation, id, token)
+        go FetchTimes(window, history, snapshot, known, missing, generation, id, request.Token)
     }
 
     private async func FetchTimes(
@@ -693,8 +693,7 @@ class HistoryPage : Cell[HistoryInput], IDisposable {
         let history = current.Session.History
         let generation = paginationGeneration
         let id = identity
-        let token = request.Token
-        go LoadMoreAsync(window, history, generation, id, token)
+        go LoadMoreAsync(window, history, generation, id, request.Token)
     }
 
     private async func LoadMoreAsync(
@@ -773,13 +772,8 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
     private let marks List[uint64] = List[uint64]()
     private var hoverCell HistoryRibbonHover?
     private var plotHeight float64
-    private let createHover Func[HistoryRibbonHover]
-
-    private func ReadHoverInput() HistoryRibbonHoverInput -> HistoryRibbonHoverInput{
-        Input: current,
-        Width: plotWidth,
-        Height: plotHeight
-    }
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createHover() -> HistoryRibbonHover
     private var plotWidth float64
     private let plot ElementHandle = ElementHandle()
 
@@ -804,7 +798,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
         }
         current = input
         days = float64(input.Span) / 288
-        let mark = days <= 1 ? 48UL: days <= 7 ? 288UL: 288UL * uint64(Math.Ceiling(days / 6))
+        let mark = days <= 1 ? 48UL : days <= 7 ? 288UL : 288UL * uint64(Math.Ceiling(days / 6))
         marks.Clear()
         var at = input.Tip - Math.Min(input.Tip, mark)
         while at > input.Low + mark * 3 / 10 {
@@ -817,7 +811,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
 
     public func Mark(height uint64) -> hoverCell?.Mark(height)
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryRibbonInput) Blob {
         let input = current
         let compact = input.Width < 1000
         let from = input.From
@@ -827,10 +821,10 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
         let data = input.Data
         let tip = input.Tip
         let width = plotWidth
-        let height = compact ? 60.0: input.Width >= 1700 ? 110.0: 84.0
+        let height = compact ? 60.0 : input.Width >= 1700 ? 110.0 : 84.0
         plotHeight = height
         let columns = data.Bins.Length
-        let scale Func[float64, float64] = value -> input.Privacy ? 1.0: Math.Sqrt(value / data.Top)
+        let scale Func[float64, float64] = value -> input.Privacy ? 1.0 : Math.Sqrt(value / data.Top)
         let up = PathBuilder(0, 0, Math.Max(1.0, width), height)
         let coin = PathBuilder(0, 0, Math.Max(1.0, width), height)
         let down = PathBuilder(0, 0, Math.Max(1.0, width), height)
@@ -897,7 +891,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
         area.Add(
             Cell.Mount[HistoryRibbonHoverInput, HistoryRibbonHover](
                 "history-ribbon-hover",
-                ReadHoverInput(),
+                HistoryRibbonHoverInput{Ribbon: current, Width: plotWidth, Height: plotHeight},
                 createHover
             )
         )
@@ -920,7 +914,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
                         AlignItems: AlignItems.Center,
                         Label(
                             ui,
-                            time.ToString(days <= 1 ? "HH:mm": "MM-dd", CultureInfo.InvariantCulture),
+                            time.ToString(days <= 1 ? "HH:mm" : "MM-dd", CultureInfo.InvariantCulture),
                             AppTheme.Type11,
                             AppTheme.Dim,
                             ""
@@ -990,7 +984,7 @@ class HistoryRibbon : Cell[HistoryRibbonInput] {
 }
 
 data struct HistoryRibbonHoverInput {
-    var Input HistoryRibbonInput
+    var Ribbon HistoryRibbonInput
     var Width float64
     var Height float64
 }
@@ -1004,16 +998,14 @@ class HistoryRibbonHover : Cell[HistoryRibbonHoverInput] {
     private var hover int32 = -1
     private var marked uint64
 
-    protected override func InputChanged(value HistoryRibbonHoverInput) {
-        let input = value.Input
-        let width = value.Width
-        let height = value.Height
-        if current.Equals(input) && plotWidth == width && plotHeight == height {
+    protected override func InputChanged(next HistoryRibbonHoverInput) {
+        let input = next.Ribbon
+        if current.Equals(input) && plotWidth == next.Width && plotHeight == next.Height {
             return
         }
         current = input
-        plotWidth = width
-        plotHeight = height
+        plotWidth = next.Width
+        plotHeight = next.Height
         Rebuild()
     }
 
@@ -1024,7 +1016,7 @@ class HistoryRibbonHover : Cell[HistoryRibbonHoverInput] {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryRibbonHoverInput) Blob {
         let input = current
         let low = input.Low
         let span = input.Span
@@ -1073,9 +1065,9 @@ class HistoryRibbonHover : Cell[HistoryRibbonHoverInput] {
                 if event.Key == Key.Escape && to > 0 {
                     current.OnSelect(0, 0)
                 } else if event.Key == Key.Left || event.Key == Key.Right {
-                    let start = to > 0 ? from: tip - block + 1
-                    let end = to > 0 ? to: tip
-                    let shift = event.Key == Key.Left ? -int64(block): int64(block)
+                    let start = to > 0 ? from : tip - block + 1
+                    let end = to > 0 ? to : tip
+                    let shift = event.Key == Key.Left ? -int64(block) : int64(block)
                     let next = uint64(Math.Clamp(int64(start) + shift, int64(low + 1), int64(tip)))
                     if event.Modifiers.Shift {
                         Select(Math.Min(next, end), end)
@@ -1129,21 +1121,27 @@ class HistoryRibbonHover : Cell[HistoryRibbonHoverInput] {
         let bin = input.Data.Bins[column]
         let tip = Container{
             Gap: AppTheme.Space4,
-            Label(ui, start == end ? Count(start): Count(start) + " – " + Count(end), AppTheme.Type12, AppTheme.Ink, "")
+            Label(
+                ui,
+                start == end ? Count(start) : Count(start) + " – " + Count(end),
+                AppTheme.Type12,
+                AppTheme.Ink,
+                ""
+            )
         }
         if bin.Time > 0 {
             tip.Add(Label(ui, Moment(bin.Time), AppTheme.Type12, AppTheme.Dim, ""))
         }
         for category in[]HistoryRowKind{HistoryRowKind.Received, HistoryRowKind.Mined, HistoryRowKind.Sent} {
-            let count = category == HistoryRowKind.Received ? bin.ReceivedCount:
-            category == HistoryRowKind.Mined ? bin.MinedCount: bin.SentCount
+            let count = category == HistoryRowKind.Received ? bin.ReceivedCount :
+            category == HistoryRowKind.Mined ? bin.MinedCount : bin.SentCount
             if count > 0 {
-                let total = category == HistoryRowKind.Received ? bin.Received:
-                category == HistoryRowKind.Mined ? bin.Mined: bin.Sent
+                let total = category == HistoryRowKind.Received ? bin.Received :
+                category == HistoryRowKind.Mined ? bin.Mined : bin.Sent
                 tip.Add(
                     Label(
                         ui,
-                        (category == HistoryRowKind.Sent ? "−": "+") + Amount(ui.Privacy, total),
+                        (category == HistoryRowKind.Sent ? "−" : "+") + Amount(ui.Privacy, total),
                         AppTheme.Type12,
                         Tint(category),
                         ""
@@ -1152,7 +1150,7 @@ class HistoryRibbonHover : Cell[HistoryRibbonHoverInput] {
             }
         }
         let x = (column + 0.5) * step
-        return ChartParts.Tooltip(x + 12, 4, tip, right: x > width / 2 ? width - x + 12: nil, zIndex: 3)
+        return ChartParts.Tooltip(x + 12, 4, tip, right: x > width / 2 ? width - x + 12 : nil, zIndex: 3)
     }
 
     private func Tint(category HistoryRowKind) Color -> switch category {
@@ -1185,7 +1183,6 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
     private var view ObserverView?
     private var viewLoading bool
     private var selectedRevision int32 = -1
-    private var selectionTimer WindowTimer?
     private var viewIssue string = ""
     private let closeObserver Action
     private let proveObserved Action
@@ -1251,7 +1248,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
             proofFor = ""
             proofKey = ""
         }
-        let selected = input.SelectionRevision != selectedRevision ? input.SelectionKey: ""
+        let selected = input.SelectionRevision != selectedRevision ? input.SelectionKey : ""
         if selected.Length > 0 {
             Expand(selected)
             selectedRevision = input.SelectionRevision
@@ -1269,14 +1266,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
         input.RequestTimes(input.Rows.Skip(Math.Max(0, firstVisible - 10)).Take(50).Select(row -> row.Height))
         RefreshRows()
         if selected.Length > 0 {
-            selectionTimer?.Dispose()
-            selectionTimer = input.Window?.After(
-                1,
-                () -> {
-                    selectionTimer = nil
-                    list.ScrollToItem(selected)
-                }
-            )
+            list.ScrollToItem(selected)
         }
     }
 
@@ -1297,7 +1287,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
             .Select(
             row -> row with{
                 Open = row.Key == expanded,
-                Revision = row.Key == expanded ? revision: 0,
+                Revision = row.Key == expanded ? revision : 0,
                 Privacy = current.Privacy,
                 Language = current.Language,
                 Width = current.Width
@@ -1311,7 +1301,6 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
     }
 
     public func Dispose() {
-        selectionTimer?.Dispose()
         proofGeneration++
         observeGeneration++
         lifetime.Cancel()
@@ -1324,7 +1313,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
         HistoryPage
         .ReadSource(current.Session).Equals(current.Source)
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryListInput) Blob {
         let input = current
         let ui = input.Ui
         let panel = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0}
@@ -1359,7 +1348,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                     .FirstOrDefault(value -> value.Length > 0) ??
                     "",
                 Recipient: WalletText.Short(row.Recipients.FirstOrDefault().Address ?? "") +
-                    (row.Recipients.Length > 1 ? " +" + (row.Recipients.Length - 1).ToString(): ""),
+                    (row.Recipients.Length > 1 ? " +" + (row.Recipients.Length - 1).ToString() : ""),
                 Privacy: input.Privacy,
                 Language: input.Language,
                 Width: input.Width,
@@ -1377,36 +1366,36 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
         let compact = row.Width < 1000
         let pending = row.Height == 0
         let mature = !pending && row.Maturity.Ready
-        let lit = pending ? 0: int32(row.Maturity.Count * 10 / row.Maturity.Required)
+        let lit = pending ? 0 : int32(row.Maturity.Count * 10 / row.Maturity.Required)
         let segments = Container{
             FlexDirection: FlexDirection.Row,
             FlexShrink: 1,
-            Gap: compact ? AppTheme.Space2: AppTheme.Space4
+            Gap: compact ? AppTheme.Space2 : AppTheme.Space4
         }
         for index in 0 ... 10 {
             segments.Add(
                 Container{
-                    Width: compact ? 9.0: 12.0,
-                    Height: compact ? 5.0: 6.0,
+                    Width: compact ? 9.0 : 12.0,
+                    Height: compact ? 5.0 : 6.0,
                     FlexShrink: 1,
                     BorderRadius: AppTheme.Radius1,
-                    BackgroundColor: index >= lit ? AppTheme.Rule: mature ? AppTheme.LimeMuted: AppTheme.Orange
+                    BackgroundColor: index >= lit ? AppTheme.Rule : mature ? AppTheme.LimeMuted : AppTheme.Orange
                 }
             )
         }
         let depth = if pending {
-            ui.Strings.Get(row.State == "not_found" ? "not found": "pending")
+            ui.Strings.Get(row.State == "not_found" ? "not found" : "pending")
         } else if mature {
-            row.Maturity.Depth >= 10000 ? (row.Maturity.Depth / 1000).ToString() + "k": Count(row.Maturity.Depth)
+            row.Maturity.Depth >= 10000 ? (row.Maturity.Depth / 1000).ToString() + "k" : Count(row.Maturity.Depth)
         } else {
             row.Maturity.Count.ToString() + "/" + row.Maturity.Required.ToString()
         }
         let recipient = row.Recipients.FirstOrDefault()
         let memo = MessageParts.Content(ui, row.Memo, row.InvitationName)
-        let note = memo.Length > 0 ? memo:
-        row.Recipients.Length > 1 ? Short(recipient.Address ?? ""): Short(row.TxId)
+        let note = memo.Length > 0 ? memo :
+        row.Recipients.Length > 1 ? Short(recipient.Address ?? "") : Short(row.TxId)
         let preview = Hidden(ui.Privacy, SafeText(note, 512))
-        let sign = row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "+": "−"
+        let sign = row.Kind == HistoryRowKind.Received || row.Kind == HistoryRowKind.Mined ? "+" : "−"
         let notes = Container{
             Padding: Edges{Left: AppTheme.Space6},
             FlexDirection: FlexDirection.Row,
@@ -1416,9 +1405,9 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
             Grow(
                 Label(
                     ui,
-                    (row.Self ? ui.Strings.Get("To self") + " · ": "") + preview,
+                    (row.Self ? ui.Strings.Get("To self") + " · " : "") + preview,
                     AppTheme.Type12,
-                    memo.Length > 0 ? AppTheme.Ink: AppTheme.Dim,
+                    memo.Length > 0 ? AppTheme.Ink : AppTheme.Dim,
                     ""
                 )
             )
@@ -1429,17 +1418,17 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
         let line = Goo
             .Button{
             BasedOn: AppTheme.ListRowStyle,
-            Height: row.Width >= 1700 ? 42.0: 38.0,
+            Height: row.Width >= 1700 ? 42.0 : 38.0,
             Gap: AppTheme.Space12,
             Padding: Edges{Left: AppTheme.Space10, Right: AppTheme.Space10},
-            BorderColor: row.Open ? Color.Transparent: AppTheme.Rule,
-            BackgroundColor: row.Open ? AppTheme.Raised: Color.Transparent,
+            BorderColor: row.Open ? Color.Transparent : AppTheme.Rule,
+            BackgroundColor: row.Open ? AppTheme.Raised : Color.Transparent,
             HoverStyle: Style{BackgroundColor: AppTheme.Raised},
             FocusStyle: Theme.Read().FocusStyle,
             Accessibility: Accessibility{
                 Role: AccessibilityRole.Button,
                 Name: ui.Strings.Get(
-                    row.Self ? "To self": switch row.Kind {
+                    row.Self ? "To self" : switch row.Kind {
                         case HistoryRowKind.Received: "received"
                         case HistoryRowKind.Mined: "mined"
                         case HistoryRowKind.Sent: "sent"
@@ -1456,7 +1445,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                 Expanded: row.Open
             },
             OnClick: () -> {
-                Expand(row.Open ? "": row.Key)
+                Expand(row.Open ? "" : row.Key)
                 RefreshRows()
             },
             OnPointerEnter: (event PointerEvent) -> {
@@ -1466,7 +1455,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                 current.OnMark(0)
             },
             MaterialIcons.Create(
-                row.Self ? "sync": switch row.Kind {
+                row.Self ? "sync" : switch row.Kind {
                     case HistoryRowKind.Received: "south_west"
                     case HistoryRowKind.Mined: "diamond"
                     case HistoryRowKind.Pending: "schedule"
@@ -1476,26 +1465,29 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                 Tint(row.Kind)
             ),
             Container{
-                Width: compact ? 112.0: 128.0,
+                Width: compact ? 112.0 : 128.0,
                 FlexShrink: 0,
                 AlignItems: AlignItems.FlexEnd,
                 Label(
                     ui,
                     sign + Amount(ui.Privacy, row.Amount),
                     AppTheme.Type14,
-                    row.Kind == HistoryRowKind.Pending ? AppTheme.Pink: Tint(row.Kind),
+                    row.Kind == HistoryRowKind.Pending ? AppTheme.Pink : Tint(row.Kind),
                     ""
                 )
             },
             Grow(notes),
             Container{
-                Width: compact ? 170.0: 212.0,
+                Width: compact ? 170.0 : 212.0,
                 FlexShrink: 0,
                 FlexDirection: FlexDirection.Row,
                 AlignItems: AlignItems.Center,
                 Gap: AppTheme.Space8,
                 segments,
-                Container{FlexShrink: 0, Label(ui, depth, AppTheme.Type12, mature ? AppTheme.Body: AppTheme.Orange, "")}
+                Container{
+                    FlexShrink: 0,
+                    Label(ui, depth, AppTheme.Type12, mature ? AppTheme.Body : AppTheme.Orange, "")
+                }
             }
         }
         WidgetKeyBindings.BindActivation(line)
@@ -1505,23 +1497,23 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                     Width: 64,
                     FlexShrink: 0,
                     AlignItems: AlignItems.FlexEnd,
-                    Label(ui, pending ? "": Count(row.Height), AppTheme.Type12, AppTheme.Body, "")
+                    Label(ui, pending ? "" : Count(row.Height), AppTheme.Type12, AppTheme.Body, "")
                 }
             )
         }
         line.Children.Add(
             Container{
-                Width: compact ? 84.0: 88.0,
+                Width: compact ? 84.0 : 88.0,
                 FlexShrink: 0,
                 AlignItems: AlignItems.FlexEnd,
-                Label(ui, row.Time > 0 ? Moment(row.Time): "", AppTheme.Type12, AppTheme.Body, "")
+                Label(ui, row.Time > 0 ? Moment(row.Time) : "", AppTheme.Type12, AppTheme.Body, "")
             }
         )
         line.Children.Add(
             MaterialIcons.Create(
-                row.Open ? "expand_more": "chevron_right",
+                row.Open ? "expand_more" : "chevron_right",
                 AppTheme.Icon14,
-                row.Open ? AppTheme.Ink: AppTheme.Dim
+                row.Open ? AppTheme.Ink : AppTheme.Dim
             )
         )
         let root = Container{Key: row.Key, FlexShrink: 0, line}
@@ -1541,7 +1533,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
             Padding: Edges{
                 Top: AppTheme.Space4,
                 Bottom: AppTheme.Space14,
-                Left: row.Width < 1000 ? AppTheme.Space16: AppTheme.ControlRegular,
+                Left: row.Width < 1000 ? AppTheme.Space16 : AppTheme.ControlRegular,
                 Right: AppTheme.Space16
             },
             BackgroundColor: AppTheme.Raised,
@@ -1556,7 +1548,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                 Segments(
                     "tabs",
                     "Transaction",
-                    recipients.Length > 0 ? []string{"details", "proof"}: []string{"details"},
+                    recipients.Length > 0 ? []string{"details", "proof"} : []string{"details"},
                     tab,
                     id -> {
                         tab = id
@@ -1618,8 +1610,8 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                 panel.Add(
                     Block(
                         "proof key",
-                        proofFor == row.TxId ? proofKey: "",
-                        Grouped(proofFor == row.TxId ? proofKey: ""),
+                        proofFor == row.TxId ? proofKey : "",
+                        Grouped(proofFor == row.TxId ? proofKey : ""),
                         AppTheme.Ink
                     )
                 )
@@ -1635,12 +1627,12 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                     if ready {
                         Status(
                             ui,
-                            ui.Strings.Get(proofValid ? "valid": "invalid"),
-                            proofValid ? AppTheme.Lime: AppTheme.Pink,
-                            proofValid ? "check": "close"
+                            ui.Strings.Get(proofValid ? "valid" : "invalid"),
+                            proofValid ? AppTheme.Lime : AppTheme.Pink,
+                            proofValid ? "check" : "close"
                         )
                     } else {
-                        proofIssue.Length == 0 ? Loading(ui, "proof-loading"): Container{}
+                        proofIssue.Length == 0 ? Loading(ui, "proof-loading") : Container{}
                     },
                     Figure(
                         ui,
@@ -1668,8 +1660,8 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
             Figure(
                 ui,
                 "height",
-                row.Height > 0 ? Count(row.Height): ui.Strings.Get("pending"),
-                row.Height > 0 ? AppTheme.Ink: AppTheme.Orange,
+                row.Height > 0 ? Count(row.Height) : ui.Strings.Get("pending"),
+                row.Height > 0 ? AppTheme.Ink : AppTheme.Orange,
                 AppTheme.Type13,
                 compact: true
             )
@@ -1689,7 +1681,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                             ui.Privacy,
                             address.Length > 14 ? address.Substring(0, 8) + "…" + address.Substring(
                                 address.Length - 6
-                            ): address
+                            ) : address
                         ),
                         AppTheme.Ink,
                         AppTheme.Type13,
@@ -1708,7 +1700,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
                 Figure(
                     ui,
                     "output",
-                    row.Indices.Length > 0 ? String.Join(", ", row.Indices.Select(index -> "#" + index.ToString())):
+                    row.Indices.Length > 0 ? String.Join(", ", row.Indices.Select(index -> "#" + index.ToString())) :
                     "#" + row.Index.ToString(),
                     AppTheme.Ink,
                     AppTheme.Type13,
@@ -1735,7 +1727,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
             recipients.Height = Math.Min(
                 228.0,
                 row.Recipients.Sum(
-                    (entry HistoryRecipient) -> entry.Memo.Length > 0 || entry.InvitationName.Length > 0 ? 118.0: 76.0
+                    (entry HistoryRecipient) -> entry.Memo.Length > 0 || entry.InvitationName.Length > 0 ? 118.0 : 76.0
                 )
             )
             recipients.MinHeight = 0
@@ -1852,7 +1844,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
 
     private func Short(value string) string -> value.Length > 16 ? value.Substring(0, 8) + "…" + value.Substring(
         value.Length - 8
-    ): value
+    ) : value
 
     private func ProofRecipients(row HistoryRow)[]HistoryRecipient -> row
         .Recipients
@@ -1890,8 +1882,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
         proofValid = false
         let transaction = row.TxId
         let address = recipient.Address
-        let token = request.Token
-        go LoadProof(window, proofs, transaction, address, amount, generation, id, token)
+        go LoadProof(window, proofs, transaction, address, amount, generation, id, request.Token)
     }
 
     private async func LoadProof(
@@ -1974,8 +1965,7 @@ class HistoryTransactions : Cell[HistoryListInput], IDisposable {
             let selected = observeGeneration
             let checks = current.Session.Checks
             let id = current.Identity
-            let token = request.Token
-            go LoadObserver(window, checks, transaction, id, selected, token)
+            go LoadObserver(window, checks, transaction, id, selected, request.Token)
         }
         Rebuild()
     }
@@ -2051,7 +2041,7 @@ class HistoryExport : Cell[HistoryExportInput], IDisposable {
         generation++
     }
 
-    override func Build() Blob {
+    protected override func Build(_ HistoryExportInput) Blob {
         let input = current
         let period = input.Period
         let from = input.From
@@ -2059,7 +2049,7 @@ class HistoryExport : Cell[HistoryExportInput], IDisposable {
         let ui = input.Ui
         let button = ControlParts.Button(
             ui,
-            writing ? "Working": "export",
+            writing ? "Working" : "export",
             () -> {
                 exporting = !exporting
                 if exporting {
@@ -2071,13 +2061,13 @@ class HistoryExport : Cell[HistoryExportInput], IDisposable {
             busy: writing,
             appearance: AppTheme.CompactButton with{
                 Leading = MaterialIcons.Create("download", AppTheme.Icon16, AppTheme.Ink),
-                BorderColor = exporting ? AppTheme.StrongEdge: AppTheme.Edge,
-                BackgroundColor = exporting ? AppTheme.FaintRule: AppTheme.Raised
+                BorderColor = exporting ? AppTheme.StrongEdge : AppTheme.Edge,
+                BackgroundColor = exporting ? AppTheme.FaintRule : AppTheme.Raised
             },
             hasPopup: true,
             expanded: exporting
         )
-        let shownRange = to > 0 ? Count(from) + " – " + Count(to): ui.Strings.Get(period)
+        let shownRange = to > 0 ? Count(from) + " – " + Count(to) : ui.Strings.Get(period)
         let content = Container{
             Gap: AppTheme.Space12,
             Container{
@@ -2110,7 +2100,7 @@ class HistoryExport : Cell[HistoryExportInput], IDisposable {
             },
             (
                 AppTheme.Checkbox with{
-                    Value = memos ? AccessibilityChecked.True: AccessibilityChecked.False,
+                    Value = memos ? AccessibilityChecked.True : AccessibilityChecked.False,
                     Label = ui.Strings.Get("memos"),
                     LabelFontSize = AppTheme.Type12,
                     OnChange = state -> {
@@ -2136,7 +2126,7 @@ class HistoryExport : Cell[HistoryExportInput], IDisposable {
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space6,
-            writing ? Loading(ui, "history-export-loading"): Container{Display: Display.None},
+            writing ? Loading(ui, "history-export-loading") : Container{Display: Display.None},
             button,
             Cell.Mount[PopoverInput, Popover](
                 "export",

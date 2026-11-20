@@ -91,14 +91,6 @@ data struct ToolsLockInput {
 }
 
 class ToolsPage : Cell[ToolsInput] {
-    private func ReadPrivacyInput() ToolsInput -> current
-
-    private func ReadHealthInput() ToolsHealthInput -> ToolsHealthInput{
-        Region: current.Region,
-        State: current.State,
-        Outputs: current.Outputs,
-        OnReport: reportChanged
-    }
     private let reportChanged Action
     private var current ToolsInput
 
@@ -113,15 +105,15 @@ class ToolsPage : Cell[ToolsInput] {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ ToolsInput) Blob {
         let input = current
         if input.Section == AppPage.Privacy {
-            return Cell.Mount[ToolsInput, ToolsPrivacyRegion]("privacy-" + input.Region.Identity, ReadPrivacyInput())
+            return Cell.Mount[ToolsInput, ToolsPrivacyRegion]("privacy-" + input.Region.Identity, input)
         }
         let region = input.Region
         let ui = region.Ui
-        let tab = input.ViewOnly && input.State.Tab == "sign" ? "verify": input.State.Tab
-        let ids = input.ViewOnly ? []string{"verify", "proof", "health"}: []string{"sign", "verify", "proof", "health"}
+        let tab = input.ViewOnly && input.State.Tab == "sign" ? "verify" : input.State.Tab
+        let ids = input.ViewOnly ? []string{"verify", "proof", "health"} : []string{"sign", "verify", "proof", "health"}
         let items = [ids.Length]NavigationItem
         for index in 0 ... ids.Length {
             items[index] = NavigationItem{Id: ids[index], Label: ui.Strings.Get(ids[index])}
@@ -148,7 +140,15 @@ class ToolsPage : Cell[ToolsInput] {
                 case "sign": Cell.Mount[ToolsRegionInput, ToolsSignRegion]("sign-" + region.Identity, region)
                 case "verify": Cell.Mount[ToolsRegionInput, ToolsVerifyRegion]("verify-" + region.Identity, region)
                 case "proof": Cell.Mount[ToolsRegionInput, ToolsProofRegion]("proof-" + region.Identity, region)
-                default: Cell.Mount[ToolsHealthInput, ToolsHealthRegion]("health-" + region.Identity, ReadHealthInput())
+                default: Cell.Mount[ToolsHealthInput, ToolsHealthRegion](
+                    "health-" + region.Identity,
+                    ToolsHealthInput{
+                        Region: region,
+                        State: input.State,
+                        Outputs: input.Outputs,
+                        OnReport: reportChanged
+                    }
+                )
             }
         )
         return card
@@ -217,7 +217,7 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
         } catch (failure Exception) { }
     }
 
-    override func Build() Blob -> if checking {
+    protected override func Build(_ ToolsInput) Blob -> if checking {
         Cell.Mount[ToolsPhraseInput, ToolsPhraseRegion](
             "phrase-check",
             ToolsPhraseInput{
@@ -242,7 +242,7 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
         let context = input.Region
         let ui = context.Ui
         let compact = context.Compact
-        let size = compact ? AppTheme.Type16: AppTheme.Type20
+        let size = compact ? AppTheme.Type16 : AppTheme.Type20
         let report = input.State.Report
         let stale = report?.Stale.Length ?? 0
         let shared = UnixFileMode.GroupRead |
@@ -269,9 +269,9 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
         } else {
             Label(
                 ui,
-                ui.Strings.Get(unchecked ? "not checked": "checked"),
+                ui.Strings.Get(unchecked ? "not checked" : "checked"),
                 size,
-                unchecked ? AppTheme.Orange: AppTheme.Ink,
+                unchecked ? AppTheme.Orange : AppTheme.Ink,
                 ""
             )
         }
@@ -299,9 +299,9 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
             ).Build(),
             Label(
                 ui,
-                ui.Strings.Get(context.Privacy ? "on": "off"),
+                ui.Strings.Get(context.Privacy ? "on" : "off"),
                 size,
-                context.Privacy ? AppTheme.Ink: AppTheme.Orange,
+                context.Privacy ? AppTheme.Ink : AppTheme.Orange,
                 ""
             )
         }
@@ -364,9 +364,9 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
         } else {
             Label(
                 ui,
-                ui.Strings.Get(exposed ? "others can read": "owner only"),
+                ui.Strings.Get(exposed ? "others can read" : "owner only"),
                 size,
-                exposed ? AppTheme.Orange: AppTheme.Ink,
+                exposed ? AppTheme.Orange : AppTheme.Ink,
                 ""
             )
         }
@@ -400,7 +400,7 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
             Tile(
                 input,
                 "amounts",
-                context.Privacy ? "visibility_off": "visibility",
+                context.Privacy ? "visibility_off" : "visibility",
                 "hide amounts",
                 amountsValue,
                 Container{},
@@ -424,8 +424,8 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
                     context,
                     "peers",
                     "send relay",
-                    Count(peers) + " " + ui.Strings.Get(peers == 1 ? "peer": "peers"),
-                    peers == 0 ? AppTheme.Orange: AppTheme.Ink,
+                    Count(peers) + " " + ui.Strings.Get(peers == 1 ? "peer" : "peers"),
+                    peers == 0 ? AppTheme.Orange : AppTheme.Ink,
                     size
                 ),
                 Container{},
@@ -445,7 +445,7 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
                 "memo",
                 "notes",
                 "memo errors",
-                Number(context, "memos", "memo errors", Count(memos), memos > 0 ? AppTheme.Orange: AppTheme.Ink, size),
+                Number(context, "memos", "memo errors", Count(memos), memos > 0 ? AppTheme.Orange : AppTheme.Ink, size),
                 if memos > 0 {
                     Small(context, "View", false, () -> input.OnNavigate(AppPage.Transactions))
                 } else {
@@ -470,7 +470,7 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
                     Width: 12,
                     Height: 6,
                     BorderRadius: AppTheme.Radius2,
-                    BackgroundColor: warning ? AppTheme.Orange: AppTheme.Lime
+                    BackgroundColor: warning ? AppTheme.Orange : AppTheme.Lime
                 }
             )
         }
@@ -495,7 +495,7 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
                 }
             )
         )
-        let gap = compact ? AppTheme.Space8: AppTheme.Space12
+        let gap = compact ? AppTheme.Space8 : AppTheme.Space12
         if context.Busy {
             card.Add(Loading(ui, "privacy-loading"))
         }
@@ -542,8 +542,8 @@ class ToolsPrivacyRegion : Cell[ToolsInput], IDisposable {
             FlexGrow: 1,
             FlexBasis: 0,
             MinWidth: 0,
-            Padding: compact ? AppTheme.Space12: AppTheme.Space14,
-            Gap: compact ? AppTheme.Space8: AppTheme.Space10,
+            Padding: compact ? AppTheme.Space12 : AppTheme.Space14,
+            Gap: compact ? AppTheme.Space8 : AppTheme.Space10,
             BorderColor: AppTheme.Rule,
             BackgroundColor: AppTheme.Raised,
             HoverStyle: Style{BorderColor: AppTheme.StrongRule, BackgroundColor: AppTheme.FaintRule},
@@ -622,12 +622,12 @@ class ToolsLockRegion : Cell[ToolsLockInput] {
                 Expanded: editing
             },
             OnClick: () -> editing = !editing,
-            Arc(LockShare(input.AutoLock), context.Compact ? 20.0: 26.0),
+            Arc(LockShare(input.AutoLock), context.Compact ? 20.0 : 26.0),
             Label(
                 ui,
                 LockText(input),
-                context.Compact ? AppTheme.Type16: AppTheme.Type20,
-                input.AutoLock == 0 ? AppTheme.Orange: AppTheme.Ink,
+                context.Compact ? AppTheme.Type16 : AppTheme.Type20,
+                input.AutoLock == 0 ? AppTheme.Orange : AppTheme.Ink,
                 ""
             )
         }
@@ -713,7 +713,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
 
     init() {
         suggestionRow = suggestion -> {
-            let style = suggestion.First ? AppTheme.PrimaryButton: AppTheme.Button
+            let style = suggestion.First ? AppTheme.PrimaryButton : AppTheme.Button
             return (
                 style with{
                     Content = suggestion.Word,
@@ -737,8 +737,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         password = ""
         issue = ""
         Rebuild()
-        let token = lifetime.Token
-        go ReadPhrase(session, window, secret, identity, run, token)
+        go ReadPhrase(session, window, secret, identity, run, lifetime.Token)
     }
 
     private async func ReadPhrase(
@@ -819,7 +818,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             return
         }
         typed = value
-        let next = List[PhraseSuggestion](value.Length == 0 ? 0: 5)
+        let next = List[PhraseSuggestion](value.Length == 0 ? 0 : 5)
         if value.Length > 0 {
             for word in Bip39Wordlist.Words {
                 if word.StartsWith(value, StringComparison.Ordinal) {
@@ -904,7 +903,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
         let stepper = Stepper{
             AccessibilityName: ui.Strings.Get("recovery phrase"),
             Labels: []string{ui.Strings.Get("show"), ui.Strings.Get("check"), ui.Strings.Get("done")},
-            CurrentIndex: step == "show" ? 0: step == "check" ? 1: 2,
+            CurrentIndex: step == "show" ? 0 : step == "check" ? 1 : 2,
             Width: 300
         }.Build()
         card.Add(
@@ -921,7 +920,7 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
                     Width: 18,
                     Height: 4,
                     BorderRadius: AppTheme.Radius2,
-                    BackgroundColor: index < found ? AppTheme.Lime: AppTheme.Edge
+                    BackgroundColor: index < found ? AppTheme.Lime : AppTheme.Edge
                 }
             )
         }
@@ -957,8 +956,8 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             card.Add(footer)
             return card
         }
-        let gap = compact ? AppTheme.Space8: AppTheme.Space10
-        let height = compact ? 40.0: 46.0
+        let gap = compact ? AppTheme.Space8 : AppTheme.Space10
+        let height = compact ? 40.0 : 46.0
         let grid = SegmentGrid(words / 4, 4, index -> Slot(input, index, phraseForm), gap, gap, height, height)
         grid.FlexGrow = 0
         grid.FlexShrink = 0
@@ -1037,13 +1036,13 @@ class ToolsPhraseRegion : Cell[ToolsPhraseInput], IDisposable {
             FlexGrow: 1,
             FlexBasis: 0,
             MinWidth: 0,
-            Height: compact ? 40.0: 46.0,
+            Height: compact ? 40.0 : 46.0,
             FlexDirection: FlexDirection.Row,
             AlignItems: AlignItems.Center,
             Gap: AppTheme.Space10,
             Padding: Edges{
-                Left: compact ? AppTheme.Space10: AppTheme.Space12,
-                Right: compact ? AppTheme.Space10: AppTheme.Space12
+                Left: compact ? AppTheme.Space10 : AppTheme.Space12,
+                Right: compact ? AppTheme.Space10 : AppTheme.Space12
             },
             BorderWidth: AppTheme.Border1,
             BorderRadius: AppTheme.Radius8,
@@ -1134,7 +1133,7 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         root.Add(
             ActionRow(
                 []Blob{
-                    busy ? Loading(input.Ui, "sign-loading"): Container{Display: Display.None},
+                    busy ? Loading(input.Ui, "sign-loading") : Container{Display: Display.None},
                     ControlParts.Button(input.Ui, "Sign", form.Submit, !form.CanSubmit, true, busy: busy),
                     Info(
                         input,
@@ -1161,8 +1160,7 @@ class ToolsSignRegion : Cell[ToolsRegionInput], IDisposable {
         let message = state.SignMessage
         let identity = input.Identity
         let run = generation
-        let token = lifetime.Token
-        go SignMessage(state, session, window, message, identity, run, token)
+        go SignMessage(state, session, window, message, identity, run, lifetime.Token)
     }
 
     private async func SignMessage(
@@ -1236,7 +1234,7 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
             form.Field("Signature", input.State.VerifySignature, value -> input.State.VerifySignature = value.Trim()),
             ActionRow(
                 []Blob{
-                    busy ? Loading(input.Ui, "verify-loading", "checking"): Container{Display: Display.None},
+                    busy ? Loading(input.Ui, "verify-loading", "checking") : Container{Display: Display.None},
                     Verdict(input, verdict),
                     ControlParts.Button(input.Ui, "Verify", form.Submit, !form.CanSubmit, true, busy: busy),
                     Info(
@@ -1269,8 +1267,7 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
         let signature = input.State.VerifySignature
         let identity = input.Identity
         let run = generation
-        let token = lifetime.Token
-        go VerifyMessage(session, window, signer, message, signature, identity, run, token)
+        go VerifyMessage(session, window, signer, message, signature, identity, run, lifetime.Token)
     }
 
     private async func VerifyMessage(
@@ -1297,7 +1294,7 @@ class ToolsVerifyRegion : Cell[ToolsRegionInput], IDisposable {
             () -> {
                 if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
-                    verdict = error.Length == 0 ? value: nil
+                    verdict = error.Length == 0 ? value : nil
                     issue = error
                     Rebuild()
                 }
@@ -1366,7 +1363,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
             ),
             ActionRow(
                 []Blob{
-                    busy ? Loading(input.Ui, "proof-verify-loading", "checking"): Container{Display: Display.None},
+                    busy ? Loading(input.Ui, "proof-verify-loading", "checking") : Container{Display: Display.None},
                     Verdict(input, verdict),
                     ControlParts.Button(input.Ui, "Verify", form.Submit, !form.CanSubmit, true, busy: busy),
                     Info(
@@ -1402,8 +1399,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
         let amount = input.State.ProofAmount
         let identity = input.Identity
         let run = generation
-        let token = lifetime.Token
-        go VerifyProof(session, window, transaction, proofKey, address, amount, identity, run, token)
+        go VerifyProof(session, window, transaction, proofKey, address, amount, identity, run, lifetime.Token)
     }
 
     private async func VerifyProof(
@@ -1431,7 +1427,7 @@ class ToolsProofRegion : Cell[ToolsRegionInput], IDisposable {
             () -> {
                 if run == generation && identity == ReadWalletIdentity(session) {
                     busy = false
-                    verdict = error.Length == 0 ? value: nil
+                    verdict = error.Length == 0 ? value : nil
                     issue = error
                     Rebuild()
                 }
@@ -1504,7 +1500,7 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
         lifetime.Dispose()
     }
 
-    override func Build() Blob {
+    protected override func Build(_ ToolsHealthInput) Blob {
         let view = current
         let input = view.Region
         let card = Container{Gap: AppTheme.Space16, FlexGrow: 1, MinHeight: 0}
@@ -1515,7 +1511,7 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
         let total = report?.Total ?? view.Outputs
         let stats = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: compact ? AppTheme.Space8: AppTheme.Space12,
+            Gap: compact ? AppTheme.Space8 : AppTheme.Space12,
             FlexShrink: 0
         }
         stats.Add(Stat(input, "outputs", Count(total), AppTheme.Ink, false))
@@ -1533,13 +1529,19 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
             )
         )
         stats.Add(
-            Stat(input, "stale", report == nil ? "—": stale.ToString(), stale > 0 ? AppTheme.Orange: AppTheme.Ink, true)
+            Stat(
+                input,
+                "stale",
+                report == nil ? "—" : stale.ToString(),
+                stale > 0 ? AppTheme.Orange : AppTheme.Ink,
+                true
+            )
         )
-        stats.Add(Stat(input, "duplicates", report == nil ? "—": Count(report.Duplicates), AppTheme.Ink, true))
+        stats.Add(Stat(input, "duplicates", report == nil ? "—" : Count(report.Duplicates), AppTheme.Ink, true))
         card.Add(stats)
         let values = Container{
             FlexDirection: FlexDirection.Row,
-            Gap: compact ? AppTheme.Space8: AppTheme.Space12,
+            Gap: compact ? AppTheme.Space8 : AppTheme.Space12,
             Padding: Edges{Left: AppTheme.Space14, Right: AppTheme.Space14},
             FlexShrink: 0
         }
@@ -1547,15 +1549,15 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
             Reading(
                 input,
                 "stale amount",
-                report == nil ? "—": Amount(ui.Privacy, report.StaleAmount),
-                stale > 0 ? AppTheme.Orange: AppTheme.Ink
+                report == nil ? "—" : Amount(ui.Privacy, report.StaleAmount),
+                stale > 0 ? AppTheme.Orange : AppTheme.Ink
             )
         )
         values.Add(
-            Reading(input, "unspendable", report == nil ? "—": Amount(ui.Privacy, report.Unspendable), AppTheme.Ink)
+            Reading(input, "unspendable", report == nil ? "—" : Amount(ui.Privacy, report.Unspendable), AppTheme.Ink)
         )
-        values.Add(Reading(input, "synced", report == nil ? "—": Count(report.Synced), AppTheme.Ink))
-        values.Add(Reading(input, "checked", report == nil ? "—": report.Checked.ToString("HH:mm"), AppTheme.Ink))
+        values.Add(Reading(input, "synced", report == nil ? "—" : Count(report.Synced), AppTheme.Ink))
+        values.Add(Reading(input, "checked", report == nil ? "—" : report.Checked.ToString("HH:mm"), AppTheme.Ink))
         card.Add(values)
         if report != nil && stale > 0 {
             card.Add(
@@ -1574,7 +1576,7 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
                 )
             )
         } else {
-            let empty = ListParts.Empty(ui, report == nil ? "not checked": "all outputs on the main chain")
+            let empty = ListParts.Empty(ui, report == nil ? "not checked" : "all outputs on the main chain")
             empty.FlexGrow = 0
             card.Add(empty)
         }
@@ -1584,7 +1586,7 @@ class ToolsHealthRegion : Cell[ToolsHealthInput], IDisposable {
         card.Add(
             ActionRow(
                 []Blob{
-                    auditing ? Loading(ui, "health-loading", "checking"): Container{Display: Display.None},
+                    auditing ? Loading(ui, "health-loading", "checking") : Container{Display: Display.None},
                     Button(ui, "Check", () -> Audit(view), input.Busy || auditing),
                     Info(
                         input,
@@ -1713,7 +1715,7 @@ class ToolsParts {
         )
 
         func Arc(fraction float64, size float64) Blob ->
-        Ring(fraction, fraction > 0 ? AppTheme.Lime: Color.Transparent, AppTheme.Rule, size, AppTheme.Border3)
+        Ring(fraction, fraction > 0 ? AppTheme.Lime : Color.Transparent, AppTheme.Rule, size, AppTheme.Border3)
 
         func Number(input ToolsRegionInput, key string, label string, value string, color Color, size float64) Blob ->
         Value(input.Ui, key, input.Ui.Strings.Get(label) + " " + value, value, size, color, color)
@@ -1728,9 +1730,9 @@ class ToolsParts {
 
         func Day(input ToolsRegionInput, date DateTime, year bool) string -> date.ToString(
             if input.Language == "zh-Hans" {
-                year ? "yyyy年M月d日": "M月d日"
+                year ? "yyyy年M月d日" : "M月d日"
             } else {
-                year ? "d MMM yyyy": "d MMM"
+                year ? "d MMM yyyy" : "d MMM"
             },
             CultureInfo.InvariantCulture
         )
@@ -1743,9 +1745,9 @@ class ToolsParts {
                 FlexGrow: 1
             }
             if let valid = verdict {
-                let color = valid ? AppTheme.Lime: AppTheme.Pink
-                root.Add(MaterialIcons.Create(valid ? "check_circle": "cancel", AppTheme.Icon18, color))
-                root.Add(Label(input.Ui, input.Ui.Strings.Get(valid ? "Valid": "Invalid"), AppTheme.Type14, color, ""))
+                let color = valid ? AppTheme.Lime : AppTheme.Pink
+                root.Add(MaterialIcons.Create(valid ? "check_circle" : "cancel", AppTheme.Icon18, color))
+                root.Add(Label(input.Ui, input.Ui.Strings.Get(valid ? "Valid" : "Invalid"), AppTheme.Type14, color, ""))
             }
             return root
         }

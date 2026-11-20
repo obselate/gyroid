@@ -59,8 +59,10 @@ class InfoTip : Cell[InfoTipInput] {
                     Padding: AppTheme.Space14,
                     BackgroundColor: AppTheme.Raised,
                     BorderColor: AppTheme.Edge,
-                    ConfigurePanel: (value, bounds, content, panel) -> {
+                    ConfigurePanel: (_, _, _, panel) -> {
                         panel.BasedOn = AppTheme.InformationCardStyle
+                        panel.BorderWidth = AppTheme.Border1
+                        panel.BorderRadius = AppTheme.Radius8
                         panel.BoxShadow = BoxShadow{}
                     },
                     Content: lines,

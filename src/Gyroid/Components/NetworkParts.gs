@@ -20,7 +20,7 @@ class NetworkParts {
             compact bool = false,
             offline bool = false
         ) Blob {
-            let count = Math.Min(blocks.Length - 1, compact ? 30: 60)
+            let count = Math.Min(blocks.Length - 1, compact ? 30 : 60)
             let plot = Container{
                 Handle: handle,
                 FlexGrow: 1,
@@ -38,13 +38,13 @@ class NetworkParts {
                 return plot
             }
             let inner = width - 46
-            let extent = height - (compact ? 6.0: 22.0)
-            let limit = compact ? 480.0: 900.0
-            let slots = compact ? 30: 60
+            let extent = height - (compact ? 6.0 : 22.0)
+            let limit = compact ? 480.0 : 900.0
+            let slots = compact ? 30 : 60
             let step = inner / slots
             let target = Level(300, extent, limit)
             for tick in 0 ... 3 {
-                let seconds = (3 - tick) * (compact ? 150.0: 300.0)
+                let seconds = (3 - tick) * (compact ? 150.0 : 300.0)
                 let top = Level(seconds, extent, limit)
                 if seconds == 300 {
                     plot.Add(
@@ -56,7 +56,7 @@ class NetworkParts {
                             Height: 1,
                             Path: PathBuilder(0, 0, inner, 1).MoveTo(0, 0.5).LineTo(inner, 0.5).Build(),
                             Fit: ShapeFit.Fill,
-                            Stroke: VectorStroke(AppTheme.Border1, VectorPaint(AppTheme.Dim)){
+                            Stroke: VectorStroke(AppTheme.Border1, AppTheme.Dim){
                                 .Dashes: DashPattern([]float64{4, 3}, 0)
                             }
                         }
@@ -79,20 +79,20 @@ class NetworkParts {
                     Container{
                         Position: PositionType.Absolute,
                         Left: left + step * 0.18,
-                        Top: compact ? level: Math.Min(level, target),
+                        Top: compact ? level : Math.Min(level, target),
                         Width: Math.Max(2.0, step * 0.64),
-                        Height: Math.Max(1.5, compact ? extent + 6 - level: Math.Abs(level - target)),
+                        Height: Math.Max(1.5, compact ? extent + 6 - level : Math.Abs(level - target)),
                         BorderRadius: AppTheme.Radius1,
-                        BorderWidth: chosen ? 1.2: AppTheme.Border0,
+                        BorderWidth: chosen ? 1.2 : AppTheme.Border0,
                         BorderColor: AppTheme.Ink,
                         BackgroundColor: if offline {
                             AppTheme.Rule
                         } else if compact {
                             AppTheme.BlueStrong
                         } else if seconds > 300 {
-                            chosen ? AppTheme.Orange: AppTheme.OrangeStrong
+                            chosen ? AppTheme.Orange : AppTheme.OrangeStrong
                         } else {
-                            chosen ? AppTheme.Blue: AppTheme.BlueStrong
+                            chosen ? AppTheme.Blue : AppTheme.BlueStrong
                         }
                     }
                 )

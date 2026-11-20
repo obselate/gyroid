@@ -68,7 +68,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
     private var failed bool
     private var loadedHistory[]WalletOutput = []WalletOutput{}
     private var loadedSends[]WalletSend = []WalletSend{}
-    private func ReadPeersInput() NetworkPeersInput -> NetworkPeersInput{
+    private func PeersInput() NetworkPeersInput -> NetworkPeersInput{
         Ui: input.Ui,
         Peers: report.Peers,
         Banned: report.Banned,
@@ -135,15 +135,14 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
             let node = next.Session.Node
             let window = next.Window
             let id = generation
-            let token = current.Token
             let history = next.History
             let sends = next.Sends
             let previous = report
-            go Load(node, window, id, token, history, sends, previous)
+            go Load(node, window, id, current.Token, history, sends, previous)
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ NetworkInput) Blob {
         let page = Container{FlexGrow: 1, FlexBasis: 0, MinHeight: 0, Width: Percent(100), Gap: AppTheme.Space12}
         if loading && !loaded {
             page.Add(ControlParts.Loading(input.Ui, "network-loading"))
@@ -170,7 +169,11 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                     Hashrate: report.Hashrate,
                     Difficulty: report.Difficulty,
                     Emitted: report.Emitted,
-                    PreviousDifficulty: report.Blocks.Length > 0 ? report.Blocks[report.Blocks.Length - 1].Difficulty: 0
+                    PreviousDifficulty: report
+                        .Blocks
+                        .Length > 0 ? report
+                        .Blocks[report.Blocks.Length - 1]
+                        .Difficulty : 0
                 }
             )
         )
@@ -191,7 +194,7 @@ class NetworkPage : Cell[NetworkInput], IDisposable {
                         Height: input.Height
                     }
                 ),
-                Cell.Mount[NetworkPeersInput, NetworkPeers]("network-peers", ReadPeersInput())
+                Cell.Mount[NetworkPeersInput, NetworkPeers]("network-peers", PeersInput())
             }
         )
         return page
@@ -278,7 +281,7 @@ class NetworkSummary : Cell[NetworkSummaryInput] {
         let ui = input.Ui
         let change = input.PreviousDifficulty > 0 ? (
             float64(input.Difficulty) / input.PreviousDifficulty - 1
-        ) * 100: 0.0
+        ) * 100 : 0.0
         let figures = WalletParts.Card(
             ui,
             Edges{Left: AppTheme.Space22, Right: AppTheme.Space22, Top: AppTheme.Space14, Bottom: AppTheme.Space14},
@@ -294,7 +297,7 @@ class NetworkSummary : Cell[NetworkSummaryInput] {
                 input,
                 "Difficulty",
                 Compact(input.Difficulty),
-                change == 0 ? "": (change > 0 ? "▲ ": "▼ ") + Math.Abs(change).ToString(
+                change == 0 ? "" : (change > 0 ? "▲ " : "▼ ") + Math.Abs(change).ToString(
                     "0.0",
                     CultureInfo.InvariantCulture
                 ) +
@@ -391,7 +394,7 @@ class NetworkTimeChart : Cell[NetworkChartInput] {
         let blocks = input.Blocks
         let average = blocks.Length > 1 ? float64(blocks[blocks.Length - 1].Timestamp - blocks[0].Timestamp) / (
             blocks.Length - 1
-        ): 0.0
+        ) : 0.0
         let card = WalletParts.Card(
             input.Ui,
             Edges{Left: AppTheme.Space16, Right: AppTheme.Space16, Top: AppTheme.Space14, Bottom: AppTheme.Space12},
@@ -454,9 +457,9 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
     protected override func Build(input NetworkRibbonInput) Blob {
         let chart = input.Chart
         let blocks = chart.Blocks
-        let tip = blocks.Length > 0 ? blocks[blocks.Length - 1]: NetworkBlock()
+        let tip = blocks.Length > 0 ? blocks[blocks.Length - 1] : NetworkBlock()
         let shown = chart.Selected > 0 && Array.Exists(blocks, block -> block.Height == chart.Selected) ?
-        Array.Find(blocks, block -> block.Height == chart.Selected): tip
+        Array.Find(blocks, block -> block.Height == chart.Selected) : tip
         let card = WalletParts.Card(
             chart.Ui,
             Edges{Left: AppTheme.Space16, Right: AppTheme.Space16, Top: AppTheme.Space14, Bottom: AppTheme.Space12},
@@ -470,7 +473,7 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                 chart,
                 "Last block",
                 "last",
-                tip.Timestamp > 0 ? Clock(tip.Timestamp): "-",
+                tip.Timestamp > 0 ? Clock(tip.Timestamp) : "-",
                 Container{}
             )
         )
@@ -508,8 +511,8 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                     Left: left,
                     Top: bottom + 3,
                     Width: 1,
-                    Height: seconds % 12 == 0 ? 6.0: 3.0,
-                    BackgroundColor: seconds % 12 == 0 ? AppTheme.Dim: AppTheme.StrongRule
+                    Height: seconds % 12 == 0 ? 6.0 : 3.0,
+                    BackgroundColor: seconds % 12 == 0 ? AppTheme.Dim : AppTheme.StrongRule
                 }
             )
         }
@@ -565,21 +568,19 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                         CornerRadius: 2,
                         Fill: VectorPaint(
                             if chosen {
-                                pending ? AppTheme.OrangeMuted: AppTheme.LimeMuted
+                                pending ? AppTheme.OrangeMuted : AppTheme.LimeMuted
                             } else {
-                                pending ? AppTheme.OrangeQuiet: AppTheme.LimeQuiet
+                                pending ? AppTheme.OrangeQuiet : AppTheme.LimeQuiet
                             }
                         ),
                         Stroke: VectorStroke(
-                            chosen ? 1.4: AppTheme.Border1,
-                            VectorPaint(
-                                if chosen {
-                                    AppTheme.Ink
-                                } else {
-                                    pending ? AppTheme.OrangeStrong: AppTheme.LimeStrong
-                                }
-                            )
-                        ){.Dashes: pending && !chosen ? DashPattern([]float64{3, 2}, 0): nil}
+                            chosen ? 1.4 : AppTheme.Border1,
+                            if chosen {
+                                AppTheme.Ink
+                            } else {
+                                pending ? AppTheme.OrangeStrong : AppTheme.LimeStrong
+                            }
+                        ){.Dashes: pending && !chosen ? DashPattern([]float64{3, 2}, 0) : nil}
                     }
                 }
             )
@@ -593,7 +594,7 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                         Height: 6.4,
                         BorderRadius: 3.2,
                         HitTestSelf: false,
-                        BackgroundColor: block.Own == 1 ? AppTheme.Mint: AppTheme.Orange
+                        BackgroundColor: block.Own == 1 ? AppTheme.Mint : AppTheme.Orange
                     }
                 )
             }
@@ -663,7 +664,7 @@ class NetworkRibbon : Cell[NetworkRibbonInput] {
                 ui,
                 confirmations.ToString() + " " + ui.Strings.Get("conf"),
                 AppTheme.Type13,
-                confirmations < 10 ? AppTheme.Orange: AppTheme.Body,
+                confirmations < 10 ? AppTheme.Orange : AppTheme.Body,
                 ""
             )
         )
@@ -717,20 +718,29 @@ class NetworkPeers : Cell[NetworkPeersInput] {
     private let rowBuilder Func[NetworkRow, Blob]
     private let realized HashSet[NetworkPeerRow] = HashSet[NetworkPeerRow]()
     private var peerMapCell NetworkPeerMap?
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createRow() -> NetworkPeerRow
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createMap() -> NetworkPeerMap
 
     init() {
         hoverPeer = Hover
+        createRow = () -> {
+            let cell = NetworkPeerRow()
+            realized.Add(cell)
+            return cell
+        }
+        createMap = () -> {
+            let cell = NetworkPeerMap()
+            peerMapCell = cell
+            return cell
+        }
         rowBuilder = row -> {
             if row.Peer != nil {
                 return Cell.Mount[NetworkPeerRowInput, NetworkPeerRow](
                     row.Key,
-                    NetworkPeerRowInput{NextOwner: this, Next: row},
-                    () -> {
-                        let cell = NetworkPeerRow()
-                        cell.Hover(hovered)
-                        realized.Add(cell)
-                        return cell
-                    }
+                    NetworkPeerRowInput{Owner: this, Row: row, Hovered: hovered},
+                    createRow
                 )
             }
             return BanRow(current.Ui, row.Ban ?? throw InvalidOperationException("Network row has no peer"))
@@ -773,7 +783,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ NetworkPeersInput) Blob {
         let input = current
         let ui = input.Ui
         let card = WalletParts.Card(
@@ -830,11 +840,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
                     Online: input.Online,
                     Language: input.Language
                 },
-                () -> {
-                    let cell = NetworkPeerMap()
-                    peerMapCell = cell
-                    return cell
-                }
+                createMap
             )
         )
         card.Add(
@@ -849,17 +855,17 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             }
         )
         let list = rows.Length == 0 && tab == "banned" ?
-        ListParts.Empty(ui, "no banned peers"): VirtualRows(
+        ListParts.Empty(ui, "no banned peers") : VirtualRows(
             rows,
-            tab == "peers" ? 30: 44,
+            tab == "peers" ? 30 : 44,
             rowKey,
             rowBuilder,
             false,
             version: 0
         )
         list.MinHeight = 0
-        list.FlexGrow = rows.Length > 0 ? 1: 0
-        list.FlexBasis = rows.Length > 0 ? 0: Length.Auto
+        list.FlexGrow = rows.Length > 0 ? 1 : 0
+        list.FlexBasis = rows.Length > 0 ? 0 : Length.Auto
         let viewport = ListParts.Viewport(list, Style{MinHeight: 0, MaxHeight: Percent(45)}, grow: rows.Length > 0)
         card.Add(viewport)
         let identity = input.PeerId
@@ -876,8 +882,8 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             Label(
                 ui,
                 String.Format(
-                    ui.Strings.Get(hours >= 24 ? "identity {0} d": "identity {0} h"),
-                    hours >= 24 ? hours / 24: hours
+                    ui.Strings.Get(hours >= 24 ? "identity {0} d" : "identity {0} h"),
+                    hours >= 24 ? hours / 24 : hours
                 ),
                 AppTheme.Type13,
                 AppTheme.Dim,
@@ -886,8 +892,8 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             Container{FlexGrow: 1},
             ControlParts.Icon(
                 ui,
-                MaterialIcons.Create(revealed ? "visibility_off": "visibility", AppTheme.Icon16, AppTheme.Body),
-                ui.Strings.Get(revealed ? "Hide node ID": "Show node ID"),
+                MaterialIcons.Create(revealed ? "visibility_off" : "visibility", AppTheme.Icon16, AppTheme.Body),
+                ui.Strings.Get(revealed ? "Hide node ID" : "Show node ID"),
                 () -> {
                     revealed = !revealed
                 }
@@ -942,7 +948,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
             FlexShrink: 0,
             Padding: Edges{Left: AppTheme.Space8, Right: AppTheme.Space8},
             BorderRadius: AppTheme.Radius8,
-            BackgroundColor: active ? AppTheme.Rule: Color.Transparent,
+            BackgroundColor: active ? AppTheme.Rule : Color.Transparent,
             Accessibility: Accessibility{Name: Short(peer.Id) + " " + peer.Transport + " " + peer.Address},
             OnPointerEnter: (event PointerEvent) -> Hover(peer.Id),
             OnPointerLeave: (event PointerEvent) -> Hover(""),
@@ -952,7 +958,7 @@ class NetworkPeers : Cell[NetworkPeersInput] {
                 Container{
                     BasedOn: AppTheme.MarkerStyle,
                     BorderRadius: AppTheme.Radius4,
-                    BackgroundColor: peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
+                    BackgroundColor: peer.Transport == "quic" ? AppTheme.Mint : AppTheme.Blue
                 }
             },
             Grow(Label(ui, Short(peer.Id), AppTheme.Type13, AppTheme.Ink, ""))
@@ -995,8 +1001,9 @@ class NetworkPeers : Cell[NetworkPeersInput] {
 }
 
 data struct NetworkPeerRowInput {
-    var NextOwner NetworkPeers
-    var Next NetworkRow
+    var Owner NetworkPeers
+    var Row NetworkRow
+    var Hovered string
 }
 
 class NetworkPeerRow : Cell[NetworkPeerRowInput], IDisposable {
@@ -1004,14 +1011,14 @@ class NetworkPeerRow : Cell[NetworkPeerRowInput], IDisposable {
     private var current NetworkRow
     private var hovered bool
 
-    protected override func InputChanged(value NetworkPeerRowInput) {
-        let nextOwner = value.NextOwner
-        let next = value.Next
-        if current.Equals(next) {
+    protected override func InputChanged(input NetworkPeerRowInput) {
+        let active = input.Row.Peer?.Id == input.Hovered
+        if owner == input.Owner && current.Equals(input.Row) && hovered == active {
             return
         }
-        owner = nextOwner
-        current = next
+        owner = input.Owner
+        current = input.Row
+        hovered = active
         Rebuild()
     }
 
@@ -1023,7 +1030,7 @@ class NetworkPeerRow : Cell[NetworkPeerRowInput], IDisposable {
         }
     }
 
-    override func Build() Blob -> owner.PeerRow(
+    protected override func Build(_ NetworkPeerRowInput) Blob -> owner.PeerRow(
         current.Peer ?? throw InvalidOperationException("Network row has no peer"),
         hovered
     )
@@ -1047,8 +1054,15 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
     private var markers NetworkPeerMarkers?
     private var mapWidth float64
     private var mapHeight float64
+    // https://github.com/DavidObando/gsharp/issues/6088
+    private let createMarkers() -> NetworkPeerMarkers
 
     init() {
+        createMarkers = () -> {
+            let cell = NetworkPeerMarkers()
+            markers = cell
+            return cell
+        }
         peerMap.MetricsChanged += _ -> {
             if peerMap.BorderBox.Width != mapWidth || peerMap.BorderBox.Height != mapHeight {
                 Rebuild()
@@ -1069,7 +1083,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
         markers?.Hover(id)
     }
 
-    override func Build() Blob {
+    protected override func Build(_ NetworkPeerMapInput) Blob {
         let input = current
         let ui = input.Ui
         let plot = Container{
@@ -1100,7 +1114,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
         for index in 0 ... input.Peers.Length {
             let peer = input.Peers[index]
             let angle = -Math.PI / 2 + index * 2.39996
-            (peer.Transport == "quic" ? quic: tcp).MoveTo(x, y).LineTo(
+            (peer.Transport == "quic" ? quic : tcp).MoveTo(x, y).LineTo(
                 x + Math.Cos(angle) * ring,
                 y + Math.Sin(angle) * ring
             )
@@ -1126,10 +1140,10 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
                 Path: hexagon.Close().Build(),
                 Fit: ShapeFit.Fill,
                 Fill: VectorPaint(AppTheme.Surface),
-                Stroke: VectorStroke(1.5, VectorPaint(input.Online ? AppTheme.Lime: AppTheme.Dim))
+                Stroke: VectorStroke(1.5, input.Online ? AppTheme.Lime : AppTheme.Dim)
             }
         )
-        plot.Add(Dot(x, y, 3, input.Online ? AppTheme.Lime: AppTheme.Dim))
+        plot.Add(Dot(x, y, 3, input.Online ? AppTheme.Lime : AppTheme.Dim))
         for index in 0 ... Math.Min(input.Banned.Length, 50) {
             let angle = 0.78 * Math.PI + index * 0.84 * Math.PI
             let mark = MaterialIcons.Create("close", AppTheme.Icon14, AppTheme.Pink)
@@ -1138,13 +1152,8 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
         plot.Add(
             Cell.Mount[NetworkPeerMarkersInput, NetworkPeerMarkers](
                 "markers",
-                NetworkPeerMarkersInput{NextOwner: this, Next: input, NextWidth: width, NextHeight: height},
-                () -> {
-                    let cell = NetworkPeerMarkers()
-                    markers = cell
-                    cell.Hover(hovered)
-                    return cell
-                }
+                NetworkPeerMarkersInput{Owner: this, Map: input, Width: width, Height: height, Hovered: hovered},
+                createMarkers
             )
         )
         return plot
@@ -1154,11 +1163,11 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
         let dot = Dot(
             position.X,
             position.Y,
-            active ? 7.0: 5.5,
-            peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
+            active ? 7.0 : 5.5,
+            peer.Transport == "quic" ? AppTheme.Mint : AppTheme.Blue
         )
         dot.Key = "peer:" + peer.Id
-        dot.BorderWidth = active ? 1.5: AppTheme.Border0
+        dot.BorderWidth = active ? 1.5 : AppTheme.Border0
         dot.BorderColor = AppTheme.Ink
         dot.OnPointerEnter = (event PointerEvent) -> input.Hover(peer.Id)
         dot.OnPointerLeave = (event PointerEvent) -> input.Hover("")
@@ -1176,14 +1185,14 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
         let ui = input.Ui
         let px = position.X
         let py = position.Y
-        let color = peer.Transport == "quic" ? AppTheme.Mint: AppTheme.Blue
+        let color = peer.Transport == "quic" ? AppTheme.Mint : AppTheme.Blue
         plot.Add(
             Lines(width, height, PathBuilder(0, 0, width, height).MoveTo(width / 2, height / 2).LineTo(px, py), color)
         )
         plot.Add(MarkerDot(input, peer, position, true))
         plot.Add(
             ChartParts.Tooltip(
-                px + 14 + 250 > width ? Math.Max(0.0, px - 264): px + 14,
+                px + 14 + 250 > width ? Math.Max(0.0, px - 264) : px + 14,
                 Math.Max(0.0, py - 34),
                 Container{
                     Gap: AppTheme.Space4,
@@ -1211,7 +1220,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
             .ArcTo(radius, radius, 0, false, true, radius, 0)
             .Build(),
         Fit: ShapeFit.Fill,
-        Stroke: VectorStroke(AppTheme.Border1, VectorPaint(color)){.Dashes: dashes}
+        Stroke: VectorStroke(AppTheme.Border1, color){.Dashes: dashes}
     }
 
     private func Lines(width float64, height float64, path PathBuilder, color Color) Blob -> Shape{
@@ -1220,7 +1229,7 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
         Height: height,
         Path: path.Build(),
         Fit: ShapeFit.Fill,
-        Stroke: VectorStroke(AppTheme.Border1, VectorPaint(color))
+        Stroke: VectorStroke(AppTheme.Border1, color)
     }
 
     private func Dot(x float64, y float64, radius float64, color Color) Container {
@@ -1231,10 +1240,11 @@ class NetworkPeerMap : Cell[NetworkPeerMapInput] {
 }
 
 data struct NetworkPeerMarkersInput {
-    var NextOwner NetworkPeerMap
-    var Next NetworkPeerMapInput
-    var NextWidth float64
-    var NextHeight float64
+    var Owner NetworkPeerMap
+    var Map NetworkPeerMapInput
+    var Width float64
+    var Height float64
+    var Hovered string
 }
 
 class NetworkPeerMarkers : Cell[NetworkPeerMarkersInput] {
@@ -1246,15 +1256,15 @@ class NetworkPeerMarkers : Cell[NetworkPeerMarkersInput] {
     private var dots[]Blob = []Blob{}
     private var positions[]Point = []Point{}
 
-    protected override func InputChanged(value NetworkPeerMarkersInput) {
-        let nextOwner = value.NextOwner
-        let next = value.Next
-        let nextWidth = value.NextWidth
-        let nextHeight = value.NextHeight
+    protected override func InputChanged(input NetworkPeerMarkersInput) {
+        let next = input.Map
+        let nextWidth = input.Width
+        let nextHeight = input.Height
+        Hover(input.Hovered)
         if current.Equals(next) && width == nextWidth && height == nextHeight {
             return
         }
-        owner = nextOwner
+        owner = input.Owner
         current = next
         width = nextWidth
         height = nextHeight
@@ -1276,7 +1286,7 @@ class NetworkPeerMarkers : Cell[NetworkPeerMarkersInput] {
         }
     }
 
-    override func Build() Blob {
+    protected override func Build(_ NetworkPeerMarkersInput) Blob {
         let plot = Container{Position: PositionType.Absolute, HitTestSelf: false, Width: width, Height: height}
         for index in 0 ... dots.Length {
             let peer = current.Peers[index]

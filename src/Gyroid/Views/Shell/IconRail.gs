@@ -11,21 +11,18 @@ import System
 import System.Linq
 
 partial class App {
-    private func ConfigureRailItem(input NavigationRailInput, item NavigationItem, button Goo.Button) {
+    private func RailItem(input NavigationRailInput, item NavigationItem, button Goo.Button) {
         let selected = item.Id == input.SelectedId
-        let color = item.Disabled ? AppTheme.Dim: selected ? AppTheme.Lime: AppTheme.Body
+        let color = item.Disabled ? AppTheme.Dim : selected ? AppTheme.Lime : AppTheme.Body
         button.Width = 60
-        button.Height = input.ItemHeight!!
-        button.Padding = AppTheme.Space0
-        button.BorderWidth = AppTheme.Border0
-        button.TransitionMs = 0
+        button.Height = input.ItemHeight ?? Theme.Read().ControlHeight
         button.FlexShrink = 1
         button.FlexDirection = FlexDirection.Column
         button.AlignItems = AlignItems.Center
         button.JustifyContent = JustifyContent.Center
         button.Gap = AppTheme.Space4
         button.BorderRadius = AppTheme.Radius10
-        button.BackgroundColor = selected ? AppTheme.LimeQuiet: Color.Transparent
+        button.BackgroundColor = selected ? AppTheme.LimeQuiet : Color.Transparent
         button.HoverStyle = Style{BackgroundColor: AppTheme.Rule}
         button.FocusStyle = Theme.Read().FocusStyle
         button.Children.Clear()
@@ -49,18 +46,18 @@ partial class App {
             (AppPage.Contacts, "contacts", "person"),
             (AppPage.Mining, "mining", "hardware"),
             (AppPage.Network, "network", "share"),
-            (AppPage.Privacy, "privacy", ui.Privacy ? "visibility_off": "visibility"),
+            (AppPage.Privacy, "privacy", ui.Privacy ? "visibility_off" : "visibility"),
             (AppPage.Settings, "settings", "settings")
         }
-        let items = [wallet.Snapshot.ViewOnly ? 11: 12]NavigationItem
+        let items = [wallet.Snapshot.ViewOnly ? 11 : 12]NavigationItem
         var index = 0
         for (destination, label, icon) in entries {
             if destination == AppPage.Send && wallet.Snapshot.ViewOnly {
                 continue
             }
             let name = ui.Strings.Get(label)
-            let count = destination == AppPage.Messages && unread > 0 ? unread.ToString(): ""
-            let color = blocked ? AppTheme.Dim: page == destination ? AppTheme.Lime: AppTheme.Body
+            let count = destination == AppPage.Messages && unread > 0 ? unread.ToString() : ""
+            let color = blocked ? AppTheme.Dim : page == destination ? AppTheme.Lime : AppTheme.Body
             var content Blob = MaterialIcons.Create(icon, AppTheme.Icon20, color)
             if count.Length > 0 {
                 content = Container{
@@ -74,7 +71,7 @@ partial class App {
             items[index] = NavigationItem{
                 Id: destination.ToString(),
                 Label: name,
-                AccessibilityName: name + (count.Length > 0 ? " " + count: ""),
+                AccessibilityName: name + (count.Length > 0 ? " " + count : ""),
                 Content: content,
                 Disabled: blocked
             }
@@ -83,7 +80,7 @@ partial class App {
         items[index] = NavigationItem{
             Id: "lock",
             Label: ui.Strings.Get("lock"),
-            Content: MaterialIcons.Create("lock", AppTheme.Icon20, wallet.LockQueued ? AppTheme.Dim: AppTheme.Body),
+            Content: MaterialIcons.Create("lock", AppTheme.Icon20, wallet.LockQueued ? AppTheme.Dim : AppTheme.Body),
             Disabled: blocked || wallet.LockQueued
         }
         return ControlParts.Navigation(
@@ -94,8 +91,8 @@ partial class App {
                 SelectedId: page.ToString(),
                 AccessibilityName: ui.Strings.Get("Navigation"),
                 ActiveMarker: false,
-                ItemHeight: compact ? 44: 48,
-                ConfigureItem: ConfigureRailItem,
+                ItemHeight: compact ? 44 : 48,
+                ConfigureItem: RailItem,
                 OnSelect: id -> {
                     if id == "lock" {
                         Lock()
@@ -104,11 +101,11 @@ partial class App {
                     }
                 },
                 CreateRoot: (input NavigationRailInput, buttons[]Goo.Button) -> {
-                    let inset = compact ? AppTheme.Space4: AppTheme.Space8
+                    let inset = compact ? AppTheme.Space4 : AppTheme.Space8
                     let rail = WalletParts.Card(
                         ui,
                         Edges{Top: inset, Bottom: inset},
-                        compact ? AppTheme.Space0: AppTheme.Space2,
+                        compact ? AppTheme.Space0 : AppTheme.Space2,
                         AppTheme.Radius14
                     )
                     rail.Width = 72

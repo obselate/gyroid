@@ -97,7 +97,7 @@ class SettingsValidation {
         }
 
         func PoolUrlError(value string) string {
-            let text = value.Contains("://", StringComparison.Ordinal) ? value: "stratum+tcp://" + value
+            let text = value.Contains("://", StringComparison.Ordinal) ? value : "stratum+tcp://" + value
             if value.Length > 0 && value == value.Trim() && Uri.TryCreate(text, UriKind.Absolute, out let endpoint) &&
                 endpoint != nil &&
                 (
