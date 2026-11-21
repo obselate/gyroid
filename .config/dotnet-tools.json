@@ -3,8 +3,10 @@
   "isRoot": true,
   "tools": {
     "gsharp.gsfmt": {
-      "version": "0.5.698",
-      "commands": ["gsfmt"]
+      "version": "0.5.728",
+      "commands": [
+        "gsfmt"
+      ]
     }
   }
 }
